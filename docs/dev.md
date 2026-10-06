@@ -30,7 +30,8 @@ repo root.
 A normal `just build` produces **both** raw Windows executables:
 `build/sofcat.exe` and `build/sofcat-ui.exe`. The UI build runs the Vite
 production build first, then embeds `sofcat-ui/frontend/dist`. No installer is
-produced and nothing is signed.
+produced by `just build`; `just msi` builds the installer with embala (see
+`installer/embala.toml`). Nothing is signed.
 
 ## Cross-compilation: pure Go, no cgo
 
