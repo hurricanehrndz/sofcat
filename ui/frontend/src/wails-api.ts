@@ -1,6 +1,6 @@
 import { Browser, Events } from "@wailsio/runtime";
 
-import { UIService } from "../bindings/github.com/hurricanehrndz/sofcat/sofcat-ui/index.js";
+import { UIService } from "../bindings/github.com/hurricanehrndz/sofcat/ui/index.js";
 import type { SofCatApi, OperationStatus } from "./api.ts";
 
 export const api: SofCatApi = {

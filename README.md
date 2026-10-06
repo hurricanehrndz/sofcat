@@ -38,7 +38,7 @@ ships no `config.yaml`. Releases publish the two executables, the MSI and the
 standalone `makecatalogs` binaries (see below); nothing is code signed.
 
 UI-specific targets: `just ui-lint` (TypeScript and generated-binding check),
-`just ui-test` (frontend tests). See [sofcat-ui/README.md](sofcat-ui/README.md).
+`just ui-test` (frontend tests). See [ui/README.md](ui/README.md).
 
 ## Contributing
 Pull Requests are always welcome. Before submitting, lint and test:

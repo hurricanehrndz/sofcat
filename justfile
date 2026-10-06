@@ -23,20 +23,20 @@ pre-commit: fmt-check lint
 
 # Frontend dependencies.
 ui-install:
-    npm ci --prefix sofcat-ui/frontend
+    npm ci --prefix ui/frontend
 
 # Frontend type check.
 ui-type: ui-install
-    npm run check --prefix sofcat-ui/frontend
+    npm run check --prefix ui/frontend
 
 # Frontend tests.
 ui-test: ui-install
-    npm test --prefix sofcat-ui/frontend
+    npm test --prefix ui/frontend
 
 # Production frontend assets.
 ui-assets: ui-install
-    npm run build --prefix sofcat-ui/frontend
-    @if grep -rq SOFCAT_VITE_MOCK_ONLY sofcat-ui/frontend/dist; then \
+    npm run build --prefix ui/frontend
+    @if grep -rq SOFCAT_VITE_MOCK_ONLY ui/frontend/dist; then \
       echo "Dev mock leaked into the production bundle" && exit 1; \
       else echo "Production bundle is mock-free"; fi
 
@@ -44,8 +44,8 @@ ui-assets: ui-install
 ui-bindings-check:
     rm -rf build/ui-bindings-check
     mkdir -p build
-    cd sofcat-ui && go run github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha2.117 generate bindings -clean -ts -noevents -d ../build/ui-bindings-check .
-    diff -ru sofcat-ui/frontend/bindings build/ui-bindings-check
+    cd ui && go run github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha2.117 generate bindings -clean -ts -noevents -d ../build/ui-bindings-check .
+    diff -ru ui/frontend/bindings build/ui-bindings-check
 
 # Type check plus committed-binding verification.
 ui-lint: ui-type ui-bindings-check
@@ -58,7 +58,7 @@ build arch="amd64": ui-assets
         -o build/{{app}}.exe ./cmd/sofcat
     GOOS=windows GOARCH={{arch}} CGO_ENABLED=0 \
         go build -tags production -ldflags "-H windowsgui" \
-        -o build/sofcat-ui.exe ./sofcat-ui
+        -o build/sofcat-ui.exe ./ui
 
 # Windows installer -> build/sofcat-<msi_version>-x86_64.msi (embala, no WiX).
 # msi_version is the numeric part of version: v1.5.0-3-gabc-dirty -> 1.5.0.

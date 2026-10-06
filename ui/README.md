@@ -142,10 +142,10 @@ The Windows executable is a pure-Go cross-build:
 
 ```sh
 GOOS=windows GOARCH=amd64 CGO_ENABLED=0 \
-  go build -tags production -ldflags "-H windowsgui" -o build/sofcat-ui.exe ./sofcat-ui
+  go build -tags production -ldflags "-H windowsgui" -o build/sofcat-ui.exe ./ui
 ```
 
-Regenerate committed bindings from `sofcat-ui/` with the pinned command:
+Regenerate committed bindings from `ui/` with the pinned command:
 
 ```sh
 go run github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha2.117 generate bindings -clean -ts -noevents -d frontend/bindings .
