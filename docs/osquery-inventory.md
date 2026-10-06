@@ -27,7 +27,7 @@ table construction) can't be used, because it reads SQLite databases only.
   nothing is inherited. `icacls` shows only these two entries:
 
   ```text
-  C:\ProgramData\sofcat\inventory.json NT AUTHORITY\SYSTEM:(F)
+  C:\ProgramData\SofCat\inventory.json NT AUTHORITY\SYSTEM:(F)
                                         BUILTIN\Administrators:(R)
   ```
 

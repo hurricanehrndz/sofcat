@@ -36,7 +36,7 @@ func TestGet(t *testing.T) {
 		Branding: Branding{
 			Title:     "Acme Software Center",
 			Tagline:   "Need help? Call the service desk at ext. 1234.",
-			Logo:      `C:\ProgramData\sofcat\branding\logo.png`,
+			Logo:      `C:\ProgramData\SofCat\branding\logo.png`,
 			HelpURL:   "https://example.com/help",
 			HelpLabel: "Get help",
 			Accent:    "#0b6e4f",

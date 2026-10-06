@@ -627,7 +627,7 @@ func TestRouteServiceInstallProtectsAppData(t *testing.T) {
 		return nil
 	}
 
-	cfg := config.Configuration{ServiceInstall: true, AppDataPath: `C:\ProgramData\sofcat`}
+	cfg := config.Configuration{ServiceInstall: true, AppDataPath: `C:\ProgramData\SofCat`}
 	if err := route(cfg); err != nil {
 		t.Fatalf("route: %v", err)
 	}

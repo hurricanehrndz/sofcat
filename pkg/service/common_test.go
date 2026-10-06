@@ -199,7 +199,7 @@ func TestExecuteCommandRunPassesProgressCallback(t *testing.T) {
 }
 
 func TestServiceInstallArgs(t *testing.T) {
-	configPath := `C:\ProgramData\sofcat\config.yaml`
+	configPath := `C:\ProgramData\SofCat\config.yaml`
 	got := serviceInstallArgs(configPath)
 	if len(got) != 3 {
 		t.Fatalf("expected 3 args, got %d: %#v", len(got), got)

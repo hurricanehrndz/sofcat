@@ -11,9 +11,9 @@ Bootstrap SofCat on a Windows VM from prepared manual-test assets.
 [CmdletBinding()]
 param(
     [string]$BaseUrl = "http://localhost:8080/",
-    [string]$InstallPath = "$env:ProgramData\sofcat\bin",
-    [string]$ConfigPath = "$env:ProgramData\sofcat\config.yaml",
-    [string]$AppDataPath = "$env:ProgramData\sofcat",
+    [string]$InstallPath = "$env:ProgramFiles\SofCat",
+    [string]$ConfigPath = "$env:ProgramData\SofCat\config.yaml",
+    [string]$AppDataPath = "$env:ProgramData\SofCat",
     [string]$Manifest = "example_manifest",
     [string[]]$Catalogs = @("example_catalog"),
     [switch]$InstallService,

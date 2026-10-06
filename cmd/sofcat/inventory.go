@@ -20,7 +20,7 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/version"
 )
 
-// inventoryFile is written under cfg.AppDataPath (ProgramData\sofcat).
+// inventoryFile is written under cfg.AppDataPath (ProgramData\SofCat).
 const inventoryFile = "inventory.json"
 
 // legacyReportFile is the pre-inventory report, GorillaReport.json. It is kept

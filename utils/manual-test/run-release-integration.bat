@@ -21,7 +21,7 @@ if exist "%PS1_CANDIDATE%" (
   set "RUN_PS1_PATH=%PS1_CANDIDATE%"
 )
 
-set "SOFCAT_EXE=%ProgramData%\sofcat\bin\sofcat.exe"
+set "SOFCAT_EXE=%ProgramFiles%\SofCat\sofcat.exe"
 set "WORK_ROOT=%TEMP%\sofcat-release-integration"
 set "EXITCODE=0"
 
