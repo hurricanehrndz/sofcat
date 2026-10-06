@@ -17,9 +17,9 @@ PowerShell 5.1 compatible.
 
 [CmdletBinding()]
 param(
-    [string]$SofCat   = "$env:ProgramData\sofcat\bin\sofcat.exe",
-    [string]$Config    = "$env:ProgramData\sofcat\config.yaml",
-    [string]$SelfServe = "$env:ProgramData\sofcat\service-manifest.yaml",
+    [string]$SofCat   = "$env:ProgramFiles\SofCat\sofcat.exe",
+    [string]$Config    = "$env:ProgramData\SofCat\config.yaml",
+    [string]$SelfServe = "$env:ProgramData\SofCat\service-manifest.yaml",
     [string]$MarkerDir = "C:\ProgramData\sofcat-c-smoke",
     [int]$TimeoutSec   = 120
 )
@@ -185,7 +185,7 @@ if ((Get-YamlList $SelfServe "default_installs") -notcontains "DemoDefault") {
 Write-Host "    default stayed removed and is still recorded (once-only)" -ForegroundColor Green
 
 $blockedTxt = Join-Path $MarkerDir "blocked.txt"
-$inventoryPath = "$env:ProgramData\sofcat\inventory.json"
+$inventoryPath = "$env:ProgramData\SofCat\inventory.json"
 
 # Inventory-Defers returns $true when inventory.json lists $Item in
 # ManagedInstalls with status "deferred". The inventory is rewritten at the end

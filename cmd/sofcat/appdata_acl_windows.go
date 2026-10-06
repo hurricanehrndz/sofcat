@@ -19,11 +19,10 @@ import (
 // state the pipe guards), the cache (installers that run as SYSTEM) and the
 // log. ProgramData grants Users read and create rights, so the root gets a
 // protected DACL: SYSTEM and Administrators only, inherited by everything
-// below. bin additionally lets Users read and execute sofcat-ui.exe; they
-// reach it through the bypass-traverse privilege. See docs/data-directory.md.
+// below. The executables live under Program Files, whose default ACL already
+// lets Users read and execute them. See docs/data-directory.md.
 const (
 	appDataSDDL = "O:BAD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)"
-	binSDDL     = "O:BAD:(A;OICI;FRFX;;;BU)"
 	// inheritSDDL has no explicit ACEs: the entry keeps only what it inherits.
 	inheritSDDL = "O:BAD:"
 )
@@ -50,9 +49,6 @@ func protectAppData(root string) error {
 	} else if !fi.IsDir() {
 		return fmt.Errorf("not protecting %s: not a plain directory", root)
 	}
-	if err := os.MkdirAll(filepath.Join(root, "bin"), 0o755); err != nil {
-		return err
-	}
 
 	// SYSTEM and elevated administrators hold the privilege but it is off by
 	// default; without it, a file a user locked to themselves cannot be fixed.
@@ -74,8 +70,6 @@ func protectAppData(root string) error {
 		case !d.IsDir() && !d.Type().IsRegular():
 			errs = append(errs, fmt.Errorf("skipped %s: not a plain file or directory", path))
 		case parent == root && strings.EqualFold(d.Name(), inventoryFile):
-		case parent == root && d.IsDir() && strings.EqualFold(d.Name(), "bin"):
-			errs = append(errs, setSecurity(path, binSDDL, windows.UNPROTECTED_DACL_SECURITY_INFORMATION))
 		default:
 			errs = append(errs, setSecurity(path, inheritSDDL, windows.UNPROTECTED_DACL_SECURITY_INFORMATION))
 		}

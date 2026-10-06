@@ -38,10 +38,10 @@ PowerShell 5.1 compatible.
 
 [CmdletBinding()]
 param(
-    [string]$SofCat   = "$env:ProgramData\sofcat\bin\sofcat.exe",
-    [string]$Config    = "$env:ProgramData\sofcat\config.yaml",
-    [string]$SelfServe = "$env:ProgramData\sofcat\service-manifest.yaml",
-    [string]$Inventory = "$env:ProgramData\sofcat\inventory.json",
+    [string]$SofCat   = "$env:ProgramFiles\SofCat\sofcat.exe",
+    [string]$Config    = "$env:ProgramData\SofCat\config.yaml",
+    [string]$SelfServe = "$env:ProgramData\SofCat\service-manifest.yaml",
+    [string]$Inventory = "$env:ProgramData\SofCat\inventory.json",
     [string]$ItemName  = "GoogleChrome",
     [string]$RegistryName = "Google Chrome",
     [string]$ChromeExe = "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",

@@ -136,7 +136,7 @@ Write-Host "::group::[TEST] Environment setup"
 Remove-Item -LiteralPath $markerRoot -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Path $markerRoot -Force | Out-Null
 New-Item -ItemType Directory -Path $configRoot -Force | Out-Null
-New-Item -ItemType Directory -Path "C:\ProgramData\sofcat" -Force | Out-Null
+New-Item -ItemType Directory -Path "C:\ProgramData\SofCat" -Force | Out-Null
 Write-Host "[INFO] Cleaned marker directory: $markerRoot"
 Write-Host "::endgroup::"
 

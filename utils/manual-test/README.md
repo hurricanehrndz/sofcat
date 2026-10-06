@@ -129,7 +129,7 @@ copies the selfserve fixtures and both binaries into `build/e2e-repo/`).
    (`tar.exe -xf ... --strip-components=1`).
 3. `bootstrap-vm.ps1 -BaseUrl file://C:/sofcat-repo/ -Manifest e2e_manifest -Catalogs e2e_catalog -InstallService -StartService -NoPause`.
 4. Optionally brand the UI: copy `fixtures/e2e/branding/logo.png` to
-   `C:\ProgramData\sofcat\branding\`, append a `branding:` block (title,
+   `C:\ProgramData\SofCat\branding\`, append a `branding:` block (title,
    tagline, logo path, help link, accent) to `config.yaml`, restart the service.
 5. Run the two gates, then launch `launch-wails-ui.ps1` on the desktop for the
    visual check:

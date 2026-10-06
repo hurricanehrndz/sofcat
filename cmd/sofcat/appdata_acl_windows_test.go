@@ -13,14 +13,14 @@ import (
 )
 
 // TestProtectAppData: after protectAppData, a standard user must have no
-// access to anything in the data directory but bin, whatever ACLs and owners
+// access to anything in the data directory, whatever ACLs and owners
 // entries had before (as on a tree an older version created, where Users could
 // create files), while inventory.json keeps its stricter DACL and a junction a
 // user planted is not followed.
 func TestProtectAppData(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "sofcat")
-	mkdir(t, root, filepath.Join(root, "bin"), filepath.Join(root, "cache", "packages"))
-	write(t, filepath.Join(root, "bin", "sofcat-ui.exe"), filepath.Join(root, "config.yaml"),
+	mkdir(t, root, filepath.Join(root, "cache", "packages"))
+	write(t, filepath.Join(root, "config.yaml"),
 		filepath.Join(root, "cache", "packages", "setup.msi"), filepath.Join(root, "service-manifest.yaml"),
 		filepath.Join(root, inventoryFile))
 	// A planted manifest that only Everyone may read, and inventory.json as
@@ -51,10 +51,8 @@ func TestProtectAppData(t *testing.T) {
 		dirInh    = "(A;OICIID;FA;;;SY)(A;OICIID;FA;;;BA)"
 	)
 	want := map[string]string{
-		root:                       admins + "D:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)",
-		filepath.Join(root, "bin"): admins + "D:AI(A;OICI;0x1200a9;;;BU)" + dirInh,
-		filepath.Join(root, "bin", "sofcat-ui.exe"):           admins + "D:AI(A;ID;0x1200a9;;;BU)" + inherited,
-		filepath.Join(root, "cache"):                          admins + "D:AI" + dirInh,
+		root:                         admins + "D:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)",
+		filepath.Join(root, "cache"): admins + "D:AI" + dirInh,
 		filepath.Join(root, "cache", "packages", "setup.msi"): admins + "D:AI" + inherited,
 		filepath.Join(root, "config.yaml"):                    admins + "D:AI" + inherited,
 		filepath.Join(root, "service-manifest.yaml"):          admins + "D:AI" + inherited,

@@ -24,6 +24,13 @@ installs all of them plus the lint and format tools from `mise.toml`: run
 - `build/sofcat.exe` — the agent/CLI/service
 - `build/sofcat-ui.exe` — the Wails self-service UI (pure Go, no cgo)
 
+## Install layout
+
+- `C:\Program Files\SofCat\` holds `sofcat.exe` and `sofcat-ui.exe`.
+- `C:\ProgramData\SofCat\` holds `config.yaml`, the cache, the log, the
+  self-serve manifest and `inventory.json` (`app_data_path`; see
+  [docs/data-directory.md](docs/data-directory.md) for its ACL).
+
 Releases publish those two executables plus the standalone `makecatalogs`
 binaries (see below); there is no installer or code
 signing in this path.

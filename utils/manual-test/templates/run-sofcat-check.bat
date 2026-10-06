@@ -1,7 +1,7 @@
 @echo off
 setlocal
 
-set "SOFCAT_EXE=%ProgramData%\sofcat\bin\sofcat.exe"
+set "SOFCAT_EXE=%ProgramFiles%\SofCat\sofcat.exe"
 set "SOFCAT_CONFIG=%ProgramData%\sofcat\config.yaml"
 set "EXITCODE=0"
 

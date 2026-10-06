@@ -14,7 +14,7 @@ param()
 
 $ErrorActionPreference = "Stop"
 $ReadyMarker = "C:\sofcat-test\ui-smoke-ready.txt"
-$UIPath = Join-Path $env:ProgramData "sofcat\bin\sofcat-ui.exe"
+$UIPath = Join-Path $env:ProgramFiles "SofCat\sofcat-ui.exe"
 # Wails leaves WebviewUserDataPath empty, so go-webview2 derives this path from
 # %AppData% and the executable name. Only reported, never removed.
 $ProfilePath = Join-Path $env:AppData "sofcat-ui.exe"

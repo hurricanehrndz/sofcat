@@ -16,7 +16,7 @@ var (
 	aboutArg          bool
 	aboutDefault      = false
 	configArg         string
-	configDefault     = filepath.Join(os.Getenv("ProgramData"), "sofcat/config.yaml")
+	configDefault     = filepath.Join(os.Getenv("ProgramData"), "SofCat/config.yaml")
 	debugArg          bool
 	debugDefault      = false
 	helpArg           bool
@@ -215,7 +215,7 @@ func Get() Configuration {
 
 	// If AppDataPath wasn't provided, configure a default
 	if cfg.AppDataPath == "" {
-		cfg.AppDataPath = filepath.Join(os.Getenv("ProgramData"), "sofcat/")
+		cfg.AppDataPath = filepath.Join(os.Getenv("ProgramData"), "SofCat/")
 	} else {
 		cfg.AppDataPath = filepath.Clean(cfg.AppDataPath)
 	}

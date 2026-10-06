@@ -16,5 +16,5 @@ manifest: employee
 
 ## `app_data_path` is SofCat's working directory, and may store copies of
 ## manifests, catalogs, or packages. If `app_data_path` is not provided,
-## it will default to `%ProgramData%/sofcat/`
+## it will default to `%ProgramData%/SofCat/`
 # app_data_path: C:/sofcat/cache

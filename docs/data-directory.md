@@ -15,9 +15,9 @@ its own ACL.
 - `cache\` holds installers and scripts that run as SYSTEM.
 - `sofcat.log` may name paths and items.
 
-The UI needs only `bin\sofcat-ui.exe`. Users can launch it by its full path
-without any rights on the parent directory, because Windows grants every user
-the bypass traverse checking privilege by default.
+The executables are not here. `sofcat.exe` and `sofcat-ui.exe` install to
+`C:\Program Files\SofCat`, whose default ACL already lets Users read and
+execute them and only Administrators and TrustedInstaller write.
 
 ## ACL
 
@@ -25,8 +25,6 @@ the bypass traverse checking privilege by default.
   protected, so it inherits nothing from `ProgramData`. SYSTEM and
   Administrators have full control, and every subfolder and file inherits it.
   There is no entry for Users or Authenticated Users.
-- **`bin`:** inherits the root's entries and adds Users read and execute
-  (`(A;OICI;FRFX;;;BU)`), which its files inherit.
 - **Everything else** has no explicit entries and only inherits from the
   root, as after `icacls /reset /t`. The owner is Administrators.
 - **`inventory.json`** keeps its own protected ACL, which is stricter (see
@@ -35,25 +33,17 @@ the bypass traverse checking privilege by default.
 `icacls` shows:
 
 ```text
-C:\ProgramData\sofcat\ NT AUTHORITY\SYSTEM:(OI)(CI)(F)
+C:\ProgramData\SofCat\ NT AUTHORITY\SYSTEM:(OI)(CI)(F)
                         BUILTIN\Administrators:(OI)(CI)(F)
 
-C:\ProgramData\sofcat\bin BUILTIN\Users:(OI)(CI)(RX)
-                           NT AUTHORITY\SYSTEM:(I)(OI)(CI)(F)
-                           BUILTIN\Administrators:(I)(OI)(CI)(F)
-
-C:\ProgramData\sofcat\bin\sofcat-ui.exe BUILTIN\Users:(I)(RX)
-                                          NT AUTHORITY\SYSTEM:(I)(F)
-                                          BUILTIN\Administrators:(I)(F)
-
-C:\ProgramData\sofcat\service-manifest.yaml NT AUTHORITY\SYSTEM:(I)(F)
+C:\ProgramData\SofCat\service-manifest.yaml NT AUTHORITY\SYSTEM:(I)(F)
                                              BUILTIN\Administrators:(I)(F)
 ```
 
 ## When it is applied
 
-- `sofcat.exe -serviceinstall` creates the directory and `bin` if they are
-  missing and applies the ACL before it registers the service.
+- `sofcat.exe -serviceinstall` creates the directory if it is missing and
+  applies the ACL before it registers the service.
 - The service applies it again at every start, so a tree deployed by hand or
   created by an older version is fixed on the next start. It resets each
   entry's owner and ACL, so a file a user created earlier, even one locked to
