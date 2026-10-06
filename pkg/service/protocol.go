@@ -10,7 +10,7 @@ import (
 // The service speaks JSON-RPC 2.0 (https://www.jsonrpc.org/specification):
 // one newline-delimited JSON request per connection and one response, except
 // streamOperationStatus, which follows its response with operationStatus
-// notifications until the operation ends. sofcat-ui/ARCHITECTURE.md
+// notifications until the operation ends. ui/ARCHITECTURE.md
 // ("Protocol") is the contract.
 const (
 	jsonrpcVersion = "2.0"

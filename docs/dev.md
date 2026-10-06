@@ -9,7 +9,7 @@ provides Go 1.26, Node 22, `just`, `golangci-lint`, `treefmt` with `gofumpt` and
 `just pre-commit` (format check plus incremental lint).
 
 The Windows binaries cross-compile with no cgo, so `just build` needs nothing
-else. Compiling or testing the `sofcat-ui` package for the host (`just test`,
+else. Compiling or testing the `ui` package for the host (`just test`,
 `just check-xplat`) does need cgo: on Linux install GTK4 and WebKitGTK 6 dev
 packages plus `pkg-config` (Debian: `libgtk-4-dev libwebkitgtk-6.0-dev`), on
 macOS the Xcode command line tools.
@@ -23,13 +23,13 @@ production build).
 ## Build artifacts
 
 Every build recipe writes only under `build/` (gitignored), except the frontend
-recipes: `ui-install` writes `sofcat-ui/frontend/node_modules/` and `ui-assets`
-writes `sofcat-ui/frontend/dist/` (both gitignored). Nothing is emitted at the
+recipes: `ui-install` writes `ui/frontend/node_modules/` and `ui-assets`
+writes `ui/frontend/dist/` (both gitignored). Nothing is emitted at the
 repo root.
 
 A normal `just build` produces **both** raw Windows executables:
 `build/sofcat.exe` and `build/sofcat-ui.exe`. The UI build runs the Vite
-production build first, then embeds `sofcat-ui/frontend/dist`. No installer is
+production build first, then embeds `ui/frontend/dist`. No installer is
 produced by `just build`; `just msi` builds the installer with embala (see
 `installer/embala.toml`). Nothing is signed.
 

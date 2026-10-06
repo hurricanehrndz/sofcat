@@ -21,7 +21,7 @@ SofCat assumes one interactive user per machine. The self-serve manifest is per 
 
 ## Protocol
 
-This section is the contract between the service and its clients (`sofcat-ui`
+This section is the contract between the service and its clients (`ui`
 and `sofcat -S`, both through `pkg/service.Client`).
 
 The service speaks [JSON-RPC 2.0](https://www.jsonrpc.org/specification): one

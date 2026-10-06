@@ -51,7 +51,7 @@ installer puts them in `C:\Program Files\SofCat` and registers the service.
 - Use idiomatic Go and keep code gofmt-clean.
 - Prefer small, explicit functions over broad refactors.
 - Preserve existing package boundaries (`cmd/`, `pkg/`, `integration/`, `utils/`, `installer/`).
-- Keep SofCat UI code and related docs under `sofcat-ui/` unless there is a clear reason to place files elsewhere.
+- Keep SofCat UI code and related docs under `ui/` unless there is a clear reason to place files elsewhere.
 - Do not add new dependencies unless necessary, and explicitly call out/review any dependency additions in the PR.
 
 ## Windows & Integration Notes
@@ -77,13 +77,13 @@ installer puts them in `C:\Program Files\SofCat` and registers the service.
 
 ## UI & Protocol Notes
 
-- SofCat UI is a Wails v3 application (`package main` in `sofcat-ui/`) inside
+- SofCat UI is a Wails v3 application (`package main` in `ui/`) inside
   this repository's root Go module. Its frontend is vanilla TypeScript + Vite.
 - Local tooling prerequisites: `mise install` (see `mise.toml`) supplies Go, Node 22,
   `just` and the lint and format tools. No other SDK is needed; the shipped Windows
   binary is a pure-Go cross-build.
-- Generated Wails TypeScript bindings under `sofcat-ui/frontend/bindings/` are
-  committed and must never be hand-edited. Regenerate them from `sofcat-ui/` with
+- Generated Wails TypeScript bindings under `ui/frontend/bindings/` are
+  committed and must never be hand-edited. Regenerate them from `ui/` with
   the pinned command and commit the result:
 
       go run github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha2.117 generate bindings -clean -ts -noevents -d frontend/bindings .
@@ -91,7 +91,7 @@ installer puts them in `C:\Program Files\SofCat` and registers the service.
   `just ui-lint` fails when the committed tree and a fresh generation differ.
 - The service speaks JSON-RPC 2.0 (newline-delimited, one request per connection, plus
   the `streamOperationStatus` notification stream); the contract is the "Protocol"
-  section of `sofcat-ui/ARCHITECTURE.md`. Only `pkg/service/transport_*.go` is per
+  section of `ui/ARCHITECTURE.md`. Only `pkg/service/transport_*.go` is per
   platform, so keep protocol and runner code portable and its tests running on Linux.
 - Keep `cmd/sofcat` service-message commands updated in lockstep with SofCat UI protocol changes for testing/debugging.
 - `ListOptionalInstalls` should return JSON-safe subset DTOs, not full internal item objects.
@@ -138,8 +138,8 @@ the two gates above. `msiexec /x <msi> /qn` must remove the service and
 ## Diagnostics
 
 - For diagnostics policy, behavior, and implementation guidance, follow:
-  - `sofcat-ui/ARCHITECTURE.md`
-  - `sofcat-ui/README.md`
+  - `ui/ARCHITECTURE.md`
+  - `ui/README.md`
 
 ## PR Expectations
 
