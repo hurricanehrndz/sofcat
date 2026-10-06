@@ -15,11 +15,11 @@ DemoOptional:
   installer:
     type: ps1
     location: packages/scripts/demooptional-install.ps1
-    hash: e1039dc97ecfce817da975b317fec024a997c1dd7ba65d2f465f3d5efbe31bdf
+    hash: 3575ac3bef6f5335d1867b4e9916b17d56205d341ed4cd8bcebc089ad2249640
   uninstaller:
     type: ps1
     location: packages/scripts/demooptional-uninstall.ps1
-    hash: a2981def3ade212d8d875c0e263fde861c5ebb64c3b28432b9f44b4aac95bd4d
+    hash: fbb65db40540402f4bef3330e8313224cc85089f0ed78c8ae42ca427e66d11cb
   version: "1.0"
 DemoDefault:
   display_name: Demo Default
@@ -29,11 +29,11 @@ DemoDefault:
   installer:
     type: ps1
     location: packages/scripts/demodefault-install.ps1
-    hash: 32774fa0552591e0a5f66a1ff382bb528bcfb32410c64388526d726bb4d36aa3
+    hash: c6c995c6c67f4e070623114ae1c93a0595143cf9d97e9f8805d9142251741052
   uninstaller:
     type: ps1
     location: packages/scripts/demodefault-uninstall.ps1
-    hash: 7efabc3552fb0774eae48e7eda8bc4efd6d94b435446958ac86e736c0eea3eb1
+    hash: 0eba0587690fae47f5775605238f59e56cf16da68d3d3a6615c12503dd092b4d
   version: "1.0"
 DemoBlocked:
   display_name: Demo Blocked
@@ -46,11 +46,11 @@ DemoBlocked:
   installer:
     type: ps1
     location: packages/scripts/demoblocked-install.ps1
-    hash: 4cbbc99ebd062b2bb51156368df7a003b0f315e4965b1d679c306272fced04e1
+    hash: dbdb0ec0de4410eb82f9801be73feacbea0a3155e83dada44db1cfa28fe9bda1
   uninstaller:
     type: ps1
     location: packages/scripts/demoblocked-uninstall.ps1
-    hash: 8b8c8f2d54fb64e0b4f42e166bb4c31c8fc46887dff92753dbc10abea7e94736
+    hash: 2502768f0cd7087b26b5e1db01853036909d02358a568e7cc44e5a52d4e07dbd
   version: "1.0"
 # DemoUpdater rides along with DemoOptional (update_for). It is NOT offered in
 # optional_installs — updaters are pulled in by their referent (P5).
@@ -64,11 +64,11 @@ DemoUpdater:
   installer:
     type: ps1
     location: packages/scripts/demoupdater-install.ps1
-    hash: 8a587e66994e6a4c09e6fc77b35636f3405e7d738928dd82042b6cb044c7cad6
+    hash: 1f20f26868cda4612b520bcb8319b7cc9276390fdf92b9b07ddfeb7eb5798824
   uninstaller:
     type: ps1
     location: packages/scripts/demoupdater-uninstall.ps1
-    hash: e1866b01e59750f207294334f5d11d7371dab4e7431ae4bc90f008d144e80b02
+    hash: ec6b7c0017ff3f8e8ea6cbe3b66187a17c21e692904cff659222b7977ddfa0c0
   version: "1.0"
 # DemoFailing's installer exits 1 and its file check points at a path the
 # installer never creates, so the run records an honest failure (P6).
@@ -95,9 +95,9 @@ DemoRequired:
   installer:
     type: ps1
     location: packages/scripts/demorequired-install.ps1
-    hash: ad75908f5619e804c658087b5d60a755bf96dd7143102f1b3a831aaba8f0107b
+    hash: 072526acc49c1480d04e0ba217a057e672b7f421ad239c3e9ca6e28cd39b0eb9
   uninstaller:
     type: ps1
     location: packages/scripts/demorequired-uninstall.ps1
-    hash: 178cde3f99bc3d243e0b811e7625fe813b96ad0e7f6a2b20c6b7b5c2d00e0b71
+    hash: 95d52a8d69395e98888c8c8909cb79af7798d07bc2561428d142a96b24b8e6ac
   version: "1.0"
