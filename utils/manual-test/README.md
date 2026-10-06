@@ -4,7 +4,7 @@ This directory supports a fast macOS -> Windows VM manual test loop.
 
 ## Loop
 1. Make code changes on macOS.
-2. Run `make bootstrap-run` on macOS.
+2. Run `just bootstrap-run` on macOS.
 3. Start the local test server on macOS (included in `bootstrap-run`).
 4. Copy generated VM scripts from `build/manual-test/vm/` to the VM.
 5. Run one VM bootstrap script to pull the latest binary/config.
@@ -14,13 +14,13 @@ This directory supports a fast macOS -> Windows VM manual test loop.
 From repo root:
 
 ```bash
-make bootstrap-run
+just bootstrap-run
 ```
 
 Or if you want separate steps:
 
 ```bash
-make bootstrap
+just bootstrap
 ./build/manual-test-server -root build/manual-test/server-root -addr :8080
 ```
 
@@ -39,11 +39,11 @@ This creates:
 - `build/manual-test/vm/run-release-integration.bat`
 - `build/manual-test/vm/base-url.txt` (resolved URL used for stamping)
 
-`make bootstrap` auto-detects a URL like `http://<your-mac-ip>:8080/`.
+`just bootstrap` auto-detects a URL like `http://<your-mac-ip>:8080/`.
 To override:
 
 ```bash
-make bootstrap MANUAL_TEST_BASE_URL=http://192.168.1.50:8080/
+just bootstrap http://192.168.1.50:8080/
 ```
 
 Server source lives in `utils/manual-test/server` (separate Go module).

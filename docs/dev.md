@@ -2,15 +2,21 @@
 
 ## Environment
 
-The toolchain enters via [devenv](https://devenv.sh) + [direnv](https://direnv.net):
-`direnv allow` (or `devenv shell`) drops you into a shell with Go 1.26, `just`,
-`golangci-lint`, `treefmt`, and the SofCat UI toolchain (Node 22, `pkg-config`,
-GTK4, WebKitGTK 6). Formatting and linting are enforced on commit by git-hooks
-(treefmt + golangci-lint on changed Go files).
+Tools come from [mise](https://mise.jdx.dev): `mise install` reads `mise.toml` and
+provides Go 1.26, Node 22, `just`, `golangci-lint`, `treefmt` with `gofumpt` and
+`yamlfmt`. Activate mise in your shell (or prefix commands with `mise exec --`).
+`just setup` installs the frontend dependencies and a pre-commit hook that runs
+`just pre-commit` (format check plus incremental lint).
+
+The Windows binaries cross-compile with no cgo, so `just build` needs nothing
+else. Compiling or testing the `sofcat-ui` package for the host (`just test`,
+`just check-xplat`) does need cgo: on Linux install GTK4 and WebKitGTK 6 dev
+packages plus `pkg-config` (Debian: `libgtk-4-dev libwebkitgtk-6.0-dev`), on
+macOS the Xcode command line tools.
 
 Run tasks with `just`: `just build`, `just test`, `just lint`, `just fmt`,
 `just check-xplat`, `just makecatalogs`, `just clean` (see the `justfile`).
-UI-specific targets exist in both runners: `ui-lint` (TypeScript plus the
+UI-specific recipes: `ui-lint` (TypeScript plus the
 committed-binding check), `ui-test` (frontend tests), `ui-assets` (Vite
 production build).
 
@@ -21,7 +27,7 @@ recipes: `ui-install` writes `sofcat-ui/frontend/node_modules/` and `ui-assets`
 writes `sofcat-ui/frontend/dist/` (both gitignored). Nothing is emitted at the
 repo root.
 
-A normal `make build` / `just build` produces **both** raw Windows executables:
+A normal `just build` produces **both** raw Windows executables:
 `build/sofcat.exe` and `build/sofcat-ui.exe`. The UI build runs the Vite
 production build first, then embeds `sofcat-ui/frontend/dist`. No installer is
 produced and nothing is signed.

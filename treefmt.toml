@@ -1,0 +1,12 @@
+# Formatting for `just fmt` and the pre-commit hook. golangci-lint runs no
+# formatters so the two never fight over a file.
+excludes = ["*.lock", "*.patch", "package-lock.json", "go.mod", "go.sum", ".gitattributes", ".gitignore", "LICENSE"]
+
+[formatter.gofumpt]
+command = "gofumpt"
+includes = ["*.go"]
+options = ["-w"]
+
+[formatter.yamlfmt]
+command = "yamlfmt"
+includes = ["*.yaml", "*.yml"]

@@ -1,0 +1,10 @@
+# Toolchain for contributors. `mise install` fetches everything; `mise run`
+# is not used: tasks live in the justfile.
+[tools]
+go = "1.26"
+node = "22"
+just = "1.58"
+golangci-lint = "2.12.2"
+gofumpt = "0.12"
+yamlfmt = "0.21"
+"ubi:numtide/treefmt" = "2.5.0"

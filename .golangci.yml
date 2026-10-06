@@ -21,5 +21,5 @@ linters:
   # whole-tree cleanup are intentionally deferred to Workstream B
   # (kernel-repair). Enforcement here is incremental (new-from-merge-base).
 
-# Formatting is handled by treefmt (gofumpt) in devenv.nix, so no formatters
+# Formatting is handled by treefmt (gofumpt, treefmt.toml), so no formatters
 # are enabled here to avoid two tools fighting over the same files.

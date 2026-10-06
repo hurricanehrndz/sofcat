@@ -19,7 +19,7 @@ Guidance for coding agents working in this repository.
 
 1. Read relevant package(s) before editing.
 2. Make minimal, focused changes.
-3. Run broad local validation with `make test` (tests are fast/lightweight in this repo).
+3. Run broad local validation with `just test` (tests are fast/lightweight in this repo).
 4. Keep changes ready for PR review (clear commits, no unrelated edits).
 5. For each task, create and use a new branch named `agent/<task-slug>` (do not work on `main`).
 6. Before any commit, verify the current branch was created by this agent for this task; if not, stop and create a new `agent/<task-slug>` branch.
@@ -27,20 +27,20 @@ Guidance for coding agents working in this repository.
 
 ## Build & Test Commands
 
-- Helpful make targets:
-  - `make build`
-  - `make test`
-  - `make ui-lint`
-  - `make ui-test`
-  - `make clean`
-  - `make bootstrap`
-  - `make bootstrap-run`
+- Helpful just recipes (`just` alone lists them all):
+  - `just build`
+  - `just test`
+  - `just ui-lint`
+  - `just ui-test`
+  - `just clean`
+  - `just bootstrap`
+  - `just bootstrap-run`
 
-Prefer `make test` as the default local validation step, even for small changes.
-When changes include SofCat UI code, run `make ui-lint` and `make ui-test`.
-When changes span Go service/CLI and UI protocol layers, run `make test`, `make ui-lint`, and `make ui-test`.
+Prefer `just test` as the default local validation step, even for small changes.
+When changes include SofCat UI code, run `just ui-lint` and `just ui-test`.
+When changes span Go service/CLI and UI protocol layers, run `just test`, `just ui-lint`, and `just ui-test`.
 
-`make build` produces both raw Windows executables — `build/sofcat.exe` and the
+`just build` produces both raw Windows executables — `build/sofcat.exe` and the
 pure-Go, windows-GUI `build/sofcat-ui.exe`
 (`GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -tags production -ldflags "-H windowsgui"`).
 
@@ -77,16 +77,16 @@ pure-Go, windows-GUI `build/sofcat-ui.exe`
 
 - SofCat UI is a Wails v3 application (`package main` in `sofcat-ui/`) inside
   this repository's root Go module. Its frontend is vanilla TypeScript + Vite.
-- Local tooling prerequisites: the `devenv` shell (`devenv shell` / `direnv allow`)
-  supplies Go, Node 22, `pkg-config`, GTK4, and WebKitGTK 6. No other SDK is needed;
-  the shipped Windows binary is a pure-Go cross-build.
+- Local tooling prerequisites: `mise install` (see `mise.toml`) supplies Go, Node 22,
+  `just` and the lint and format tools. No other SDK is needed; the shipped Windows
+  binary is a pure-Go cross-build.
 - Generated Wails TypeScript bindings under `sofcat-ui/frontend/bindings/` are
   committed and must never be hand-edited. Regenerate them from `sofcat-ui/` with
   the pinned command and commit the result:
 
       go run github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha2.117 generate bindings -clean -ts -noevents -d frontend/bindings .
 
-  `make ui-lint` fails when the committed tree and a fresh generation differ.
+  `just ui-lint` fails when the committed tree and a fresh generation differ.
 - The service speaks JSON-RPC 2.0 (newline-delimited, one request per connection, plus
   the `streamOperationStatus` notification stream); the contract is the "Protocol"
   section of `sofcat-ui/ARCHITECTURE.md`. Only `pkg/service/transport_*.go` is per
@@ -109,7 +109,7 @@ a Windows VM against the real SYSTEM service.
 validation.** It is gitignored and describes this machine's test rig: which VM
 to use and the exact commands for each step below.
 
-1. Start from a clean VM. `devenv shell -- make bootstrap MANUAL_TEST_BASE_URL=<url the VM can reach>`
+1. Start from a clean VM. `just bootstrap <url the VM can reach>`
    builds both binaries and the fixture assets. Serve them with
    `./build/manual-test-server -root build/manual-test/server-root -addr <addr>`.
 2. Copy `build/manual-test/vm/bootstrap-vm.ps1`, `utils/manual-test/run-selfserve-smoke.ps1`
