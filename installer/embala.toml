@@ -21,12 +21,10 @@ license = "Apache-2.0"
 
 [msi]
 arch = "x86_64"
-# CEILING: embala 0.2.1 binds both the Start-menu shortcut and the service to
-# main-executable, so the shortcut targets the agent rather than sofcat-ui.exe.
-# Upgrade: a separate shortcut target in embala, then point it at the UI.
-main-executable = "sofcat.exe"
+# The Start-menu shortcut targets the UI; the service runs the agent.
+main-executable = "sofcat-ui.exe"
 files = [
   { src = "sofcat.exe", dest = "sofcat.exe" },
   { src = "sofcat-ui.exe", dest = "sofcat-ui.exe" },
 ]
-service = { name = "sofcat", display-name = "SofCat", description = "SofCat application management service", start = "auto", arguments = "-service" }
+service = { name = "sofcat", executable = "sofcat.exe", display-name = "SofCat", description = "SofCat application management service", start = "auto", arguments = "-service" }
