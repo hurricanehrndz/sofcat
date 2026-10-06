@@ -4,9 +4,9 @@ import (
 	"log/slog"
 	"slices"
 
-	"github.com/1dustindavis/gorilla/pkg/catalog"
-	"github.com/1dustindavis/gorilla/pkg/manifest"
-	"github.com/1dustindavis/gorilla/pkg/status"
+	"github.com/hurricanehrndz/sofcat/pkg/catalog"
+	"github.com/hurricanehrndz/sofcat/pkg/manifest"
+	"github.com/hurricanehrndz/sofcat/pkg/status"
 )
 
 // statusCheck is a test seam over the status checker, mirroring installerInstall.

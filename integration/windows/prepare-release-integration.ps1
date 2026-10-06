@@ -1,5 +1,5 @@
 param(
-    [string]$WorkRoot = "$env:RUNNER_TEMP\gorilla-release-integration",
+    [string]$WorkRoot = "$env:RUNNER_TEMP\sofcat-release-integration",
     [string]$MsixCertThumbprint = ""
 )
 
@@ -36,13 +36,13 @@ $toolsRoot = Join-Path $fixtureRoot "tools"
 $msiBuildRoot = Join-Path $fixtureRoot "msi"
 $chocoRoot = Join-Path $fixtureRoot "choco"
 
-$markerRoot = "C:\ProgramData\gorilla-it"
+$markerRoot = "C:\ProgramData\sofcat-it"
 $exeMarker = Join-Path $markerRoot "exe.txt"
 $msiMarker = Join-Path $markerRoot "msi.txt"
 $nupkgMarker = Join-Path $markerRoot "nupkg.txt"
 $ps1Marker = Join-Path $markerRoot "ps1.txt"
-$msixPackageName = "GorillaIntegrationTest"
-$msixNoUninstallerPackageName = "GorillaIntegrationTestNoUninstaller"
+$msixPackageName = "SofCatIntegrationTest"
+$msixNoUninstallerPackageName = "SofCatIntegrationTestNoUninstaller"
 
 $msixBuildRoot = Join-Path $fixtureRoot "msix"
 
@@ -106,35 +106,35 @@ $ps1InstallV2 = Join-Path $packagesRoot "scripts/marker-install-v2.ps1"
 $ps1Uninstall = Join-Path $packagesRoot "scripts/marker-uninstall.ps1"
 New-Item -ItemType Directory -Path (Split-Path -Path $ps1InstallV1 -Parent) -Force | Out-Null
 @'
-$marker = "C:\ProgramData\gorilla-it\ps1.txt"
+$marker = "C:\ProgramData\sofcat-it\ps1.txt"
 New-Item -Path (Split-Path -Path $marker -Parent) -ItemType Directory -Force | Out-Null
 Set-Content -LiteralPath $marker -Value "1.0.0" -NoNewline
 '@ | Set-Content -LiteralPath $ps1InstallV1 -NoNewline
 @'
-$marker = "C:\ProgramData\gorilla-it\ps1.txt"
+$marker = "C:\ProgramData\sofcat-it\ps1.txt"
 New-Item -Path (Split-Path -Path $marker -Parent) -ItemType Directory -Force | Out-Null
 Set-Content -LiteralPath $marker -Value "2.0.0" -NoNewline
 '@ | Set-Content -LiteralPath $ps1InstallV2 -NoNewline
 @'
-$marker = "C:\ProgramData\gorilla-it\ps1.txt"
+$marker = "C:\ProgramData\sofcat-it\ps1.txt"
 if (Test-Path -LiteralPath $marker) {
     Remove-Item -LiteralPath $marker -Force
 }
 '@ | Set-Content -LiteralPath $ps1Uninstall -NoNewline
 
 Write-Host "Creating nupkg fixtures"
-$nupkgDir = Join-Path $chocoRoot "gorilla-it-nupkg"
+$nupkgDir = Join-Path $chocoRoot "sofcat-it-nupkg"
 $toolsDir = Join-Path $nupkgDir "tools"
 New-Item -ItemType Directory -Path $toolsDir -Force | Out-Null
 
 @'
-$marker = "C:\ProgramData\gorilla-it\nupkg.txt"
+$marker = "C:\ProgramData\sofcat-it\nupkg.txt"
 New-Item -Path (Split-Path -Path $marker -Parent) -ItemType Directory -Force | Out-Null
 Set-Content -LiteralPath $marker -Value "__VERSION__" -NoNewline
 '@ | Set-Content -LiteralPath (Join-Path $toolsDir "chocolateyInstall.template.ps1") -NoNewline
 
 @'
-$marker = "C:\ProgramData\gorilla-it\nupkg.txt"
+$marker = "C:\ProgramData\sofcat-it\nupkg.txt"
 if (Test-Path -LiteralPath $marker) {
     Remove-Item -LiteralPath $marker -Force
 }
@@ -143,15 +143,15 @@ if (Test-Path -LiteralPath $marker) {
 function Build-Nupkg {
     param([string]$Version)
 
-    $nuspecPath = Join-Path $nupkgDir "gorilla-it-nupkg.nuspec"
+    $nuspecPath = Join-Path $nupkgDir "sofcat-it-nupkg.nuspec"
     @"
 <?xml version="1.0"?>
 <package>
   <metadata>
-    <id>gorilla-it-nupkg</id>
+    <id>sofcat-it-nupkg</id>
     <version>$Version</version>
-    <title>gorilla-it-nupkg</title>
-    <authors>gorilla-it</authors>
+    <title>sofcat-it-nupkg</title>
+    <authors>sofcat-it</authors>
     <description>Integration test package</description>
   </metadata>
 </package>
@@ -168,8 +168,8 @@ New-Item -ItemType Directory -Path (Join-Path $packagesRoot "nupkg") -Force | Ou
 Build-Nupkg -Version "1.0.0"
 Build-Nupkg -Version "2.0.0"
 
-$nupkgV1 = Join-Path $packagesRoot "nupkg/gorilla-it-nupkg.1.0.0.nupkg"
-$nupkgV2 = Join-Path $packagesRoot "nupkg/gorilla-it-nupkg.2.0.0.nupkg"
+$nupkgV1 = Join-Path $packagesRoot "nupkg/sofcat-it-nupkg.1.0.0.nupkg"
+$nupkgV2 = Join-Path $packagesRoot "nupkg/sofcat-it-nupkg.2.0.0.nupkg"
 
 Write-Host "Creating msi fixtures"
 if (-not (Get-Command candle.exe -ErrorAction SilentlyContinue)) {
@@ -195,7 +195,7 @@ function Build-Msi {
     @"
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-  <Product Id="*" Name="gorilla-it-msi" Language="1033" Version="$Version" Manufacturer="gorilla-it" UpgradeCode="4BB76213-C480-4B66-BB00-5D66FC791F09">
+  <Product Id="*" Name="sofcat-it-msi" Language="1033" Version="$Version" Manufacturer="sofcat-it" UpgradeCode="4BB76213-C480-4B66-BB00-5D66FC791F09">
     <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
     <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
     <MediaTemplate EmbedCab="yes" />
@@ -204,7 +204,7 @@ function Build-Msi {
     </Feature>
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="CommonAppDataFolder">
-        <Directory Id="GorillaItFolder" Name="gorilla-it">
+        <Directory Id="SofCatItFolder" Name="sofcat-it">
           <Component Id="MarkerComponent" Guid="F7B17690-7238-4D73-8E0F-EA693E2B6E8B">
             <File Id="MarkerFile" Name="msi.txt" Source="$($markerTxt -replace "\\", "\\\\")" KeyPath="yes" />
           </Component>
@@ -220,8 +220,8 @@ function Build-Msi {
     & light.exe -nologo -out $OutputPath $wixobj | Out-Host
 }
 
-$msiV1 = Join-Path $packagesRoot "msi/gorilla-it-msi-1.0.0.msi"
-$msiV2 = Join-Path $packagesRoot "msi/gorilla-it-msi-2.0.0.msi"
+$msiV1 = Join-Path $packagesRoot "msi/sofcat-it-msi-1.0.0.msi"
+$msiV2 = Join-Path $packagesRoot "msi/sofcat-it-msi-2.0.0.msi"
 New-Item -ItemType Directory -Path (Split-Path -Path $msiV1 -Parent) -Force | Out-Null
 Build-Msi -Version "1.0.0" -OutputPath $msiV1
 Build-Msi -Version "2.0.0" -OutputPath $msiV2
@@ -264,10 +264,10 @@ function Build-Msix {
 <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
          xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
          IgnorableNamespaces="uap">
-  <Identity Name="$PackageName" Version="$Version.0" Publisher="CN=GorillaIT" ProcessorArchitecture="neutral" />
+  <Identity Name="$PackageName" Version="$Version.0" Publisher="CN=SofCatIT" ProcessorArchitecture="neutral" />
   <Properties>
-    <DisplayName>Gorilla Integration Test</DisplayName>
-    <PublisherDisplayName>GorillaIT</PublisherDisplayName>
+    <DisplayName>SofCat Integration Test</DisplayName>
+    <PublisherDisplayName>SofCatIT</PublisherDisplayName>
     <Logo>Assets\Square150x150Logo.png</Logo>
   </Properties>
   <Dependencies>
@@ -277,8 +277,8 @@ function Build-Msix {
     <Resource Language="en-US" />
   </Resources>
   <Applications>
-    <Application Id="App" Executable="gorilla-it-stub.exe" EntryPoint="gorilla-it-stub.exe">
-      <uap:VisualElements DisplayName="Gorilla Integration Test" Square150x150Logo="Assets\Square150x150Logo.png"
+    <Application Id="App" Executable="sofcat-it-stub.exe" EntryPoint="sofcat-it-stub.exe">
+      <uap:VisualElements DisplayName="SofCat Integration Test" Square150x150Logo="Assets\Square150x150Logo.png"
                           Square44x44Logo="Assets\Square44x44Logo.png" Description="Integration test stub"
                           BackgroundColor="transparent" />
     </Application>
@@ -296,16 +296,16 @@ function Build-Msix {
     [IO.File]::WriteAllBytes((Join-Path $assetsDir "Square44x44Logo.png"), $pngBytes)
 
     # Minimal stub exe (empty file — MakeAppx only requires the file exists for pack)
-    $stubExe = Join-Path $versionRoot "gorilla-it-stub.exe"
+    $stubExe = Join-Path $versionRoot "sofcat-it-stub.exe"
     [IO.File]::WriteAllBytes($stubExe, [byte[]]@())
 
     & $makeAppxExe pack /d $versionRoot /p $OutputPath /nv /o | Out-Host
 }
 
 New-Item -ItemType Directory -Path (Join-Path $packagesRoot "msix") -Force | Out-Null
-$msixV1 = Join-Path $packagesRoot "msix/gorilla-it-msix-1.0.0.msix"
-$msixV2 = Join-Path $packagesRoot "msix/gorilla-it-msix-2.0.0.msix"
-$msixNoUninstallerV1 = Join-Path $packagesRoot "msix/gorilla-it-msix-nouninstaller-1.0.0.msix"
+$msixV1 = Join-Path $packagesRoot "msix/sofcat-it-msix-1.0.0.msix"
+$msixV2 = Join-Path $packagesRoot "msix/sofcat-it-msix-2.0.0.msix"
+$msixNoUninstallerV1 = Join-Path $packagesRoot "msix/sofcat-it-msix-nouninstaller-1.0.0.msix"
 Build-Msix -Version "1.0.0" -OutputPath $msixV1
 Build-Msix -Version "2.0.0" -OutputPath $msixV2
 Build-Msix -Version "1.0.0" -OutputPath $msixNoUninstallerV1 -PackageName $msixNoUninstallerPackageName
@@ -416,11 +416,11 @@ MsiV1:
 $(Build-CheckScript -Path $msiMarker -Target "1.0.0" | ForEach-Object { "      $_" })
   installer:
     type: msi
-    location: packages/msi/gorilla-it-msi-1.0.0.msi
+    location: packages/msi/sofcat-it-msi-1.0.0.msi
     hash: $hashMsiV1
   uninstaller:
     type: msi
-    location: packages/msi/gorilla-it-msi-1.0.0.msi
+    location: packages/msi/sofcat-it-msi-1.0.0.msi
     hash: $hashMsiV1
   version: 1.0.0
 
@@ -431,11 +431,11 @@ MsiV2:
 $(Build-CheckScript -Path $msiMarker -Target "2.0.0" | ForEach-Object { "      $_" })
   installer:
     type: msi
-    location: packages/msi/gorilla-it-msi-2.0.0.msi
+    location: packages/msi/sofcat-it-msi-2.0.0.msi
     hash: $hashMsiV2
   uninstaller:
     type: msi
-    location: packages/msi/gorilla-it-msi-2.0.0.msi
+    location: packages/msi/sofcat-it-msi-2.0.0.msi
     hash: $hashMsiV2
   version: 2.0.0
 
@@ -446,14 +446,14 @@ NupkgV1:
 $(Build-CheckScript -Path $nupkgMarker -Target "1.0.0" | ForEach-Object { "      $_" })
   installer:
     type: nupkg
-    location: packages/nupkg/gorilla-it-nupkg.1.0.0.nupkg
+    location: packages/nupkg/sofcat-it-nupkg.1.0.0.nupkg
     hash: $hashNupkgV1
-    package_id: gorilla-it-nupkg
+    package_id: sofcat-it-nupkg
   uninstaller:
     type: nupkg
-    location: packages/nupkg/gorilla-it-nupkg.1.0.0.nupkg
+    location: packages/nupkg/sofcat-it-nupkg.1.0.0.nupkg
     hash: $hashNupkgV1
-    package_id: gorilla-it-nupkg
+    package_id: sofcat-it-nupkg
   version: 1.0.0
 
 NupkgV2:
@@ -463,14 +463,14 @@ NupkgV2:
 $(Build-CheckScript -Path $nupkgMarker -Target "2.0.0" | ForEach-Object { "      $_" })
   installer:
     type: nupkg
-    location: packages/nupkg/gorilla-it-nupkg.2.0.0.nupkg
+    location: packages/nupkg/sofcat-it-nupkg.2.0.0.nupkg
     hash: $hashNupkgV2
-    package_id: gorilla-it-nupkg
+    package_id: sofcat-it-nupkg
   uninstaller:
     type: nupkg
-    location: packages/nupkg/gorilla-it-nupkg.2.0.0.nupkg
+    location: packages/nupkg/sofcat-it-nupkg.2.0.0.nupkg
     hash: $hashNupkgV2
-    package_id: gorilla-it-nupkg
+    package_id: sofcat-it-nupkg
   version: 2.0.0
 
 Ps1V1:
@@ -511,7 +511,7 @@ MsixV1:
       version: 1.0.0
   installer:
     type: msix
-    location: packages/msix/gorilla-it-msix-1.0.0.msix
+    location: packages/msix/sofcat-it-msix-1.0.0.msix
     hash: $hashMsixV1
   uninstaller:
     type: msix
@@ -525,7 +525,7 @@ MsixV2:
       version: 2.0.0
   installer:
     type: msix
-    location: packages/msix/gorilla-it-msix-2.0.0.msix
+    location: packages/msix/sofcat-it-msix-2.0.0.msix
     hash: $hashMsixV2
   uninstaller:
     type: msix
@@ -539,7 +539,7 @@ MsixNoUninstallerV1:
       version: 1.0.0
   installer:
     type: msix
-    location: packages/msix/gorilla-it-msix-nouninstaller-1.0.0.msix
+    location: packages/msix/sofcat-it-msix-nouninstaller-1.0.0.msix
     hash: $hashMsixNoUninstallerV1
   version: 1.0.0
 "@

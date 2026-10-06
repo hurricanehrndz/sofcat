@@ -14,12 +14,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/1dustindavis/gorilla/pkg/catalog"
-	"github.com/1dustindavis/gorilla/pkg/config"
-	"github.com/1dustindavis/gorilla/pkg/gorillalog"
-	"github.com/1dustindavis/gorilla/pkg/installer"
-	"github.com/1dustindavis/gorilla/pkg/report"
-	"github.com/1dustindavis/gorilla/pkg/version"
+	"github.com/hurricanehrndz/sofcat/pkg/catalog"
+	"github.com/hurricanehrndz/sofcat/pkg/config"
+	"github.com/hurricanehrndz/sofcat/pkg/installer"
+	"github.com/hurricanehrndz/sofcat/pkg/report"
+	"github.com/hurricanehrndz/sofcat/pkg/sofcatlog"
+	"github.com/hurricanehrndz/sofcat/pkg/version"
 )
 
 // listener is the per-platform transport: a named pipe on Windows
@@ -142,7 +142,7 @@ func newServiceRunner(cfg config.Configuration, managedRun func(config.Configura
 }
 
 func (sr *serviceRunner) start(ctx context.Context) error {
-	if err := gorillalog.NewLog(sr.cfg); err != nil {
+	if err := sofcatlog.NewLog(sr.cfg); err != nil {
 		return fmt.Errorf("initialize logger: %w", err)
 	}
 
@@ -252,7 +252,7 @@ func (sr *serviceRunner) stop(ctx context.Context) {
 			"openOperations", sr.openOperationCount(),
 		)
 	}
-	gorillalog.Close()
+	sofcatlog.Close()
 }
 
 // openOperationCount is how many tracked operations have no terminal record.
@@ -651,7 +651,7 @@ func commandError(err error, operationID string) *Error {
 		// Any local user reads this message, and a fetch or file error can
 		// name repository URLs and local paths, so it stays in the log.
 		slog.Warn("service command failed", "operationId", operationID, "err", err)
-		return newError(codeCommandFailed, "the service could not complete the request; see the Gorilla service log", operationID)
+		return newError(codeCommandFailed, "the service could not complete the request; see the SofCat service log", operationID)
 	}
 }
 
@@ -693,7 +693,7 @@ func (sr *serviceRunner) scheduleRunAfterMutation(ctx context.Context, action, i
 				ErrorCode:       "managed_run_failed",
 				// The run's error can name repository URLs and local paths;
 				// the log above has it.
-				ErrorMessage: "the managed run failed; see the Gorilla service log",
+				ErrorMessage: "the managed run failed; see the SofCat service log",
 			})
 			return
 		}

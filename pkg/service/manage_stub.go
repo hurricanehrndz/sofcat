@@ -5,7 +5,7 @@ package service
 import (
 	"errors"
 
-	"github.com/1dustindavis/gorilla/pkg/config"
+	"github.com/hurricanehrndz/sofcat/pkg/config"
 )
 
 func RunAction(_ config.Configuration, _ string) error {

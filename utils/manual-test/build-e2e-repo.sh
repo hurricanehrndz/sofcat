@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# Assemble a complete local Gorilla repository for the Chrome end-to-end test.
+# Assemble a complete local SofCat repository for the Chrome end-to-end test.
 #
 # Output: build/e2e-repo/ (and build/e2e-repo.tar for one-shot transfer), laid
 # out exactly as a served repo is, so the VM can point `url:` at it directly
-# (file://C:/gorilla-repo/) or an HTTP server can serve it:
+# (file://C:/sofcat-repo/) or an HTTP server can serve it:
 #
-#   gorilla.exe, gorilla-ui.exe        current build (make build)
+#   sofcat.exe, sofcat-ui.exe        current build (make build)
 #   manifests/                         e2e_manifest + the selfserve fixtures
 #   catalogs/                          e2e_catalog (from makecatalogs) + selfserve_catalog
 #   packages-info/GoogleChrome.yaml    rendered from the .in template
 #   packages/google-chrome/*.msi       Chrome enterprise MSI (cached in build/)
 #   packages/scripts/                  selfserve marker installers
-#   branding/logo.png                   logo for the Gorilla UI branding step
+#   branding/logo.png                   logo for the SofCat UI branding step
 #
 # Run inside the devenv shell (needs go). Set CHROME_MSI to reuse a downloaded
 # MSI instead of fetching it.
@@ -50,7 +50,7 @@ echo "==> Chrome $version sha256 $hash"
 
 rm -rf "$repo"
 mkdir -p "$repo"/{manifests,catalogs,packages-info,packages/google-chrome}
-cp build/gorilla.exe build/gorilla-ui.exe "$repo/"
+cp build/sofcat.exe build/sofcat-ui.exe "$repo/"
 cp "$fixtures"/selfserve/manifests/*.yaml "$fixtures"/e2e/manifests/*.yaml "$repo/manifests/"
 cp -R "$fixtures"/selfserve/packages/scripts "$repo/packages/scripts"
 # Branding assets e2e-chrome.sh installs on the guest (not part of a served repo).

@@ -5,9 +5,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/1dustindavis/gorilla/pkg/catalog"
-	"github.com/1dustindavis/gorilla/pkg/manifest"
-	"github.com/1dustindavis/gorilla/pkg/status"
+	"github.com/hurricanehrndz/sofcat/pkg/catalog"
+	"github.com/hurricanehrndz/sofcat/pkg/manifest"
+	"github.com/hurricanehrndz/sofcat/pkg/status"
 )
 
 func TestReconcileSelfServe(t *testing.T) {

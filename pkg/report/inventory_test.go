@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/1dustindavis/gorilla/pkg/catalog"
+	"github.com/hurricanehrndz/sofcat/pkg/catalog"
 )
 
 // findItem returns the inventory item named name, failing the test if absent.
@@ -130,7 +130,7 @@ func TestInventoryStatusFromRunResults(t *testing.T) {
 
 // Copies of macadmins/osquery-extension tables/munki/munki.go structs with
 // json tags in place of plist tags. This is the contract for a future
-// gorilla_* extension table: if this stops decoding, that table breaks.
+// sofcat_* extension table: if this stops decoding, that table breaks.
 type munkiReport struct {
 	ConsoleUser           string
 	StartTime             string

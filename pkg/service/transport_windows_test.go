@@ -31,7 +31,7 @@ func testPipeName(t *testing.T) string {
 		return user.User.Sid, nil
 	}
 	t.Cleanup(func() { trustedPipeOwner = original })
-	return fmt.Sprintf("gorilla-test-%d-%d", os.Getpid(), testPipeSeq.Add(1))
+	return fmt.Sprintf("sofcat-test-%d-%d", os.Getpid(), testPipeSeq.Add(1))
 }
 
 // distrustTestServer makes clients expect the real service's owner,

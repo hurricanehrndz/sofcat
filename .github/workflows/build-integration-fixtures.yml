@@ -22,12 +22,12 @@ jobs:
       - name: Prepare released-binary integration fixtures
         shell: pwsh
         run: |
-          $workRoot = "$env:RUNNER_TEMP\gorilla-release-integration"
+          $workRoot = "$env:RUNNER_TEMP\sofcat-release-integration"
           ./integration/windows/prepare-release-integration.ps1 `
             -WorkRoot "$workRoot"
       - name: Upload integration fixtures
         uses: actions/upload-artifact@v4
         with:
-          name: gorilla-release-fixtures
-          path: ${{ runner.temp }}/gorilla-release-integration/fixture
+          name: sofcat-release-fixtures
+          path: ${{ runner.temp }}/sofcat-release-integration/fixture
           if-no-files-found: error

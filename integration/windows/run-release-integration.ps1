@@ -1,7 +1,7 @@
 param(
-    [string]$WorkRoot = "$env:RUNNER_TEMP\gorilla-release-integration",
+    [string]$WorkRoot = "$env:RUNNER_TEMP\sofcat-release-integration",
     [Parameter(Mandatory = $true)]
-    [string]$GorillaExePath
+    [string]$SofCatExePath
 )
 
 Set-StrictMode -Version Latest
@@ -69,11 +69,11 @@ url: $FileUrl
 manifest: $ManifestName
 catalogs:
   - integration
-app_data_path: C:/ProgramData/gorilla-it/cache
+app_data_path: C:/ProgramData/sofcat-it/cache
 "@ | Set-Content -LiteralPath $Path -NoNewline
 }
 
-function Run-Gorilla {
+function Run-SofCat {
     param(
         [string]$ExePath,
         [string]$ConfigPath,
@@ -81,13 +81,13 @@ function Run-Gorilla {
     )
 
     Write-Host "::group::[TEST] $Phase"
-    Write-Host "[RUN] gorilla -config $ConfigPath -verbose"
+    Write-Host "[RUN] sofcat -config $ConfigPath -verbose"
     & $ExePath -config $ConfigPath -verbose
     if ($LASTEXITCODE -ne 0) {
         Write-Host "::endgroup::"
-        throw "gorilla run failed for $ConfigPath with exit code $LASTEXITCODE"
+        throw "sofcat run failed for $ConfigPath with exit code $LASTEXITCODE"
     }
-    Write-Host "[PASS] gorilla exit code 0"
+    Write-Host "[PASS] sofcat exit code 0"
     Write-Host "::endgroup::"
 }
 
@@ -124,27 +124,27 @@ if ($missingPreparedPaths.Count -gt 0) {
     throw "Preparation output missing after running prepare-release-integration.ps1: $($missingPreparedPaths -join ', ')"
 }
 
-$markerRoot = "C:\ProgramData\gorilla-it"
+$markerRoot = "C:\ProgramData\sofcat-it"
 $exeMarker = Join-Path $markerRoot "exe.txt"
 $msiMarker = Join-Path $markerRoot "msi.txt"
 $nupkgMarker = Join-Path $markerRoot "nupkg.txt"
 $ps1Marker = Join-Path $markerRoot "ps1.txt"
-$msixPackageName = "GorillaIntegrationTest"
-$msixNoUninstallerPackageName = "GorillaIntegrationTestNoUninstaller"
+$msixPackageName = "SofCatIntegrationTest"
+$msixNoUninstallerPackageName = "SofCatIntegrationTestNoUninstaller"
 
 Write-Host "::group::[TEST] Environment setup"
 Remove-Item -LiteralPath $markerRoot -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Path $markerRoot -Force | Out-Null
 New-Item -ItemType Directory -Path $configRoot -Force | Out-Null
-New-Item -ItemType Directory -Path "C:\ProgramData\gorilla" -Force | Out-Null
+New-Item -ItemType Directory -Path "C:\ProgramData\sofcat" -Force | Out-Null
 Write-Host "[INFO] Cleaned marker directory: $markerRoot"
 Write-Host "::endgroup::"
 
-$gorillaExePath = [System.IO.Path]::GetFullPath($GorillaExePath)
-if (-not (Test-Path -LiteralPath $gorillaExePath)) {
-    throw "gorilla.exe not found at path: $gorillaExePath"
+$sofcatExePath = [System.IO.Path]::GetFullPath($SofCatExePath)
+if (-not (Test-Path -LiteralPath $sofcatExePath)) {
+    throw "sofcat.exe not found at path: $sofcatExePath"
 }
-Write-Host "[INFO] Using gorilla.exe from: $gorillaExePath"
+Write-Host "[INFO] Using sofcat.exe from: $sofcatExePath"
 
 $serverPort = Get-Random -Minimum 18080 -Maximum 18999
 $serverProc = Start-Process -FilePath $serverExe `
@@ -171,7 +171,7 @@ $currentPhase = "initialization"
 
 try {
     $currentPhase = "install"
-    Run-Gorilla -ExePath $gorillaExePath -ConfigPath $configInstall -Phase "Install"
+    Run-SofCat -ExePath $sofcatExePath -ConfigPath $configInstall -Phase "Install"
     Assert-Content -Path $exeMarker -Expected "1.0.0"
     Assert-Content -Path $msiMarker -Expected "1.0.0"
     Assert-Content -Path $nupkgMarker -Expected "1.0.0"
@@ -181,7 +181,7 @@ try {
     $results += "[PASS] Install"
 
     $currentPhase = "update"
-    Run-Gorilla -ExePath $gorillaExePath -ConfigPath $configUpdate -Phase "Update"
+    Run-SofCat -ExePath $sofcatExePath -ConfigPath $configUpdate -Phase "Update"
     Assert-Content -Path $exeMarker -Expected "2.0.0"
     Assert-Content -Path $msiMarker -Expected "2.0.0"
     Assert-Content -Path $nupkgMarker -Expected "2.0.0"
@@ -191,7 +191,7 @@ try {
     $results += "[PASS] Update"
 
     $currentPhase = "uninstall"
-    Run-Gorilla -ExePath $gorillaExePath -ConfigPath $configUninstall -Phase "Uninstall"
+    Run-SofCat -ExePath $sofcatExePath -ConfigPath $configUninstall -Phase "Uninstall"
     Assert-Missing -Path $exeMarker
     Assert-Missing -Path $msiMarker
     Assert-Missing -Path $nupkgMarker
@@ -202,7 +202,7 @@ try {
 
     Write-Host "========== Integration Test Summary =========="
     $results | ForEach-Object { Write-Host $_ }
-    Write-Host "[PASS] Gorilla released-binary integration run passed"
+    Write-Host "[PASS] SofCat released-binary integration run passed"
 
     if ($env:GITHUB_STEP_SUMMARY) {
         @"

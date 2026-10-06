@@ -8,14 +8,14 @@ import (
 
 	"golang.org/x/sys/windows/registry"
 
-	"github.com/1dustindavis/gorilla/pkg/config"
+	"github.com/hurricanehrndz/sofcat/pkg/config"
 )
 
 // The policy key MDM or GPO writes. Variables only so the Windows test can
 // point the reader at a scratch key under HKCU.
 var (
 	policyRoot = registry.LOCAL_MACHINE
-	policyPath = `SOFTWARE\Policies\Gorilla\Branding`
+	policyPath = `SOFTWARE\Policies\SofCat\Branding`
 )
 
 // readPolicy returns the REG_SZ values under the policy key. A missing key or

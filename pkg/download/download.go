@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/1dustindavis/gorilla/pkg/config"
+	"github.com/hurricanehrndz/sofcat/pkg/config"
 )
 
 // A package level copy of our config for the `download` package to reference

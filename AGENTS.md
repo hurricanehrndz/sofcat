@@ -8,9 +8,9 @@ Guidance for coding agents working in this repository.
 
 ## Project Context
 
-- Project: `gorilla` (Windows-focused application/package management tool in Go).
-- Main entrypoint: `./cmd/gorilla`.
-- Gorilla's deployed/runtime target is Windows, so Windows behavior is first-class.
+- Project: `sofcat` (Windows-focused application/package management tool in Go).
+- Main entrypoint: `./cmd/sofcat`.
+- SofCat's deployed/runtime target is Windows, so Windows behavior is first-class.
 - CI runs in GitHub Actions and primarily targets Windows (`windows-latest`) to match deployment expectations.
 - Development often happens on macOS: keep macOS build/test/dev workflows working where practical, but do not add major complexity solely to preserve parity.
 - Where appropriate, macOS/non-Windows stub or no-op behavior is acceptable if it keeps development workflows usable.
@@ -37,11 +37,11 @@ Guidance for coding agents working in this repository.
   - `make bootstrap-run`
 
 Prefer `make test` as the default local validation step, even for small changes.
-When changes include Gorilla UI code, run `make ui-lint` and `make ui-test`.
+When changes include SofCat UI code, run `make ui-lint` and `make ui-test`.
 When changes span Go service/CLI and UI protocol layers, run `make test`, `make ui-lint`, and `make ui-test`.
 
-`make build` produces both raw Windows executables — `build/gorilla.exe` and the
-pure-Go, windows-GUI `build/gorilla-ui.exe`
+`make build` produces both raw Windows executables — `build/sofcat.exe` and the
+pure-Go, windows-GUI `build/sofcat-ui.exe`
 (`GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -tags production -ldflags "-H windowsgui"`).
 
 ## Code Style
@@ -49,13 +49,13 @@ pure-Go, windows-GUI `build/gorilla-ui.exe`
 - Use idiomatic Go and keep code gofmt-clean.
 - Prefer small, explicit functions over broad refactors.
 - Preserve existing package boundaries (`cmd/`, `pkg/`, `integration/`, `utils/`, `wix/`).
-- Keep Gorilla UI code and related docs under `gorilla-ui/` unless there is a clear reason to place files elsewhere.
+- Keep SofCat UI code and related docs under `sofcat-ui/` unless there is a clear reason to place files elsewhere.
 - Do not add new dependencies unless necessary, and explicitly call out/review any dependency additions in the PR.
 
 ## Windows & Integration Notes
 
 - Be careful with path handling, newlines, and shell behavior differences.
-- Changes that affect service behavior should include/adjust tests in `pkg/service` and `cmd/gorilla` when appropriate.
+- Changes that affect service behavior should include/adjust tests in `pkg/service` and `cmd/sofcat` when appropriate.
 - When changing Windows named-pipe/service code paths, add or update Windows-only tests (`//go:build windows`) and validate on a Windows VM.
 - Keep diagnostics pragmatic: prefer debug-level logging or explicit debug toggles over always-on high-volume tracing.
 - Manual/integration helpers live under:
@@ -75,13 +75,13 @@ pure-Go, windows-GUI `build/gorilla-ui.exe`
 
 ## UI & Protocol Notes
 
-- Gorilla UI is a Wails v3 application (`package main` in `gorilla-ui/`) inside
+- SofCat UI is a Wails v3 application (`package main` in `sofcat-ui/`) inside
   this repository's root Go module. Its frontend is vanilla TypeScript + Vite.
 - Local tooling prerequisites: the `devenv` shell (`devenv shell` / `direnv allow`)
   supplies Go, Node 22, `pkg-config`, GTK4, and WebKitGTK 6. No other SDK is needed;
   the shipped Windows binary is a pure-Go cross-build.
-- Generated Wails TypeScript bindings under `gorilla-ui/frontend/bindings/` are
-  committed and must never be hand-edited. Regenerate them from `gorilla-ui/` with
+- Generated Wails TypeScript bindings under `sofcat-ui/frontend/bindings/` are
+  committed and must never be hand-edited. Regenerate them from `sofcat-ui/` with
   the pinned command and commit the result:
 
       go run github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha2.117 generate bindings -clean -ts -noevents -d frontend/bindings .
@@ -89,13 +89,13 @@ pure-Go, windows-GUI `build/gorilla-ui.exe`
   `make ui-lint` fails when the committed tree and a fresh generation differ.
 - The service speaks JSON-RPC 2.0 (newline-delimited, one request per connection, plus
   the `streamOperationStatus` notification stream); the contract is the "Protocol"
-  section of `gorilla-ui/ARCHITECTURE.md`. Only `pkg/service/transport_*.go` is per
+  section of `sofcat-ui/ARCHITECTURE.md`. Only `pkg/service/transport_*.go` is per
   platform, so keep protocol and runner code portable and its tests running on Linux.
-- Keep `cmd/gorilla` service-message commands updated in lockstep with Gorilla UI protocol changes for testing/debugging.
+- Keep `cmd/sofcat` service-message commands updated in lockstep with SofCat UI protocol changes for testing/debugging.
 - `ListOptionalInstalls` should return JSON-safe subset DTOs, not full internal item objects.
 - The bound Wails surface is exactly six methods, `ListOptionalInstalls`, `InstallItem`,
   `RemoveItem`, `WatchOperation`, `GetBranding`, and `CancelOperation`, and one
-  `gorilla:operation-status` event; the service's `getServiceInfo` is not bound.
+  `sofcat:operation-status` event; the service's `getServiceInfo` is not bound.
   Progress percentages are per item, not aggregate; only `Succeeded`, `Failed`,
   `Deferred`, and `Canceled` end an operation, and
   `Canceled` comes from the service (`canceledBy: "service"`) or the user (`"user"`).
@@ -119,8 +119,8 @@ to use and the exact commands for each step below.
 3. Machine-assertable gate: `run-selfserve-smoke.ps1` must exit 0 and print
    `SELF-SERVE SMOKE PASSED`.
 4. Visible gate: run `launch-wails-ui.ps1` in the logged-on user's desktop session
-   with a standard (non-elevated) token, so `gorilla-ui.exe` runs as the standard
-   user. It writes a ready marker under `C:\gorilla-test\`, so create that
+   with a standard (non-elevated) token, so `sofcat-ui.exe` runs as the standard
+   user. It writes a ready marker under `C:\sofcat-test\`, so create that
    directory first. Screenshot the desktop to judge the Home, progress, terminal,
    Activity and offline-cache states.
 5. Clean up afterwards: stop the local test server and anything that exposes it
@@ -129,8 +129,8 @@ to use and the exact commands for each step below.
 ## Diagnostics
 
 - For diagnostics policy, behavior, and implementation guidance, follow:
-  - `gorilla-ui/ARCHITECTURE.md`
-  - `gorilla-ui/README.md`
+  - `sofcat-ui/ARCHITECTURE.md`
+  - `sofcat-ui/README.md`
 
 ## PR Expectations
 

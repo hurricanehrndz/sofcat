@@ -1,20 +1,20 @@
-url: https://example.com/gorilla/
+url: https://example.com/sofcat/
 manifest: example_manifest
 catalogs:
   - example_catalog
-app_data_path: c:/cpe/gorilla/cache
+app_data_path: c:/cpe/sofcat/cache
 # auth_user: johnny
 # auth_pass: pizza
-# service_name: gorilla
+# service_name: sofcat
 # service_interval: 1h
-# service_pipe_name: gorilla-service
-# Optional organisation branding for Gorilla UI. Policy values under
-# HKLM\SOFTWARE\Policies\Gorilla\Branding override each field. Leave the block
+# service_pipe_name: sofcat-service
+# Optional organisation branding for SofCat UI. Policy values under
+# HKLM\SOFTWARE\Policies\SofCat\Branding override each field. Leave the block
 # out to keep the default look.
 # branding:
 #   title: Acme Software Center
 #   tagline: Need help? Call the service desk at ext. 1234.
-#   logo: C:\ProgramData\gorilla\branding\logo.png   # local PNG, JPEG or SVG, at most 512 KiB
+#   logo: C:\ProgramData\sofcat\branding\logo.png   # local PNG, JPEG or SVG, at most 512 KiB
 #   help_url: https://help.example.com/               # http or https only
 #   help_label: Get help
 #   accent: "#0b6e4f"                                 # 6-digit hex

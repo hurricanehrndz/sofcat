@@ -2,8 +2,8 @@
 
 Every managed run writes `inventory.json`, a JSON file that a JSON-capable
 osquery extension (fleetd, or macadmins `osquery-extension`) can turn into
-`gorilla_*` tables. Its shape is Munki's `ManagedInstallReport`, with JSON in
-place of plist plus a few Gorilla extras, so a table can copy macadmins'
+`sofcat_*` tables. Its shape is Munki's `ManagedInstallReport`, with JSON in
+place of plist plus a few SofCat extras, so a table can copy macadmins'
 [`tables/munki/munki.go`](https://github.com/macadmins/osquery-extension/blob/main/tables/munki/munki.go)
 almost line for line.
 
@@ -12,9 +12,9 @@ table construction) can't be used, because it reads SQLite databases only.
 
 ## File
 
-- **Path:** `%ProgramData%\gorilla\inventory.json` (`AppDataPath` in
-  `config.yaml`, default `C:\ProgramData\gorilla`).
-- **Writer:** the managed run (`gorilla.exe` as SYSTEM, from the service or a
+- **Path:** `%ProgramData%\sofcat\inventory.json` (`AppDataPath` in
+  `config.yaml`, default `C:\ProgramData\sofcat`).
+- **Writer:** the managed run (`sofcat.exe` as SYSTEM, from the service or a
   scheduled run). It is written at the end of every run, including a run that
   fails part way, so the failure is visible. Check-only (`-C`) prints the same
   JSON to stdout and does not write the file.
@@ -27,7 +27,7 @@ table construction) can't be used, because it reads SQLite databases only.
   nothing is inherited. `icacls` shows only these two entries:
 
   ```text
-  C:\ProgramData\gorilla\inventory.json NT AUTHORITY\SYSTEM:(F)
+  C:\ProgramData\sofcat\inventory.json NT AUTHORITY\SYSTEM:(F)
                                         BUILTIN\Administrators:(R)
   ```
 
@@ -43,10 +43,10 @@ changing it, so readers should ignore keys they don't know.
 
 | Key | Type | Meaning |
 |---|---|---|
-| `schema_version` | int | See above. Gorilla extra. |
+| `schema_version` | int | See above. SofCat extra. |
 | `ConsoleUser` | string | Short name of the user at the console when the run ended; `""` if none. |
 | `StartTime`, `EndTime` | string | Local time, `2006-01-02 15:04:05 -0700` (Munki 6 format). |
-| `ManagedInstallVersion` | string | Gorilla version. |
+| `ManagedInstallVersion` | string | SofCat version. |
 | `ManifestName` | string | The client manifest (`manifest` in config). |
 | `Errors` | []string | Run-level error (e.g. manifest fetch failed), then one `"<action> of <name> failed: <error>"` per failed item. |
 | `Warnings` | []string | Items left out because they resolve to no valid catalog item, e.g. a self-service removal whose catalog entry is gone. |
@@ -61,14 +61,14 @@ Every list is present, and empty rather than `null`.
 
 ### Item
 
-The first five keys are Munki's. The rest are Gorilla extras.
+The first five keys are Munki's. The rest are SofCat extras.
 
 | Key | Type | Meaning |
 |---|---|---|
 | `name` | string | Catalog item name. |
 | `display_name` | string | Catalog `display_name`, or `name`. |
 | `installed` | bool | Present on disk after the run. |
-| `installed_version` | string | Catalog version when `installed` (Gorilla's checks report present/absent, not a version), else `""`. |
+| `installed_version` | string | Catalog version when `installed` (SofCat's checks report present/absent, not a version), else `""`. |
 | `version_to_install` | string | Catalog version. |
 | `kind` | string | Where the item came from; see below. |
 | `status` | string | What the run did with it; see below. |
@@ -133,7 +133,7 @@ release build would report it:
 These mirror `munki_info` and `munki_installs`. All columns are text, as in
 macadmins.
 
-`gorilla_info` (one row):
+`sofcat_info` (one row):
 
 | Column | Source |
 |---|---|
@@ -146,7 +146,7 @@ macadmins.
 | `manifest_name` | `ManifestName` |
 | `schema_version` | `schema_version` (extra) |
 
-`gorilla_installs` (one row per `ManagedInstalls` entry):
+`sofcat_installs` (one row per `ManagedInstalls` entry):
 
 | Column | Source |
 |---|---|

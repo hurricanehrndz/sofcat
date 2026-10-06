@@ -11,18 +11,18 @@ import (
 func TestGet(t *testing.T) {
 	// Define what we expect in a successful test
 	expected := Configuration{
-		URL:             "https://example.com/gorilla/",
-		URLPackages:     "https://example.com/gorilla/",
+		URL:             "https://example.com/sofcat/",
+		URLPackages:     "https://example.com/sofcat/",
 		Manifest:        "example_manifest",
 		LocalManifests:  []string{"example_local_manifest"},
 		Catalogs:        []string{"example_catalog"},
-		AppDataPath:     filepath.Clean("c:/cpe/gorilla/"),
+		AppDataPath:     filepath.Clean("c:/cpe/sofcat/"),
 		Verbose:         true,
 		Debug:           true,
 		CheckOnly:       true,
 		AuthUser:        "johnny",
 		AuthPass:        "pizza",
-		CachePath:       filepath.Clean("c:/cpe/gorilla/cache"),
+		CachePath:       filepath.Clean("c:/cpe/sofcat/cache"),
 		ServiceMode:     false,
 		ServiceCommand:  "",
 		ServiceInstall:  false,
@@ -30,13 +30,13 @@ func TestGet(t *testing.T) {
 		ServiceStart:    false,
 		ServiceStop:     false,
 		ServiceStatus:   false,
-		ServiceName:     "gorilla",
+		ServiceName:     "sofcat",
 		ServiceInterval: "1h",
-		ServicePipeName: "gorilla-service",
+		ServicePipeName: "sofcat-service",
 		Branding: Branding{
 			Title:     "Acme Software Center",
 			Tagline:   "Need help? Call the service desk at ext. 1234.",
-			Logo:      `C:\ProgramData\gorilla\branding\logo.png`,
+			Logo:      `C:\ProgramData\sofcat\branding\logo.png`,
 			HelpURL:   "https://example.com/help",
 			HelpLabel: "Get help",
 			Accent:    "#0b6e4f",
@@ -49,7 +49,7 @@ func TestGet(t *testing.T) {
 	defer func() { os.Args = origArgs }()
 
 	// Override with our input
-	os.Args = []string{"gorilla.exe", "-config", "testdata/test_config.yaml"}
+	os.Args = []string{"sofcat.exe", "-config", "testdata/test_config.yaml"}
 
 	// Run the actual code
 	cfg := Get()
@@ -67,10 +67,10 @@ func TestGet(t *testing.T) {
 func TestGetIgnoresLegacyRepoPath(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "legacy_config.yaml")
 	configYAML := []byte(`
-url: https://example.com/gorilla/
+url: https://example.com/sofcat/
 manifest: example_manifest
-app_data_path: c:/cpe/gorilla/
-repo_path: c:/repo/gorilla
+app_data_path: c:/cpe/sofcat/
+repo_path: c:/repo/sofcat
 `)
 	if err := os.WriteFile(configPath, configYAML, 0o644); err != nil {
 		t.Fatal(err)
@@ -82,10 +82,10 @@ repo_path: c:/repo/gorilla
 	defer func() { osExit = origExit }()
 	osExit = func(code int) { t.Fatalf("unexpected exit %d", code) }
 
-	os.Args = []string{"gorilla.exe", "--config", configPath}
+	os.Args = []string{"sofcat.exe", "--config", configPath}
 	cfg := Get()
 
-	if cfg.Manifest != "example_manifest" || cfg.URL != "https://example.com/gorilla/" {
+	if cfg.Manifest != "example_manifest" || cfg.URL != "https://example.com/sofcat/" {
 		t.Fatalf("legacy config not parsed: %#v", cfg)
 	}
 }
@@ -94,7 +94,7 @@ repo_path: c:/repo/gorilla
 // sit behind a build/import exemption; now every non-service run needs both.
 func TestGetRequiresManifestAndURL(t *testing.T) {
 	tests := map[string]string{
-		"no manifest": "url: https://example.com/gorilla/\n",
+		"no manifest": "url: https://example.com/sofcat/\n",
 		"no url":      "manifest: example_manifest\n",
 	}
 	for name, configYAML := range tests {
@@ -113,7 +113,7 @@ func TestGetRequiresManifestAndURL(t *testing.T) {
 			type exitCode int
 			osExit = func(code int) { panic(exitCode(code)) }
 
-			os.Args = []string{"gorilla.exe", "--config", configPath}
+			os.Args = []string{"sofcat.exe", "--config", configPath}
 			code := func() (code exitCode) {
 				defer func() {
 					if r := recover(); r != nil {
@@ -143,7 +143,7 @@ func TestParseArguments(t *testing.T) {
 	defer func() { os.Args = origArgs }()
 
 	// Override with our input
-	os.Args = []string{"gorilla.exe", "--verbose", "--debug", "--checkonly", "--config", `.\fake.yaml`}
+	os.Args = []string{"sofcat.exe", "--verbose", "--debug", "--checkonly", "--config", `.\fake.yaml`}
 
 	// Run code
 	configArg, verboseArg, debugArg, checkonlyArg := parseArguments()
@@ -186,7 +186,7 @@ func Example() {
 	defer func() { os.Args = origArgs }()
 
 	// Override with our input
-	os.Args = []string{"gorilla.exe", "--help"}
+	os.Args = []string{"sofcat.exe", "--help"}
 
 	// Run code, ignoring the return values
 	_, _, _, _ = parseArguments()
@@ -194,10 +194,10 @@ func Example() {
 	// Output:
 	// unknown unknown
 	//
-	// Gorilla - Munki-like Application Management for Windows
-	// https://github.com/1dustindavis/gorilla
+	// SofCat - Munki-like Application Management for Windows
+	// https://github.com/hurricanehrndz/sofcat
 	//
-	// Usage: gorilla.exe [options]
+	// Usage: sofcat.exe [options]
 	//
 	// Options:
 	// -c, -config         path to configuration file in yaml format
@@ -206,12 +206,12 @@ func Example() {
 	// -d, -debug          enable debug output
 	// -a, -about          displays the version number and other build info
 	// -V, -version        display the version number
-	// -s, -service        run Gorilla as a Windows service
-	// -S, -servicecmd     send a command to a running Gorilla service (GetServiceInfo|ListOptionalInstalls|GetBranding|InstallItem:itemName|RemoveItem:itemName|StreamOperationStatus:operationId|CancelOperation:operationId)
-	// -serviceinstall     install Gorilla as a Windows service and restrict its data directory to SYSTEM and Administrators
-	// -serviceremove      remove Gorilla Windows service
-	// -servicestart       start Gorilla Windows service
-	// -servicestop        stop Gorilla Windows service
-	// -servicestatus      show Gorilla Windows service status
+	// -s, -service        run SofCat as a Windows service
+	// -S, -servicecmd     send a command to a running SofCat service (GetServiceInfo|ListOptionalInstalls|GetBranding|InstallItem:itemName|RemoveItem:itemName|StreamOperationStatus:operationId|CancelOperation:operationId)
+	// -serviceinstall     install SofCat as a Windows service and restrict its data directory to SYSTEM and Administrators
+	// -serviceremove      remove SofCat Windows service
+	// -servicestart       start SofCat Windows service
+	// -servicestop        stop SofCat Windows service
+	// -servicestatus      show SofCat Windows service status
 	// -h, -help           display this help message
 }

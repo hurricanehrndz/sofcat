@@ -1,6 +1,6 @@
 @echo off
 
-echo Building Gorilla MSI using WIX
+echo Building SofCat MSI using WIX
 
 for /f %%i in ('git describe --tags --always --dirty') do set versionString=%%i
 echo Version: %versionString%
@@ -15,18 +15,18 @@ if "%productVersion:~0,1%"=="v" set "productVersion=%productVersion:~1%"
 for /f "tokens=1 delims=-+" %%i in ("%productVersion%") do set "productVersion=%%i"
 echo ProductVersion: %productVersion%
 
-copy "..\build\gorilla.exe" gorilla.exe 1>NUL
+copy "..\build\sofcat.exe" sofcat.exe 1>NUL
 
 echo Running candle...
-call "%wix%bin\candle.exe" -dProductVersion=%productVersion% gorilla.wxs 1>NUL
+call "%wix%bin\candle.exe" -dProductVersion=%productVersion% sofcat.wxs 1>NUL
 
 echo Running light...
-call "%wix%bin\light.exe" -ext WixUtilExtension.dll gorilla.wixobj 1>NUL
+call "%wix%bin\light.exe" -ext WixUtilExtension.dll sofcat.wixobj 1>NUL
 
 echo Cleaning up...
-move gorilla.msi gorilla-%versionString%.msi 1>NUL
-del gorilla.exe
-del gorilla.wixpdb
-del gorilla.wixobj
+move sofcat.msi sofcat-%versionString%.msi 1>NUL
+del sofcat.exe
+del sofcat.wixpdb
+del sofcat.wixobj
 
 pause

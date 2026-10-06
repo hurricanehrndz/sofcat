@@ -1,13 +1,13 @@
 <#
 .SYNOPSIS
-Real-package end-to-end test for Gorilla: install and remove Google Chrome
+Real-package end-to-end test for SofCat: install and remove Google Chrome
 through the service pipe and assert every observable side effect.
 
 .DESCRIPTION
-Drives the running Gorilla service (via `gorilla.exe -S ...`) against the e2e
+Drives the running SofCat service (via `sofcat.exe -S ...`) against the e2e
 fixture set built by build-e2e-repo.sh and asserts, in order:
   - GetBranding returns the config.yaml branding block e2e-chrome.sh appended, a
-    policy Title under HKLM\SOFTWARE\Policies\Gorilla\Branding wins over it, and
+    policy Title under HKLM\SOFTWARE\Policies\SofCat\Branding wins over it, and
     removing the policy brings the config title back
   - the item is offered with its catalog metadata and an honest NotInstalled status
   - DemoRequired, an admin managed_installs item, is listed isRequired and RemoveItem
@@ -38,10 +38,10 @@ PowerShell 5.1 compatible.
 
 [CmdletBinding()]
 param(
-    [string]$Gorilla   = "$env:ProgramData\gorilla\bin\gorilla.exe",
-    [string]$Config    = "$env:ProgramData\gorilla\config.yaml",
-    [string]$SelfServe = "$env:ProgramData\gorilla\service-manifest.yaml",
-    [string]$Inventory = "$env:ProgramData\gorilla\inventory.json",
+    [string]$SofCat   = "$env:ProgramData\sofcat\bin\sofcat.exe",
+    [string]$Config    = "$env:ProgramData\sofcat\config.yaml",
+    [string]$SelfServe = "$env:ProgramData\sofcat\service-manifest.yaml",
+    [string]$Inventory = "$env:ProgramData\sofcat\inventory.json",
     [string]$ItemName  = "GoogleChrome",
     [string]$RegistryName = "Google Chrome",
     [string]$ChromeExe = "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
@@ -66,21 +66,21 @@ function Fail {
     exit 1
 }
 
-function Invoke-Gorilla {
+function Invoke-SofCat {
     param([string]$Spec, [switch]$AllowFail)
     $savedEAP = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     try {
-        $out = & $Gorilla -c $Config -S $Spec 2>&1
+        $out = & $SofCat -c $Config -S $Spec 2>&1
     } finally {
         $ErrorActionPreference = $savedEAP
     }
     $code = $LASTEXITCODE
     $lines = @($out | ForEach-Object { "$_" })
-    Write-Host ("    gorilla -S {0} (exit {1})" -f $Spec, $code) -ForegroundColor DarkGray
+    Write-Host ("    sofcat -S {0} (exit {1})" -f $Spec, $code) -ForegroundColor DarkGray
     if (-not $AllowFail -and $code -ne 0) {
         $lines | ForEach-Object { Write-Host "      $_" -ForegroundColor DarkGray }
-        Fail "gorilla -S $Spec exited $code"
+        Fail "sofcat -S $Spec exited $code"
     }
     return @{ Code = $code; Out = $lines }
 }
@@ -121,7 +121,7 @@ function Wait-For {
 
 function Get-OptionalItem {
     param([string]$Name)
-    $res = Invoke-Gorilla "ListOptionalInstalls"
+    $res = Invoke-SofCat "ListOptionalInstalls"
     foreach ($l in $res.Out) {
         $t = "$l".Trim()
         if (-not $t.StartsWith('{')) { continue }
@@ -148,7 +148,7 @@ $Caller = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 
 function Stream-OperationEvents {
     param([string]$OpId)
-    $res = Invoke-Gorilla "StreamOperationStatus:$OpId"
+    $res = Invoke-SofCat "StreamOperationStatus:$OpId"
     $events = @()
     foreach ($l in $res.Out) {
         $t = "$l".Trim()
@@ -189,7 +189,7 @@ function Assert-ItemProgress {
 }
 
 # Get-UninstallEntry finds the Add/Remove Programs entry by DisplayName in both
-# the native and WOW6432 views of HKLM, like Gorilla's registry check does.
+# the native and WOW6432 views of HKLM, like SofCat's registry check does.
 function Get-UninstallEntry {
     param([string]$DisplayName)
     $roots = @(
@@ -225,7 +225,7 @@ function Stop-Chrome {
 }
 
 function Get-Branding {
-    $res = Invoke-Gorilla "GetBranding"
+    $res = Invoke-SofCat "GetBranding"
     foreach ($l in $res.Out) {
         $t = "$l".Trim()
         if ($t.StartsWith('{')) { return ($t | ConvertFrom-Json) }
@@ -235,7 +235,7 @@ function Get-Branding {
 
 # --- Branding: config block, then a policy value that wins over it
 Write-Step "GetBranding returns the config branding; a policy Title wins, and removing it restores the config"
-$PolicyKey = 'HKLM:\SOFTWARE\Policies\Gorilla\Branding'
+$PolicyKey = 'HKLM:\SOFTWARE\Policies\SofCat\Branding'
 $b = Get-Branding
 if ($b.title -ne $BrandingTitle)   { Fail "branding title '$($b.title)', expected '$BrandingTitle' from config.yaml" }
 if ($b.logoMime -ne "image/png")   { Fail "branding logoMime '$($b.logoMime)', expected image/png" }
@@ -243,7 +243,7 @@ if ([int]$b.logoBytes -le 0)       { Fail "branding logo is empty" }
 if ($b.accent -ne "#0b6e4f")       { Fail "branding accent '$($b.accent)'" }
 if ($b.helpUrl -notmatch '^https://') { Fail "branding helpUrl '$($b.helpUrl)'" }
 try {
-    & reg.exe add 'HKLM\SOFTWARE\Policies\Gorilla\Branding' /v Title /t REG_SZ /d 'Policy Title' /f | Out-Null
+    & reg.exe add 'HKLM\SOFTWARE\Policies\SofCat\Branding' /v Title /t REG_SZ /d 'Policy Title' /f | Out-Null
     if ($LASTEXITCODE -ne 0) { Fail "reg add exited $LASTEXITCODE" }
     $p = Get-Branding
     if ($p.title -ne "Policy Title") { Fail "policy Title did not win: '$($p.title)'" }
@@ -269,14 +269,14 @@ Pass "offered: $($item.displayName) $expectedVersion by $($item.developer) [$($i
 
 # --- Authorization: an admin-required item cannot be removed through the pipe
 Write-Step "DemoRequired (managed_installs) is listed as required and RemoveItem:DemoRequired is refused"
-Wait-For { Test-Path "C:\ProgramData\gorilla-c-smoke\required.txt" } "the managed run to install DemoRequired"
+Wait-For { Test-Path "C:\ProgramData\sofcat-c-smoke\required.txt" } "the managed run to install DemoRequired"
 $req = Get-OptionalItem "DemoRequired"
 if ($req -and $req.isRequired -ne $true) { Fail "DemoRequired is offered without isRequired: $($req | ConvertTo-Json -Compress)" }
-$refused = Invoke-Gorilla "RemoveItem:DemoRequired" -AllowFail
+$refused = Invoke-SofCat "RemoveItem:DemoRequired" -AllowFail
 if ($refused.Code -eq 0) { Fail "RemoveItem:DemoRequired was accepted" }
 if (($refused.Out -join ' ') -notmatch 'item_not_removable') { Fail "refusal lacks item_not_removable: $($refused.Out -join ' | ')" }
 if ((Get-YamlList $SelfServe "managed_uninstalls") -contains "DemoRequired") { Fail "the refused removal queued DemoRequired in managed_uninstalls" }
-if (-not (Test-Path "C:\ProgramData\gorilla-c-smoke\required.txt")) { Fail "DemoRequired's marker is gone" }
+if (-not (Test-Path "C:\ProgramData\sofcat-c-smoke\required.txt")) { Fail "DemoRequired's marker is gone" }
 Pass ("listed={0} isRequired={1}; RemoveItem refused (item_not_removable); still installed" -f [bool]$req, $req.isRequired)
 
 # --- Cancel: a queued install is withdrawn before its installer runs
@@ -284,13 +284,13 @@ Write-Step "CancelOperation withdraws a queued InstallItem:$ItemName; a second c
 # DemoOptional's installer sleeps 3 s, so its run holds the command queue.
 # InstallItem:$ItemName answers at once with its operation Queued behind that
 # run, so the cancel always lands before anything has run for Chrome.
-$demoOut = Invoke-Gorilla "InstallItem:DemoOptional"
+$demoOut = Invoke-SofCat "InstallItem:DemoOptional"
 $demoOp = Parse-OperationId $demoOut.Out
 if (-not $demoOp) { Fail "no operationId returned for InstallItem:DemoOptional" }
-$chromeOut = Invoke-Gorilla "InstallItem:$ItemName"
+$chromeOut = Invoke-SofCat "InstallItem:$ItemName"
 $chromeOp = Parse-OperationId $chromeOut.Out
 if (-not $chromeOp) { Fail "no operationId returned for InstallItem:$ItemName" }
-Invoke-Gorilla "CancelOperation:$chromeOp" | Out-Null
+Invoke-SofCat "CancelOperation:$chromeOp" | Out-Null
 $events = @(Stream-OperationEvents $chromeOp)
 $terminal = Get-TerminalEvent $events
 if (-not $terminal) { Fail "no terminal event for the canceled install" }
@@ -307,28 +307,28 @@ if (Get-UninstallEntry $RegistryName) { Fail "'$RegistryName' was installed desp
 if ((Get-YamlList $SelfServe "managed_installs") -contains $ItemName) { Fail "the cancel left $ItemName in managed_installs" }
 $demoTerminal = Get-TerminalEvent @(Stream-OperationEvents $demoOp)
 if ($demoTerminal.state -ne "Succeeded") { Fail "DemoOptional, queued ahead, ended '$($demoTerminal.state)'" }
-$again = Invoke-Gorilla "CancelOperation:$chromeOp" -AllowFail
+$again = Invoke-SofCat "CancelOperation:$chromeOp" -AllowFail
 if ($again.Code -eq 0) { Fail "a second cancel of a finished operation was accepted" }
 if (($again.Out -join ' ') -notmatch 'operation_not_cancelable') { Fail "refusal lacks operation_not_cancelable: $($again.Out -join ' | ')" }
 Pass "accepted after [$before]; Canceled by user; not installed; not selected; second cancel refused (operation_not_cancelable)"
 
 # --- Stop: the service restarts promptly while a managed run is busy
-Write-Step "Restart-Service gorilla completes within 30 s while a run is busy"
-$removeOut = Invoke-Gorilla "RemoveItem:DemoOptional"
+Write-Step "Restart-Service sofcat completes within 30 s while a run is busy"
+$removeOut = Invoke-SofCat "RemoveItem:DemoOptional"
 $removeTerminal = Get-TerminalEvent @(Stream-OperationEvents (Parse-OperationId $removeOut.Out))
 if ($removeTerminal.state -ne "Succeeded") { Fail "RemoveItem:DemoOptional ended '$($removeTerminal.state)'" }
-Invoke-Gorilla "InstallItem:DemoOptional" | Out-Null
+Invoke-SofCat "InstallItem:DemoOptional" | Out-Null
 $sw = [Diagnostics.Stopwatch]::StartNew()
-Restart-Service gorilla
+Restart-Service sofcat
 $restartSec = $sw.Elapsed.TotalSeconds
 if ($restartSec -gt 30) { Fail ("Restart-Service took {0:n0}s while a run was busy" -f $restartSec) }
-Wait-For { (Invoke-Gorilla "GetBranding" -AllowFail).Code -eq 0 } "the restarted service to answer"
+Wait-For { (Invoke-SofCat "GetBranding" -AllowFail).Code -eq 0 } "the restarted service to answer"
 Pass ("Restart-Service took {0:n1}s; the service answers again" -f $restartSec)
 
 # --- Step 2: install through the pipe and stream it to completion
 Write-Step "InstallItem:$ItemName streams Downloading/Installing/ItemCompleted and ends Succeeded"
 $sw = [Diagnostics.Stopwatch]::StartNew()
-$installOut = Invoke-Gorilla "InstallItem:$ItemName"
+$installOut = Invoke-SofCat "InstallItem:$ItemName"
 $opId = Parse-OperationId $installOut.Out
 if (-not $opId) { Fail "no operationId returned for InstallItem:$ItemName" }
 if ($opId -notmatch '^[0-9a-f]{32}$') { Fail "operationId '$opId' is not 32 hex characters" }
@@ -405,7 +405,7 @@ Write-Step "RemoveItem:$ItemName with chrome.exe running ends Deferred and the i
 Start-Process -FilePath $ChromeExe -ArgumentList @('--headless=new', '--no-first-run', '--disable-gpu', 'about:blank') | Out-Null
 Wait-For { $null -ne (Get-Process -Name chrome -ErrorAction SilentlyContinue) } "chrome.exe to be running"
 try {
-    $removeOut = Invoke-Gorilla "RemoveItem:$ItemName"
+    $removeOut = Invoke-SofCat "RemoveItem:$ItemName"
     $opId = Parse-OperationId $removeOut.Out
     if (-not $opId) { Fail "no operationId returned for RemoveItem:$ItemName" }
     $terminal = Get-TerminalEvent @(Stream-OperationEvents $opId)
@@ -425,7 +425,7 @@ try {
 # --- Step 7: with Chrome closed, removal succeeds and every trace is gone
 Write-Step "RemoveItem:$ItemName with Chrome closed streams Removing/ItemCompleted, ends Succeeded, and uninstalls"
 $sw.Restart()
-$removeOut = Invoke-Gorilla "RemoveItem:$ItemName"
+$removeOut = Invoke-SofCat "RemoveItem:$ItemName"
 $opId = Parse-OperationId $removeOut.Out
 if (-not $opId) { Fail "no operationId returned for RemoveItem:$ItemName" }
 $events = @(Stream-OperationEvents $opId)

@@ -1,23 +1,23 @@
-# gorilla task runner. All build artifacts go to build/.
-app := "gorilla"
+# sofcat task runner. All build artifacts go to build/.
+app := "sofcat"
 version := `git describe --tags --always --dirty 2>/dev/null || echo dev`
 
 # Frontend dependencies.
 ui-install:
-    npm ci --prefix gorilla-ui/frontend
+    npm ci --prefix sofcat-ui/frontend
 
 # Frontend type check.
 ui-type: ui-install
-    npm run check --prefix gorilla-ui/frontend
+    npm run check --prefix sofcat-ui/frontend
 
 # Frontend tests.
 ui-test: ui-install
-    npm test --prefix gorilla-ui/frontend
+    npm test --prefix sofcat-ui/frontend
 
 # Production frontend assets.
 ui-assets: ui-install
-    npm run build --prefix gorilla-ui/frontend
-    @if grep -rq GORILLA_VITE_MOCK_ONLY gorilla-ui/frontend/dist; then \
+    npm run build --prefix sofcat-ui/frontend
+    @if grep -rq SOFCAT_VITE_MOCK_ONLY sofcat-ui/frontend/dist; then \
       echo "Dev mock leaked into the production bundle" && exit 1; \
       else echo "Production bundle is mock-free"; fi
 
@@ -25,21 +25,21 @@ ui-assets: ui-install
 ui-bindings-check:
     rm -rf build/ui-bindings-check
     mkdir -p build
-    cd gorilla-ui && go run github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha2.117 generate bindings -clean -ts -noevents -d ../build/ui-bindings-check .
-    diff -ru gorilla-ui/frontend/bindings build/ui-bindings-check
+    cd sofcat-ui && go run github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha2.117 generate bindings -clean -ts -noevents -d ../build/ui-bindings-check .
+    diff -ru sofcat-ui/frontend/bindings build/ui-bindings-check
 
 # Type check plus committed-binding verification.
 ui-lint: ui-type ui-bindings-check
 
-# Windows binaries (pure Go, no cgo) -> build/gorilla.exe and build/gorilla-ui.exe
+# Windows binaries (pure Go, no cgo) -> build/sofcat.exe and build/sofcat-ui.exe
 build arch="amd64": ui-assets
     mkdir -p build
     GOOS=windows GOARCH={{arch}} CGO_ENABLED=0 \
-        go build -ldflags "-X github.com/1dustindavis/gorilla/pkg/version.version={{version}}" \
-        -o build/{{app}}.exe ./cmd/gorilla
+        go build -ldflags "-X github.com/hurricanehrndz/sofcat/pkg/version.version={{version}}" \
+        -o build/{{app}}.exe ./cmd/sofcat
     GOOS=windows GOARCH={{arch}} CGO_ENABLED=0 \
         go build -tags production -ldflags "-H windowsgui" \
-        -o build/gorilla-ui.exe ./gorilla-ui
+        -o build/sofcat-ui.exe ./sofcat-ui
 
 # Standalone makecatalogs for every admin platform (pure Go, no cgo)
 # -> build/makecatalogs-<os>-<arch>[.exe]
@@ -49,7 +49,7 @@ makecatalogs:
       for arch in amd64 arm64; do \
         ext=""; if [ "$os" = windows ]; then ext=".exe"; fi; \
         GOOS=$os GOARCH=$arch CGO_ENABLED=0 \
-          go build -ldflags "-X github.com/1dustindavis/gorilla/pkg/version.version={{version}}" \
+          go build -ldflags "-X github.com/hurricanehrndz/sofcat/pkg/version.version={{version}}" \
           -o build/makecatalogs-$os-$arch$ext ./cmd/makecatalogs || exit 1; \
       done; \
     done

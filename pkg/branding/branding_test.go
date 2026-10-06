@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/1dustindavis/gorilla/pkg/config"
+	"github.com/hurricanehrndz/sofcat/pkg/config"
 )
 
 // A policy value must win field by field, so an MDM can override one field

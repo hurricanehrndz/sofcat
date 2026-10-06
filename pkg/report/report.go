@@ -1,6 +1,6 @@
 package report
 
-import "github.com/1dustindavis/gorilla/pkg/catalog"
+import "github.com/hurricanehrndz/sofcat/pkg/catalog"
 
 // FailedItem records an item whose action failed during this run
 type FailedItem struct {

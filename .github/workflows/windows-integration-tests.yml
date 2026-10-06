@@ -34,19 +34,19 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Build gorilla.exe
+      - name: Build sofcat.exe
         shell: pwsh
         run: |
-          $outDir = "${{ runner.temp }}\gorilla-binary"
+          $outDir = "${{ runner.temp }}\sofcat-binary"
           New-Item -Path $outDir -ItemType Directory -Force | Out-Null
-          go build -v -o "$outDir\gorilla.exe" ./cmd/gorilla
+          go build -v -o "$outDir\sofcat.exe" ./cmd/sofcat
       - name: Trust sideload certificate for msix fixtures
         shell: pwsh
         run: |
-          $certPath = "${{ runner.temp }}\gorilla-it-sideload.cer"
-          # Create a self-signed cert matching the Publisher in AppxManifest.xml (CN=GorillaIT)
+          $certPath = "${{ runner.temp }}\sofcat-it-sideload.cer"
+          # Create a self-signed cert matching the Publisher in AppxManifest.xml (CN=SofCatIT)
           $cert = New-SelfSignedCertificate `
-            -Subject "CN=GorillaIT" `
+            -Subject "CN=SofCatIT" `
             -CertStoreLocation "Cert:\CurrentUser\My" `
             -Type CodeSigningCert `
             -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3")
@@ -58,14 +58,14 @@ jobs:
         shell: pwsh
         run: |
           $cert = Get-ChildItem -Path "Cert:\CurrentUser\My" |
-            Where-Object { $_.Subject -eq "CN=GorillaIT" } |
+            Where-Object { $_.Subject -eq "CN=SofCatIT" } |
             Select-Object -First 1
           ./integration/windows/prepare-release-integration.ps1 `
-            -WorkRoot "${{ runner.temp }}\gorilla-release-integration" `
+            -WorkRoot "${{ runner.temp }}\sofcat-release-integration" `
             -MsixCertThumbprint $cert.Thumbprint
       - name: Run integration tests
         shell: pwsh
         run: |
           ./integration/windows/run-release-integration.ps1 `
-            -WorkRoot "${{ runner.temp }}\gorilla-release-integration" `
-            -GorillaExePath "${{ runner.temp }}\gorilla-binary\gorilla.exe"
+            -WorkRoot "${{ runner.temp }}\sofcat-release-integration" `
+            -SofCatExePath "${{ runner.temp }}\sofcat-binary\sofcat.exe"

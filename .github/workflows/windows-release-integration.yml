@@ -78,7 +78,7 @@ jobs:
               repo,
               issue_number: context.issue.number,
               body: [
-                "<!-- gorilla-integration-status -->",
+                "<!-- sofcat-integration-status -->",
                 "Windows integration test started from `/run-integration-test`.",
                 "",
                 `Run: ${runUrl}`
@@ -94,22 +94,22 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Download gorilla.exe from Build Release run artifact
+      - name: Download sofcat.exe from Build Release run artifact
         if: github.event_name == 'workflow_run'
         uses: actions/download-artifact@v4
         with:
           repository: ${{ github.repository }}
           run-id: ${{ github.event.workflow_run.id }}
-          name: gorilla-exe-release
-          path: ${{ runner.temp }}/gorilla-artifact
+          name: sofcat-exe-release
+          path: ${{ runner.temp }}/sofcat-artifact
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build gorilla.exe from PR merge ref
+      - name: Build sofcat.exe from PR merge ref
         if: github.event_name == 'issue_comment'
         shell: pwsh
         run: |
-          $outDir = "${{ runner.temp }}\gorilla-binary"
+          $outDir = "${{ runner.temp }}\sofcat-binary"
           New-Item -Path $outDir -ItemType Directory -Force | Out-Null
-          go build -v -o "$outDir\gorilla.exe" ./cmd/gorilla
+          go build -v -o "$outDir\sofcat.exe" ./cmd/sofcat
       - name: Resolve latest integration fixture run
         if: github.event_name == 'issue_comment' && steps.fixture_mode.outputs.mode != 'full'
         id: fixture_run
@@ -140,40 +140,40 @@ jobs:
         with:
           repository: ${{ github.repository }}
           run-id: ${{ steps.fixture_run.outputs.run_id }}
-          name: gorilla-release-fixtures
-          path: ${{ runner.temp }}/gorilla-release-integration/fixture
+          name: sofcat-release-fixtures
+          path: ${{ runner.temp }}/sofcat-release-integration/fixture
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Resolve gorilla.exe path
+      - name: Resolve sofcat.exe path
         shell: pwsh
         run: |
-          $candidate1 = "${{ runner.temp }}\gorilla-artifact\gorilla.exe"
-          $candidate2 = "${{ runner.temp }}\gorilla-binary\gorilla.exe"
+          $candidate1 = "${{ runner.temp }}\sofcat-artifact\sofcat.exe"
+          $candidate2 = "${{ runner.temp }}\sofcat-binary\sofcat.exe"
 
           if (Test-Path -LiteralPath $candidate1) {
-            "GORILLA_EXE_PATH=$candidate1" >> $env:GITHUB_ENV
+            "SOFCAT_EXE_PATH=$candidate1" >> $env:GITHUB_ENV
             exit 0
           }
 
           if (Test-Path -LiteralPath $candidate2) {
-            "GORILLA_EXE_PATH=$candidate2" >> $env:GITHUB_ENV
+            "SOFCAT_EXE_PATH=$candidate2" >> $env:GITHUB_ENV
             exit 0
           }
 
-          throw "Unable to resolve gorilla.exe path"
+          throw "Unable to resolve sofcat.exe path"
       - name: Prepare released-binary integration fixtures
         if: github.event_name == 'workflow_run' || github.event_name == 'issue_comment' && (steps.fixture_mode.outputs.mode == 'full' || steps.fixture_download.outcome != 'success')
         shell: pwsh
         run: |
-          $workRoot = "$env:RUNNER_TEMP\gorilla-release-integration"
+          $workRoot = "$env:RUNNER_TEMP\sofcat-release-integration"
           ./integration/windows/prepare-release-integration.ps1 `
             -WorkRoot "$workRoot"
       - name: Run released-binary integration tests
         shell: pwsh
         run: |
-          $workRoot = "$env:RUNNER_TEMP\gorilla-release-integration"
+          $workRoot = "$env:RUNNER_TEMP\sofcat-release-integration"
           ./integration/windows/run-release-integration.ps1 `
             -WorkRoot "$workRoot" `
-            -GorillaExePath "$env:GORILLA_EXE_PATH"
+            -SofCatExePath "$env:SOFCAT_EXE_PATH"
       - name: Finalize check run
         if: always() && github.event_name == 'issue_comment' && steps.check_start.outputs.check_run_id != ''
         continue-on-error: true
@@ -215,7 +215,7 @@ jobs:
               repo,
               comment_id: Number("${{ steps.comment_start.outputs.comment_id }}"),
               body: [
-                "<!-- gorilla-integration-status -->",
+                "<!-- sofcat-integration-status -->",
                 `Windows integration test ${state}.`,
                 "",
                 `Run: ${runUrl}`

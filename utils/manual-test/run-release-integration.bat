@@ -21,12 +21,12 @@ if exist "%PS1_CANDIDATE%" (
   set "RUN_PS1_PATH=%PS1_CANDIDATE%"
 )
 
-set "GORILLA_EXE=%ProgramData%\gorilla\bin\gorilla.exe"
-set "WORK_ROOT=%TEMP%\gorilla-release-integration"
+set "SOFCAT_EXE=%ProgramData%\sofcat\bin\sofcat.exe"
+set "WORK_ROOT=%TEMP%\sofcat-release-integration"
 set "EXITCODE=0"
 
 if not "%~1"=="" (
-  set "GORILLA_EXE=%~1"
+  set "SOFCAT_EXE=%~1"
 )
 
 if not "%~2"=="" (
@@ -60,11 +60,11 @@ if not "%EXITCODE%"=="0" (
 )
 
 echo Running Windows release integration tests
-echo Gorilla exe: %GORILLA_EXE%
+echo SofCat exe: %SOFCAT_EXE%
 echo Work root : %WORK_ROOT%
 echo.
 
-powershell -NoProfile -NoLogo -NonInteractive -ExecutionPolicy Bypass -File "%RUN_PS1_PATH%" -GorillaExePath "%GORILLA_EXE%" -WorkRoot "%WORK_ROOT%"
+powershell -NoProfile -NoLogo -NonInteractive -ExecutionPolicy Bypass -File "%RUN_PS1_PATH%" -SofCatExePath "%SOFCAT_EXE%" -WorkRoot "%WORK_ROOT%"
 set "EXITCODE=%errorlevel%"
 
 :end

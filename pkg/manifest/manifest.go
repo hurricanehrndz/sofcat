@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/1dustindavis/gorilla/pkg/config"
-	"github.com/1dustindavis/gorilla/pkg/download"
+	"github.com/hurricanehrndz/sofcat/pkg/config"
+	"github.com/hurricanehrndz/sofcat/pkg/download"
 	"go.yaml.in/yaml/v4"
 )
 
