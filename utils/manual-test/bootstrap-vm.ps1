@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-Bootstrap Gorilla on a Windows VM from prepared manual-test assets.
+Bootstrap SofCat on a Windows VM from prepared manual-test assets.
 
 .DESCRIPTION
-- Downloads gorilla.exe and gorilla-ui.exe from a provided base URL.
+- Downloads sofcat.exe and sofcat-ui.exe from a provided base URL.
 - Writes config.yaml to ProgramData.
 - Optionally installs/starts service mode.
 #>
@@ -11,9 +11,9 @@ Bootstrap Gorilla on a Windows VM from prepared manual-test assets.
 [CmdletBinding()]
 param(
     [string]$BaseUrl = "http://localhost:8080/",
-    [string]$InstallPath = "$env:ProgramData\gorilla\bin",
-    [string]$ConfigPath = "$env:ProgramData\gorilla\config.yaml",
-    [string]$AppDataPath = "$env:ProgramData\gorilla",
+    [string]$InstallPath = "$env:ProgramData\sofcat\bin",
+    [string]$ConfigPath = "$env:ProgramData\sofcat\config.yaml",
+    [string]$AppDataPath = "$env:ProgramData\sofcat",
     [string]$Manifest = "example_manifest",
     [string[]]$Catalogs = @("example_catalog"),
     [switch]$InstallService,
@@ -39,7 +39,7 @@ function Convert-ToYamlPath {
     return ($PathValue -replace "\\", "/")
 }
 
-function Write-GorillaConfig {
+function Write-SofCatConfig {
     param(
         [string]$ConfigFilePath,
         [string]$URLValue,
@@ -62,9 +62,9 @@ manifest: $ManifestValue
 catalogs:
 $yamlCatalogs
 app_data_path: $yamlAppDataPath
-# service_name: gorilla
+# service_name: sofcat
 # service_interval: 1h
-# service_pipe_name: gorilla-service
+# service_pipe_name: sofcat-service
 "@
 
     Set-Content -Path $ConfigFilePath -Value $content -Encoding ASCII
@@ -100,8 +100,8 @@ function Ensure-PathEntry {
     }
 }
 
-function Remove-ExistingGorillaService {
-    param([string]$ServiceName = "gorilla")
+function Remove-ExistingSofCatService {
+    param([string]$ServiceName = "sofcat")
 
     $existingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
     if (-not $existingService) {
@@ -110,7 +110,7 @@ function Remove-ExistingGorillaService {
 
     Write-Step "Existing '$ServiceName' service detected; stopping and removing it"
 
-    # Prevent SCM from auto-restarting the service while we are replacing gorilla.exe.
+    # Prevent SCM from auto-restarting the service while we are replacing sofcat.exe.
     sc.exe failure $ServiceName reset= 0 actions= "" | Out-Null
     if ($LASTEXITCODE -ne 0) {
         Write-Warning "Unable to clear failure actions for service '$ServiceName'."
@@ -175,36 +175,36 @@ if (-not $BaseUrl.EndsWith("/")) {
 }
 
 New-Item -ItemType Directory -Path $InstallPath -Force | Out-Null
-$binaryPath = Join-Path $InstallPath "gorilla.exe"
-$binaryUrl = "$BaseUrl" + "gorilla.exe"
-$uiBinaryPath = Join-Path $InstallPath "gorilla-ui.exe"
-$uiBinaryUrl = "$BaseUrl" + "gorilla-ui.exe"
+$binaryPath = Join-Path $InstallPath "sofcat.exe"
+$binaryUrl = "$BaseUrl" + "sofcat.exe"
+$uiBinaryPath = Join-Path $InstallPath "sofcat-ui.exe"
+$uiBinaryUrl = "$BaseUrl" + "sofcat-ui.exe"
 
-Remove-ExistingGorillaService
+Remove-ExistingSofCatService
 
-Write-Step "Downloading Gorilla binary from $binaryUrl"
+Write-Step "Downloading SofCat binary from $binaryUrl"
 Invoke-WebRequest -Uri $binaryUrl -OutFile $binaryPath
-$runningUI = @(Get-Process -Name "gorilla-ui" -ErrorAction SilentlyContinue)
+$runningUI = @(Get-Process -Name "sofcat-ui" -ErrorAction SilentlyContinue)
 if ($runningUI.Count -gt 0) {
-    Write-Step "Stopping running Gorilla UI so $uiBinaryPath can be replaced"
+    Write-Step "Stopping running SofCat UI so $uiBinaryPath can be replaced"
     $runningUI | Stop-Process -Force
     Start-Sleep -Seconds 2
 }
 
-Write-Step "Downloading Gorilla UI binary from $uiBinaryUrl"
+Write-Step "Downloading SofCat UI binary from $uiBinaryUrl"
 Invoke-WebRequest -Uri $uiBinaryUrl -OutFile $uiBinaryPath
 
 Write-Step "Writing config to $ConfigPath"
-Write-GorillaConfig -ConfigFilePath $ConfigPath -URLValue $BaseUrl -ManifestValue $Manifest -CatalogList $Catalogs -AppDataPathValue $AppDataPath
+Write-SofCatConfig -ConfigFilePath $ConfigPath -URLValue $BaseUrl -ManifestValue $Manifest -CatalogList $Catalogs -AppDataPathValue $AppDataPath
 Ensure-PathEntry -DirectoryPath $InstallPath
 
 if ($InstallService) {
-    Write-Step "Installing Gorilla Windows service"
+    Write-Step "Installing SofCat Windows service"
     & $binaryPath -c $ConfigPath -serviceinstall
 }
 
 if ($StartService) {
-    Write-Step "Starting Gorilla Windows service"
+    Write-Step "Starting SofCat Windows service"
     & $binaryPath -c $ConfigPath -servicestart
 }
 

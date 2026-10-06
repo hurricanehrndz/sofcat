@@ -8,7 +8,7 @@ on:
       - pkg/**
       - utils/**
       - integration/**
-      - gorilla-ui/*.go
+      - sofcat-ui/*.go
       - Makefile
       - go.mod
       - go.sum
@@ -19,7 +19,7 @@ on:
       - pkg/**
       - utils/**
       - integration/**
-      - gorilla-ui/*.go
+      - sofcat-ui/*.go
       - Makefile
       - go.mod
       - go.sum

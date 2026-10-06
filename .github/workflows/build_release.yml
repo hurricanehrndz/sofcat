@@ -46,35 +46,35 @@ jobs:
           namespace: ''
           bump_each_commit: false
       - name: Install frontend dependencies
-        working-directory: gorilla-ui/frontend
+        working-directory: sofcat-ui/frontend
         run: npm ci
       - name: Build frontend production assets
-        working-directory: gorilla-ui/frontend
+        working-directory: sofcat-ui/frontend
         run: npm run build
-      - name: Build gorilla.exe
+      - name: Build sofcat.exe
         run: |
           New-Item -ItemType Directory -Force -Path build | Out-Null
-          $pkg = "github.com/1dustindavis/gorilla/pkg/version"
+          $pkg = "github.com/hurricanehrndz/sofcat/pkg/version"
           $ldflags = @(
-            "-X $pkg.appName=gorilla"
+            "-X $pkg.appName=sofcat"
             "-X $pkg.version=${{ steps.create_tag.outputs.version_tag }}"
             "-X $pkg.branch=${{ env.CURRENT_BRANCH }}"
             "-X $pkg.buildDate=$(Get-Date -format s)"
             "-X $pkg.revision=${{ env.REVISION }}"
             "-X $pkg.goVersion=${{ env.GO_VERSION }}"
           ) -join ' '
-          go build -v -o build/gorilla.exe -ldflags="$ldflags" ./cmd/gorilla
-      - name: Build gorilla-ui.exe
+          go build -v -o build/sofcat.exe -ldflags="$ldflags" ./cmd/sofcat
+      - name: Build sofcat-ui.exe
         env:
           GOOS: windows
           GOARCH: amd64
           CGO_ENABLED: "0"
-        run: go build -tags production -ldflags "-H windowsgui" -o build/gorilla-ui.exe ./gorilla-ui
+        run: go build -tags production -ldflags "-H windowsgui" -o build/sofcat-ui.exe ./sofcat-ui
       - name: Build makecatalogs (linux/darwin/windows, amd64/arm64)
         env:
           CGO_ENABLED: "0"
         run: |
-          $ldflags = "-X github.com/1dustindavis/gorilla/pkg/version.version=${{ steps.create_tag.outputs.version_tag }}"
+          $ldflags = "-X github.com/hurricanehrndz/sofcat/pkg/version.version=${{ steps.create_tag.outputs.version_tag }}"
           foreach ($os in "linux", "darwin", "windows") {
             foreach ($arch in "amd64", "arm64") {
               $ext = if ($os -eq "windows") { ".exe" } else { "" }
@@ -87,10 +87,10 @@ jobs:
       - name: Upload executables workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gorilla-exe-release
+          name: sofcat-exe-release
           path: |
-            ./build/gorilla.exe
-            ./build/gorilla-ui.exe
+            ./build/sofcat.exe
+            ./build/sofcat-ui.exe
             ./build/makecatalogs-*
           if-no-files-found: error
       - name: Cut release
@@ -98,6 +98,6 @@ jobs:
         with:
           allowUpdates: false
           prerelease: true
-          artifacts: "./build/gorilla.exe,./build/gorilla-ui.exe,./build/makecatalogs-*"
+          artifacts: "./build/sofcat.exe,./build/sofcat-ui.exe,./build/makecatalogs-*"
           tag: ${{ steps.create_tag.outputs.version_tag }}
           token: ${{ secrets.GITHUB_TOKEN }}

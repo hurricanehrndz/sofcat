@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-Self-serve end-to-end smoke test for Gorilla (Workstream C).
+Self-serve end-to-end smoke test for SofCat (Workstream C).
 
 .DESCRIPTION
-Drives the running Gorilla service over the named pipe (via `gorilla.exe -S ...`)
+Drives the running SofCat service over the named pipe (via `sofcat.exe -S ...`)
 against the selfserve fixture set and asserts the reconciling-run behavior on
 disk: default_installs assertion, authorized install, write-time authorization,
 deselect -> uninstall with prune, and the once-only default state machine.
@@ -17,10 +17,10 @@ PowerShell 5.1 compatible.
 
 [CmdletBinding()]
 param(
-    [string]$Gorilla   = "$env:ProgramData\gorilla\bin\gorilla.exe",
-    [string]$Config    = "$env:ProgramData\gorilla\config.yaml",
-    [string]$SelfServe = "$env:ProgramData\gorilla\service-manifest.yaml",
-    [string]$MarkerDir = "C:\ProgramData\gorilla-c-smoke",
+    [string]$SofCat   = "$env:ProgramData\sofcat\bin\sofcat.exe",
+    [string]$Config    = "$env:ProgramData\sofcat\config.yaml",
+    [string]$SelfServe = "$env:ProgramData\sofcat\service-manifest.yaml",
+    [string]$MarkerDir = "C:\ProgramData\sofcat-c-smoke",
     [int]$TimeoutSec   = 120
 )
 
@@ -39,9 +39,9 @@ function Fail {
     exit 1
 }
 
-# Invoke-Gorilla runs a service command. Returns @{Code=<int>; Out=<string[]>}.
+# Invoke-SofCat runs a service command. Returns @{Code=<int>; Out=<string[]>}.
 # By default a non-zero exit is a hard failure; pass -AllowFail to inspect it.
-function Invoke-Gorilla {
+function Invoke-SofCat {
     param([string]$Spec, [switch]$AllowFail)
     # 2>&1 turns native stderr lines into ErrorRecords; with EAP=Stop that
     # becomes a terminating NativeCommandError. Relax EAP around the call so
@@ -49,16 +49,16 @@ function Invoke-Gorilla {
     $savedEAP = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     try {
-        $out = & $Gorilla -c $Config -S $Spec 2>&1
+        $out = & $SofCat -c $Config -S $Spec 2>&1
     } finally {
         $ErrorActionPreference = $savedEAP
     }
     $code = $LASTEXITCODE
     $lines = @($out | ForEach-Object { "$_" })
-    Write-Host ("    gorilla -S {0} (exit {1})" -f $Spec, $code) -ForegroundColor DarkGray
+    Write-Host ("    sofcat -S {0} (exit {1})" -f $Spec, $code) -ForegroundColor DarkGray
     $lines | ForEach-Object { Write-Host "      $_" -ForegroundColor DarkGray }
     if (-not $AllowFail -and $code -ne 0) {
-        Fail "gorilla -S $Spec exited $code"
+        Fail "sofcat -S $Spec exited $code"
     }
     return @{ Code = $code; Out = $lines }
 }
@@ -133,7 +133,7 @@ Write-Host "    DemoDefault recorded in both lists" -ForegroundColor Green
 
 # --- Step 3: ListOptionalInstalls offers DemoOptional
 Write-Step "ListOptionalInstalls lists DemoOptional"
-$list = Invoke-Gorilla "ListOptionalInstalls"
+$list = Invoke-SofCat "ListOptionalInstalls"
 if (-not ($list.Out -match "DemoOptional")) {
     Fail "DemoOptional not listed by ListOptionalInstalls"
 }
@@ -141,14 +141,14 @@ Write-Host "    DemoOptional offered" -ForegroundColor Green
 
 # --- Step 4: InstallItem:DemoOptional -> optional.txt appears
 Write-Step "InstallItem:DemoOptional installs the marker (optional.txt)"
-Invoke-Gorilla "InstallItem:DemoOptional" | Out-Null
+Invoke-SofCat "InstallItem:DemoOptional" | Out-Null
 Wait-For { Test-Path $optionalTxt } "optional.txt to exist after InstallItem"
 Write-Host "    optional.txt present" -ForegroundColor Green
 
 # --- Step 5: InstallItem for an unavailable name is rejected, file unchanged
 Write-Step "InstallItem:NotARealItem is rejected and leaves the manifest unchanged"
 $before = (Get-Content -LiteralPath $SelfServe -Raw)
-$bad = Invoke-Gorilla "InstallItem:NotARealItem" -AllowFail
+$bad = Invoke-SofCat "InstallItem:NotARealItem" -AllowFail
 if ($bad.Code -eq 0) {
     Fail "InstallItem:NotARealItem unexpectedly succeeded"
 }
@@ -164,17 +164,17 @@ Write-Host "    rejected and manifest unchanged" -ForegroundColor Green
 
 # --- Step 6: RemoveItem:DemoOptional -> optional.txt gone, uninstalls pruned empty
 Write-Step "RemoveItem:DemoOptional uninstalls the marker and prunes managed_uninstalls"
-Invoke-Gorilla "RemoveItem:DemoOptional" | Out-Null
+Invoke-SofCat "RemoveItem:DemoOptional" | Out-Null
 Wait-For { -not (Test-Path $optionalTxt) } "optional.txt to be removed"
 Wait-For { (Get-YamlList $SelfServe "managed_uninstalls").Count -eq 0 } "managed_uninstalls to be pruned empty"
 Write-Host "    optional.txt gone and managed_uninstalls pruned" -ForegroundColor Green
 
 # --- Step 7: once-only default -- a removed default does not re-assert
 Write-Step "RemoveItem:DemoDefault, then a later run must NOT re-assert the default"
-Invoke-Gorilla "RemoveItem:DemoDefault" | Out-Null
+Invoke-SofCat "RemoveItem:DemoDefault" | Out-Null
 Wait-For { -not (Test-Path $defaultTxt) } "default.txt to be removed"
 # InstallItem:DemoOptional triggers another full run.
-Invoke-Gorilla "InstallItem:DemoOptional" | Out-Null
+Invoke-SofCat "InstallItem:DemoOptional" | Out-Null
 Wait-For { Test-Path $optionalTxt } "optional.txt to reappear (run happened)"
 if (Test-Path $defaultTxt) {
     Fail "default.txt reappeared -- a user-removed default was re-asserted"
@@ -185,7 +185,7 @@ if ((Get-YamlList $SelfServe "default_installs") -notcontains "DemoDefault") {
 Write-Host "    default stayed removed and is still recorded (once-only)" -ForegroundColor Green
 
 $blockedTxt = Join-Path $MarkerDir "blocked.txt"
-$inventoryPath = "$env:ProgramData\gorilla\inventory.json"
+$inventoryPath = "$env:ProgramData\sofcat\inventory.json"
 
 # Inventory-Defers returns $true when inventory.json lists $Item in
 # ManagedInstalls with status "deferred". The inventory is rewritten at the end
@@ -207,7 +207,7 @@ function Inventory-Defers {
 Write-Step "InstallItem:DemoBlocked with notepad running is deferred, not installed"
 if (Test-Path $blockedTxt) { Remove-Item -LiteralPath $blockedTxt -Force }
 Start-Process notepad | Out-Null
-Invoke-Gorilla "InstallItem:DemoBlocked" | Out-Null
+Invoke-SofCat "InstallItem:DemoBlocked" | Out-Null
 Wait-For { Inventory-Defers "DemoBlocked" } "inventory.json to list DemoBlocked as deferred"
 if (Test-Path $blockedTxt) {
     Fail "blocked.txt was created while notepad was running (item not deferred)"
@@ -217,7 +217,7 @@ Write-Host "    DemoBlocked deferred and blocked.txt absent" -ForegroundColor Gr
 # --- Step 9: with the blocker gone, the next run installs (retry works)
 Write-Step "Stop notepad, InstallItem:DemoBlocked now installs (blocked.txt appears)"
 Stop-Notepad
-Invoke-Gorilla "InstallItem:DemoBlocked" | Out-Null
+Invoke-SofCat "InstallItem:DemoBlocked" | Out-Null
 Wait-For { Test-Path $blockedTxt } "blocked.txt to appear after the blocker stopped"
 Write-Host "    blocked.txt present after retry" -ForegroundColor Green
 
@@ -228,14 +228,14 @@ $optionalUpdateTxt = Join-Path $MarkerDir "optional-update.txt"
 # in. InstallItem:DemoOptional is idempotent -- it triggers a run that installs
 # both the referent (optional.txt) and its updater (optional-update.txt).
 Write-Step "InstallItem:DemoOptional rides DemoUpdater along (optional-update.txt appears)"
-Invoke-Gorilla "InstallItem:DemoOptional" | Out-Null
+Invoke-SofCat "InstallItem:DemoOptional" | Out-Null
 Wait-For { Test-Path $optionalTxt } "optional.txt to exist"
 Wait-For { Test-Path $optionalUpdateTxt } "optional-update.txt to exist (updater rode along)"
 Write-Host "    optional.txt and optional-update.txt both present" -ForegroundColor Green
 
 # --- Step 11: removal coupling -- removing the referent removes its updater
 Write-Step "RemoveItem:DemoOptional removes both markers (removal coupling)"
-Invoke-Gorilla "RemoveItem:DemoOptional" | Out-Null
+Invoke-SofCat "RemoveItem:DemoOptional" | Out-Null
 Wait-For { -not (Test-Path $optionalTxt) } "optional.txt to be removed"
 Wait-For { -not (Test-Path $optionalUpdateTxt) } "optional-update.txt to be removed (coupled)"
 Wait-For { (Get-YamlList $SelfServe "managed_uninstalls").Count -eq 0 } "managed_uninstalls to be pruned empty"
@@ -247,7 +247,7 @@ Write-Host "    both markers gone and managed_uninstalls pruned" -ForegroundColo
 # ListOptionalInstalls (the client now prints one compact JSON object per item).
 function Get-OptionalItem {
     param([string]$Name)
-    $res = Invoke-Gorilla "ListOptionalInstalls"
+    $res = Invoke-SofCat "ListOptionalInstalls"
     foreach ($l in $res.Out) {
         $t = "$l".Trim()
         if (-not $t.StartsWith('{')) { continue }
@@ -271,7 +271,7 @@ function Parse-OperationId {
 # parsed status record printed by the CLI as a JSON line.
 function Stream-OperationEvents {
     param([string]$OpId)
-    $res = Invoke-Gorilla "StreamOperationStatus:$OpId"
+    $res = Invoke-SofCat "StreamOperationStatus:$OpId"
     $events = @()
     foreach ($l in $res.Out) {
         $t = "$l".Trim()
@@ -279,9 +279,9 @@ function Stream-OperationEvents {
         try { $ev = $t | ConvertFrom-Json } catch { continue }
         if ($ev.operationId -eq $OpId -and $ev.state) {
             # Every JSON-RPC status record carries a numeric seq; a record
-            # without one means a stale, pre-JSON-RPC gorilla.exe was staged.
+            # without one means a stale, pre-JSON-RPC sofcat.exe was staged.
             if (-not ($ev.seq -is [int] -or $ev.seq -is [long])) {
-                Fail "status record has no numeric seq (stale gorilla.exe staged?): $t"
+                Fail "status record has no numeric seq (stale sofcat.exe staged?): $t"
             }
             $events += $ev
         }
@@ -345,7 +345,7 @@ if ($demo.description -ne "A self-service optional install used by the Workstrea
     Fail "DemoOptional description mismatch: '$($demo.description)'"
 }
 if ($demo.category -ne "Smoke")   { Fail "DemoOptional category mismatch: '$($demo.category)'" }
-if ($demo.developer -ne "Gorilla") { Fail "DemoOptional developer mismatch: '$($demo.developer)'" }
+if ($demo.developer -ne "SofCat") { Fail "DemoOptional developer mismatch: '$($demo.developer)'" }
 $expectStatus = if (Test-Path $optionalTxt) { "Installed" } else { "NotInstalled" }
 if ($demo.status -ne $expectStatus) {
     Fail "DemoOptional status '$($demo.status)' does not match marker state (expected $expectStatus)"
@@ -354,7 +354,7 @@ Write-Host "    DemoOptional metadata present and status=$($demo.status) matches
 
 # --- Step 13: honest terminal event for a failing install
 Write-Step "InstallItem:DemoFailing then StreamOperationStatus reports terminal Failed/item_failed"
-$installOut = Invoke-Gorilla "InstallItem:DemoFailing"
+$installOut = Invoke-SofCat "InstallItem:DemoFailing"
 $opId = Parse-OperationId $installOut.Out
 if (-not $opId) { Fail "no operationId returned for InstallItem:DemoFailing" }
 $terminal = Stream-TerminalEvent $opId
@@ -370,7 +370,7 @@ Write-Step "notepad running + InstallItem:DemoBlocked then stream reports termin
 if (Test-Path $blockedTxt) { Remove-Item -LiteralPath $blockedTxt -Force }
 Start-Process notepad | Out-Null
 try {
-    $installOut = Invoke-Gorilla "InstallItem:DemoBlocked"
+    $installOut = Invoke-SofCat "InstallItem:DemoBlocked"
     $opId = Parse-OperationId $installOut.Out
     if (-not $opId) { Fail "no operationId returned for InstallItem:DemoBlocked" }
     $terminal = Stream-TerminalEvent $opId
@@ -397,11 +397,11 @@ Write-Host "    manifest shape intact (sorted installs, defaults recorded)" -For
 
 Write-Step "Regression: ListOptionalInstalls still lists DemoOptional with metadata"
 $demo = Get-OptionalItem "DemoOptional"
-if (-not $demo -or $demo.developer -ne "Gorilla") { Fail "DemoOptional metadata regression" }
+if (-not $demo -or $demo.developer -ne "SofCat") { Fail "DemoOptional metadata regression" }
 Write-Host "    DemoOptional still listed with metadata" -ForegroundColor Green
 
 Write-Step "Regression: DemoOptional install/remove streams real item progress incl updater coupling"
-$installOut = Invoke-Gorilla "InstallItem:DemoOptional"
+$installOut = Invoke-SofCat "InstallItem:DemoOptional"
 $opId = Parse-OperationId $installOut.Out
 if (-not $opId) { Fail "no operationId returned for InstallItem:DemoOptional" }
 $installEvents = @(Stream-OperationEvents $opId)
@@ -409,7 +409,7 @@ Assert-DemoOptionalProgress -Events $installEvents -ActionState "Installing"
 Wait-For { Test-Path $optionalTxt } "optional.txt to exist"
 Wait-For { Test-Path $optionalUpdateTxt } "optional-update.txt to exist (updater rode along)"
 
-$removeOut = Invoke-Gorilla "RemoveItem:DemoOptional"
+$removeOut = Invoke-SofCat "RemoveItem:DemoOptional"
 $opId = Parse-OperationId $removeOut.Out
 if (-not $opId) { Fail "no operationId returned for RemoveItem:DemoOptional" }
 $removeEvents = @(Stream-OperationEvents $opId)
@@ -422,11 +422,11 @@ Write-Host "    DemoOptional item progress + updater coupling + prune OK" -Foreg
 Write-Step "Regression: DemoBlocked defer-then-retry round-trip"
 if (Test-Path $blockedTxt) { Remove-Item -LiteralPath $blockedTxt -Force }
 Start-Process notepad | Out-Null
-Invoke-Gorilla "InstallItem:DemoBlocked" | Out-Null
+Invoke-SofCat "InstallItem:DemoBlocked" | Out-Null
 Wait-For { Inventory-Defers "DemoBlocked" } "inventory.json to list DemoBlocked as deferred"
 if (Test-Path $blockedTxt) { Fail "blocked.txt created while notepad running" }
 Stop-Notepad
-Invoke-Gorilla "InstallItem:DemoBlocked" | Out-Null
+Invoke-SofCat "InstallItem:DemoBlocked" | Out-Null
 Wait-For { Test-Path $blockedTxt } "blocked.txt to appear after the blocker stopped"
 Write-Host "    DemoBlocked defer-then-retry OK" -ForegroundColor Green
 

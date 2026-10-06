@@ -1,36 +1,36 @@
-![Gorilla logo](gorilla.png)
-# Gorilla [![Go Report Card](https://goreportcard.com/badge/github.com/1dustindavis/gorilla)](https://goreportcard.com/report/github.com/1dustindavis/gorilla) [![Build status](https://github.com/1dustindavis/gorilla/actions/workflows/go-test.yml/badge.svg?branch=main)](https://github.com/1dustindavis/gorilla/actions/workflows/go-test.yml)
+![SofCat logo](sofcat.png)
+# SofCat [![Go Report Card](https://goreportcard.com/badge/github.com/hurricanehrndz/sofcat)](https://goreportcard.com/report/github.com/hurricanehrndz/sofcat) [![Build status](https://github.com/hurricanehrndz/sofcat/actions/workflows/go-test.yml/badge.svg?branch=main)](https://github.com/hurricanehrndz/sofcat/actions/workflows/go-test.yml)
 
 Munki-like Application Management for Windows
 
-Gorilla is intended to provide application management on Windows using [Munki](https://github.com/munki/munki) as inspiration.
-Gorilla supports `.msi`, `.ps1`, `.exe`, or `.nupkg` [(via chocolatey)](https://github.com/chocolatey/choco).
+SofCat is a fork of [Gorilla](https://github.com/1dustindavis/gorilla) that provides application management on Windows using [Munki](https://github.com/munki/munki) as inspiration.
+SofCat supports `.msi`, `.ps1`, `.exe`, or `.nupkg` [(via chocolatey)](https://github.com/chocolatey/choco).
 
 ## Getting Started
-Information related to installing and configuring Gorilla can be found on the [Wiki](https://github.com/1dustindavis/gorilla/wiki).
+Information related to installing and configuring SofCat can be found on the upstream [Gorilla wiki](https://github.com/1dustindavis/gorilla/wiki); the config keys are the same.
 For quick manual-test setup helpers on a fresh Windows VM, see [utils/manual-test/README.md](utils/manual-test/README.md).
 
 ## Building
 
-If you just want the latest version, download it from the [releases page](https://github.com/1dustindavis/gorilla/releases).
+If you just want the latest version, download it from the [releases page](https://github.com/hurricanehrndz/sofcat/releases).
 
 Building from source requires the [Go tools](https://golang.org/doc/install) and
-Node 22 for the Gorilla UI frontend. The [devenv](https://devenv.sh) shell
+Node 22 for the SofCat UI frontend. The [devenv](https://devenv.sh) shell
 (`devenv shell`, or `direnv allow`) supplies both plus `just`, `golangci-lint`,
 and `treefmt` — see [docs/dev.md](docs/dev.md).
 
 `make build` (or `just build`) produces **both** raw Windows executables in
 `build/`:
 
-- `build/gorilla.exe` — the agent/CLI/service
-- `build/gorilla-ui.exe` — the Wails self-service UI (pure Go, no cgo)
+- `build/sofcat.exe` — the agent/CLI/service
+- `build/sofcat-ui.exe` — the Wails self-service UI (pure Go, no cgo)
 
 Releases publish those two executables plus the standalone `makecatalogs`
 binaries (see below); there is no installer or code
 signing in this path.
 
 UI-specific targets: `make ui-lint` (TypeScript and generated-binding check),
-`make ui-test` (frontend tests). See [gorilla-ui/README.md](gorilla-ui/README.md).
+`make ui-test` (frontend tests). See [sofcat-ui/README.md](sofcat-ui/README.md).
 
 ## Contributing
 Pull Requests are always welcome. Before submitting, lint and test:
@@ -43,7 +43,7 @@ go test ./...
 `makecatalogs` compiles a repo's `packages-info/*.yaml` files into
 `catalogs/<catalog>.yaml`, like Munki's `makecatalogs`. It is a standalone, pure-Go
 binary for Linux, macOS and Windows, so a package repo's CI never needs Windows.
-It reads no Gorilla config file.
+It reads no SofCat config file.
 
 ```
 makecatalogs [--check] <repo_path>
@@ -64,6 +64,6 @@ Releases publish `makecatalogs-<os>-<arch>[.exe]` for linux, darwin and windows
 on amd64 and arm64. `just makecatalogs` builds the same set into `build/`.
 See `examples/example_package-info.yaml` for a package-info example.
 
-`gorilla -build`/`-b` and `-import`/`-i` were removed, along with the
+`sofcat -build`/`-b` and `-import`/`-i` were removed, along with the
 `repo_path` config key; existing configs that still set it keep loading.
 `-import` was never implemented.

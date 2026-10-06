@@ -11,17 +11,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/1dustindavis/gorilla/pkg/branding"
+	"github.com/hurricanehrndz/sofcat/pkg/branding"
 )
 
-const DefaultPipeName = "gorilla-service"
+const DefaultPipeName = "sofcat-service"
 
 const (
 	defaultConnectTimeout  = 5 * time.Second
 	defaultResponseTimeout = 30 * time.Second
 )
 
-// Client is the typed Gorilla service client shared by command-line and UI
+// Client is the typed SofCat service client shared by command-line and UI
 // callers. Timeouts default to five seconds for connecting and 30 seconds for
 // ordinary responses and stream acknowledgements.
 type Client struct {

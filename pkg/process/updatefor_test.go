@@ -4,10 +4,10 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/1dustindavis/gorilla/pkg/catalog"
-	"github.com/1dustindavis/gorilla/pkg/installer"
-	"github.com/1dustindavis/gorilla/pkg/report"
-	"github.com/1dustindavis/gorilla/pkg/status"
+	"github.com/hurricanehrndz/sofcat/pkg/catalog"
+	"github.com/hurricanehrndz/sofcat/pkg/installer"
+	"github.com/hurricanehrndz/sofcat/pkg/report"
+	"github.com/hurricanehrndz/sofcat/pkg/status"
 )
 
 // item is a small helper for building update_for test catalogs.

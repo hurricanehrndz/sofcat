@@ -19,11 +19,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/1dustindavis/gorilla/pkg/catalog"
-	"github.com/1dustindavis/gorilla/pkg/config"
-	"github.com/1dustindavis/gorilla/pkg/installer"
-	"github.com/1dustindavis/gorilla/pkg/manifest"
-	"github.com/1dustindavis/gorilla/pkg/report"
+	"github.com/hurricanehrndz/sofcat/pkg/catalog"
+	"github.com/hurricanehrndz/sofcat/pkg/config"
+	"github.com/hurricanehrndz/sofcat/pkg/installer"
+	"github.com/hurricanehrndz/sofcat/pkg/manifest"
+	"github.com/hurricanehrndz/sofcat/pkg/report"
 )
 
 // These tests run the service core over the platform's real transport: the
@@ -42,7 +42,7 @@ func testServiceConfig(t *testing.T) config.Configuration {
 		ServicePipeName: testPipeName(t),
 		ServiceInterval: "1h",
 		ServiceMode:     true,
-		ServiceName:     "gorilla-test",
+		ServiceName:     "sofcat-test",
 	}
 }
 
@@ -281,7 +281,7 @@ func reliabilityIterations(t *testing.T) int {
 	const (
 		defaultIterations = 10
 		shortIterations   = 2
-		envKey            = "GORILLA_SERVICE_PIPE_RELIABILITY_ITERATIONS"
+		envKey            = "SOFCAT_SERVICE_PIPE_RELIABILITY_ITERATIONS"
 	)
 
 	iterations := defaultIterations
@@ -629,7 +629,7 @@ func TestMutationReturnsWhileRunIsBusy(t *testing.T) {
 	}
 }
 
-// `gorilla -S` prints what SendCommand returns, and the manual-test scripts
+// `sofcat -S` prints what SendCommand returns, and the manual-test scripts
 // parse it: one JSON line per item or status record, and the operationId of an
 // accepted mutation.
 func TestSendCommandOverTransport(t *testing.T) {

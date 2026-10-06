@@ -1,11 +1,11 @@
 ##
-## Gorilla configuration template
+## SofCat configuration template
 ## Only `url` and `manifest` are required
-## More details at https://github.com/1dustindavis/gorilla/wiki/Client-Configuration
+## More details at https://github.com/1dustindavis/gorilla/wiki/Client-Configuration (upstream Gorilla; the keys are the same)
 ##
 ## `url` is the path on your server that contains the directories for
 ## manifests, catalogs, and packages.
-url: https://example.com/gorilla/
+url: https://example.com/sofcat/
 ## `manifest` is the primary manifest that is assigned to this machine.
 manifest: employee
 
@@ -14,7 +14,7 @@ manifest: employee
 # catalogs: 
 #   - beta
 
-## `app_data_path` is Gorilla's working directory, and may store copies of
+## `app_data_path` is SofCat's working directory, and may store copies of
 ## manifests, catalogs, or packages. If `app_data_path` is not provided,
-## it will default to `%ProgramData%/gorilla/`
-# app_data_path: C:/gorilla/cache
+## it will default to `%ProgramData%/sofcat/`
+# app_data_path: C:/sofcat/cache

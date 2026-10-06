@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/1dustindavis/gorilla/pkg/catalog"
-	"github.com/1dustindavis/gorilla/pkg/download"
 	version "github.com/hashicorp/go-version"
+	"github.com/hurricanehrndz/sofcat/pkg/catalog"
+	"github.com/hurricanehrndz/sofcat/pkg/download"
 )
 
 // RegistryApplication contains attributes for an installed application
@@ -119,7 +119,7 @@ func checkScript(catalogItem catalog.Item, cachePath string, installType string)
 	}
 
 	// Write InstallCheckScript to disk as a Powershell file
-	tmpFile, err := os.CreateTemp(cachePath, "gorilla-check-*.ps1")
+	tmpFile, err := os.CreateTemp(cachePath, "sofcat-check-*.ps1")
 	if err != nil {
 		return false, err
 	}

@@ -8,7 +8,7 @@ This directory supports a fast macOS -> Windows VM manual test loop.
 3. Start the local test server on macOS (included in `bootstrap-run`).
 4. Copy generated VM scripts from `build/manual-test/vm/` to the VM.
 5. Run one VM bootstrap script to pull the latest binary/config.
-6. Run Gorilla manually on the VM.
+6. Run SofCat manually on the VM.
 
 ## 1) Prepare assets on macOS
 From repo root:
@@ -25,8 +25,8 @@ make bootstrap
 ```
 
 This creates:
-- `build/manual-test/server-root/gorilla.exe`
-- `build/manual-test/server-root/gorilla-ui.exe`
+- `build/manual-test/server-root/sofcat.exe`
+- `build/manual-test/server-root/sofcat-ui.exe`
 - `build/manual-test/server-root/manifests/example_manifest.yaml`
 - `build/manual-test/server-root/catalogs/example_catalog.yaml`
 - `build/manual-test/server-root/packages/` (empty)
@@ -35,7 +35,7 @@ This creates:
 - `build/manual-test/vm/bootstrap-vm.bat` (URL stamped automatically)
 - `build/manual-test/vm/bootstrap-vm-full.ps1`
 - `build/manual-test/vm/bootstrap-vm-full.bat` (URL stamped automatically)
-- `build/manual-test/vm/run-gorilla-check.bat`
+- `build/manual-test/vm/run-sofcat-check.bat`
 - `build/manual-test/vm/run-release-integration.bat`
 - `build/manual-test/vm/base-url.txt` (resolved URL used for stamping)
 
@@ -51,7 +51,7 @@ Server source lives in `utils/manual-test/server` (separate Go module).
 Two VM scripts are not generated and must be copied straight from this
 directory: `run-selfserve-smoke.ps1` (machine-assertable self-serve smoke test,
 exits 0 and prints `SELF-SERVE SMOKE PASSED`) and `launch-wails-ui.ps1` (starts
-`gorilla-ui.exe` as the interactive user).
+`sofcat-ui.exe` as the interactive user).
 
 ## 2) Serve assets from macOS
 
@@ -86,7 +86,7 @@ Optional switches:
 ## 4) Manual run on VM
 
 ```bat
-.\run-gorilla-check.bat
+.\run-sofcat-check.bat
 ```
 
 `-C` runs check-only mode so you can quickly validate config/flow without installing packages.
@@ -110,8 +110,8 @@ Recommended flow first:
 ```
 
 Optional args:
-- `.\build\manual-test\vm\run-release-integration.bat C:\path\to\gorilla.exe`
-- `.\build\manual-test\vm\run-release-integration.bat C:\path\to\gorilla.exe C:\temp\gorilla-release-integration`
+- `.\build\manual-test\vm\run-release-integration.bat C:\path\to\sofcat.exe`
+- `.\build\manual-test\vm\run-release-integration.bat C:\path\to\sofcat.exe C:\temp\sofcat-release-integration`
 
 ## Chrome end-to-end loop (local file:// repo)
 
@@ -125,11 +125,11 @@ particular VM rig is machine-local (see `AGENTS.local.md`). The loop:
 `build/cache/`, renders `fixtures/e2e/packages-info/GoogleChrome.yaml.in` with
 the MSI's version and SHA-256, compiles the catalog with `makecatalogs`, and
 copies the selfserve fixtures and both binaries into `build/e2e-repo/`).
-2. Copy `build/e2e-repo.tar` to the VM and extract it to `C:\gorilla-repo`
+2. Copy `build/e2e-repo.tar` to the VM and extract it to `C:\sofcat-repo`
    (`tar.exe -xf ... --strip-components=1`).
-3. `bootstrap-vm.ps1 -BaseUrl file://C:/gorilla-repo/ -Manifest e2e_manifest -Catalogs e2e_catalog -InstallService -StartService -NoPause`.
+3. `bootstrap-vm.ps1 -BaseUrl file://C:/sofcat-repo/ -Manifest e2e_manifest -Catalogs e2e_catalog -InstallService -StartService -NoPause`.
 4. Optionally brand the UI: copy `fixtures/e2e/branding/logo.png` to
-   `C:\ProgramData\gorilla\branding\`, append a `branding:` block (title,
+   `C:\ProgramData\sofcat\branding\`, append a `branding:` block (title,
    tagline, logo path, help link, accent) to `config.yaml`, restart the service.
 5. Run the two gates, then launch `launch-wails-ui.ps1` on the desktop for the
    visual check:
@@ -138,7 +138,7 @@ copies the selfserve fixtures and both binaries into `build/e2e-repo/`).
   through `included_manifests`.
 - `run-chrome-e2e.ps1` (prints `CHROME E2E PASSED`): `GetBranding` returns
   the config branding, a policy `Title` under
-  `HKLM\SOFTWARE\Policies\Gorilla\Branding` wins over it and removing it
+  `HKLM\SOFTWARE\Policies\SofCat\Branding` wins over it and removing it
   restores the config; then metadata and NotInstalled
   status, a `CancelOperation` of a Chrome install queued behind a busy run
   (ends `Canceled` by the user, nothing installed, selection reverted, a second
@@ -146,11 +146,11 @@ copies the selfserve fixtures and both binaries into `build/e2e-repo/`).
   streamed install to `Succeeded`, registry entry and `chrome.exe`,
   `inventory.json` contents and ACL, self-serve manifest, deferred removal while
   `chrome.exe` runs, then a real uninstall with every trace gone.
-- `gorilla-ui.exe` on the desktop (`launch-wails-ui.ps1`): judge Home, the
+- `sofcat-ui.exe` on the desktop (`launch-wails-ui.ps1`): judge Home, the
   branded banner and window title, an install with the bottom strip, Cancel
   while queued, the detail page and Activity by screenshot.
 
-Repository URL spellings (verified on Windows): `file://C:/gorilla-repo/`
-works; `file:///C:/gorilla-repo/` returns 404 from the file transport, and a
-bare `C:/gorilla-repo/` or `C:\gorilla-repo\` fails with "unsupported protocol
+Repository URL spellings (verified on Windows): `file://C:/sofcat-repo/`
+works; `file:///C:/sofcat-repo/` returns 404 from the file transport, and a
+bare `C:/sofcat-repo/` or `C:\sofcat-repo\` fails with "unsupported protocol
 scheme".

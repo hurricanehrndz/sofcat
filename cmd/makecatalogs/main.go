@@ -1,4 +1,4 @@
-// Command makecatalogs compiles a Gorilla repository's packages-info files
+// Command makecatalogs compiles a SofCat repository's packages-info files
 // into its catalogs, like Munki's makecatalogs. It runs on any platform and
 // reads no agent configuration.
 package main
@@ -10,8 +10,8 @@ import (
 	"io"
 	"os"
 
-	"github.com/1dustindavis/gorilla/pkg/admin"
-	"github.com/1dustindavis/gorilla/pkg/version"
+	"github.com/hurricanehrndz/sofcat/pkg/admin"
+	"github.com/hurricanehrndz/sofcat/pkg/version"
 )
 
 const usage = `Usage: makecatalogs [options] <repo_path>

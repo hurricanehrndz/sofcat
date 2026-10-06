@@ -13,15 +13,15 @@ MSI_VERSION = $(word 1,$(subst +, ,$(word 1,$(subst -, ,$(VERSION_NO_PREFIX)))))
 BRANCH = $(shell git rev-parse --abbrev-ref HEAD)
 REVISION = $(shell git rev-parse HEAD)
 REVSHORT = $(shell git rev-parse --short HEAD)
-APP_NAME = gorilla
+APP_NAME = sofcat
 MANUAL_TEST_DIR = build/manual-test
 MANUAL_TEST_SERVER_ROOT = ${MANUAL_TEST_DIR}/server-root
 MANUAL_TEST_VM_DIR = ${MANUAL_TEST_DIR}/vm
 MANUAL_TEST_BASE_URL ?=
 GO111MODULE = on
-UI_FRONTEND = gorilla-ui/frontend
+UI_FRONTEND = sofcat-ui/frontend
 WAILS_VERSION = v3.0.0-alpha2.117
-UI_BINDINGS = gorilla-ui/frontend/bindings
+UI_BINDINGS = sofcat-ui/frontend/bindings
 UI_BINDINGS_CHECK = build/ui-bindings-check
 
 ifneq ($(OS), Windows_NT)
@@ -45,12 +45,12 @@ else
 endif
 
 BUILD_VERSION = "\
-	-X github.com/1dustindavis/gorilla/pkg/version.appName=${APP_NAME} \
-	-X github.com/1dustindavis/gorilla/pkg/version.version=${VERSION} \
-	-X github.com/1dustindavis/gorilla/pkg/version.branch=${BRANCH} \
-	-X github.com/1dustindavis/gorilla/pkg/version.buildDate=${NOW} \
-	-X github.com/1dustindavis/gorilla/pkg/version.revision=${REVISION} \
-	-X github.com/1dustindavis/gorilla/pkg/version.goVersion=${GOVERSION}"
+	-X github.com/hurricanehrndz/sofcat/pkg/version.appName=${APP_NAME} \
+	-X github.com/hurricanehrndz/sofcat/pkg/version.version=${VERSION} \
+	-X github.com/hurricanehrndz/sofcat/pkg/version.branch=${BRANCH} \
+	-X github.com/hurricanehrndz/sofcat/pkg/version.buildDate=${NOW} \
+	-X github.com/hurricanehrndz/sofcat/pkg/version.revision=${REVISION} \
+	-X github.com/hurricanehrndz/sofcat/pkg/version.goVersion=${GOVERSION}"
 
 define HELP_TEXT
 
@@ -65,8 +65,8 @@ define HELP_TEXT
 	make bootstrap-run - Build manual-test assets/server and run local test server
 
 	make test          - Run the Go tests
-	make ui-lint       - Type-check Gorilla UI and verify generated bindings
-	make ui-test       - Run Gorilla UI frontend tests
+	make ui-lint       - Type-check SofCat UI and verify generated bindings
+	make ui-test       - Run SofCat UI frontend tests
 	make lint          - Run the Go linters
 
 endef
@@ -75,7 +75,7 @@ help:
 	$(info $(HELP_TEXT))
 
 gomodcheck:
-	@go help mod > /dev/null || (@echo gorilla requires Go version 1.11 or higher && exit 1)
+	@go help mod > /dev/null || (@echo sofcat requires Go version 1.11 or higher && exit 1)
 
 clean:
 	rm -rf build/
@@ -84,8 +84,8 @@ clean:
 	mkdir -p build/
 
 build: .pre-build ui-assets
-	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o build/${APP_NAME}.exe -ldflags ${BUILD_VERSION} ./cmd/gorilla
-	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -tags production -ldflags "-H windowsgui" -o build/gorilla-ui.exe ./gorilla-ui
+	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o build/${APP_NAME}.exe -ldflags ${BUILD_VERSION} ./cmd/sofcat
+	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -tags production -ldflags "-H windowsgui" -o build/sofcat-ui.exe ./sofcat-ui
 
 msi: build
 ifeq ($(OS), Windows_NT)
@@ -103,8 +103,8 @@ bootstrap: build manual-test-server
 	mkdir -p ${MANUAL_TEST_SERVER_ROOT}/catalogs
 	mkdir -p ${MANUAL_TEST_SERVER_ROOT}/packages
 	mkdir -p ${MANUAL_TEST_VM_DIR}
-	cp build/${APP_NAME}.exe ${MANUAL_TEST_SERVER_ROOT}/gorilla.exe
-	cp build/gorilla-ui.exe ${MANUAL_TEST_SERVER_ROOT}/gorilla-ui.exe
+	cp build/${APP_NAME}.exe ${MANUAL_TEST_SERVER_ROOT}/sofcat.exe
+	cp build/sofcat-ui.exe ${MANUAL_TEST_SERVER_ROOT}/sofcat-ui.exe
 	cp examples/example_manifest.yaml ${MANUAL_TEST_SERVER_ROOT}/manifests/example_manifest.yaml
 	cp examples/example_catalog.yaml ${MANUAL_TEST_SERVER_ROOT}/catalogs/example_catalog.yaml
 	cp utils/manual-test/fixtures/selfserve/manifests/*.yaml ${MANUAL_TEST_SERVER_ROOT}/manifests/
@@ -113,7 +113,7 @@ bootstrap: build manual-test-server
 	cp -R utils/manual-test/fixtures/selfserve/packages/scripts ${MANUAL_TEST_SERVER_ROOT}/packages/scripts
 	cp utils/manual-test/bootstrap-vm.ps1 ${MANUAL_TEST_VM_DIR}/bootstrap-vm.ps1
 	cp utils/manual-test/bootstrap-vm-full.ps1 ${MANUAL_TEST_VM_DIR}/bootstrap-vm-full.ps1
-	cp utils/manual-test/templates/run-gorilla-check.bat ${MANUAL_TEST_VM_DIR}/run-gorilla-check.bat
+	cp utils/manual-test/templates/run-sofcat-check.bat ${MANUAL_TEST_VM_DIR}/run-sofcat-check.bat
 	cp utils/manual-test/run-release-integration.bat ${MANUAL_TEST_VM_DIR}/run-release-integration.bat
 	@BASE_URL="${MANUAL_TEST_BASE_URL}"; \
 	if [ -z "$$BASE_URL" ]; then \
@@ -153,19 +153,19 @@ ui-test: ui-install
 
 ui-assets: ui-install
 	npm run build --prefix ${UI_FRONTEND}
-	@if grep -rq GORILLA_VITE_MOCK_ONLY ${UI_FRONTEND}/dist; then \
+	@if grep -rq SOFCAT_VITE_MOCK_ONLY ${UI_FRONTEND}/dist; then \
 	  echo "Dev mock leaked into the production bundle" && exit 1; \
 	  else echo "Production bundle is mock-free"; fi
 
 ui-bindings-check: .pre-build
 	rm -rf ${UI_BINDINGS_CHECK}
-	cd gorilla-ui && go run github.com/wailsapp/wails/v3/cmd/wails3@${WAILS_VERSION} generate bindings -clean -ts -noevents -d ../${UI_BINDINGS_CHECK} .
+	cd sofcat-ui && go run github.com/wailsapp/wails/v3/cmd/wails3@${WAILS_VERSION} generate bindings -clean -ts -noevents -d ../${UI_BINDINGS_CHECK} .
 	diff -ru ${UI_BINDINGS} ${UI_BINDINGS_CHECK}
 
 ui-lint: ui-type ui-bindings-check
 
 lint:
-	@if gofmt -l -s ./cmd/ ./pkg/ ./gorilla-ui/ | grep .go; then \
+	@if gofmt -l -s ./cmd/ ./pkg/ ./sofcat-ui/ | grep .go; then \
 	  echo "^- Repo contains improperly formatted go files; run gofmt -w -s *.go" && exit 1; \
 	  else echo "All .go files formatted correctly"; fi
 	GOOS=windows GOARCH=amd64 go vet ./...

@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/1dustindavis/gorilla/pkg/config"
+	"github.com/hurricanehrndz/sofcat/pkg/config"
 	yaml "go.yaml.in/yaml/v4"
 )
 

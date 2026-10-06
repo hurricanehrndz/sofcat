@@ -1,10 +1,10 @@
-url: https://example.com/gorilla/
+url: https://example.com/sofcat/
 manifest: example_manifest
 local_manifests:
   - example_local_manifest
 catalogs:
   - example_catalog
-app_data_path: c:/cpe/gorilla/
+app_data_path: c:/cpe/sofcat/
 auth_user: johnny
 auth_pass: pizza
 verbose: true
@@ -13,7 +13,7 @@ checkonly: true
 branding:
   title: Acme Software Center
   tagline: Need help? Call the service desk at ext. 1234.
-  logo: C:\ProgramData\gorilla\branding\logo.png
+  logo: C:\ProgramData\sofcat\branding\logo.png
   help_url: https://example.com/help
   help_label: Get help
   accent: "#0b6e4f"

@@ -4,8 +4,8 @@ import (
 	"log/slog"
 	"sort"
 
-	"github.com/1dustindavis/gorilla/pkg/catalog"
-	"github.com/1dustindavis/gorilla/pkg/status"
+	"github.com/hurricanehrndz/sofcat/pkg/catalog"
+	"github.com/hurricanehrndz/sofcat/pkg/status"
 )
 
 // UpdaterIndex maps a referent item name to the names of items that declare

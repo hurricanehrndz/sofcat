@@ -6,12 +6,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/1dustindavis/gorilla/pkg/branding"
-	"github.com/1dustindavis/gorilla/pkg/catalog"
-	"github.com/1dustindavis/gorilla/pkg/config"
-	"github.com/1dustindavis/gorilla/pkg/installer"
-	"github.com/1dustindavis/gorilla/pkg/manifest"
-	"github.com/1dustindavis/gorilla/pkg/report"
+	"github.com/hurricanehrndz/sofcat/pkg/branding"
+	"github.com/hurricanehrndz/sofcat/pkg/catalog"
+	"github.com/hurricanehrndz/sofcat/pkg/config"
+	"github.com/hurricanehrndz/sofcat/pkg/installer"
+	"github.com/hurricanehrndz/sofcat/pkg/manifest"
+	"github.com/hurricanehrndz/sofcat/pkg/report"
 )
 
 // TestGetOptionalItemsHonestStatus exercises the enriched ListOptionalInstalls
@@ -199,7 +199,7 @@ func TestExecuteCommandRunPassesProgressCallback(t *testing.T) {
 }
 
 func TestServiceInstallArgs(t *testing.T) {
-	configPath := `C:\ProgramData\gorilla\config.yaml`
+	configPath := `C:\ProgramData\sofcat\config.yaml`
 	got := serviceInstallArgs(configPath)
 	if len(got) != 3 {
 		t.Fatalf("expected 3 args, got %d: %#v", len(got), got)

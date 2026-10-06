@@ -1,18 +1,18 @@
 <#
 .SYNOPSIS
-Bootstrap Gorilla on a Windows VM and install full integration test prerequisites.
+Bootstrap SofCat on a Windows VM and install full integration test prerequisites.
 
 .DESCRIPTION
-- Runs bootstrap-vm.ps1 to install gorilla.exe + config.
+- Runs bootstrap-vm.ps1 to install sofcat.exe + config.
 - Installs prerequisite tools needed by integration/windows/prepare-release-integration.ps1 and integration/windows/run-release-integration.ps1.
 #>
 
 [CmdletBinding()]
 param(
     [string]$BaseUrl = "http://localhost:8080/",
-    [string]$InstallPath = "$env:ProgramData\gorilla\bin",
-    [string]$ConfigPath = "$env:ProgramData\gorilla\config.yaml",
-    [string]$AppDataPath = "$env:ProgramData\gorilla",
+    [string]$InstallPath = "$env:ProgramData\sofcat\bin",
+    [string]$ConfigPath = "$env:ProgramData\sofcat\config.yaml",
+    [string]$AppDataPath = "$env:ProgramData\sofcat",
     [string]$Manifest = "example_manifest",
     [string[]]$Catalogs = @("example_catalog"),
     [switch]$InstallService,

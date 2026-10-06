@@ -8,7 +8,7 @@ import (
 
 	"go.yaml.in/yaml/v4"
 
-	"github.com/1dustindavis/gorilla/pkg/version"
+	"github.com/hurricanehrndz/sofcat/pkg/version"
 )
 
 var (
@@ -16,7 +16,7 @@ var (
 	aboutArg          bool
 	aboutDefault      = false
 	configArg         string
-	configDefault     = filepath.Join(os.Getenv("ProgramData"), "gorilla/config.yaml")
+	configDefault     = filepath.Join(os.Getenv("ProgramData"), "sofcat/config.yaml")
 	debugArg          bool
 	debugDefault      = false
 	helpArg           bool
@@ -42,10 +42,10 @@ var (
 )
 
 const usage = `
-Gorilla - Munki-like Application Management for Windows
-https://github.com/1dustindavis/gorilla
+SofCat - Munki-like Application Management for Windows
+https://github.com/hurricanehrndz/sofcat
 
-Usage: gorilla.exe [options]
+Usage: sofcat.exe [options]
 
 Options:
 -c, -config         path to configuration file in yaml format
@@ -54,13 +54,13 @@ Options:
 -d, -debug          enable debug output
 -a, -about          displays the version number and other build info
 -V, -version        display the version number
--s, -service        run Gorilla as a Windows service
--S, -servicecmd     send a command to a running Gorilla service (GetServiceInfo|ListOptionalInstalls|GetBranding|InstallItem:itemName|RemoveItem:itemName|StreamOperationStatus:operationId|CancelOperation:operationId)
--serviceinstall     install Gorilla as a Windows service and restrict its data directory to SYSTEM and Administrators
--serviceremove      remove Gorilla Windows service
--servicestart       start Gorilla Windows service
--servicestop        stop Gorilla Windows service
--servicestatus      show Gorilla Windows service status
+-s, -service        run SofCat as a Windows service
+-S, -servicecmd     send a command to a running SofCat service (GetServiceInfo|ListOptionalInstalls|GetBranding|InstallItem:itemName|RemoveItem:itemName|StreamOperationStatus:operationId|CancelOperation:operationId)
+-serviceinstall     install SofCat as a Windows service and restrict its data directory to SYSTEM and Administrators
+-serviceremove      remove SofCat Windows service
+-servicestart       start SofCat Windows service
+-servicestop        stop SofCat Windows service
+-servicestatus      show SofCat Windows service status
 -h, -help           display this help message
 
 `
@@ -102,7 +102,7 @@ type Configuration struct {
 	RequestedBy map[string]string `yaml:"-"`
 }
 
-// Branding is the optional organisation branding block for Gorilla UI. Policy
+// Branding is the optional organisation branding block for SofCat UI. Policy
 // registry values override it per field; pkg/branding merges and validates both.
 type Branding struct {
 	Title     string `yaml:"title,omitempty"`
@@ -215,7 +215,7 @@ func Get() Configuration {
 
 	// If AppDataPath wasn't provided, configure a default
 	if cfg.AppDataPath == "" {
-		cfg.AppDataPath = filepath.Join(os.Getenv("ProgramData"), "gorilla/")
+		cfg.AppDataPath = filepath.Join(os.Getenv("ProgramData"), "sofcat/")
 	} else {
 		cfg.AppDataPath = filepath.Clean(cfg.AppDataPath)
 	}
@@ -248,13 +248,13 @@ func Get() Configuration {
 
 	// Configure service defaults.
 	if cfg.ServiceName == "" {
-		cfg.ServiceName = "gorilla"
+		cfg.ServiceName = "sofcat"
 	}
 	if cfg.ServiceInterval == "" {
 		cfg.ServiceInterval = "1h"
 	}
 	if cfg.ServicePipeName == "" {
-		cfg.ServicePipeName = "gorilla-service"
+		cfg.ServicePipeName = "sofcat-service"
 	}
 
 	return cfg

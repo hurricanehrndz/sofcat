@@ -39,10 +39,10 @@ func main() {
 	})
 
 	fmt.Printf("Serving %s on http://localhost%s\n", absRoot, addr)
-	fmt.Println("Expected Gorilla paths:")
+	fmt.Println("Expected SofCat paths:")
 	fmt.Printf("  http://localhost%s/manifests/example_manifest.yaml\n", addr)
 	fmt.Printf("  http://localhost%s/catalogs/example_catalog.yaml\n", addr)
-	fmt.Printf("  http://localhost%s/gorilla.exe\n", addr)
+	fmt.Printf("  http://localhost%s/sofcat.exe\n", addr)
 
 	log.Fatal(http.ListenAndServe(addr, handler))
 }

@@ -17,7 +17,7 @@ func testPipeName(t *testing.T) string {
 	originalUID := trustedServerUID
 	trustedServerUID = uint32(os.Getuid())
 	t.Cleanup(func() { trustedServerUID = originalUID })
-	dir, err := os.MkdirTemp("", "gorilla")
+	dir, err := os.MkdirTemp("", "sofcat")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,7 +27,7 @@ func testPipeName(t *testing.T) string {
 		socketDir = original
 		_ = os.RemoveAll(dir)
 	})
-	return "gorilla-test"
+	return "sofcat-test"
 }
 
 // distrustTestServer makes clients expect a uid the test's server is not.

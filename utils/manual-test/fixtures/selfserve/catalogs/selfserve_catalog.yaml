@@ -1,17 +1,17 @@
 # Self-serve smoke catalog (Workstream C E2E). Marker installers write files
-# under C:\ProgramData\gorilla-c-smoke\; uninstallers delete them. The installer
+# under C:\ProgramData\sofcat-c-smoke\; uninstallers delete them. The installer
 # hashes below are the SHA256 of the ps1 files in packages/scripts — regenerate
 # them (sha256sum) whenever a script changes or the download hash check fails.
 DemoOptional:
   display_name: Demo Optional
   description: A self-service optional install used by the Workstream C smoke test
   category: Smoke
-  developer: Gorilla
+  developer: SofCat
   icon_name: demo-optional.png
   restart_action: None
   check:
     file:
-      - path: C:\ProgramData\gorilla-c-smoke\optional.txt
+      - path: C:\ProgramData\sofcat-c-smoke\optional.txt
   installer:
     type: ps1
     location: packages/scripts/demooptional-install.ps1
@@ -25,7 +25,7 @@ DemoDefault:
   display_name: Demo Default
   check:
     file:
-      - path: C:\ProgramData\gorilla-c-smoke\default.txt
+      - path: C:\ProgramData\sofcat-c-smoke\default.txt
   installer:
     type: ps1
     location: packages/scripts/demodefault-install.ps1
@@ -42,7 +42,7 @@ DemoBlocked:
     - notepad
   check:
     file:
-      - path: C:\ProgramData\gorilla-c-smoke\blocked.txt
+      - path: C:\ProgramData\sofcat-c-smoke\blocked.txt
   installer:
     type: ps1
     location: packages/scripts/demoblocked-install.ps1
@@ -60,7 +60,7 @@ DemoUpdater:
     - DemoOptional
   check:
     file:
-      - path: C:\ProgramData\gorilla-c-smoke\optional-update.txt
+      - path: C:\ProgramData\sofcat-c-smoke\optional-update.txt
   installer:
     type: ps1
     location: packages/scripts/demoupdater-install.ps1
@@ -76,7 +76,7 @@ DemoFailing:
   display_name: Demo Failing
   check:
     file:
-      - path: C:\ProgramData\gorilla-c-smoke\never-created.txt
+      - path: C:\ProgramData\sofcat-c-smoke\never-created.txt
   installer:
     type: ps1
     location: packages/scripts/demofailing-install.ps1
@@ -88,10 +88,10 @@ DemoRequired:
   display_name: Demo Required
   description: Required by the organisation; self-service cannot remove it
   category: Smoke
-  developer: Gorilla
+  developer: SofCat
   check:
     file:
-      - path: C:\ProgramData\gorilla-c-smoke\required.txt
+      - path: C:\ProgramData\sofcat-c-smoke\required.txt
   installer:
     type: ps1
     location: packages/scripts/demorequired-install.ps1

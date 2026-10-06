@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/1dustindavis/gorilla/pkg/catalog"
-	"github.com/1dustindavis/gorilla/pkg/installer"
-	"github.com/1dustindavis/gorilla/pkg/manifest"
-	"github.com/1dustindavis/gorilla/pkg/report"
+	"github.com/hurricanehrndz/sofcat/pkg/catalog"
+	"github.com/hurricanehrndz/sofcat/pkg/installer"
+	"github.com/hurricanehrndz/sofcat/pkg/manifest"
+	"github.com/hurricanehrndz/sofcat/pkg/report"
 )
 
 var (
