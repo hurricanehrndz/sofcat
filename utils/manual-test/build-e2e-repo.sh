@@ -5,7 +5,7 @@
 # out exactly as a served repo is, so the VM can point `url:` at it directly
 # (file://C:/sofcat-repo/) or an HTTP server can serve it:
 #
-#   sofcat.exe, sofcat-ui.exe        current build (make build)
+#   sofcat.exe, sofcat-ui.exe        current build (just build)
 #   manifests/                         e2e_manifest + the selfserve fixtures
 #   catalogs/                          e2e_catalog (from makecatalogs) + selfserve_catalog
 #   packages-info/GoogleChrome.yaml    rendered from the .in template
@@ -13,7 +13,7 @@
 #   packages/scripts/                  selfserve marker installers
 #   branding/logo.png                   logo for the SofCat UI branding step
 #
-# Run inside the devenv shell (needs go). Set CHROME_MSI to reuse a downloaded
+# Needs go (mise install). Set CHROME_MSI to reuse a downloaded
 # MSI instead of fetching it.
 set -euo pipefail
 
@@ -37,7 +37,7 @@ fi
 
 # Always rebuild: staging older executables once made the gates test code the
 # branch no longer had.
-make build
+just build
 
 hash=$(sha256sum "$cache/$msi_name" | cut -d' ' -f1)
 # The MSI summary-information Comments field carries "<version> Copyright ...".

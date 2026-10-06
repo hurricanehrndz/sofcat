@@ -133,9 +133,9 @@ so the production bundle contains no mock fixture data and no
 ## Commands
 
 ```sh
-make ui-lint    # tsc --noEmit plus the generated-binding check
-make ui-test    # node --test frontend state/cache tests
-make build      # frontend assets, then build/sofcat.exe and build/sofcat-ui.exe
+just ui-lint    # tsc --noEmit plus the generated-binding check
+just ui-test    # node --test frontend state/cache tests
+just build      # frontend assets, then build/sofcat.exe and build/sofcat-ui.exe
 ```
 
 The Windows executable is a pure-Go cross-build:

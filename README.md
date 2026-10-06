@@ -14,12 +14,11 @@ For quick manual-test setup helpers on a fresh Windows VM, see [utils/manual-tes
 
 If you just want the latest version, download it from the [releases page](https://github.com/hurricanehrndz/sofcat/releases).
 
-Building from source requires the [Go tools](https://golang.org/doc/install) and
-Node 22 for the SofCat UI frontend. The [devenv](https://devenv.sh) shell
-(`devenv shell`, or `direnv allow`) supplies both plus `just`, `golangci-lint`,
-and `treefmt` — see [docs/dev.md](docs/dev.md).
+Building from source needs Go 1.26, Node 22 and `just`. [mise](https://mise.jdx.dev)
+installs all of them plus the lint and format tools from `mise.toml`: run
+`mise install`, then `just setup` once. See [docs/dev.md](docs/dev.md).
 
-`make build` (or `just build`) produces **both** raw Windows executables in
+`just build` produces **both** raw Windows executables in
 `build/`:
 
 - `build/sofcat.exe` — the agent/CLI/service
@@ -29,8 +28,8 @@ Releases publish those two executables plus the standalone `makecatalogs`
 binaries (see below); there is no installer or code
 signing in this path.
 
-UI-specific targets: `make ui-lint` (TypeScript and generated-binding check),
-`make ui-test` (frontend tests). See [sofcat-ui/README.md](sofcat-ui/README.md).
+UI-specific targets: `just ui-lint` (TypeScript and generated-binding check),
+`just ui-test` (frontend tests). See [sofcat-ui/README.md](sofcat-ui/README.md).
 
 ## Contributing
 Pull Requests are always welcome. Before submitting, lint and test:

@@ -1,6 +1,24 @@
 # sofcat task runner. All build artifacts go to build/.
+# Tools come from mise.toml (`mise install`); `just setup` wires the git hook.
+set shell := ["bash", "-cu"]
+
 app := "sofcat"
 version := `git describe --tags --always --dirty 2>/dev/null || echo dev`
+manual_test_dir := "build/manual-test"
+server_root := manual_test_dir / "server-root"
+vm_dir := manual_test_dir / "vm"
+
+# List recipes.
+default:
+    @just --list
+
+# One-time contributor setup: frontend deps and the pre-commit hook.
+setup: ui-install
+    printf '#!/bin/sh\nexec just pre-commit\n' > .git/hooks/pre-commit
+    chmod +x .git/hooks/pre-commit
+
+# What the pre-commit hook runs.
+pre-commit: fmt-check lint
 
 # Frontend dependencies.
 ui-install:
@@ -54,9 +72,52 @@ makecatalogs:
       done; \
     done
 
+# Static file server for the manual-test loop -> build/manual-test-server
+manual-test-server:
+    mkdir -p build
+    cd utils/manual-test/server && go build -o ../../../build/manual-test-server .
+
+# Manual-test assets under build/manual-test/ and VM scripts stamped with the
+# server URL (auto-detected from the default route when base_url is empty).
+bootstrap base_url="": build manual-test-server
+    mkdir -p {{server_root}}/manifests {{server_root}}/catalogs {{server_root}}/packages {{vm_dir}}
+    cp build/{{app}}.exe build/sofcat-ui.exe {{server_root}}/
+    cp examples/example_manifest.yaml {{server_root}}/manifests/
+    cp examples/example_catalog.yaml {{server_root}}/catalogs/
+    cp utils/manual-test/fixtures/selfserve/manifests/*.yaml {{server_root}}/manifests/
+    cp utils/manual-test/fixtures/selfserve/catalogs/*.yaml {{server_root}}/catalogs/
+    rm -rf {{server_root}}/packages/scripts
+    cp -R utils/manual-test/fixtures/selfserve/packages/scripts {{server_root}}/packages/scripts
+    cp utils/manual-test/bootstrap-vm.ps1 utils/manual-test/bootstrap-vm-full.ps1 \
+       utils/manual-test/templates/run-sofcat-check.bat \
+       utils/manual-test/run-release-integration.bat {{vm_dir}}/
+    @base_url="{{base_url}}"; \
+    if [ -z "$base_url" ]; then \
+      case "$(uname)" in \
+        Darwin) ip=$(ipconfig getifaddr "$(route -n get default 2>/dev/null | awk '/interface:/{print $2}' | head -n1)" 2>/dev/null || true) ;; \
+        Linux) ip=$(hostname -I 2>/dev/null | awk '{print $1}') ;; \
+        *) ip="" ;; \
+      esac; \
+      base_url="http://${ip:-localhost}:8080/"; \
+    fi; \
+    sed "s#@DEFAULT_BASE_URL@#$base_url#g" utils/manual-test/templates/bootstrap-vm.bat > {{vm_dir}}/bootstrap-vm.bat; \
+    sed "s#@DEFAULT_BASE_URL@#$base_url#g" utils/manual-test/templates/bootstrap-vm-full.bat > {{vm_dir}}/bootstrap-vm-full.bat; \
+    echo "$base_url" > {{vm_dir}}/base-url.txt; \
+    echo "Using manual-test base URL: $base_url"; \
+    echo "Prepared manual-test assets in {{server_root}}; VM scripts in {{vm_dir}}"; \
+    echo "Run: ./build/manual-test-server -root {{server_root}} -addr :8080"
+
+# bootstrap, then serve the assets on :8080.
+bootstrap-run base_url="": (bootstrap base_url)
+    ./build/manual-test-server -root {{server_root}} -addr :8080
+
 # Guard that the tree keeps cross-compiling on Linux (CI-without-Windows goal).
 check-xplat:
     GOOS=linux GOARCH=amd64 go build -o /dev/null ./...
+
+# go vet for the deployment target (most of the tree is windows-tagged).
+vet:
+    GOOS=windows GOARCH=amd64 go vet ./...
 
 # Go tests.
 test:
