@@ -1,0 +1,30 @@
+# SofCat installer definition for embala (https://github.com/hurricanehrndz/embala).
+# `just msi` copies the built executables beside a rendered copy of this file
+# under build/msi/ and runs `embala build` there, so `src` paths are plain
+# file names and @VERSION@ is the MSI ProductVersion (major.minor.patch).
+#
+# The MSI puts both executables in C:\Program Files\SofCat and registers
+# sofcat.exe as the SofCat service. It ships no config.yaml: management
+# tooling writes C:\ProgramData\SofCat\config.yaml, and the service runs with
+# defaults (every managed run failing) until that file exists and the service
+# restarts.
+
+[package]
+name = "sofcat"
+display-name = "SofCat"
+version = "@VERSION@"
+identifier = "ca.hrndz.sofcat"
+publisher = "Carlos Hernandez"
+description = "Munki-like application management for Windows"
+homepage = "https://github.com/hurricanehrndz/sofcat"
+license = "Apache-2.0"
+
+[msi]
+arch = "x86_64"
+# The Start-menu shortcut targets the UI; the service runs the agent.
+main-executable = "sofcat-ui.exe"
+files = [
+  { src = "sofcat.exe", dest = "sofcat.exe" },
+  { src = "sofcat-ui.exe", dest = "sofcat-ui.exe" },
+]
+service = { name = "sofcat", executable = "sofcat.exe", display-name = "SofCat", description = "SofCat application management service", start = "auto", arguments = "-service" }

@@ -43,12 +43,14 @@ When changes span Go service/CLI and UI protocol layers, run `just test`, `just 
 `just build` produces both raw Windows executables — `build/sofcat.exe` and the
 pure-Go, windows-GUI `build/sofcat-ui.exe`
 (`GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -tags production -ldflags "-H windowsgui"`).
+`just msi` wraps them in an MSI with embala (`installer/embala.toml`); the
+installer puts them in `C:\Program Files\SofCat` and registers the service.
 
 ## Code Style
 
 - Use idiomatic Go and keep code gofmt-clean.
 - Prefer small, explicit functions over broad refactors.
-- Preserve existing package boundaries (`cmd/`, `pkg/`, `integration/`, `utils/`, `wix/`).
+- Preserve existing package boundaries (`cmd/`, `pkg/`, `integration/`, `utils/`, `installer/`).
 - Keep SofCat UI code and related docs under `sofcat-ui/` unless there is a clear reason to place files elsewhere.
 - Do not add new dependencies unless necessary, and explicitly call out/review any dependency additions in the PR.
 
@@ -125,6 +127,13 @@ to use and the exact commands for each step below.
    Activity and offline-cache states.
 5. Clean up afterwards: stop the local test server and anything that exposes it
    to the VM, and remove temporary scheduled tasks.
+
+To validate the installer instead of the raw executables: `just msi`, copy
+`build/sofcat-<version>-x86_64.msi` to the VM and run `msiexec /i <msi> /qn`.
+The service starts with no config. Write `C:\ProgramData\SofCat\config.yaml`
+(url, manifest, catalogs, app_data_path), `Restart-Service sofcat`, then run
+the two gates above. `msiexec /x <msi> /qn` must remove the service and
+`C:\Program Files\SofCat` and leave `C:\ProgramData\SofCat` alone.
 
 ## Diagnostics
 

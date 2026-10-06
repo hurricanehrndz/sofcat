@@ -31,9 +31,11 @@ installs all of them plus the lint and format tools from `mise.toml`: run
   self-serve manifest and `inventory.json` (`app_data_path`; see
   [docs/data-directory.md](docs/data-directory.md) for its ACL).
 
-Releases publish those two executables plus the standalone `makecatalogs`
-binaries (see below); there is no installer or code
-signing in this path.
+`just msi` wraps them in `build/sofcat-<version>-x86_64.msi` with
+[embala](https://github.com/hurricanehrndz/embala), built on any host without
+WiX. The MSI installs both executables and registers the `sofcat` service; it
+ships no `config.yaml`. Releases publish the two executables, the MSI and the
+standalone `makecatalogs` binaries (see below); nothing is code signed.
 
 UI-specific targets: `just ui-lint` (TypeScript and generated-binding check),
 `just ui-test` (frontend tests). See [sofcat-ui/README.md](sofcat-ui/README.md).

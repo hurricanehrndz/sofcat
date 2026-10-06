@@ -215,3 +215,25 @@ func Example() {
 	// -servicestatus      show SofCat Windows service status
 	// -h, -help           display this help message
 }
+
+// TestGetServiceModeToleratesMissingConfig: the MSI starts the service before
+// management tooling has written config.yaml, so -service must come up with
+// defaults instead of exiting, and a service restart then picks the file up.
+func TestGetServiceModeToleratesMissingConfig(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+	origExit := osExit
+	defer func() { osExit = origExit }()
+	osExit = func(code int) { t.Fatalf("unexpected exit %d", code) }
+
+	os.Args = []string{"sofcat.exe", "--config", configPath, "-service"}
+	cfg := Get()
+	if !cfg.ServiceMode || cfg.ServiceName != "sofcat" || cfg.ServicePipeName != "sofcat-service" {
+		t.Fatalf("service defaults not applied: %+v", cfg)
+	}
+	if cfg.URL != "" || cfg.Manifest != "" {
+		t.Fatalf("expected an empty configuration, got %+v", cfg)
+	}
+}

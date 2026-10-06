@@ -4,6 +4,7 @@ set shell := ["bash", "-cu"]
 
 app := "sofcat"
 version := `git describe --tags --always --dirty 2>/dev/null || echo dev`
+msi_version := replace_regex(replace_regex(version, "^v", ""), "[-+].*$", "")
 manual_test_dir := "build/manual-test"
 server_root := manual_test_dir / "server-root"
 vm_dir := manual_test_dir / "vm"
@@ -53,11 +54,20 @@ ui-lint: ui-type ui-bindings-check
 build arch="amd64": ui-assets
     mkdir -p build
     GOOS=windows GOARCH={{arch}} CGO_ENABLED=0 \
-        go build -ldflags "-X github.com/hurricanehrndz/sofcat/pkg/version.version={{version}}" \
+        go build -ldflags "-X github.com/hurricanehrndz/sofcat/pkg/version.appName={{app}} -X github.com/hurricanehrndz/sofcat/pkg/version.version={{version}}" \
         -o build/{{app}}.exe ./cmd/sofcat
     GOOS=windows GOARCH={{arch}} CGO_ENABLED=0 \
         go build -tags production -ldflags "-H windowsgui" \
         -o build/sofcat-ui.exe ./sofcat-ui
+
+# Windows installer -> build/sofcat-<msi_version>-x86_64.msi (embala, no WiX).
+# msi_version is the numeric part of version: v1.5.0-3-gabc-dirty -> 1.5.0.
+msi: build
+    rm -rf build/msi
+    mkdir -p build/msi
+    cp build/{{app}}.exe build/sofcat-ui.exe build/msi/
+    sed "s/@VERSION@/{{msi_version}}/" installer/embala.toml > build/msi/embala.toml
+    embala build --config build/msi/embala.toml --formats msi --out-dir build
 
 # Standalone makecatalogs for every admin platform (pure Go, no cgo)
 # -> build/makecatalogs-<os>-<arch>[.exe]

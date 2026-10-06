@@ -1,8 +1,10 @@
 package config
 
 import (
+	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -178,9 +180,12 @@ func Get() Configuration {
 	// Parse any arguments that may have been passed
 	configPath, verbose, debug, checkonly := parseArguments()
 
-	// Read the config file
+	// Read the config file. The MSI starts the service before management
+	// tooling has written config.yaml, so service mode runs with defaults
+	// until the file exists; every managed run fails until then, and a
+	// service restart picks the file up.
 	configFile, err := os.ReadFile(configPath)
-	if err != nil {
+	if err != nil && (!serviceArg || !errors.Is(err, fs.ErrNotExist)) {
 		fmt.Println("Unable to read configuration file: ", err)
 		osExit(1)
 	}
@@ -195,8 +200,9 @@ func Get() Configuration {
 	serviceControlMode := serviceInstallArg || serviceRemoveArg || serviceStartArg || serviceStopArg || serviceStatusArg
 	serviceClientMode := serviceCmdArg != ""
 
-	// Normal run mode requires both manifest and URL.
-	if !serviceControlMode && !serviceClientMode {
+	// Normal run mode requires both manifest and URL. Service mode starts
+	// without them and waits for config.yaml (see above).
+	if !serviceControlMode && !serviceClientMode && !serviceArg {
 		if cfg.Manifest == "" {
 			fmt.Println("Invalid configuration - Manifest: ", err)
 			osExit(1)
