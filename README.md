@@ -8,7 +8,7 @@ SofCat supports `.msi`, `.ps1`, `.exe`, or `.nupkg` [(via chocolatey)](https://g
 
 ## Getting Started
 Information related to installing and configuring SofCat can be found on the upstream [Gorilla wiki](https://github.com/1dustindavis/gorilla/wiki); the config keys are the same.
-For quick manual-test setup helpers on a fresh Windows VM, see [utils/manual-test/README.md](utils/manual-test/README.md).
+For quick manual-test setup helpers on a fresh Windows VM, see [test/manual/README.md](test/manual/README.md).
 
 ## Building
 

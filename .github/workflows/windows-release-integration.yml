@@ -165,13 +165,13 @@ jobs:
         shell: pwsh
         run: |
           $workRoot = "$env:RUNNER_TEMP\sofcat-release-integration"
-          ./integration/windows/prepare-release-integration.ps1 `
+          ./test/integration/prepare-release-integration.ps1 `
             -WorkRoot "$workRoot"
       - name: Run released-binary integration tests
         shell: pwsh
         run: |
           $workRoot = "$env:RUNNER_TEMP\sofcat-release-integration"
-          ./integration/windows/run-release-integration.ps1 `
+          ./test/integration/run-release-integration.ps1 `
             -WorkRoot "$workRoot" `
             -SofCatExePath "$env:SOFCAT_EXE_PATH"
       - name: Finalize check run

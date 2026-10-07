@@ -50,7 +50,7 @@ installer puts them in `C:\Program Files\SofCat` and registers the service.
 
 - Use idiomatic Go and keep code gofmt-clean.
 - Prefer small, explicit functions over broad refactors.
-- Preserve existing package boundaries (`cmd/`, `pkg/`, `integration/`, `utils/`, `installer/`).
+- Preserve existing package boundaries (`cmd/`, `pkg/`, `test/`, `installer/`).
 - Keep SofCat UI code and related docs under `ui/` unless there is a clear reason to place files elsewhere.
 - Do not add new dependencies unless necessary, and explicitly call out/review any dependency additions in the PR.
 
@@ -61,8 +61,8 @@ installer puts them in `C:\Program Files\SofCat` and registers the service.
 - When changing Windows named-pipe/service code paths, add or update Windows-only tests (`//go:build windows`) and validate on a Windows VM.
 - Keep diagnostics pragmatic: prefer debug-level logging or explicit debug toggles over always-on high-volume tracing.
 - Manual/integration helpers live under:
-  - `integration/windows/`
-  - `utils/manual-test/`
+  - `test/integration/`
+  - `test/manual/`
 
 ## Config & Examples
 
@@ -114,8 +114,8 @@ to use and the exact commands for each step below.
 1. Start from a clean VM. `just bootstrap <url the VM can reach>`
    builds both binaries and the fixture assets. Serve them with
    `./build/manual-test-server -root build/manual-test/server-root -addr <addr>`.
-2. Copy `build/manual-test/vm/bootstrap-vm.ps1`, `utils/manual-test/run-selfserve-smoke.ps1`
-   and `utils/manual-test/launch-wails-ui.ps1` to the VM, then run
+2. Copy `build/manual-test/vm/bootstrap-vm.ps1`, `test/manual/run-selfserve-smoke.ps1`
+   and `test/manual/launch-wails-ui.ps1` to the VM, then run
    `bootstrap-vm.ps1 -BaseUrl <url> -Manifest selfserve_manifest -Catalogs selfserve_catalog -InstallService -StartService -NoPause`
    as an administrator.
 3. Machine-assertable gate: `run-selfserve-smoke.ps1` must exit 0 and print

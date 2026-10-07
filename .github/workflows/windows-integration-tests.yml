@@ -5,7 +5,7 @@ on:
     paths:
       - cmd/**
       - pkg/**
-      - integration/windows/**
+      - test/integration/**
       - go.mod
       - go.sum
       - .github/workflows/windows-integration-tests.yml
@@ -13,7 +13,7 @@ on:
     paths:
       - cmd/**
       - pkg/**
-      - integration/windows/**
+      - test/integration/**
       - go.mod
       - go.sum
       - .github/workflows/windows-integration-tests.yml
@@ -60,12 +60,12 @@ jobs:
           $cert = Get-ChildItem -Path "Cert:\CurrentUser\My" |
             Where-Object { $_.Subject -eq "CN=SofCatIT" } |
             Select-Object -First 1
-          ./integration/windows/prepare-release-integration.ps1 `
+          ./test/integration/prepare-release-integration.ps1 `
             -WorkRoot "${{ runner.temp }}\sofcat-release-integration" `
             -MsixCertThumbprint $cert.Thumbprint
       - name: Run integration tests
         shell: pwsh
         run: |
-          ./integration/windows/run-release-integration.ps1 `
+          ./test/integration/run-release-integration.ps1 `
             -WorkRoot "${{ runner.temp }}\sofcat-release-integration" `
             -SofCatExePath "${{ runner.temp }}\sofcat-binary\sofcat.exe"

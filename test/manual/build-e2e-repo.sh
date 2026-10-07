@@ -21,7 +21,7 @@ root=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$root"
 
 repo=build/e2e-repo
-fixtures=utils/manual-test/fixtures
+fixtures=test/manual/fixtures
 msi_name=googlechromestandaloneenterprise64.msi
 msi_url=https://dl.google.com/dl/chrome/install/$msi_name
 cache=build/cache

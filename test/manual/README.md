@@ -46,7 +46,7 @@ To override:
 just bootstrap http://192.168.1.50:8080/
 ```
 
-Server source lives in `utils/manual-test/server` (separate Go module).
+Server source lives in `test/manual/server` (separate Go module).
 
 Two VM scripts are not generated and must be copied straight from this
 directory: `run-selfserve-smoke.ps1` (machine-assertable self-serve smoke test,
@@ -100,8 +100,8 @@ From repo root on the VM:
 ```
 
 This helper now runs both phases in order:
-- `integration/windows/prepare-release-integration.ps1`
-- `integration/windows/run-release-integration.ps1`
+- `test/integration/prepare-release-integration.ps1`
+- `test/integration/run-release-integration.ps1`
 
 Recommended flow first:
 
@@ -121,7 +121,7 @@ service, with the repository on the VM's own disk instead of an HTTP server.
 The pieces are rig-agnostic; a host-side script that chains them for a
 particular VM rig is machine-local (see `AGENTS.local.md`). The loop:
 
-1. `utils/manual-test/build-e2e-repo.sh` (downloads the Chrome enterprise MSI once into
+1. `test/manual/build-e2e-repo.sh` (downloads the Chrome enterprise MSI once into
 `build/cache/`, renders `fixtures/e2e/packages-info/GoogleChrome.yaml.in` with
 the MSI's version and SHA-256, compiles the catalog with `makecatalogs`, and
 copies the selfserve fixtures and both binaries into `build/e2e-repo/`).
