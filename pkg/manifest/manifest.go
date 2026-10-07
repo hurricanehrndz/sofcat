@@ -56,7 +56,7 @@ func Get(cfg config.Configuration) (manifests []Item, newCatalogs []string, err 
 			return nil, nil, err
 		}
 
-		newManifest, err := parseManifest(manifestURL, yamlFile)
+		newManifest, err := parseManifest(yamlFile)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -126,7 +126,7 @@ func Get(cfg config.Configuration) (manifests []Item, newCatalogs []string, err 
 				}
 				return nil, nil, err
 			}
-			localManifest, err = parseManifest(manifest, localManifestsYaml)
+			localManifest, err = parseManifest(localManifestsYaml)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -137,7 +137,7 @@ func Get(cfg config.Configuration) (manifests []Item, newCatalogs []string, err 
 	return manifests, newCatalogs, nil
 }
 
-func parseManifest(manifestURL string, yamlFile []byte) (Item, error) {
+func parseManifest(yamlFile []byte) (Item, error) {
 	// Parse the new manifest
 	var newManifest Item
 	err := yaml.Unmarshal(yamlFile, &newManifest)

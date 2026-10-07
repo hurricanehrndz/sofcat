@@ -115,7 +115,9 @@ func TestFileHash(t *testing.T) {
 	defer ts.Close()
 
 	// Run the code
-	File(dir, ts.URL+"/hashtest.txt")
+	if err := fileContext(context.Background(), dir, ts.URL+"/hashtest.txt"); err != nil {
+		t.Fatal(err)
+	}
 
 	// Validate the hash to confirm it was downloaded properly
 	if !Verify(filepath.Join(dir, "hashtest.txt"), validHash) {
@@ -142,7 +144,9 @@ func TestFileHashLocal(t *testing.T) {
 
 	// Run the code
 	fmt.Println("Downloading from local path:", testPath)
-	File(dir, "file://"+testPath)
+	if err := fileContext(context.Background(), dir, "file://"+testPath); err != nil {
+		t.Fatal(err)
+	}
 
 	// Validate the hash to confirm it was downloaded properly
 	if !Verify(filepath.Join(dir, "hashtest.txt"), validHash) {
@@ -171,15 +175,15 @@ func TestFileTimeout(t *testing.T) {
 	defer ts.Close()
 
 	// Run the code
-	fileErr := File(dir, ts.URL+"/timeout")
+	fileErr := fileContext(context.Background(), dir, ts.URL+"/timeout")
 
 	// Check the error output to confirm we timedout
 	if fileErr != nil {
 		if !strings.Contains(fileErr.Error(), "timeout") {
-			t.Errorf("Error received from File() did not include 'timeout':\n%v", fileErr)
+			t.Errorf("Error received from fileContext did not include 'timeout':\n%v", fileErr)
 		}
 	} else {
-		t.Errorf("File() did not return an error when running 'TestFileTimeout'")
+		t.Errorf("fileContext did not return an error when running 'TestFileTimeout'")
 	}
 }
 
@@ -197,15 +201,15 @@ func TestFileStatus(t *testing.T) {
 	defer ts.Close()
 
 	// Run the code
-	fileErr := File(dir, ts.URL+"/404")
+	fileErr := fileContext(context.Background(), dir, ts.URL+"/404")
 
 	// Check the error output to confirm we received a 404
 	if fileErr != nil {
 		if !strings.Contains(fileErr.Error(), "404") {
-			t.Errorf("Error received from File() did not include '404':\n%v", fileErr)
+			t.Errorf("Error received from fileContext did not include '404':\n%v", fileErr)
 		}
 	} else {
-		t.Errorf("File() did not return an error when returning a 404")
+		t.Errorf("fileContext did not return an error when returning a 404")
 	}
 }
 
@@ -227,7 +231,7 @@ func TestFileBasicAuth(t *testing.T) {
 	downloadCfg.AuthPass = "beans"
 
 	// Run the code
-	fileErr := File(dir, ts.URL+"/basicauth")
+	fileErr := fileContext(context.Background(), dir, ts.URL+"/basicauth")
 
 	// Check that we did not receive an error
 	if fileErr != nil {
@@ -287,7 +291,7 @@ func TestFileTLS(t *testing.T) {
 	tlsURL := "https://localhost:" + u.Port() + "/tlsauth"
 
 	// Run the code
-	fileErr := File(dir, tlsURL)
+	fileErr := fileContext(context.Background(), dir, tlsURL)
 
 	// Check that we did not receive an error
 	if fileErr != nil {
