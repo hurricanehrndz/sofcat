@@ -123,7 +123,7 @@ func TestParseServiceManifestFixture(t *testing.T) {
 		t.Fatalf("failed reading fixture %s: %v", serviceManifestPath, err)
 	}
 
-	parsed, err := parseManifest(serviceManifestPath, content)
+	parsed, err := parseManifest(content)
 	if err != nil {
 		t.Fatalf("parseManifest failed: %v", err)
 	}
@@ -148,7 +148,7 @@ func TestParseOptionalManifestFixture(t *testing.T) {
 		t.Fatalf("failed reading fixture %s: %v", optionalManifestPath, err)
 	}
 
-	parsed, err := parseManifest(optionalManifestPath, content)
+	parsed, err := parseManifest(content)
 	if err != nil {
 		t.Fatalf("parseManifest failed: %v", err)
 	}

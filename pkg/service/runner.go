@@ -437,7 +437,8 @@ func decodeParams[T any](raw json.RawMessage) (T, error) {
 
 // handleConn reads one request from conn and answers it.
 func (sr *serviceRunner) handleConn(ctx context.Context, conn clientConn) {
-	// Every response and notification below must go out within writeTimeout. conn = boundedConn{conn}
+	// Every response and notification below must go out within writeTimeout.
+	conn = boundedConn{conn}
 	startedAt := time.Now()
 	result := "error"
 	var req rpcRequest

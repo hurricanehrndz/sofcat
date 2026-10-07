@@ -28,11 +28,6 @@ func SetConfig(cfg config.Configuration) {
 	downloadCfg = cfg
 }
 
-// File downloads a provided url to the file path specified.
-func File(file string, url string) error {
-	return fileContext(context.Background(), file, url)
-}
-
 func fileContext(ctx context.Context, file string, url string) error {
 	// Get the absolute file path
 	_, fileName := path.Split(url)
