@@ -85,7 +85,7 @@ makecatalogs:
 # Static file server for the manual-test loop -> build/manual-test-server
 manual-test-server:
     mkdir -p build
-    cd utils/manual-test/server && go build -o ../../../build/manual-test-server .
+    cd test/manual/server && go build -o ../../../build/manual-test-server .
 
 # Manual-test assets under build/manual-test/ and VM scripts stamped with the
 # server URL (auto-detected from the default route when base_url is empty).
@@ -94,13 +94,13 @@ bootstrap base_url="": build manual-test-server
     cp build/{{app}}.exe build/sofcat-ui.exe {{server_root}}/
     cp examples/example_manifest.yaml {{server_root}}/manifests/
     cp examples/example_catalog.yaml {{server_root}}/catalogs/
-    cp utils/manual-test/fixtures/selfserve/manifests/*.yaml {{server_root}}/manifests/
-    cp utils/manual-test/fixtures/selfserve/catalogs/*.yaml {{server_root}}/catalogs/
+    cp test/manual/fixtures/selfserve/manifests/*.yaml {{server_root}}/manifests/
+    cp test/manual/fixtures/selfserve/catalogs/*.yaml {{server_root}}/catalogs/
     rm -rf {{server_root}}/packages/scripts
-    cp -R utils/manual-test/fixtures/selfserve/packages/scripts {{server_root}}/packages/scripts
-    cp utils/manual-test/bootstrap-vm.ps1 utils/manual-test/bootstrap-vm-full.ps1 \
-       utils/manual-test/templates/run-sofcat-check.bat \
-       utils/manual-test/run-release-integration.bat {{vm_dir}}/
+    cp -R test/manual/fixtures/selfserve/packages/scripts {{server_root}}/packages/scripts
+    cp test/manual/bootstrap-vm.ps1 test/manual/bootstrap-vm-full.ps1 \
+       test/manual/templates/run-sofcat-check.bat \
+       test/manual/run-release-integration.bat {{vm_dir}}/
     @base_url="{{base_url}}"; \
     if [ -z "$base_url" ]; then \
       case "$(uname)" in \
@@ -110,8 +110,8 @@ bootstrap base_url="": build manual-test-server
       esac; \
       base_url="http://${ip:-localhost}:8080/"; \
     fi; \
-    sed "s#@DEFAULT_BASE_URL@#$base_url#g" utils/manual-test/templates/bootstrap-vm.bat > {{vm_dir}}/bootstrap-vm.bat; \
-    sed "s#@DEFAULT_BASE_URL@#$base_url#g" utils/manual-test/templates/bootstrap-vm-full.bat > {{vm_dir}}/bootstrap-vm-full.bat; \
+    sed "s#@DEFAULT_BASE_URL@#$base_url#g" test/manual/templates/bootstrap-vm.bat > {{vm_dir}}/bootstrap-vm.bat; \
+    sed "s#@DEFAULT_BASE_URL@#$base_url#g" test/manual/templates/bootstrap-vm-full.bat > {{vm_dir}}/bootstrap-vm-full.bat; \
     echo "$base_url" > {{vm_dir}}/base-url.txt; \
     echo "Using manual-test base URL: $base_url"; \
     echo "Prepared manual-test assets in {{server_root}}; VM scripts in {{vm_dir}}"; \

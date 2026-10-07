@@ -6,8 +6,7 @@ on:
     paths:
       - cmd/**
       - pkg/**
-      - utils/**
-      - integration/**
+      - test/**
       - ui/*.go
       - justfile
       - mise.toml
@@ -18,8 +17,7 @@ on:
     paths:
       - cmd/**
       - pkg/**
-      - utils/**
-      - integration/**
+      - test/**
       - ui/*.go
       - justfile
       - mise.toml

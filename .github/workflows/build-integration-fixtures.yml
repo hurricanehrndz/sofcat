@@ -23,7 +23,7 @@ jobs:
         shell: pwsh
         run: |
           $workRoot = "$env:RUNNER_TEMP\sofcat-release-integration"
-          ./integration/windows/prepare-release-integration.ps1 `
+          ./test/integration/prepare-release-integration.ps1 `
             -WorkRoot "$workRoot"
       - name: Upload integration fixtures
         uses: actions/upload-artifact@v4
