@@ -20,8 +20,9 @@ import (
 const defaultWindowTitle = "SofCat UI"
 
 // defaultIcon is the window and taskbar icon when no branding logo is set.
-// The executable carries no icon resource, so without this Windows shows the
-// generic program icon.
+// The executable's own icon resource (assets/sofcat.ico, linked by
+// `just winres`) is what Explorer and the Start menu show; the window icon is
+// set separately.
 //
 //go:embed icon.png
 var defaultIcon []byte

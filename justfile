@@ -50,8 +50,15 @@ ui-bindings-check:
 # Type check plus committed-binding verification.
 ui-lint: ui-type ui-bindings-check
 
+# Windows icon resources (rsrc_windows_<arch>.syso, gitignored) that go build
+# links into both executables. Icon only: no manifest, no version info.
+winres arch="amd64":
+    for dir in cmd/sofcat ui; do \
+      go run github.com/tc-hib/go-winres@v0.3.3 simply --arch {{arch}} --manifest none --icon assets/sofcat.ico --out $dir/rsrc; \
+    done
+
 # Windows binaries (pure Go, no cgo) -> build/sofcat.exe and build/sofcat-ui.exe
-build arch="amd64": ui-assets
+build arch="amd64": ui-assets (winres arch)
     mkdir -p build
     GOOS=windows GOARCH={{arch}} CGO_ENABLED=0 \
         go build -ldflags "-X github.com/hurricanehrndz/sofcat/pkg/version.appName={{app}} -X github.com/hurricanehrndz/sofcat/pkg/version.version={{version}}" \

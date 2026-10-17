@@ -1,4 +1,8 @@
-![SofCat logo](sofcat.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/sofcat-logo-dark.png">
+  <img alt="SofCat" src="assets/sofcat-logo.png" width="320">
+</picture>
+
 # SofCat [![Go Report Card](https://goreportcard.com/badge/github.com/hurricanehrndz/sofcat)](https://goreportcard.com/report/github.com/hurricanehrndz/sofcat) [![Build status](https://github.com/hurricanehrndz/sofcat/actions/workflows/go-test.yml/badge.svg?branch=main)](https://github.com/hurricanehrndz/sofcat/actions/workflows/go-test.yml)
 
 Munki-like Application Management for Windows
@@ -7,7 +11,8 @@ SofCat is a fork of [Gorilla](https://github.com/1dustindavis/gorilla) that prov
 SofCat supports `.msi`, `.ps1`, `.exe`, or `.nupkg` [(via chocolatey)](https://github.com/chocolatey/choco).
 
 ## Getting Started
-Information related to installing and configuring SofCat can be found on the upstream [Gorilla wiki](https://github.com/1dustindavis/gorilla/wiki); the config keys are the same.
+Annotated examples of the config, catalog, manifest and package-info files are in [examples/](examples/).
+[docs/](docs/) covers the data directory, osquery inventory and development setup.
 For quick manual-test setup helpers on a fresh Windows VM, see [test/manual/README.md](test/manual/README.md).
 
 ## Building
