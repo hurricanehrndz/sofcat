@@ -1,52 +1,53 @@
 name: Windows Released-Binary Integration
+# Two entry points:
+# - workflow_call from Build Release tests the sofcat.exe that run just built.
+# - workflow_dispatch ("Run workflow", needs write access) tests a pull
+#   request: it builds sofcat.exe from refs/pull/<pr>/merge and reports a
+#   check run and a comment on the PR.
+# PR code only ever runs in the read-only `integration` job; the jobs that
+# hold write permissions (`start`, `finish`) run no repository code.
 on:
-  workflow_run:
-    workflows:
-      - Build Release
-    types:
-      - completed
-  issue_comment:
-    types:
-      - created
+  workflow_call:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number to test
+        required: true
+        type: number
+      fixtures:
+        description: prebuilt reuses main's latest fixture artifact; full rebuilds the fixtures
+        type: choice
+        options:
+          - prebuilt
+          - full
+        default: prebuilt
 permissions:
   contents: read
-  actions: read
-  checks: write
-  issues: write
-  pull-requests: write
 jobs:
-  integration:
-    name: Run Integration on Windows VM
-    runs-on: windows-latest
-    timeout-minutes: 60
-    if: >-
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') || (github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, '/run-integration-test') && (github.event.comment.author_association == 'OWNER' || github.event.comment.author_association == 'MEMBER' || github.event.comment.author_association == 'COLLABORATOR'))
+  start:
+    name: Report start on PR
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      checks: write
+      pull-requests: write
+    outputs:
+      head_sha: ${{ steps.pr_meta.outputs.head_sha }}
+      check_run_id: ${{ steps.check_start.outputs.check_run_id }}
+      comment_id: ${{ steps.comment_start.outputs.comment_id }}
     steps:
-      - name: Resolve fixture mode
-        if: github.event_name == 'issue_comment'
-        id: fixture_mode
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const body = (context.payload.comment && context.payload.comment.body) || "";
-            const fullMode = body.includes("/run-integration-test-full");
-            core.setOutput("mode", fullMode ? "full" : "prebuilt");
       - name: Resolve PR head sha
-        if: github.event_name == 'issue_comment'
         id: pr_meta
-        continue-on-error: true
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
         with:
           script: |
             const { owner, repo } = context.repo;
-            const pull_number = context.issue.number;
-            const pr = await github.rest.pulls.get({ owner, repo, pull_number });
+            const pr = await github.rest.pulls.get({ owner, repo, pull_number: Number("${{ inputs.pr }}") });
             core.setOutput("head_sha", pr.data.head.sha);
       - name: Create in-progress check run
-        if: github.event_name == 'issue_comment'
         id: check_start
         continue-on-error: true
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
         with:
           script: |
             const { owner, repo } = context.repo;
@@ -60,15 +61,14 @@ jobs:
               details_url: runUrl,
               output: {
                 title: "Integration test started",
-                summary: `Triggered by @${context.payload.comment.user.login} via /run-integration-test.\n\nRun: ${runUrl}`
+                summary: `Started by @${context.actor} from Run workflow.\n\nRun: ${runUrl}`
               }
             });
             core.setOutput("check_run_id", String(response.data.id));
       - name: Comment start on PR
-        if: github.event_name == 'issue_comment'
         id: comment_start
         continue-on-error: true
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
         with:
           script: |
             const { owner, repo } = context.repo;
@@ -76,44 +76,53 @@ jobs:
             const comment = await github.rest.issues.createComment({
               owner,
               repo,
-              issue_number: context.issue.number,
+              issue_number: Number("${{ inputs.pr }}"),
               body: [
                 "<!-- sofcat-integration-status -->",
-                "Windows integration test started from `/run-integration-test`.",
+                `Windows integration test started by @${context.actor}.`,
                 "",
                 `Run: ${runUrl}`
               ].join("\n")
             });
             core.setOutput("comment_id", String(comment.data.id));
+  integration:
+    name: Run Integration on Windows VM
+    needs: start
+    # start is skipped under workflow_call; run anyway, but not when start failed.
+    if: ${{ !cancelled() && needs.start.result != 'failure' }}
+    runs-on: windows-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read # download artifacts from this and other runs
+    steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          ref: ${{ github.event_name == 'issue_comment' && format('refs/pull/{0}/merge', github.event.issue.number) || github.event.workflow_run.head_sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/pull/{0}/merge', inputs.pr) || github.sha }}
+          persist-credentials: false
       - name: Setup go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
           cache: true
-      - name: Download sofcat.exe from Build Release run artifact
-        if: github.event_name == 'workflow_run'
-        uses: actions/download-artifact@v4
+      - name: Download sofcat.exe from the Build Release run
+        if: github.event_name != 'workflow_dispatch'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          repository: ${{ github.repository }}
-          run-id: ${{ github.event.workflow_run.id }}
           name: sofcat-exe-release
           path: ${{ runner.temp }}/sofcat-artifact
-          github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Build sofcat.exe from PR merge ref
-        if: github.event_name == 'issue_comment'
+        if: github.event_name == 'workflow_dispatch'
         shell: pwsh
         run: |
           $outDir = "${{ runner.temp }}\sofcat-binary"
           New-Item -Path $outDir -ItemType Directory -Force | Out-Null
           go build -v -o "$outDir\sofcat.exe" ./cmd/sofcat
       - name: Resolve latest integration fixture run
-        if: github.event_name == 'issue_comment' && steps.fixture_mode.outputs.mode != 'full'
+        if: github.event_name == 'workflow_dispatch' && inputs.fixtures != 'full'
         id: fixture_run
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
         with:
           script: |
             const { owner, repo } = context.repo;
@@ -133,10 +142,10 @@ jobs:
             }
             core.setOutput("run_id", String(latestSuccess.id));
       - name: Download prebuilt fixtures
-        if: github.event_name == 'issue_comment' && steps.fixture_mode.outputs.mode != 'full' && steps.fixture_run.outputs.run_id != ''
+        if: github.event_name == 'workflow_dispatch' && inputs.fixtures != 'full' && steps.fixture_run.outputs.run_id != ''
         id: fixture_download
         continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           repository: ${{ github.repository }}
           run-id: ${{ steps.fixture_run.outputs.run_id }}
@@ -161,7 +170,7 @@ jobs:
 
           throw "Unable to resolve sofcat.exe path"
       - name: Prepare released-binary integration fixtures
-        if: github.event_name == 'workflow_run' || github.event_name == 'issue_comment' && (steps.fixture_mode.outputs.mode == 'full' || steps.fixture_download.outcome != 'success')
+        if: github.event_name != 'workflow_dispatch' || inputs.fixtures == 'full' || steps.fixture_download.outcome != 'success'
         shell: pwsh
         run: |
           $workRoot = "$env:RUNNER_TEMP\sofcat-release-integration"
@@ -174,46 +183,55 @@ jobs:
           ./test/integration/run-release-integration.ps1 `
             -WorkRoot "$workRoot" `
             -SofCatExePath "$env:SOFCAT_EXE_PATH"
+  finish:
+    name: Report result on PR
+    needs: [start, integration]
+    if: ${{ always() && github.event_name == 'workflow_dispatch' && needs.start.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      checks: write
+      pull-requests: write
+    steps:
       - name: Finalize check run
-        if: always() && github.event_name == 'issue_comment' && steps.check_start.outputs.check_run_id != ''
+        if: needs.start.outputs.check_run_id != ''
         continue-on-error: true
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
         with:
           script: |
             const { owner, repo } = context.repo;
             const runUrl = `https://github.com/${owner}/${repo}/actions/runs/${context.runId}`;
-            const status = "${{ job.status }}";
+            const result = "${{ needs.integration.result }}";
             let conclusion = "failure";
-            if (status === "success") conclusion = "success";
-            if (status === "cancelled") conclusion = "cancelled";
-            if (status === "skipped") conclusion = "neutral";
+            if (result === "success") conclusion = "success";
+            if (result === "cancelled") conclusion = "cancelled";
+            if (result === "skipped") conclusion = "neutral";
 
             await github.rest.checks.update({
               owner,
               repo,
-              check_run_id: Number("${{ steps.check_start.outputs.check_run_id }}"),
+              check_run_id: Number("${{ needs.start.outputs.check_run_id }}"),
               status: "completed",
               conclusion,
               details_url: runUrl,
               output: {
                 title: `Integration ${conclusion}`,
-                summary: `Workflow completed with status: ${status}.\n\nRun: ${runUrl}`
+                summary: `Integration job finished with result: ${result}.\n\nRun: ${runUrl}`
               }
             });
       - name: Finalize PR comment
-        if: always() && github.event_name == 'issue_comment' && steps.comment_start.outputs.comment_id != ''
+        if: needs.start.outputs.comment_id != ''
         continue-on-error: true
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
         with:
           script: |
             const { owner, repo } = context.repo;
             const runUrl = `https://github.com/${owner}/${repo}/actions/runs/${context.runId}`;
-            const status = "${{ job.status }}";
-            const state = status === "success" ? "passed" : (status === "cancelled" ? "was cancelled" : "failed");
+            const result = "${{ needs.integration.result }}";
+            const state = result === "success" ? "passed" : (result === "cancelled" ? "was cancelled" : "failed");
             await github.rest.issues.updateComment({
               owner,
               repo,
-              comment_id: Number("${{ steps.comment_start.outputs.comment_id }}"),
+              comment_id: Number("${{ needs.start.outputs.comment_id }}"),
               body: [
                 "<!-- sofcat-integration-status -->",
                 `Windows integration test ${state}.`,
