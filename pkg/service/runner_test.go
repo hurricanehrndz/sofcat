@@ -35,11 +35,11 @@ func noopRun(config.Configuration, installer.ProgressFn, *installer.Cancels) (*r
 	return nil, nil
 }
 
-func testServiceConfig(t testing.TB) config.Configuration {
-	t.Helper()
+func testServiceConfig(tb testing.TB) config.Configuration {
+	tb.Helper()
 	return config.Configuration{
-		AppDataPath:     t.TempDir(),
-		ServicePipeName: testPipeName(t),
+		AppDataPath:     tb.TempDir(),
+		ServicePipeName: testPipeName(tb),
 		ServiceInterval: "1h",
 		ServiceMode:     true,
 		ServiceName:     "sofcat-test",
@@ -47,15 +47,15 @@ func testServiceConfig(t testing.TB) config.Configuration {
 }
 
 // startTestRunner starts a runner and stops it when the test ends.
-func startTestRunner(t testing.TB, cfg config.Configuration, run managedRunFunc) (*serviceRunner, context.Context) {
-	t.Helper()
+func startTestRunner(tb testing.TB, cfg config.Configuration, run managedRunFunc) (*serviceRunner, context.Context) {
+	tb.Helper()
 	sr := newServiceRunner(cfg, run)
 	ctx, cancel := context.WithCancel(context.Background())
 	if err := sr.start(ctx); err != nil {
 		cancel()
-		t.Fatalf("service start failed: %v", err)
+		tb.Fatalf("service start failed: %v", err)
 	}
-	t.Cleanup(func() {
+	tb.Cleanup(func() {
 		cancel()
 		sr.stop(context.Background())
 	})
