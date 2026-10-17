@@ -123,7 +123,7 @@ func getContext(ctx context.Context, url string) ([]byte, error) {
 		}
 
 		// Register a file handler so `file://` works
-		transport.RegisterProtocol("file", http.NewFileTransport(http.Dir("/")))
+		transport.RegisterProtocol("file", http.NewFileTransport(http.Dir("/"))) //nolint:gosec // G111: file:// sources are absolute paths from the admin-controlled catalog
 
 		// Create the client using our custom transport
 		client = &http.Client{Transport: transport}

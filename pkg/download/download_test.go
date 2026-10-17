@@ -245,7 +245,7 @@ func TestFileTLS(t *testing.T) {
 
 	cert, err := tls.X509KeyPair(serverCert, serverKey)
 	if err != nil {
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 
 	// Set TLS configuration
@@ -262,7 +262,7 @@ func TestFileTLS(t *testing.T) {
 	// Compile the url with hostname instead of ip address
 	u, err := url.Parse(ts.URL)
 	if err != nil {
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 	tlsURL := "https://localhost:" + u.Port() + "/tlsauth"
 
@@ -287,13 +287,13 @@ func copy(src, dst string) error {
 
 	source, err := os.Open(src)
 	if err != nil {
-		return fmt.Errorf("%s could not be opened: %s", src, err)
+		return fmt.Errorf("%s could not be opened: %w", src, err)
 	}
 	defer source.Close()
 
 	destination, err := os.Create(dst)
 	if err != nil {
-		return fmt.Errorf("%s could not be created: %s", dst, err)
+		return fmt.Errorf("%s could not be created: %w", dst, err)
 	}
 	defer destination.Close()
 

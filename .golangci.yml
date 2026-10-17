@@ -42,12 +42,14 @@ linters:
         - shadow
     exhaustive:
       default-signifies-exhaustive: true
+    gocritic:
+      disabled-checks:
+        - ifElseChain # style: if-else vs switch is taste
     gocognit:
-      # CEILING: 30 (the linter's default) flags only the five worst existing
-      # functions. Issues anchor on the func line, so the incremental gate
-      # lets an existing function grow unless its signature changes; `just
-      # lint-all` shows the full list. Lower to 25 once Workstream B
-      # (kernel-repair) has split those five.
+      # CEILING: 30 (the linter's default). The five functions over it carry
+      # a `//nolint:gocognit`, so they can keep growing unnoticed. Remove
+      # those and lower this to 25 once Workstream B (kernel-repair) has
+      # split them.
       min-complexity: 30
     gosec:
       excludes:
@@ -65,6 +67,9 @@ linters:
       - common-false-positives
       - std-error-handling
     rules:
+      - linters:
+          - staticcheck
+        text: "QF1003" # style: tagged switch suggestion
       - path: _test\.go
         linters:
           - forcetypeassert # a panic fails the test, which is fine

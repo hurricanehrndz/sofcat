@@ -6,7 +6,7 @@ Tools come from [mise](https://mise.jdx.dev): `mise install` reads `mise.toml` a
 provides Go 1.26, Node 22, `just`, `golangci-lint`, `treefmt` with `gofumpt` and
 `yamlfmt`. Activate mise in your shell (or prefix commands with `mise exec --`).
 `just setup` installs the frontend dependencies and a pre-commit hook that runs
-`just pre-commit` (format check plus incremental lint).
+`just pre-commit` (format check plus lint).
 
 The Windows binaries cross-compile with no cgo, so `just build` needs nothing
 else. Compiling or testing the `ui` package for the host (`just test`,

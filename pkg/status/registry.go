@@ -30,9 +30,9 @@ func checkValues(values []string) (valuesExist bool) {
 	return nameExists && versionExists && uninstallExists
 }
 
-func getUninstallKeys() (installedItems map[string]RegistryApplication, checkErr error) {
+func getUninstallKeys() (map[string]RegistryApplication, error) {
 	// Initialize the map we will add any values to
-	installedItems = make(map[string]RegistryApplication)
+	installedItems := make(map[string]RegistryApplication)
 
 	// Both Uninstall paths (64 & 32 bits apps)
 	regPaths := []string{
@@ -101,5 +101,5 @@ func getUninstallKeys() (installedItems map[string]RegistryApplication, checkErr
 			}
 		}
 	}
-	return installedItems, checkErr
+	return installedItems, nil
 }

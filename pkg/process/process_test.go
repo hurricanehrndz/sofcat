@@ -648,7 +648,9 @@ func TestCleanUp(t *testing.T) {
 	// Create an empty directory if it doesn't already exist
 	if _, err := os.Stat(emptyDir); os.IsNotExist(err) {
 		// Directory does not exist
-		os.Mkdir(emptyDir, os.ModePerm)
+		if err := os.Mkdir(emptyDir, os.ModePerm); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	// Run `CleanUp`

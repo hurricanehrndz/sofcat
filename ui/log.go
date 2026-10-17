@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -12,17 +11,17 @@ import (
 
 func setupLogger() (*slog.Logger, *lumberjack.Logger, error) {
 	if os.Getenv("SOFCAT_UI_DEBUG") != "1" && os.Getenv("SOFCAT_DEBUG") != "1" {
-		return slog.New(slog.NewJSONHandler(io.Discard, nil)), nil, nil
+		return slog.New(slog.DiscardHandler), nil, nil
 	}
 
 	localAppData := os.Getenv("LOCALAPPDATA")
 	if localAppData == "" {
-		return slog.New(slog.NewJSONHandler(io.Discard, nil)), nil, errors.New("LOCALAPPDATA is not set")
+		return slog.New(slog.DiscardHandler), nil, errors.New("LOCALAPPDATA is not set")
 	}
 
 	directory := filepath.Join(localAppData, "sofcat")
-	if err := os.MkdirAll(directory, 0o700); err != nil {
-		return slog.New(slog.NewJSONHandler(io.Discard, nil)), nil, err
+	if err := os.MkdirAll(directory, 0o700); err != nil { //nolint:gosec // G703: LOCALAPPDATA comes from the user's own session, which the UI runs as
+		return slog.New(slog.DiscardHandler), nil, err
 	}
 
 	writer := &lumberjack.Logger{

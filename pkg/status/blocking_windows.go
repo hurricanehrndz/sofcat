@@ -4,6 +4,7 @@
 package status
 
 import (
+	"errors"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -25,7 +26,7 @@ func RunningBlockingApps(apps []string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer windows.CloseHandle(snapshot)
+	defer func() { _ = windows.CloseHandle(snapshot) }()
 
 	var entry windows.ProcessEntry32
 	entry.Size = uint32(unsafe.Sizeof(entry))
@@ -34,7 +35,7 @@ func RunningBlockingApps(apps []string) ([]string, error) {
 	for err = windows.Process32First(snapshot, &entry); err == nil; err = windows.Process32Next(snapshot, &entry) {
 		running = append(running, windows.UTF16ToString(entry.ExeFile[:]))
 	}
-	if err != windows.ERROR_NO_MORE_FILES {
+	if !errors.Is(err, windows.ERROR_NO_MORE_FILES) {
 		return nil, err
 	}
 

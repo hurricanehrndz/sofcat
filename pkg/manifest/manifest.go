@@ -29,7 +29,7 @@ var downloadGet = download.Get
 // 1) All manifest objects
 // 2) Aditional catalogs that need to be added to the config
 // 3) Any retrieval or parse error encountered while loading manifests
-func Get(cfg config.Configuration) (manifests []Item, newCatalogs []string, err error) {
+func Get(cfg config.Configuration) (manifests []Item, newCatalogs []string, err error) { //nolint:gocognit // CEILING: known-complex, split in Workstream B (kernel-repair)
 	// Create a slice with the names of all manifests
 	// This is so we can track them before we get the data
 	var manifestsList []string

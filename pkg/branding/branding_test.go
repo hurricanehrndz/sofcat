@@ -50,7 +50,7 @@ func TestResolveValidatesText(t *testing.T) {
 func TestResolveHelpURL(t *testing.T) {
 	for value, want := range map[string]string{
 		"https://example.invalid/help": "https://example.invalid/help",
-		" HTTP://intranet/help ":       "http://intranet/help",
+		" HTTP://intranet/help ":       "http://intranet/help", //nolint:gocritic // mapKey: the whitespace is the input under test
 		"javascript:alert(1)":          "",
 		"file:///C:/Windows/notepad":   "",
 		"/help":                        "",

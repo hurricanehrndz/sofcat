@@ -53,7 +53,7 @@ func getFileVersionInfoSize(path string) uint32 {
 		uintptr(unsafe.Pointer(pathPtr)),
 		0,
 	)
-	return uint32(size)
+	return uint32(size) //nolint:gosec // G115: GetFileVersionInfoSizeW returns a DWORD
 }
 
 func getFileVersionInfo(path string, rawMetadata []byte) bool {
@@ -69,7 +69,7 @@ func getFileVersionInfo(path string, rawMetadata []byte) bool {
 	ret, _, _ := procGetFileVersionInfo.Call(
 		uintptr(unsafe.Pointer(pathPtr)),
 		0,
-		uintptr(uint32(len(rawMetadata))),
+		uintptr(len(rawMetadata)),
 		uintptr(unsafe.Pointer(&rawMetadata[0])),
 	)
 	return ret != 0

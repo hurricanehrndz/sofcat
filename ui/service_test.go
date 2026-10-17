@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
-	"io"
 	"log/slog"
 	"net/http"
 	"sync"
@@ -295,7 +294,7 @@ func testApplication() *application.App {
 }
 
 func discardLogger() *slog.Logger {
-	return slog.New(slog.NewTextHandler(io.Discard, nil))
+	return slog.New(slog.DiscardHandler)
 }
 
 // The window chrome comes from the branding fetched before the window opens,

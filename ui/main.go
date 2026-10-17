@@ -74,7 +74,10 @@ func main() {
 	if err := app.Run(); err != nil {
 		logger.Debug("application stopped", "result", "error", "error", err)
 		fmt.Fprintf(os.Stderr, "SofCat UI failed: %v\n", err)
-		os.Exit(1)
+		if logWriter != nil {
+			_ = logWriter.Close()
+		}
+		os.Exit(1) //nolint:gocritic // exitAfterDefer: the log is closed explicitly above
 	}
 	logger.Debug("application stopped", "result", "ok")
 }

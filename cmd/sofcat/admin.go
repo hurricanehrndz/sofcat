@@ -32,9 +32,9 @@ func adminCheck() (bool, error) {
 		&adminSid,
 	)
 	if err != nil {
-		return false, fmt.Errorf("SID Error: %v", err)
+		return false, fmt.Errorf("sid error: %w", err)
 	}
-	defer windows.FreeSid(adminSid)
+	defer func() { _ = windows.FreeSid(adminSid) }()
 	// This appears to cast a null pointer so I'm not sure why this
 	// works, but this guy says it does and it Works for Me™:
 	// https://github.com/golang/go/issues/28804#issuecomment-438838144
@@ -42,7 +42,7 @@ func adminCheck() (bool, error) {
 
 	admin, err := token.IsMember(adminSid)
 	if err != nil {
-		return false, fmt.Errorf("Token Membership Error: %v", err)
+		return false, fmt.Errorf("token membership error: %w", err)
 	}
 	return admin, nil
 }

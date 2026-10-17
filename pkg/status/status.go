@@ -27,7 +27,6 @@ type RegistryApplication struct {
 // WindowsMetadata contains extended metadata retrieved in the `properties.go`
 type WindowsMetadata struct {
 	productName   string
-	companyName   string
 	versionString string
 	versionMajor  int
 	versionMinor  int
@@ -167,7 +166,7 @@ func checkScript(catalogItem catalog.Item, cachePath string, installType string)
 	return actionNeeded, checkErr
 }
 
-func checkPath(catalogItem catalog.Item, installType string) (actionNeeded bool, checkErr error) {
+func checkPath(catalogItem catalog.Item, installType string) (actionNeeded bool, checkErr error) { //nolint:gocognit // CEILING: known-complex, split in Workstream B (kernel-repair)
 	var actionStore []bool
 
 	// Iterate through all file provided paths
