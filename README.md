@@ -1,5 +1,5 @@
 <p align="center">
-  <img alt="SofCat: self-service software for Windows" src="assets/readme/banner.png" width="100%">
+  <img alt="SofCat: a catalog for anything you can put on disk or run" src="assets/readme/banner.png" width="100%">
 </p>
 
 <p align="center">
@@ -11,42 +11,58 @@
   <a href="LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/github/license/hurricanehrndz/sofcat"></a>
 </p>
 
-SofCat installs and updates software on Windows machines from a catalog you
-host on any web server, the way [Munki](https://github.com/munki/munki) does on
-macOS. A SYSTEM service keeps every required item installed. A self-service
-app lets people install the optional ones without admin rights.
+> [!WARNING]
+> SofCat is pre-beta. The config keys, catalog format and service protocol can
+> change between releases without a migration path. Only the Windows agent
+> ships today.
+
+SofCat is a catalog for anything you can put on disk or run: installers,
+packages, scripts, AI skills. You publish manifests and catalogs on any web
+server. An agent on each machine keeps the required items in place, and a
+self-service app, branded as your own, lets people add the optional ones
+without admin rights.
+
+It started as a fork of [Gorilla](https://github.com/1dustindavis/gorilla) and
+keeps the [Munki](https://github.com/munki/munki) model: a manifest says what a
+machine gets, catalogs say what exists, and both are plain YAML.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/readme/storefront-dark.png">
   <img alt="The SofCat self-service app listing available software with Install, Cancel and Remove actions" src="assets/readme/storefront-light.png">
 </picture>
 
-## What you get
+## Where it stands
 
-- **Munki-style repos.** Manifests say what a machine gets, catalogs say what
-  exists, and both are plain YAML served over HTTP(S).
-- **Four package types.** `.msi`, `.exe`, `.ps1`, and `.nupkg` through
-  [Chocolatey](https://github.com/chocolatey/choco).
+| | Today | Planned |
+| --- | --- | --- |
+| Agent | Windows service | macOS and Linux |
+| Item types | `.msi`, `.exe`, `.ps1`, `.nupkg` via [Chocolatey](https://github.com/chocolatey/choco) | Files and scripts on any platform, AI skills, native packages |
+| Self-service app | Windows | macOS and Linux |
+| `makecatalogs` | Linux, macOS, Windows | |
+
+What already works:
+
 - **Self-service for standard users.** Browse, install, remove and cancel,
-  with per-item progress and an Activity log. The app talks to the service
-  over a local named pipe, so nobody needs to elevate.
-- **Your branding.** Set a title, logo, accent colour and help link with
-  policy registry values or `config.yaml`. See [ui/README.md](ui/README.md#branding).
+  with per-item progress and an Activity log. The app talks to the agent over
+  a local named pipe, so nobody needs to elevate.
+- **Your branding.** Set the app's title, logo, accent colour and help link
+  with policy registry values or `config.yaml`. See
+  [ui/README.md](ui/README.md#branding).
 - **Inventory for osquery.** Every run writes a Munki-compatible
   `inventory.json`. See [docs/osquery-inventory.md](docs/osquery-inventory.md).
-- **`makecatalogs` anywhere.** Build catalogs on Linux, macOS or Windows, so
-  your package repo's CI never needs a Windows runner.
+- **`makecatalogs` anywhere.** Build catalogs on any OS, so your repo's CI
+  never needs a Windows runner.
 
 ## How it works
 
 ```mermaid
 flowchart LR
-  repo["Web server<br/>manifests, catalogs, packages"] -->|HTTPS| svc["sofcat.exe<br/>SYSTEM service"]
-  svc -->|installs| pc["Windows machine"]
-  ui["sofcat-ui.exe<br/>self-service app"] <-->|named pipe| svc
+  repo["Web server<br/>manifests, catalogs, items"] -->|HTTPS| agent["sofcat agent<br/>runs as SYSTEM"]
+  agent -->|installs, runs, removes| pc["Each machine"]
+  ui["Self-service app<br/>your branding"] <-->|local pipe| agent
 ```
 
-## Quick start
+## Quick start on Windows
 
 1. Download `sofcat-<version>-x86_64.msi` from the
    [releases page](https://github.com/hurricanehrndz/sofcat/releases) and install it:
@@ -140,5 +156,5 @@ To try the whole thing on a fresh Windows VM, start with
 ## Credits
 
 SofCat is a fork of [Gorilla](https://github.com/1dustindavis/gorilla) by
-Dustin Davis and borrows its ideas from [Munki](https://github.com/munki/munki).
+Dustin Davis and borrows its model from [Munki](https://github.com/munki/munki).
 Licensed under [Apache-2.0](LICENSE).

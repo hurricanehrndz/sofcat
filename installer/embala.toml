@@ -15,7 +15,7 @@ display-name = "SofCat"
 version = "@VERSION@"
 identifier = "ca.hrndz.sofcat"
 publisher = "Carlos Hernandez"
-description = "Munki-like application management for Windows"
+description = "A catalog for anything you can put on disk or run"
 homepage = "https://github.com/hurricanehrndz/sofcat"
 license = "Apache-2.0"
 
