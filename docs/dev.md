@@ -24,8 +24,11 @@ production build).
 
 Every build recipe writes only under `build/` (gitignored), except the frontend
 recipes: `ui-install` writes `ui/frontend/node_modules/` and `ui-assets`
-writes `ui/frontend/dist/` (both gitignored). Nothing is emitted at the
-repo root.
+writes `ui/frontend/dist/` (both gitignored), and `winres` (run by `build`)
+writes `cmd/sofcat/rsrc_windows_<arch>.syso` and `ui/rsrc_windows_<arch>.syso`
+(gitignored). Those carry `assets/sofcat.ico` into both executables, so a
+plain `go build` without them gives an exe with the generic icon. Nothing is
+emitted at the repo root.
 
 A normal `just build` produces **both** raw Windows executables:
 `build/sofcat.exe` and `build/sofcat-ui.exe`. The UI build runs the Vite

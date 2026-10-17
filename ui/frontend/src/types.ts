@@ -83,6 +83,7 @@ export type BrandingView = {
   /** Text colour that reads on `accent`. */
   onAccent: string;
   productName: string;
+  /** The title's initial, or "" to show the SofCat icon. */
   productMark: string;
   showBanner: boolean;
 };
