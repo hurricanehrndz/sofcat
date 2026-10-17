@@ -148,8 +148,10 @@ function applyBranding(next: BrandingView): void {
   need<HTMLSpanElement>("#product-name").textContent = next.productName;
   if (next.logoSrc) {
     productMark.replaceChildren(logoImage(next.logoSrc));
-  } else {
+  } else if (next.productMark) {
     productMark.textContent = next.productMark;
+  } else {
+    productMark.replaceChildren(logoImage("/sofcat-icon.png"));
   }
   const root = document.documentElement;
   if (next.accent) {

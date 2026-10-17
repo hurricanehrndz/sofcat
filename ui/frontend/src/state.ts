@@ -602,7 +602,7 @@ export function brandingView(payload: unknown): BrandingView {
     accent,
     onAccent: accent ? onAccent(accent) : "",
     productName: title || DEFAULT_PRODUCT,
-    productMark: (Array.from(title)[0] ?? DEFAULT_PRODUCT[0]).toUpperCase(),
+    productMark: (Array.from(title)[0] ?? "").toUpperCase(),
     showBanner: Boolean(title || tagline || logoSrc || helpUrl),
   };
 }

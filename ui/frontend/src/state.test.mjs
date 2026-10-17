@@ -604,7 +604,7 @@ test("brandingView of an empty or missing payload is the default shell", () => {
     const view = brandingView(payload);
     assert.equal(view.showBanner, false);
     assert.equal(view.productName, "SofCat");
-    assert.equal(view.productMark, "S");
+    assert.equal(view.productMark, "", "an empty mark shows the SofCat icon");
     assert.equal(view.accent, "");
     assert.equal(view.logoSrc, "");
     assert.equal(view.helpUrl, "");
@@ -616,6 +616,8 @@ test("brandingView shows the banner for any of title, tagline, logo or help", ()
   for (const payload of [{ title: "Acme" }, { tagline: "Call ext. 1234" }, png, { helpUrl: "https://example.invalid/help" }]) {
     assert.equal(brandingView(payload).showBanner, true, JSON.stringify(payload));
   }
+  // An organisation title without a logo shows its initial, not the SofCat icon.
+  assert.equal(brandingView({ title: "acme" }).productMark, "A");
   // An accent alone recolours the shell but is not banner content.
   assert.equal(brandingView({ accent: "#0b6e4f" }).showBanner, false);
   // A help label without a URL has nothing to open.
