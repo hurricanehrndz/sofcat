@@ -18,7 +18,7 @@ import (
 // given names as available optional installs, restoring the originals on
 // cleanup. The catalog is left empty on purpose: authorization keys off the
 // offered names, and the enriched list tolerates a missing catalog entry.
-func stubOptional(t *testing.T, names ...string) {
+func stubOptional(t testing.TB, names ...string) {
 	t.Helper()
 	origManifest := manifestGet
 	origCatalog := catalogGet

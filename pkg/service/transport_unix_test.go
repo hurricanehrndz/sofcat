@@ -12,7 +12,7 @@ import (
 // the test. os.MkdirTemp keeps the path short: a socket path is limited to
 // about 104 bytes. The test serves the socket as itself, not as root, so its
 // clients trust its own uid.
-func testPipeName(t *testing.T) string {
+func testPipeName(t testing.TB) string {
 	t.Helper()
 	originalUID := trustedServerUID
 	trustedServerUID = uint32(os.Getuid())

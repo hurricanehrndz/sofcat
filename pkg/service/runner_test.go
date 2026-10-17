@@ -35,7 +35,7 @@ func noopRun(config.Configuration, installer.ProgressFn, *installer.Cancels) (*r
 	return nil, nil
 }
 
-func testServiceConfig(t *testing.T) config.Configuration {
+func testServiceConfig(t testing.TB) config.Configuration {
 	t.Helper()
 	return config.Configuration{
 		AppDataPath:     t.TempDir(),
@@ -47,7 +47,7 @@ func testServiceConfig(t *testing.T) config.Configuration {
 }
 
 // startTestRunner starts a runner and stops it when the test ends.
-func startTestRunner(t *testing.T, cfg config.Configuration, run managedRunFunc) (*serviceRunner, context.Context) {
+func startTestRunner(t testing.TB, cfg config.Configuration, run managedRunFunc) (*serviceRunner, context.Context) {
 	t.Helper()
 	sr := newServiceRunner(cfg, run)
 	ctx, cancel := context.WithCancel(context.Background())
