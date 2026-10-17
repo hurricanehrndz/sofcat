@@ -72,7 +72,12 @@ func (l unixListener) Accept() (clientConn, error) {
 	if err != nil {
 		return nil, err
 	}
-	return unixConn{c.(*net.UnixConn)}, nil
+	uc, ok := c.(*net.UnixConn)
+	if !ok {
+		_ = c.Close()
+		return nil, fmt.Errorf("unexpected connection type %T", c)
+	}
+	return unixConn{uc}, nil
 }
 
 // unixConn is an accepted socket connection.
@@ -115,7 +120,12 @@ func dial(ctx context.Context, name string, timeout time.Duration) (io.ReadWrite
 		}
 		return nil, err
 	}
-	uid, err := peerUID(conn.(*net.UnixConn))
+	uc, ok := conn.(*net.UnixConn)
+	if !ok {
+		_ = conn.Close()
+		return nil, fmt.Errorf("unexpected connection type %T", conn)
+	}
+	uid, err := peerUID(uc)
 	if err != nil {
 		_ = conn.Close()
 		return nil, fmt.Errorf("read the server's credentials on %s: %w", path, err)

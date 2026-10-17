@@ -309,7 +309,7 @@ func dirEmpty(path string) bool {
 	_, err = f.Readdir(1)
 
 	// If the we recevie an EOF error, the dir is empty
-	return err == io.EOF
+	return errors.Is(err, io.EOF)
 }
 
 // fileOld returns true if the file is older than
@@ -343,7 +343,9 @@ func CleanUp(cachePath string) {
 		// If not a directory and older that our limit, delete
 		if !info.IsDir() && fileOld(info) {
 			slog.Info("Cleaning old cached file", "path", path)
-			osRemove(path)
+			if err := osRemove(path); err != nil {
+				slog.Warn("Failed to remove path", "path", path, "err", err)
+			}
 			return nil
 		}
 		return nil
@@ -363,7 +365,9 @@ func CleanUp(cachePath string) {
 		// If a dir and empty, delete
 		if info.IsDir() && dirEmpty(path) {
 			slog.Info("Cleaning empty directory", "path", path)
-			osRemove(path)
+			if err := osRemove(path); err != nil {
+				slog.Warn("Failed to remove path", "path", path, "err", err)
+			}
 			return nil
 
 		}

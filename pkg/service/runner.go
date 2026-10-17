@@ -356,7 +356,7 @@ func within(conn clientConn, d time.Duration, fn func() error) error {
 	err := fn()
 	close(stop)
 	if expired.Load() {
-		return fmt.Errorf("%w after %s: %v", errTimedOut, d, err)
+		return fmt.Errorf("%w after %s: %v", errTimedOut, d, err) //nolint:errorlint // %v on purpose: classifying checks io.EOF before errTimedOut, so the aborted I/O error must not match
 	}
 	return err
 }

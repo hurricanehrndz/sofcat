@@ -116,10 +116,12 @@ func setDACL(t *testing.T, path, s string) {
 }
 
 func sddl(t *testing.T, path string) string {
+	t.Helper()
 	return securityString(t, path, windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
 }
 
 func daclSDDL(t *testing.T, path string) string {
+	t.Helper()
 	return securityString(t, path, windows.DACL_SECURITY_INFORMATION)
 }
 

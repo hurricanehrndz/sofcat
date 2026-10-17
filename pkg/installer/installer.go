@@ -468,7 +468,7 @@ var (
 
 // Install determines if action needs to be taken on a item and then
 // calls the appropriate function to install or uninstall
-func (r *Runner) Install(item catalog.Item, installerType string) (string, error) {
+func (r *Runner) Install(item catalog.Item, installerType string) (string, error) { //nolint:gocognit // CEILING: known-complex, split in Workstream B (kernel-repair)
 	// Check the status and determine if any action is needed for this item
 	actionNeeded, err := statusCheckStatus(r.Checker, item, installerType, r.CachePath)
 	if err != nil {

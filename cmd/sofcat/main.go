@@ -28,7 +28,7 @@ func main() {
 	}
 }
 
-func route(cfg config.Configuration) error {
+func route(cfg config.Configuration) error { //nolint:gocognit // CEILING: known-complex, split in Workstream B (kernel-repair)
 	if cfg.ServiceInstall {
 		// Before the install, so a reinstall over an existing service still
 		// fixes the tree. The service applies it again at every start.

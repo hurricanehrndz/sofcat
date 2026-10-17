@@ -1029,7 +1029,7 @@ func TestRunCommandDebugOutput(t *testing.T) {
 	testArgs := []string{"arg1", "arg2"}
 
 	// Run the function
-	runCommand(testCmd, testArgs)
+	_, _ = runCommand(testCmd, testArgs)
 
 	out := console.String()
 	for _, want := range []string{

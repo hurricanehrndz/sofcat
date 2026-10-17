@@ -32,7 +32,7 @@ func RunAction(cfg config.Configuration, action string) error {
 	if err != nil {
 		return fmt.Errorf("failed to connect to service manager: %w", err)
 	}
-	defer m.Disconnect()
+	defer func() { _ = m.Disconnect() }()
 	serviceVerbose(cfg, "action=%s service=%q", action, cfg.ServiceName)
 
 	switch action {
@@ -54,7 +54,7 @@ func ServiceStatus(cfg config.Configuration) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to connect to service manager: %w", err)
 	}
-	defer m.Disconnect()
+	defer func() { _ = m.Disconnect() }()
 
 	s, err := m.OpenService(cfg.ServiceName)
 	if err != nil {
@@ -158,11 +158,11 @@ func installWindowsService(m *mgr.Mgr, cfg config.Configuration) error {
 	startArgs := serviceInstallArgs(configPath)
 	serviceVerbose(cfg, "install config: exe=%q config=%q args=%q start_type=automatic account=%q", exePath, configPath, startArgs, "LocalSystem")
 
-	if existing, err := m.OpenService(cfg.ServiceName); err == nil {
+	if existing, openErr := m.OpenService(cfg.ServiceName); openErr == nil {
 		existing.Close()
 		return fmt.Errorf("service %q already exists", cfg.ServiceName)
-	} else if !errors.Is(err, windows.ERROR_SERVICE_DOES_NOT_EXIST) {
-		return fmt.Errorf("failed to query existing service %q: %w", cfg.ServiceName, err)
+	} else if !errors.Is(openErr, windows.ERROR_SERVICE_DOES_NOT_EXIST) {
+		return fmt.Errorf("failed to query existing service %q: %w", cfg.ServiceName, openErr)
 	}
 
 	s, err := m.CreateService(
