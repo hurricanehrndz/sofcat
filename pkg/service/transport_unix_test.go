@@ -17,7 +17,7 @@ func testPipeName(t *testing.T) string {
 	originalUID := trustedServerUID
 	trustedServerUID = uint32(os.Getuid())
 	t.Cleanup(func() { trustedServerUID = originalUID })
-	dir, err := os.MkdirTemp("", "sofcat")
+	dir, err := os.MkdirTemp("", "sofcat") //nolint:usetesting // t.TempDir() can exceed the socket path limit on macOS
 	if err != nil {
 		t.Fatal(err)
 	}
