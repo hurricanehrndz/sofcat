@@ -2,9 +2,11 @@ module github.com/hurricanehrndz/sofcat
 
 go 1.26.0
 
+toolchain go1.26.9
+
 require (
 	github.com/hashicorp/go-version v1.8.0
-	golang.org/x/sys v0.43.0
+	golang.org/x/sys v0.44.0
 )
 
 require go.yaml.in/yaml/v4 v4.0.0-rc.4

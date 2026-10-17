@@ -5,18 +5,20 @@ on:
     branches:
       - main
 permissions:
-  contents: write
+  contents: read
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the version tag and cut the release
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
       - name: Create version tag
         id: create_tag
-        uses: paulhatch/semantic-version@v5.4.0
+        uses: paulhatch/semantic-version@a8f8f59fd7f0625188492e945240f12d7ad2dca3 # v5.4.0
         with:
           tag_prefix: "v"
           major_pattern: "(MAJOR)"
@@ -25,12 +27,12 @@ jobs:
           namespace: ''
           bump_each_commit: false
       - name: Install toolchain
-        uses: jdx/mise-action@v2
+        uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2.4.4
       - name: Build executables, MSI and makecatalogs
         run: |
           just version=${{ steps.create_tag.outputs.version_tag }} msi makecatalogs
       - name: Upload executables workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: sofcat-exe-release
           path: |
@@ -40,10 +42,22 @@ jobs:
             ./build/makecatalogs-*
           if-no-files-found: error
       - name: Cut release
-        uses: ncipollo/release-action@v1
+        uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1.21.0
         with:
           allowUpdates: false
           prerelease: true
           artifacts: "./build/sofcat.exe,./build/sofcat-ui.exe,./build/sofcat-*.msi,./build/makecatalogs-*"
           tag: ${{ steps.create_tag.outputs.version_tag }}
           token: ${{ secrets.GITHUB_TOKEN }}
+  integration:
+    name: Released-binary integration
+    needs: build
+    uses: ./.github/workflows/windows-release-integration.yml
+    # The called workflow's PR-reporting jobs declare checks/pull-requests
+    # write, so the caller has to allow them even though they are skipped
+    # here; its integration job itself stays read-only.
+    permissions:
+      contents: read
+      actions: read
+      checks: write
+      pull-requests: write
