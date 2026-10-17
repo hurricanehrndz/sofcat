@@ -5,7 +5,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/1dustindavis/gorilla/pkg/catalog"
+	"github.com/hurricanehrndz/sofcat/pkg/catalog"
 )
 
 // SchemaVersion is the inventory schema version. Bump it on any change that
@@ -37,7 +37,7 @@ const (
 )
 
 // Inventory is the osquery-facing state of one managed run. It mirrors Munki's
-// ManagedInstallReport keys so a gorilla_* table can reuse the macadmins munki
+// ManagedInstallReport keys so a sofcat_* table can reuse the macadmins munki
 // table's structs with JSON in place of plist.
 type Inventory struct {
 	SchemaVersion         int             `json:"schema_version"`
@@ -57,7 +57,7 @@ type Inventory struct {
 }
 
 // InventoryItem is one item in the inventory. The first five keys are Munki's;
-// the rest are Gorilla extras.
+// the rest are SofCat extras.
 type InventoryItem struct {
 	Name             string `json:"name"`
 	DisplayName      string `json:"display_name"`
@@ -178,7 +178,7 @@ func (r *Report) inventoryItem(pi PlanItem, checkOnly bool) (InventoryItem, bool
 	uninstalled := slices.ContainsFunc(r.UninstalledItems, func(i catalog.Item) bool { return i.Name == pi.Name })
 
 	// installed marks the item present on disk at the catalog version.
-	// CEILING: Gorilla's checks answer present/absent, not which version, so
+	// CEILING: SofCat's checks answer present/absent, not which version, so
 	// installed_version is the catalog version. Upgrade: return the detected
 	// version from status.Checker and record it here.
 	installed := func() {

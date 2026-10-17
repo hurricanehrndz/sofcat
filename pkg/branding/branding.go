@@ -1,4 +1,4 @@
-// Package branding resolves the organisation branding Gorilla UI shows: policy
+// Package branding resolves the organisation branding SofCat UI shows: policy
 // registry values first, then the config.yaml `branding:` block, field by
 // field. Every field is validated here, in the SYSTEM service, so the UI only
 // ever receives plain text, an http(s) URL, a #rrggbb colour and a sniffed
@@ -17,7 +17,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/1dustindavis/gorilla/pkg/config"
+	"github.com/hurricanehrndz/sofcat/pkg/config"
 )
 
 // Caps on the admin-supplied values. Text is counted in runes.

@@ -1,25 +1,80 @@
 # golangci-lint v2 configuration.
 # Docs: https://golangci-lint.run/usage/configuration/
+#
+# Policy: enable a linter only when a hit is usually a bug or a real hazard.
+# Style is gofumpt's job (treefmt), so taste-only linters (revive, wsl, lll,
+# funlen, varnamelen, perfsprint, ...) stay off.
 version: "2"
 run:
   timeout: 5m
 linters:
-  # Keep golangci-lint's default set (errcheck, govet, ineffassign,
-  # staticcheck, unused) and layer a low-noise, high-signal set on top.
+  # standard = errcheck, govet, ineffassign, staticcheck, unused.
+  default: standard
   enable:
+    # Correctness
     - bodyclose # unclosed HTTP response bodies
-    - misspell # common misspellings in comments/strings
-    - unconvert # unnecessary type conversions
+    - durationcheck # time.Duration multiplied by time.Duration
+    - errorlint # ==/type switch on possibly-wrapped errors; %v where %w belongs
+    - exhaustive # enum switch misses a case (a default: counts)
+    - forcetypeassert # unchecked x.(T) panics
+    - gocritic # default checks only, e.g. exitAfterDefer
+    - nilerr # returns nil while holding a non-nil err
+    - nilnesserr # returns a different, nil error after an err check
+    - sloglint # slog key/value mistakes
     - unparam # unused function parameters
+    # Security: a SYSTEM service fed by remote catalogs
+    - bidichk # trojan-source unicode
+    - gosec
+    # Tests
+    - thelper # helpers call t.Helper()
+    - usetesting # t.TempDir/t.Context/t.Setenv over the os equivalents
+    # Hygiene that never argues
+    - misspell # common misspellings in comments/strings
+    - nolintlint # every //nolint names the linter and says why
+    - unconvert # unnecessary type conversions
+    # Readability ceiling
+    - gocognit
   settings:
     govet:
       # Enable the shadow analyzer (off by default) to catch a re-declared
       # variable shadowing an outer one, e.g. a shadowed `err`.
       enable:
         - shadow
-  # Complexity guards (gocyclo/gocognit/cyclop/funlen/nestif) and any
-  # whole-tree cleanup are intentionally deferred to Workstream B
-  # (kernel-repair). Enforcement here is incremental (new-from-merge-base).
+    exhaustive:
+      default-signifies-exhaustive: true
+    gocognit:
+      # CEILING: 30 (the linter's default) flags only the five worst existing
+      # functions. Issues anchor on the func line, so the incremental gate
+      # lets an existing function grow unless its signature changes; `just
+      # lint-all` shows the full list. Lower to 25 once Workstream B
+      # (kernel-repair) has split those five.
+      min-complexity: 30
+    gosec:
+      excludes:
+        - G104 # duplicate of errcheck
+        - G204 # running subprocesses is the product (installers, scripts)
+        - G301 # Unix mode bits; Windows access is governed by ACLs
+        - G302
+        - G306
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+  exclusions:
+    generated: lax
+    presets:
+      - common-false-positives
+      - std-error-handling
+    rules:
+      - path: _test\.go
+        linters:
+          - forcetypeassert # a panic fails the test, which is fine
+          - gocognit # table tests are long by design
+          - gosec # fixtures use test-controlled paths and input
+issues:
+  # Show everything; the default caps (50 per linter, 3 per message) hide
+  # the size of the backlog.
+  max-issues-per-linter: 0
+  max-same-issues: 0
 
-# Formatting is handled by treefmt (gofumpt) in devenv.nix, so no formatters
+# Formatting is handled by treefmt (gofumpt, treefmt.toml), so no formatters
 # are enabled here to avoid two tools fighting over the same files.

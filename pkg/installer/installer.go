@@ -13,10 +13,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/1dustindavis/gorilla/pkg/catalog"
-	"github.com/1dustindavis/gorilla/pkg/download"
-	"github.com/1dustindavis/gorilla/pkg/report"
-	"github.com/1dustindavis/gorilla/pkg/status"
+	"github.com/hurricanehrndz/sofcat/pkg/catalog"
+	"github.com/hurricanehrndz/sofcat/pkg/download"
+	"github.com/hurricanehrndz/sofcat/pkg/report"
+	"github.com/hurricanehrndz/sofcat/pkg/status"
 )
 
 // ErrBlockingApps is returned by Install when a listed blocking application is
@@ -427,7 +427,7 @@ func runScript(script, kind, cachePath string) error {
 	}
 
 	// Write the script to disk as a Powershell file
-	tmpFile, err := os.CreateTemp(cachePath, "gorilla-"+kind+"-*.ps1")
+	tmpFile, err := os.CreateTemp(cachePath, "sofcat-"+kind+"-*.ps1")
 	if err != nil {
 		return err
 	}

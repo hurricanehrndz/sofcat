@@ -4,7 +4,7 @@ package report
 
 import "os"
 
-// createProtectedTemp is a plain temp file off Windows, where Gorilla only
+// createProtectedTemp is a plain temp file off Windows, where SofCat only
 // runs for development.
 func createProtectedTemp(dir, prefix string) (*os.File, error) {
 	return os.CreateTemp(dir, prefix+"*.tmp")

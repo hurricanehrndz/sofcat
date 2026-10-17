@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/1dustindavis/gorilla/pkg/config"
+	"github.com/hurricanehrndz/sofcat/pkg/config"
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/mgr"
@@ -169,8 +169,8 @@ func installWindowsService(m *mgr.Mgr, cfg config.Configuration) error {
 		cfg.ServiceName,
 		exePath,
 		mgr.Config{
-			DisplayName:      "Gorilla",
-			Description:      "Gorilla application management service",
+			DisplayName:      "SofCat",
+			Description:      "SofCat application management service",
 			StartType:        mgr.StartAutomatic,
 			ServiceStartName: "LocalSystem",
 		},

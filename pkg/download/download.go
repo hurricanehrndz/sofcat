@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/1dustindavis/gorilla/pkg/config"
+	"github.com/hurricanehrndz/sofcat/pkg/config"
 )
 
 // A package level copy of our config for the `download` package to reference
@@ -26,11 +26,6 @@ var downloadCfg config.Configuration
 // SetConfig accepts a configuration struct that all functions in the `download` package will use
 func SetConfig(cfg config.Configuration) {
 	downloadCfg = cfg
-}
-
-// File downloads a provided url to the file path specified.
-func File(file string, url string) error {
-	return fileContext(context.Background(), file, url)
 }
 
 func fileContext(ctx context.Context, file string, url string) error {

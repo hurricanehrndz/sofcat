@@ -12,12 +12,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/1dustindavis/gorilla/pkg/catalog"
-	"github.com/1dustindavis/gorilla/pkg/config"
-	"github.com/1dustindavis/gorilla/pkg/download"
-	"github.com/1dustindavis/gorilla/pkg/gorillalog"
-	"github.com/1dustindavis/gorilla/pkg/report"
-	"github.com/1dustindavis/gorilla/pkg/status"
+	"github.com/hurricanehrndz/sofcat/pkg/catalog"
+	"github.com/hurricanehrndz/sofcat/pkg/config"
+	"github.com/hurricanehrndz/sofcat/pkg/download"
+	"github.com/hurricanehrndz/sofcat/pkg/report"
+	"github.com/hurricanehrndz/sofcat/pkg/sofcatlog"
+	"github.com/hurricanehrndz/sofcat/pkg/status"
 )
 
 // A lot of ideas taken from https://npf.io/2015/06/testing-exec-command/
@@ -108,17 +108,17 @@ var (
 		},
 		Check: catalog.InstallCheck{
 			Appx: catalog.AppxCheck{
-				Name: `Gorilla.Test.App`,
+				Name: `SofCat.Test.App`,
 			},
 		},
 		Version: "1.0.0",
 	}
 
 	// Define different options to bypass status checks during tests
-	statusActionNoError   = `_gorilla_dev_action_noerror_`
-	statusNoActionNoError = `_gorilla_dev_noaction_noerror_`
-	statusActionError     = `_gorilla_dev_action_error_`
-	statusNoActionError   = `_gorilla_dev_noaction_error_`
+	statusActionNoError   = `_sofcat_dev_action_noerror_`
+	statusNoActionNoError = `_sofcat_dev_noaction_noerror_`
+	statusActionError     = `_sofcat_dev_action_error_`
+	statusNoActionError   = `_sofcat_dev_noaction_error_`
 )
 
 // fakeExecCommand provides a method for validating what is passed to exec.Command
@@ -387,7 +387,7 @@ func TestInstallStatusError(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected a status check error")
 	}
-	expectedOutput := "unable to check status: testing _gorilla_dev_action_error_"
+	expectedOutput := "unable to check status: testing _sofcat_dev_action_error_"
 	if have, want := err.Error(), expectedOutput; have != want {
 		t.Errorf("\n-----\nhave\n%s\nwant\n%s\n-----", have, want)
 	}
@@ -573,7 +573,7 @@ func TestUninstallItem(t *testing.T) {
 	}
 	// Check the result
 	msixCmd := filepath.Join(os.Getenv("WINDIR"), "system32/WindowsPowershell/v1.0/powershell.exe")
-	expectedMsix := "[" + msixCmd + " -NoProfile -NoLogo -NonInteractive -ExecutionPolicy Bypass -Command $pkg = Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -eq 'Gorilla.Test.App' }; if ($pkg) { Remove-AppxProvisionedPackage -Online -PackageName $pkg.PackageName }; Get-AppxPackage -Name 'Gorilla.Test.App' -AllUsers | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue]"
+	expectedMsix := "[" + msixCmd + " -NoProfile -NoLogo -NonInteractive -ExecutionPolicy Bypass -Command $pkg = Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -eq 'SofCat.Test.App' }; if ($pkg) { Remove-AppxProvisionedPackage -Online -PackageName $pkg.PackageName }; Get-AppxPackage -Name 'SofCat.Test.App' -AllUsers | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue]"
 	if have, want := actualMsix, expectedMsix; have != want {
 		t.Errorf("\n-----\nhave\n%s\nwant\n%s\n-----", have, want)
 	}
@@ -742,7 +742,7 @@ func TestUninstallStatusError(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected a status check error")
 	}
-	expectedOutput := "unable to check status: testing _gorilla_dev_noaction_error_"
+	expectedOutput := "unable to check status: testing _sofcat_dev_noaction_error_"
 	if have, want := err.Error(), expectedOutput; have != want {
 		t.Errorf("\n-----\nhave\n%s\nwant\n%s\n-----", have, want)
 	}
@@ -786,7 +786,7 @@ func TestUpdateStatusError(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected a status check error")
 	}
-	expectedOutput := "unable to check status: testing _gorilla_dev_action_error_"
+	expectedOutput := "unable to check status: testing _sofcat_dev_action_error_"
 	if have, want := err.Error(), expectedOutput; have != want {
 		t.Errorf("\n-----\nhave\n%s\nwant\n%s\n-----", have, want)
 	}
@@ -992,12 +992,12 @@ func TestUninstallURL(t *testing.T) {
 	}
 }
 
-// captureConsole redirects gorillalog's console sink to a buffer (debug mode
+// captureConsole redirects sofcatlog's console sink to a buffer (debug mode
 // so DEBUG/INFO messages are visible) and restores it after the test.
 func captureConsole(t *testing.T) *bytes.Buffer {
 	t.Helper()
 	buf := &bytes.Buffer{}
-	gorillalog.SetOutput(buf)
+	sofcatlog.SetOutput(buf)
 	cfg := config.Configuration{
 		Debug:       true,
 		Verbose:     true,
@@ -1007,10 +1007,10 @@ func captureConsole(t *testing.T) *bytes.Buffer {
 	// Close releases the log file handle before TempDir's RemoveAll —
 	// Windows cannot delete an open file.
 	t.Cleanup(func() {
-		gorillalog.SetOutput(os.Stdout)
-		gorillalog.Close()
+		sofcatlog.SetOutput(os.Stdout)
+		sofcatlog.Close()
 	})
-	if err := gorillalog.NewLog(cfg); err != nil {
+	if err := sofcatlog.NewLog(cfg); err != nil {
 		t.Fatalf("NewLog failed: %v", err)
 	}
 	return buf
@@ -1070,8 +1070,8 @@ func TestInstallItemSuccess(t *testing.T) {
 
 	out := console.String()
 	for _, want := range []string{
-		`msg=Installing item=_gorilla_dev_action_noerror_ version=1.2.3 installerType=msi`,
-		`msg="Installation SUCCESSFUL" item=_gorilla_dev_action_noerror_ version=1.2.3 result=success`,
+		`msg=Installing item=_sofcat_dev_action_noerror_ version=1.2.3 installerType=msi`,
+		`msg="Installation SUCCESSFUL" item=_sofcat_dev_action_noerror_ version=1.2.3 result=success`,
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("console output missing %q:\n%s", want, out)
@@ -1092,8 +1092,8 @@ func TestInstallItemFailure(t *testing.T) {
 
 	out := console.String()
 	for _, want := range []string{
-		`msg=Installing item=_gorilla_dev_action_error_ version=1.2.3 installerType=msi`,
-		`msg="Installation FAILED" item=_gorilla_dev_action_error_ version=1.2.3 result=error err="Deliberate test error has occurred!!"`,
+		`msg=Installing item=_sofcat_dev_action_error_ version=1.2.3 installerType=msi`,
+		`msg="Installation FAILED" item=_sofcat_dev_action_error_ version=1.2.3 result=error err="Deliberate test error has occurred!!"`,
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("console output missing %q:\n%s", want, out)
@@ -1114,8 +1114,8 @@ func TestUninstallItemSuccess(t *testing.T) {
 
 	out := console.String()
 	for _, want := range []string{
-		`msg=Uninstalling item=_gorilla_dev_action_noerror_ version=1.2.3 installerType=msi`,
-		`msg="Uninstallation SUCCESSFUL" item=_gorilla_dev_action_noerror_ version=1.2.3 result=success`,
+		`msg=Uninstalling item=_sofcat_dev_action_noerror_ version=1.2.3 installerType=msi`,
+		`msg="Uninstallation SUCCESSFUL" item=_sofcat_dev_action_noerror_ version=1.2.3 result=success`,
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("console output missing %q:\n%s", want, out)
@@ -1136,8 +1136,8 @@ func TestUninstallItemFailure(t *testing.T) {
 
 	out := console.String()
 	for _, want := range []string{
-		`msg=Uninstalling item=_gorilla_dev_action_error_ version=1.2.3 installerType=msi`,
-		`msg="Uninstallation FAILED" item=_gorilla_dev_action_error_ version=1.2.3 result=error err="Deliberate test error has occurred!!"`,
+		`msg=Uninstalling item=_sofcat_dev_action_error_ version=1.2.3 installerType=msi`,
+		`msg="Uninstallation FAILED" item=_sofcat_dev_action_error_ version=1.2.3 result=error err="Deliberate test error has occurred!!"`,
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("console output missing %q:\n%s", want, out)
@@ -1178,10 +1178,10 @@ func TestPrePostScriptsDistinctTempFiles(t *testing.T) {
 	if pre == post {
 		t.Errorf("pre and post scripts shared the same temp file: %s", pre)
 	}
-	if !strings.HasPrefix(filepath.Base(pre), "gorilla-preinstall-") {
+	if !strings.HasPrefix(filepath.Base(pre), "sofcat-preinstall-") {
 		t.Errorf("unexpected preinstall temp file name: %s", pre)
 	}
-	if !strings.HasPrefix(filepath.Base(post), "gorilla-postinstall-") {
+	if !strings.HasPrefix(filepath.Base(post), "sofcat-postinstall-") {
 		t.Errorf("unexpected postinstall temp file name: %s", post)
 	}
 	// Both temp files must be removed after the run
@@ -1346,10 +1346,10 @@ func TestPrePostUninstallScriptsSuccess(t *testing.T) {
 	if len(scriptFiles) != 2 {
 		t.Fatalf("expected 2 script executions, got %d: %#v", len(scriptFiles), scriptFiles)
 	}
-	if !strings.HasPrefix(filepath.Base(scriptFiles[0]), "gorilla-preuninstall-") {
+	if !strings.HasPrefix(filepath.Base(scriptFiles[0]), "sofcat-preuninstall-") {
 		t.Errorf("unexpected preuninstall temp file name: %s", scriptFiles[0])
 	}
-	if !strings.HasPrefix(filepath.Base(scriptFiles[1]), "gorilla-postuninstall-") {
+	if !strings.HasPrefix(filepath.Base(scriptFiles[1]), "sofcat-postuninstall-") {
 		t.Errorf("unexpected postuninstall temp file name: %s", scriptFiles[1])
 	}
 	if len(r.Report.FailedItems) != 0 {

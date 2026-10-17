@@ -1,4 +1,4 @@
-module github.com/1dustindavis/gorilla
+module github.com/hurricanehrndz/sofcat
 
 go 1.26.0
 

@@ -7,18 +7,18 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/1dustindavis/gorilla/pkg/config"
-	"github.com/1dustindavis/gorilla/pkg/installer"
-	"github.com/1dustindavis/gorilla/pkg/report"
+	"github.com/hurricanehrndz/sofcat/pkg/config"
+	"github.com/hurricanehrndz/sofcat/pkg/installer"
+	"github.com/hurricanehrndz/sofcat/pkg/report"
 	"golang.org/x/sys/windows/svc"
 )
 
-type gorillaWindowsService struct {
+type sofcatWindowsService struct {
 	cfg        config.Configuration
 	managedRun func(config.Configuration, installer.ProgressFn, *installer.Cancels) (*report.Report, error)
 }
 
-func (g *gorillaWindowsService) Execute(_ []string, requests <-chan svc.ChangeRequest, changes chan<- svc.Status) (bool, uint32) {
+func (g *sofcatWindowsService) Execute(_ []string, requests <-chan svc.ChangeRequest, changes chan<- svc.Status) (bool, uint32) {
 	const accepted = svc.AcceptStop | svc.AcceptShutdown
 	changes <- svc.Status{State: svc.StartPending}
 
@@ -56,5 +56,5 @@ func (g *gorillaWindowsService) Execute(_ []string, requests <-chan svc.ChangeRe
 }
 
 func Run(cfg config.Configuration, managedRun func(config.Configuration, installer.ProgressFn, *installer.Cancels) (*report.Report, error)) error {
-	return svc.Run(cfg.ServiceName, &gorillaWindowsService{cfg: cfg, managedRun: managedRun})
+	return svc.Run(cfg.ServiceName, &sofcatWindowsService{cfg: cfg, managedRun: managedRun})
 }

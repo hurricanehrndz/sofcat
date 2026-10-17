@@ -6,10 +6,10 @@ on:
     paths:
       - cmd/**
       - pkg/**
-      - utils/**
-      - integration/**
-      - gorilla-ui/*.go
-      - Makefile
+      - test/**
+      - ui/*.go
+      - justfile
+      - mise.toml
       - go.mod
       - go.sum
       - .github/workflows/go-test.yml
@@ -17,10 +17,10 @@ on:
     paths:
       - cmd/**
       - pkg/**
-      - utils/**
-      - integration/**
-      - gorilla-ui/*.go
-      - Makefile
+      - test/**
+      - ui/*.go
+      - justfile
+      - mise.toml
       - go.mod
       - go.sum
       - .github/workflows/go-test.yml
@@ -41,12 +41,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Install staticcheck
-        shell: pwsh
-        run: |
-          go install honnef.co/go/tools/cmd/staticcheck@v0.7.0
-          "$(go env GOPATH)\bin" >> $env:GITHUB_PATH
-      - name: Lint
-        run: make lint
+      - name: Install just
+        uses: extractions/setup-just@v3
+      - name: Vet
+        run: just vet
       - name: Test
-        run: make test
+        run: just test

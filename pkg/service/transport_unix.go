@@ -26,9 +26,9 @@ var socketDir = defaultSocketDir()
 
 func defaultSocketDir() string {
 	if runtime.GOOS == "linux" {
-		return "/run/gorilla"
+		return "/run/sofcat"
 	}
-	return "/var/run/gorilla"
+	return "/var/run/sofcat"
 }
 
 func socketPath(name string) string {
@@ -122,7 +122,7 @@ func dial(ctx context.Context, name string, timeout time.Duration) (io.ReadWrite
 	}
 	if uid != trustedServerUID {
 		_ = conn.Close()
-		return nil, fmt.Errorf("refusing %s: it is served by uid %d, not %d, so it is not the Gorilla service", path, uid, trustedServerUID)
+		return nil, fmt.Errorf("refusing %s: it is served by uid %d, not %d, so it is not the SofCat service", path, uid, trustedServerUID)
 	}
 	return conn, nil
 }

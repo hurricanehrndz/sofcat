@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/1dustindavis/gorilla/pkg/catalog"
-	"github.com/1dustindavis/gorilla/pkg/config"
-	"github.com/1dustindavis/gorilla/pkg/gorillalog"
+	"github.com/hurricanehrndz/sofcat/pkg/catalog"
+	"github.com/hurricanehrndz/sofcat/pkg/config"
+	"github.com/hurricanehrndz/sofcat/pkg/sofcatlog"
 )
 
 var (
@@ -18,7 +18,7 @@ var (
 	origExec = execCommand
 
 	// Temp directory for logging
-	logTmp, _ = os.MkdirTemp("", "gorilla-status_test")
+	logTmp, _ = os.MkdirTemp("", "sofcat-status_test")
 
 	// Setup a testing Configuration struct
 	cfgVerbose = config.Configuration{
@@ -69,7 +69,7 @@ var (
 			File: []catalog.FileCheck{{
 				Path:        `testdata/test.exe`,
 				Version:     `3.2.0.1`,
-				ProductName: `Gorilla Test`,
+				ProductName: `SofCat Test`,
 			}},
 		},
 	}
@@ -78,7 +78,7 @@ var (
 			File: []catalog.FileCheck{{
 				Path:        `testdata/test.exe`,
 				Version:     `3.12.0.1`,
-				ProductName: `Gorilla Test`,
+				ProductName: `SofCat Test`,
 			}},
 		},
 	}
@@ -174,8 +174,8 @@ var (
 	}
 
 	// Define different options to bypass status checks during tests
-	statusActionNoError   = `_gorilla_dev_action_noerror_`
-	statusNoActionNoError = `_gorilla_dev_noaction_noerror_`
+	statusActionNoError   = `_sofcat_dev_action_noerror_`
+	statusNoActionNoError = `_sofcat_dev_noaction_noerror_`
 )
 
 // check if a slice contains a string
@@ -641,17 +641,17 @@ func TestCheckPath(t *testing.T) {
 	}
 }
 
-// captureConsole redirects gorillalog's console sink to a buffer (verbose so
+// captureConsole redirects sofcatlog's console sink to a buffer (verbose so
 // INFO-level status messages are visible) and restores it after the test.
 func captureConsole(t *testing.T) *bytes.Buffer {
 	t.Helper()
 	buf := &bytes.Buffer{}
-	gorillalog.SetOutput(buf)
+	sofcatlog.SetOutput(buf)
 	t.Cleanup(func() {
-		gorillalog.SetOutput(os.Stdout)
-		gorillalog.Close()
+		sofcatlog.SetOutput(os.Stdout)
+		sofcatlog.Close()
 	})
-	if err := gorillalog.NewLog(cfgVerbose); err != nil {
+	if err := sofcatlog.NewLog(cfgVerbose); err != nil {
 		t.Fatalf("NewLog failed: %v", err)
 	}
 	return buf
@@ -703,7 +703,7 @@ func TestCheckStatusRegistry(t *testing.T) {
 }
 
 // TestCheckStatusRegistryWithEmptyFileList guards catalogs built by the old
-// `gorilla -build`, which wrote `file: []` on every item. An empty list is no
+// `sofcat -build`, which wrote `file: []` on every item. An empty list is no
 // file check, so the registry check must still run.
 func TestCheckStatusRegistryWithEmptyFileList(t *testing.T) {
 	execCommand = fakeExecCommand

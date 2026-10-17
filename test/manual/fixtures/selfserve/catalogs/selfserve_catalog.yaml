@@ -1,0 +1,103 @@
+# Self-serve smoke catalog (Workstream C E2E). Marker installers write files
+# under C:\ProgramData\sofcat-c-smoke\; uninstallers delete them. The installer
+# hashes below are the SHA256 of the ps1 files in packages/scripts — regenerate
+# them (sha256sum) whenever a script changes or the download hash check fails.
+DemoOptional:
+  display_name: Demo Optional
+  description: A self-service optional install used by the Workstream C smoke test
+  category: Smoke
+  developer: SofCat
+  icon_name: demo-optional.png
+  restart_action: None
+  check:
+    file:
+      - path: C:\ProgramData\sofcat-c-smoke\optional.txt
+  installer:
+    type: ps1
+    location: packages/scripts/demooptional-install.ps1
+    hash: 3575ac3bef6f5335d1867b4e9916b17d56205d341ed4cd8bcebc089ad2249640
+  uninstaller:
+    type: ps1
+    location: packages/scripts/demooptional-uninstall.ps1
+    hash: fbb65db40540402f4bef3330e8313224cc85089f0ed78c8ae42ca427e66d11cb
+  version: "1.0"
+DemoDefault:
+  display_name: Demo Default
+  check:
+    file:
+      - path: C:\ProgramData\sofcat-c-smoke\default.txt
+  installer:
+    type: ps1
+    location: packages/scripts/demodefault-install.ps1
+    hash: c6c995c6c67f4e070623114ae1c93a0595143cf9d97e9f8805d9142251741052
+  uninstaller:
+    type: ps1
+    location: packages/scripts/demodefault-uninstall.ps1
+    hash: 0eba0587690fae47f5775605238f59e56cf16da68d3d3a6615c12503dd092b4d
+  version: "1.0"
+DemoBlocked:
+  display_name: Demo Blocked
+  # blocking_apps without .exe deliberately exercises the name contract (P4).
+  blocking_apps:
+    - notepad
+  check:
+    file:
+      - path: C:\ProgramData\sofcat-c-smoke\blocked.txt
+  installer:
+    type: ps1
+    location: packages/scripts/demoblocked-install.ps1
+    hash: dbdb0ec0de4410eb82f9801be73feacbea0a3155e83dada44db1cfa28fe9bda1
+  uninstaller:
+    type: ps1
+    location: packages/scripts/demoblocked-uninstall.ps1
+    hash: 2502768f0cd7087b26b5e1db01853036909d02358a568e7cc44e5a52d4e07dbd
+  version: "1.0"
+# DemoUpdater rides along with DemoOptional (update_for). It is NOT offered in
+# optional_installs — updaters are pulled in by their referent (P5).
+DemoUpdater:
+  display_name: Demo Updater
+  update_for:
+    - DemoOptional
+  check:
+    file:
+      - path: C:\ProgramData\sofcat-c-smoke\optional-update.txt
+  installer:
+    type: ps1
+    location: packages/scripts/demoupdater-install.ps1
+    hash: 1f20f26868cda4612b520bcb8319b7cc9276390fdf92b9b07ddfeb7eb5798824
+  uninstaller:
+    type: ps1
+    location: packages/scripts/demoupdater-uninstall.ps1
+    hash: ec6b7c0017ff3f8e8ea6cbe3b66187a17c21e692904cff659222b7977ddfa0c0
+  version: "1.0"
+# DemoFailing's installer exits 1 and its file check points at a path the
+# installer never creates, so the run records an honest failure (P6).
+DemoFailing:
+  display_name: Demo Failing
+  check:
+    file:
+      - path: C:\ProgramData\sofcat-c-smoke\never-created.txt
+  installer:
+    type: ps1
+    location: packages/scripts/demofailing-install.ps1
+    hash: d7e53b61d6ec34f5dee0cea5ec0a4e1b4f22a13d2238393e63d843e1086455de
+  version: "1.0"
+# DemoRequired is listed in managed_installs (and optional_installs) by the e2e
+# manifest: the service must list it as required and refuse to remove it.
+DemoRequired:
+  display_name: Demo Required
+  description: Required by the organisation; self-service cannot remove it
+  category: Smoke
+  developer: SofCat
+  check:
+    file:
+      - path: C:\ProgramData\sofcat-c-smoke\required.txt
+  installer:
+    type: ps1
+    location: packages/scripts/demorequired-install.ps1
+    hash: 072526acc49c1480d04e0ba217a057e672b7f421ad239c3e9ca6e28cd39b0eb9
+  uninstaller:
+    type: ps1
+    location: packages/scripts/demorequired-uninstall.ps1
+    hash: 95d52a8d69395e98888c8c8909cb79af7798d07bc2561428d142a96b24b8e6ac
+  version: "1.0"

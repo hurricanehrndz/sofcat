@@ -1,0 +1,156 @@
+# Manual Test Utils
+
+This directory supports a fast macOS -> Windows VM manual test loop.
+
+## Loop
+1. Make code changes on macOS.
+2. Run `just bootstrap-run` on macOS.
+3. Start the local test server on macOS (included in `bootstrap-run`).
+4. Copy generated VM scripts from `build/manual-test/vm/` to the VM.
+5. Run one VM bootstrap script to pull the latest binary/config.
+6. Run SofCat manually on the VM.
+
+## 1) Prepare assets on macOS
+From repo root:
+
+```bash
+just bootstrap-run
+```
+
+Or if you want separate steps:
+
+```bash
+just bootstrap
+./build/manual-test-server -root build/manual-test/server-root -addr :8080
+```
+
+This creates:
+- `build/manual-test/server-root/sofcat.exe`
+- `build/manual-test/server-root/sofcat-ui.exe`
+- `build/manual-test/server-root/manifests/example_manifest.yaml`
+- `build/manual-test/server-root/catalogs/example_catalog.yaml`
+- `build/manual-test/server-root/packages/` (empty)
+- `build/manual-test-server` (Go static file server)
+- `build/manual-test/vm/bootstrap-vm.ps1`
+- `build/manual-test/vm/bootstrap-vm.bat` (URL stamped automatically)
+- `build/manual-test/vm/bootstrap-vm-full.ps1`
+- `build/manual-test/vm/bootstrap-vm-full.bat` (URL stamped automatically)
+- `build/manual-test/vm/run-sofcat-check.bat`
+- `build/manual-test/vm/run-release-integration.bat`
+- `build/manual-test/vm/base-url.txt` (resolved URL used for stamping)
+
+`just bootstrap` auto-detects a URL like `http://<your-mac-ip>:8080/`.
+To override:
+
+```bash
+just bootstrap http://192.168.1.50:8080/
+```
+
+Server source lives in `test/manual/server` (separate Go module).
+
+Two VM scripts are not generated and must be copied straight from this
+directory: `run-selfserve-smoke.ps1` (machine-assertable self-serve smoke test,
+exits 0 and prints `SELF-SERVE SMOKE PASSED`) and `launch-wails-ui.ps1` (starts
+`sofcat-ui.exe` as the interactive user).
+
+## 2) Serve assets from macOS
+
+```bash
+./build/manual-test-server -root build/manual-test/server-root -addr :8080
+```
+
+Use your Mac's reachable IP in the VM, for example:
+- `http://192.168.1.50:8080/`
+
+## 3) Bootstrap from the Windows VM
+From the copied `build/manual-test/vm/` folder on the VM:
+
+```bat
+.\bootstrap-vm.bat
+```
+
+Optional switches:
+- `.\bootstrap-vm.bat -InstallService -StartService`
+- One-off URL override: `.\bootstrap-vm.bat http://192.168.1.99:8080/`
+
+For full integration-test prerequisites (go/chocolatey/WiX):
+
+```bat
+.\bootstrap-vm-full.bat
+```
+
+Optional switches:
+- `.\bootstrap-vm-full.bat -InstallService -StartService`
+- One-off URL override: `.\bootstrap-vm-full.bat http://192.168.1.99:8080/`
+
+## 4) Manual run on VM
+
+```bat
+.\run-sofcat-check.bat
+```
+
+`-C` runs check-only mode so you can quickly validate config/flow without installing packages.
+
+## 5) Run release integration script from VM
+
+From repo root on the VM:
+
+```bat
+.\build\manual-test\vm\run-release-integration.bat
+```
+
+This helper now runs both phases in order:
+- `test/integration/prepare-release-integration.ps1`
+- `test/integration/run-release-integration.ps1`
+
+Recommended flow first:
+
+```bat
+.\build\manual-test\vm\bootstrap-vm-full.bat
+```
+
+Optional args:
+- `.\build\manual-test\vm\run-release-integration.bat C:\path\to\sofcat.exe`
+- `.\build\manual-test\vm\run-release-integration.bat C:\path\to\sofcat.exe C:\temp\sofcat-release-integration`
+
+## Chrome end-to-end loop (local file:// repo)
+
+A real-package loop that installs and removes Google Chrome through the
+service, with the repository on the VM's own disk instead of an HTTP server.
+
+The pieces are rig-agnostic; a host-side script that chains them for a
+particular VM rig is machine-local (see `AGENTS.local.md`). The loop:
+
+1. `test/manual/build-e2e-repo.sh` (downloads the Chrome enterprise MSI once into
+`build/cache/`, renders `fixtures/e2e/packages-info/GoogleChrome.yaml.in` with
+the MSI's version and SHA-256, compiles the catalog with `makecatalogs`, and
+copies the selfserve fixtures and both binaries into `build/e2e-repo/`).
+2. Copy `build/e2e-repo.tar` to the VM and extract it to `C:\sofcat-repo`
+   (`tar.exe -xf ... --strip-components=1`).
+3. `bootstrap-vm.ps1 -BaseUrl file://C:/sofcat-repo/ -Manifest e2e_manifest -Catalogs e2e_catalog -InstallService -StartService -NoPause`.
+4. Optionally brand the UI: copy `fixtures/e2e/branding/logo.png` to
+   `C:\ProgramData\SofCat\branding\`, append a `branding:` block (title,
+   tagline, logo path, help link, accent) to `config.yaml`, restart the service.
+5. Run the two gates, then launch `launch-wails-ui.ps1` on the desktop for the
+   visual check:
+
+- `run-selfserve-smoke.ps1` (prints `SELF-SERVE SMOKE PASSED`), reached here
+  through `included_manifests`.
+- `run-chrome-e2e.ps1` (prints `CHROME E2E PASSED`): `GetBranding` returns
+  the config branding, a policy `Title` under
+  `HKLM\SOFTWARE\Policies\SofCat\Branding` wins over it and removing it
+  restores the config; then metadata and NotInstalled
+  status, a `CancelOperation` of a Chrome install queued behind a busy run
+  (ends `Canceled` by the user, nothing installed, selection reverted, a second
+  cancel refused), `Restart-Service` within 30 s while a run is busy,
+  streamed install to `Succeeded`, registry entry and `chrome.exe`,
+  `inventory.json` contents and ACL, self-serve manifest, deferred removal while
+  `chrome.exe` runs, then a real uninstall with every trace gone.
+- `sofcat-ui.exe` on the desktop (`launch-wails-ui.ps1`): judge Home, the
+  branded banner and window title, an install with the bottom strip, Cancel
+  while queued, the detail page and Activity by screenshot.
+
+Repository URL spellings (verified on Windows): `file://C:/sofcat-repo/`
+works; `file:///C:/sofcat-repo/` returns 404 from the file transport, and a
+bare `C:/sofcat-repo/` or `C:\sofcat-repo\` fails with "unsupported protocol
+scheme".

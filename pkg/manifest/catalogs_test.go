@@ -10,9 +10,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/1dustindavis/gorilla/pkg/admin"
-	"github.com/1dustindavis/gorilla/pkg/catalog"
-	"github.com/1dustindavis/gorilla/pkg/config"
+	"github.com/hurricanehrndz/sofcat/pkg/admin"
+	"github.com/hurricanehrndz/sofcat/pkg/catalog"
+	"github.com/hurricanehrndz/sofcat/pkg/config"
 	"go.yaml.in/yaml/v4"
 )
 

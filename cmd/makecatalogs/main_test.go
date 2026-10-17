@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/1dustindavis/gorilla/pkg/catalog"
+	"github.com/hurricanehrndz/sofcat/pkg/catalog"
 	"go.yaml.in/yaml/v4"
 )
 
@@ -63,11 +63,11 @@ installer:
   hash: abc
 `
 
-// The research's headline defect: `gorilla -build` exited before doing any
+// The research's headline defect: `sofcat -build` exited before doing any
 // work unless an agent config file with a manifest and url existed. With no
 // config anywhere, makecatalogs must still build the catalog.
 func TestBuildsCatalogWithoutAgentConfig(t *testing.T) {
-	t.Setenv("ProgramData", t.TempDir()) // empty: no gorilla/config.yaml
+	t.Setenv("ProgramData", t.TempDir()) // empty: no sofcat/config.yaml
 	t.Chdir(t.TempDir())                 // and none relative to the working directory
 	repo := writeRepo(t, map[string]string{"chrome.yaml": chromeInfo})
 
@@ -187,8 +187,8 @@ func TestDependencyLeaf(t *testing.T) {
 		t.Fatalf("go toolchain not on PATH: %v", err)
 	}
 	forbidden := []string{
-		"github.com/1dustindavis/gorilla/pkg/config",
-		"github.com/1dustindavis/gorilla/pkg/download",
+		"github.com/hurricanehrndz/sofcat/pkg/config",
+		"github.com/hurricanehrndz/sofcat/pkg/download",
 		"golang.org/x/sys/windows",
 	}
 	for _, goos := range []string{"linux", "windows", "darwin"} {

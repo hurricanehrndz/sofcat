@@ -45,7 +45,7 @@ func listen(name string) (listener, error) {
 	path := servicePipePath(name)
 	first, err := createNamedPipe(path, true)
 	if errors.Is(err, windows.ERROR_ACCESS_DENIED) {
-		return nil, fmt.Errorf("pipe %s already exists: another process holds the name (a second Gorilla service, or one impersonating it): %w", path, err)
+		return nil, fmt.Errorf("pipe %s already exists: another process holds the name (a second SofCat service, or one impersonating it): %w", path, err)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("create pipe %s: %w", path, err)
@@ -280,7 +280,7 @@ func verifyPipeOwner(handle windows.Handle, path string) error {
 		return err
 	}
 	if !owner.Equals(want) {
-		return fmt.Errorf("refusing %s: it is owned by %s, not %s, so it is not the Gorilla service", path, accountName(owner), accountName(want))
+		return fmt.Errorf("refusing %s: it is owned by %s, not %s, so it is not the SofCat service", path, accountName(owner), accountName(want))
 	}
 	return nil
 }

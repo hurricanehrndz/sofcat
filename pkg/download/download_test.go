@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/1dustindavis/gorilla/pkg/config"
+	"github.com/hurricanehrndz/sofcat/pkg/config"
 )
 
 var (
@@ -104,18 +104,16 @@ func router() *http.ServeMux {
 // TestFileHash verifies that a file is downloaded properly
 func TestFileHash(t *testing.T) {
 	// Create a temporary directory
-	dir, err := os.MkdirTemp("", "gorilla_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	// Create a test server
 	ts := httptest.NewServer(router())
 	defer ts.Close()
 
 	// Run the code
-	File(dir, ts.URL+"/hashtest.txt")
+	if err := fileContext(context.Background(), dir, ts.URL+"/hashtest.txt"); err != nil {
+		t.Fatal(err)
+	}
 
 	// Validate the hash to confirm it was downloaded properly
 	if !Verify(filepath.Join(dir, "hashtest.txt"), validHash) {
@@ -126,11 +124,7 @@ func TestFileHash(t *testing.T) {
 // TestFileHashLocal verifies that a *local* file is downloaded properly
 func TestFileHashLocal(t *testing.T) {
 	// Create a temporary directory
-	dir, err := os.MkdirTemp("", "gorilla_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	// Get the absolute path of our test file
 	testPath, err := filepath.Abs("testdata/hashtest.txt")
@@ -142,7 +136,9 @@ func TestFileHashLocal(t *testing.T) {
 
 	// Run the code
 	fmt.Println("Downloading from local path:", testPath)
-	File(dir, "file://"+testPath)
+	if err := fileContext(context.Background(), dir, "file://"+testPath); err != nil {
+		t.Fatal(err)
+	}
 
 	// Validate the hash to confirm it was downloaded properly
 	if !Verify(filepath.Join(dir, "hashtest.txt"), validHash) {
@@ -160,63 +156,51 @@ func TestFileTimeout(t *testing.T) {
 	fmt.Println("Run with '-short' to skip this longer test")
 
 	// Create a temporary directory
-	dir, err := os.MkdirTemp("", "gorilla_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	// Create a test server
 	ts := httptest.NewServer(router())
 	defer ts.Close()
 
 	// Run the code
-	fileErr := File(dir, ts.URL+"/timeout")
+	fileErr := fileContext(context.Background(), dir, ts.URL+"/timeout")
 
 	// Check the error output to confirm we timedout
 	if fileErr != nil {
 		if !strings.Contains(fileErr.Error(), "timeout") {
-			t.Errorf("Error received from File() did not include 'timeout':\n%v", fileErr)
+			t.Errorf("Error received from fileContext did not include 'timeout':\n%v", fileErr)
 		}
 	} else {
-		t.Errorf("File() did not return an error when running 'TestFileTimeout'")
+		t.Errorf("fileContext did not return an error when running 'TestFileTimeout'")
 	}
 }
 
 // TestFileStatus verifies status codes are respected
 func TestFileStatus(t *testing.T) {
 	// Create a temporary directory
-	dir, err := os.MkdirTemp("", "gorilla_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	// Create a test server
 	ts := httptest.NewServer(router())
 	defer ts.Close()
 
 	// Run the code
-	fileErr := File(dir, ts.URL+"/404")
+	fileErr := fileContext(context.Background(), dir, ts.URL+"/404")
 
 	// Check the error output to confirm we received a 404
 	if fileErr != nil {
 		if !strings.Contains(fileErr.Error(), "404") {
-			t.Errorf("Error received from File() did not include '404':\n%v", fileErr)
+			t.Errorf("Error received from fileContext did not include '404':\n%v", fileErr)
 		}
 	} else {
-		t.Errorf("File() did not return an error when returning a 404")
+		t.Errorf("fileContext did not return an error when returning a 404")
 	}
 }
 
 // TestFileBasicAuth verifies username and password are included in headers
 func TestFileBasicAuth(t *testing.T) {
 	// Create a temporary directory
-	dir, err := os.MkdirTemp("", "gorilla_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	// Create a test server
 	ts := httptest.NewServer(router())
@@ -227,7 +211,7 @@ func TestFileBasicAuth(t *testing.T) {
 	downloadCfg.AuthPass = "beans"
 
 	// Run the code
-	fileErr := File(dir, ts.URL+"/basicauth")
+	fileErr := fileContext(context.Background(), dir, ts.URL+"/basicauth")
 
 	// Check that we did not receive an error
 	if fileErr != nil {
@@ -238,11 +222,7 @@ func TestFileBasicAuth(t *testing.T) {
 // TestFileTLS verifies TLS auth is functioning
 func TestFileTLS(t *testing.T) {
 	// Create a temporary directory
-	dir, err := os.MkdirTemp("", "gorilla_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	// Setup TLS auth
 	downloadCfg.TLSAuth = true
@@ -287,7 +267,7 @@ func TestFileTLS(t *testing.T) {
 	tlsURL := "https://localhost:" + u.Port() + "/tlsauth"
 
 	// Run the code
-	fileErr := File(dir, tlsURL)
+	fileErr := fileContext(context.Background(), dir, tlsURL)
 
 	// Check that we did not receive an error
 	if fileErr != nil {
@@ -324,15 +304,11 @@ func copy(src, dst string) error {
 // TestIfNeededValid confirms that a file is not downloaded when a valid copy exists
 func TestIfNeededValid(t *testing.T) {
 	// Create a temporary directory
-	dir, err := os.MkdirTemp("", "gorilla_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	// defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	// Copy the test file to our temp directory
 	tempFile := filepath.Join(dir, "/hashtest.txt")
-	err = copy(testFile, tempFile)
+	err := copy(testFile, tempFile)
 	if err != nil {
 		t.Error("copy failed: ", err)
 	}
@@ -370,15 +346,11 @@ func TestIfNeededValid(t *testing.T) {
 // TestIfNeededInvalid confirms that a file *is* downloaded when an invalid copy exists
 func TestIfNeededInvalid(t *testing.T) {
 	// Create a temporary directory
-	dir, err := os.MkdirTemp("", "gorilla_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	// defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	// Copy a file with a different hash to our temp directory
 	tempFile := filepath.Join(dir, "/hashtest.txt")
-	err = copy("testdata/client.pem", tempFile)
+	err := copy("testdata/client.pem", tempFile)
 	if err != nil {
 		t.Error("copy failed: ", err)
 	}

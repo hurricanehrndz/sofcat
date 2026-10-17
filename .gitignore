@@ -36,16 +36,11 @@ config.yaml
 # Local build artifacts
 build/
 
-# devenv / direnv
-.devenv*
-.direnv
-devenv.local.nix
-
-# git-hooks.nix generates this as a machine-specific symlink into /nix/store
-.pre-commit-config.yaml
-
 # Machine-local agent instructions (test rig details); see AGENTS.md
 AGENTS.local.md
 
 # Machine-local agent/test-rig helpers (rig orchestrators); see AGENTS.local.md
 .claude/
+
+# mise per-machine overrides
+mise.local.toml

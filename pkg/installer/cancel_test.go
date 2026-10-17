@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/1dustindavis/gorilla/pkg/catalog"
+	"github.com/hurricanehrndz/sofcat/pkg/catalog"
 )
 
 // cancelTestItem needs action, and its installer is already in the testdata
