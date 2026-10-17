@@ -104,11 +104,7 @@ func router() *http.ServeMux {
 // TestFileHash verifies that a file is downloaded properly
 func TestFileHash(t *testing.T) {
 	// Create a temporary directory
-	dir, err := os.MkdirTemp("", "sofcat_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	// Create a test server
 	ts := httptest.NewServer(router())
@@ -128,11 +124,7 @@ func TestFileHash(t *testing.T) {
 // TestFileHashLocal verifies that a *local* file is downloaded properly
 func TestFileHashLocal(t *testing.T) {
 	// Create a temporary directory
-	dir, err := os.MkdirTemp("", "sofcat_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	// Get the absolute path of our test file
 	testPath, err := filepath.Abs("testdata/hashtest.txt")
@@ -164,11 +156,7 @@ func TestFileTimeout(t *testing.T) {
 	fmt.Println("Run with '-short' to skip this longer test")
 
 	// Create a temporary directory
-	dir, err := os.MkdirTemp("", "sofcat_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	// Create a test server
 	ts := httptest.NewServer(router())
@@ -190,11 +178,7 @@ func TestFileTimeout(t *testing.T) {
 // TestFileStatus verifies status codes are respected
 func TestFileStatus(t *testing.T) {
 	// Create a temporary directory
-	dir, err := os.MkdirTemp("", "sofcat_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	// Create a test server
 	ts := httptest.NewServer(router())
@@ -216,11 +200,7 @@ func TestFileStatus(t *testing.T) {
 // TestFileBasicAuth verifies username and password are included in headers
 func TestFileBasicAuth(t *testing.T) {
 	// Create a temporary directory
-	dir, err := os.MkdirTemp("", "sofcat_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	// Create a test server
 	ts := httptest.NewServer(router())
@@ -242,11 +222,7 @@ func TestFileBasicAuth(t *testing.T) {
 // TestFileTLS verifies TLS auth is functioning
 func TestFileTLS(t *testing.T) {
 	// Create a temporary directory
-	dir, err := os.MkdirTemp("", "sofcat_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	// Setup TLS auth
 	downloadCfg.TLSAuth = true
@@ -328,15 +304,11 @@ func copy(src, dst string) error {
 // TestIfNeededValid confirms that a file is not downloaded when a valid copy exists
 func TestIfNeededValid(t *testing.T) {
 	// Create a temporary directory
-	dir, err := os.MkdirTemp("", "sofcat_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	// defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	// Copy the test file to our temp directory
 	tempFile := filepath.Join(dir, "/hashtest.txt")
-	err = copy(testFile, tempFile)
+	err := copy(testFile, tempFile)
 	if err != nil {
 		t.Error("copy failed: ", err)
 	}
@@ -374,15 +346,11 @@ func TestIfNeededValid(t *testing.T) {
 // TestIfNeededInvalid confirms that a file *is* downloaded when an invalid copy exists
 func TestIfNeededInvalid(t *testing.T) {
 	// Create a temporary directory
-	dir, err := os.MkdirTemp("", "sofcat_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	// defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	// Copy a file with a different hash to our temp directory
 	tempFile := filepath.Join(dir, "/hashtest.txt")
-	err = copy("testdata/client.pem", tempFile)
+	err := copy("testdata/client.pem", tempFile)
 	if err != nil {
 		t.Error("copy failed: ", err)
 	}
