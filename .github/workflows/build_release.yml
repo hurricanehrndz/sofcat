@@ -28,7 +28,7 @@ jobs:
         uses: jdx/mise-action@v2
       - name: Build executables, MSI and makecatalogs
         run: |
-          just version=${{ steps.create_tag.outputs.version_tag }} build msi makecatalogs
+          just version=${{ steps.create_tag.outputs.version_tag }} msi makecatalogs
       - name: Upload executables workflow artifact
         uses: actions/upload-artifact@v4
         with:
