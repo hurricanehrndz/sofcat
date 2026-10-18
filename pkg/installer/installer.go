@@ -75,6 +75,9 @@ func runCMD(command string, arguments []string) (string, error) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
 	scanner := bufio.NewScanner(cmdReader)
 	slog.Debug("Running command", "command", command, "args", arguments)
 	go func() {
@@ -90,7 +93,7 @@ func runCMD(command string, arguments []string) (string, error) {
 	}
 
 	wg.Wait()
-	err = cmd.Wait()
+	err = withStderr(cmd.Wait(), stderr.Bytes())
 	output := strings.Join(cmdOutput, "\n")
 	slog.Debug("Command output", "output", output)
 	if err != nil {
@@ -98,6 +101,23 @@ func runCMD(command string, arguments []string) (string, error) {
 	}
 
 	return output, err
+}
+
+// maxStderrTail bounds how much of a failed command's stderr goes into its
+// error: enough for a PowerShell error record, not a whole installer log.
+const maxStderrTail = 2048
+
+// withStderr adds the end of a failed command's stderr to its error, so the
+// log and the report say why it failed, not only its exit status.
+func withStderr(err error, stderr []byte) error {
+	msg := bytes.TrimSpace(stderr)
+	if err == nil || len(msg) == 0 {
+		return err
+	}
+	if len(msg) > maxStderrTail {
+		msg = append([]byte("..."), msg[len(msg)-maxStderrTail:]...)
+	}
+	return fmt.Errorf("%w: %s", err, strings.ToValidUTF8(string(msg), ""))
 }
 
 // Get a Nupkg's id using `choco list`
@@ -457,7 +477,7 @@ func runScript(script, kind, cachePath string) error {
 	// Log results
 	slog.Debug("Script results", "err", err, "stdout", stdout.String(), "stderr", stderr.String())
 
-	return err
+	return withStderr(err, stderr.Bytes())
 }
 
 var (
