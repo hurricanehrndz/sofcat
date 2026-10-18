@@ -29,9 +29,11 @@ Every build recipe writes only under `build/` (gitignored), except the frontend
 recipes: `ui-install` writes `ui/frontend/node_modules/` and `ui-assets`
 writes `ui/frontend/dist/` (both gitignored), and `winres` (run by `build`)
 writes `cmd/sofcat/rsrc_windows_<arch>.syso` and `ui/rsrc_windows_<arch>.syso`
-(gitignored). Those carry `assets/sofcat.ico` into both executables, so a
-plain `go build` without them gives an exe with the generic icon. Nothing is
-emitted at the repo root.
+(gitignored) from `<pkg>/winres/winres.json`. Those carry the icon, a
+VERSIONINFO resource stamped with `version`, and an `asInvoker` manifest into
+both executables. A plain `go build` without them gives an anonymous exe with
+the generic icon, which antivirus ML heuristics trust less
+([code-signing.md](code-signing.md)). Nothing is emitted at the repo root.
 
 A normal `just build` produces **both** raw Windows executables:
 `build/sofcat.exe` and `build/sofcat-ui.exe`. The UI build runs the Vite

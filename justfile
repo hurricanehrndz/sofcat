@@ -51,11 +51,16 @@ ui-bindings-check:
 # Type check plus committed-binding verification.
 ui-lint: ui-type ui-bindings-check
 
-# Windows icon resources (rsrc_windows_<arch>.syso, gitignored) that go build
-# links into both executables. Icon only: no manifest, no version info.
+# Windows resources (rsrc_windows_<arch>.syso, gitignored) that go build links
+# into each executable: icon, VERSIONINFO (company, product, and file and
+# product version from `version`) and an asInvoker application manifest, all
+# from <pkg>/winres/winres.json. Unsigned binaries without these look anonymous
+# to antivirus ML heuristics (docs/code-signing.md). The UI manifest declares
+# what Wails' own template does: per-monitor-v2 DPI and common controls v6.
 winres arch="amd64":
     for dir in cmd/sofcat ui; do \
-      go run github.com/tc-hib/go-winres@v0.3.3 simply --arch {{arch}} --manifest none --icon assets/sofcat.ico --out $dir/rsrc; \
+      go run github.com/tc-hib/go-winres@v0.3.3 make --arch {{arch}} --in $dir/winres/winres.json \
+        --file-version "{{version}}" --product-version "{{version}}" --out $dir/rsrc || exit 1; \
     done
 
 # Windows binaries (pure Go, no cgo) -> build/sofcat.exe and build/sofcat-ui.exe
