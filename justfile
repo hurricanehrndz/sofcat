@@ -107,8 +107,7 @@ bootstrap base_url="": build manual-test-server
     rm -rf {{server_root}}/packages/scripts
     cp -R test/manual/fixtures/selfserve/packages/scripts {{server_root}}/packages/scripts
     cp test/manual/bootstrap-vm.ps1 test/manual/bootstrap-vm-full.ps1 \
-       test/manual/templates/run-sofcat-check.bat \
-       test/manual/run-release-integration.bat {{vm_dir}}/
+       test/manual/templates/run-sofcat-check.bat {{vm_dir}}/
     @base_url="{{base_url}}"; \
     if [ -z "$base_url" ]; then \
       case "$(uname)" in \
