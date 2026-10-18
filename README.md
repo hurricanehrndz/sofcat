@@ -124,7 +124,7 @@ config key. Configs that still set it keep loading.
 
 ## Build from source
 
-You need Go 1.26, Node 22 and [`just`](https://github.com/casey/just).
+You need Go 1.27, Node 24 and [`just`](https://github.com/casey/just).
 [mise](https://mise.jdx.dev) installs all three plus the lint and format tools:
 
 ```sh

@@ -1,18 +1,14 @@
 module github.com/hurricanehrndz/sofcat
 
-go 1.26.0
+go 1.27.0
 
-toolchain go1.26.9
+toolchain go1.27.2
 
 require (
 	github.com/hashicorp/go-version v1.9.0
-	golang.org/x/sys v0.49.0
-)
-
-require go.yaml.in/yaml/v4 v4.0.0-rc.6
-
-require (
 	github.com/wailsapp/wails/v3 v3.0.0-alpha2.117
+	go.yaml.in/yaml/v4 v4.0.0-rc.6
+	golang.org/x/sys v0.49.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
