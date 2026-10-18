@@ -18,11 +18,11 @@ import (
 // given names as available optional installs, restoring the originals on
 // cleanup. The catalog is left empty on purpose: authorization keys off the
 // offered names, and the enriched list tolerates a missing catalog entry.
-func stubOptional(t *testing.T, names ...string) {
-	t.Helper()
+func stubOptional(tb testing.TB, names ...string) {
+	tb.Helper()
 	origManifest := manifestGet
 	origCatalog := catalogGet
-	t.Cleanup(func() { manifestGet = origManifest; catalogGet = origCatalog })
+	tb.Cleanup(func() { manifestGet = origManifest; catalogGet = origCatalog })
 	manifestGet = func(_ config.Configuration) ([]manifest.Item, []string, error) {
 		return []manifest.Item{{Name: "base", OptionalInstalls: names}}, nil, nil
 	}

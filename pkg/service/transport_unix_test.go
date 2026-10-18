@@ -12,18 +12,18 @@ import (
 // the test. os.MkdirTemp keeps the path short: a socket path is limited to
 // about 104 bytes. The test serves the socket as itself, not as root, so its
 // clients trust its own uid.
-func testPipeName(t *testing.T) string {
-	t.Helper()
+func testPipeName(tb testing.TB) string {
+	tb.Helper()
 	originalUID := trustedServerUID
 	trustedServerUID = uint32(os.Getuid())
-	t.Cleanup(func() { trustedServerUID = originalUID })
-	dir, err := os.MkdirTemp("", "sofcat") //nolint:usetesting // t.TempDir() can exceed the socket path limit on macOS
+	tb.Cleanup(func() { trustedServerUID = originalUID })
+	dir, err := os.MkdirTemp("", "sofcat") //nolint:usetesting // tb.TempDir() can exceed the socket path limit on macOS
 	if err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 	original := socketDir
 	socketDir = filepath.Join(dir, "run")
-	t.Cleanup(func() {
+	tb.Cleanup(func() {
 		socketDir = original
 		_ = os.RemoveAll(dir)
 	})

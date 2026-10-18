@@ -20,8 +20,8 @@ var testPipeSeq atomic.Uint64
 // than reading the clock: the Windows wall clock moves in timer ticks, and a
 // listener closed while no Accept waits keeps its spare instance until the
 // process exits, so a reused name fails listen.
-func testPipeName(t *testing.T) string {
-	t.Helper()
+func testPipeName(tb testing.TB) string {
+	tb.Helper()
 	original := trustedPipeOwner
 	trustedPipeOwner = func() (*windows.SID, error) {
 		user, err := windows.GetCurrentProcessToken().GetTokenUser()
@@ -30,7 +30,7 @@ func testPipeName(t *testing.T) string {
 		}
 		return user.User.Sid, nil
 	}
-	t.Cleanup(func() { trustedPipeOwner = original })
+	tb.Cleanup(func() { trustedPipeOwner = original })
 	return fmt.Sprintf("sofcat-test-%d-%d", os.Getpid(), testPipeSeq.Add(1))
 }
 
