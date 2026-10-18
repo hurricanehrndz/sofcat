@@ -14,13 +14,6 @@ on:
         description: Pull request number to test
         required: true
         type: number
-      fixtures:
-        description: prebuilt reuses main's latest fixture artifact; full rebuilds the fixtures
-        type: choice
-        options:
-          - prebuilt
-          - full
-        default: prebuilt
 permissions:
   contents: read
 jobs:
@@ -94,7 +87,7 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: read
-      actions: read # download artifacts from this and other runs
+      actions: read # download the Build Release run's artifact
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -119,39 +112,6 @@ jobs:
           $outDir = "${{ runner.temp }}\sofcat-binary"
           New-Item -Path $outDir -ItemType Directory -Force | Out-Null
           go build -v -o "$outDir\sofcat.exe" ./cmd/sofcat
-      - name: Resolve latest integration fixture run
-        if: github.event_name == 'workflow_dispatch' && inputs.fixtures != 'full'
-        id: fixture_run
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
-        with:
-          script: |
-            const { owner, repo } = context.repo;
-            const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
-              owner,
-              repo,
-              workflow_id: "build-integration-fixtures.yml",
-              branch: "main",
-              event: "push",
-              status: "completed",
-              per_page: 100
-            });
-            const latestSuccess = runs.find((run) => run.conclusion === "success");
-            if (!latestSuccess) {
-              core.warning("No successful main-branch fixture run found. Falling back to local fixture build.");
-              return;
-            }
-            core.setOutput("run_id", String(latestSuccess.id));
-      - name: Download prebuilt fixtures
-        if: github.event_name == 'workflow_dispatch' && inputs.fixtures != 'full' && steps.fixture_run.outputs.run_id != ''
-        id: fixture_download
-        continue-on-error: true
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          repository: ${{ github.repository }}
-          run-id: ${{ steps.fixture_run.outputs.run_id }}
-          name: sofcat-release-fixtures
-          path: ${{ runner.temp }}/sofcat-release-integration/fixture
-          github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Resolve sofcat.exe path
         shell: pwsh
         run: |
@@ -169,13 +129,17 @@ jobs:
           }
 
           throw "Unable to resolve sofcat.exe path"
+      # Fixtures are built here rather than downloaded: msix ones must be
+      # signed with a certificate this runner trusts, and their catalog
+      # hashes cover the signed files.
       - name: Prepare released-binary integration fixtures
-        if: github.event_name != 'workflow_dispatch' || inputs.fixtures == 'full' || steps.fixture_download.outcome != 'success'
         shell: pwsh
         run: |
           $workRoot = "$env:RUNNER_TEMP\sofcat-release-integration"
+          $thumbprint = ./test/integration/new-sideload-cert.ps1
           ./test/integration/prepare-release-integration.ps1 `
-            -WorkRoot "$workRoot"
+            -WorkRoot "$workRoot" `
+            -MsixCertThumbprint $thumbprint
       - name: Run released-binary integration tests
         shell: pwsh
         run: |

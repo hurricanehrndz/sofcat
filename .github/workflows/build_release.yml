@@ -6,6 +6,12 @@ on:
       - main
 permissions:
   contents: read
+# The version comes from the latest tag, so runs must not overlap: two at once
+# compute the same tag and the second fails to cut its release. A queued run
+# replaced by a newer push is canceled; the newer release includes its commit.
+concurrency:
+  group: build-release
+  cancel-in-progress: false
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -67,6 +73,8 @@ jobs:
           prerelease: true
           artifacts: "./build/sofcat.exe,./build/sofcat-ui.exe,./build/sofcat-*.msi,./build/makecatalogs-*,./build/sofcat-*.sigstore.json"
           tag: ${{ steps.create_tag.outputs.version_tag }}
+          # Tag the commit that was built, not wherever main points by now.
+          commit: ${{ github.sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
   integration:
     name: Released-binary integration
