@@ -142,7 +142,12 @@ Windows-only.
 ## Progress state machine
 
 `pkg/service` attaches an operation-scoped `installer.ProgressFn` to the run's
-`installer.Runner.Emit`, so every record names a real item. Runner states map to
+`installer.Runner.Emit`, so every record names a real item. The run reconciles
+every item, but an operation records only its requested item and the items its
+install or removal brings along: dependencies (the walk lists them in
+`installer.Runner.PulledBy`) and updaters (`update_for` the item). Another
+pending item worked on in the same run, such as a failed install retried every
+run, goes only to the service log. Runner states map to
 record states `Downloading`, `Installing`, `Removing`, `ItemCompleted`, and
 `ItemFailed`; all five are non-terminal. Only `Succeeded`, `Failed`, `Deferred`,
 and `Canceled` — from the requested item's real run report, a service

@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"runtime/debug"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -667,7 +668,7 @@ func (sr *serviceRunner) scheduleRunAfterMutation(ctx context.Context, action, i
 	sr.wg.Add(1)
 	go func() {
 		defer sr.wg.Done()
-		run := Command{Action: actionRun, progress: sr.operationProgressCallback(operationID)}
+		run := Command{Action: actionRun, progress: sr.operationProgressCallback(operationID, itemName)}
 		if requestedBy != "" {
 			run.requestedBy = map[string]string{itemName: requestedBy}
 		}
@@ -702,8 +703,15 @@ func (sr *serviceRunner) scheduleRunAfterMutation(ctx context.Context, action, i
 	}()
 }
 
-func (sr *serviceRunner) operationProgressCallback(operationID string) installer.ProgressFn {
-	return func(item catalog.Item, state string, percent int, message string) {
+// operationProgressCallback records the run's progress against operationID.
+// A run reconciles every item, so it keeps only itemName's own records and
+// those of the dependencies and updaters its install or removal brings along;
+// another pending item's progress would otherwise read as itemName's.
+func (sr *serviceRunner) operationProgressCallback(operationID, itemName string) installer.ProgressFn {
+	return func(item catalog.Item, pulledBy []string, state string, percent int, message string) {
+		if item.Name != itemName && !slices.Contains(pulledBy, itemName) && !slices.Contains(item.UpdateFor, itemName) {
+			return
+		}
 		mappedState := ""
 		switch state {
 		case "downloading":

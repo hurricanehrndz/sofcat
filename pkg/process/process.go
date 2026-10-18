@@ -183,6 +183,14 @@ func recordDeferredItem(r *installer.Runner, name, version, reason string) {
 	})
 }
 
+// pullIn runs walk with name pushed on r.PulledBy, so the progress of every
+// item walk installs says name's install pulled it in.
+func pullIn(r *installer.Runner, name string, walk func() bool) bool {
+	r.PulledBy = append(r.PulledBy, name)
+	defer func() { r.PulledBy = r.PulledBy[:len(r.PulledBy)-1] }()
+	return walk()
+}
+
 // installWithDeps installs itemName's dependencies depth-first and then the
 // item itself (K4, spec R6). visited gates each item to one attempt per run
 // and detects cycles; a failed, invalid, or missing dependency skips its
@@ -213,7 +221,7 @@ func installWithDeps(itemName string, catalogsMap map[int]map[string]catalog.Ite
 
 	visited[itemName] = depInProgress
 	for _, dependency := range item.Dependencies {
-		if !installWithDeps(dependency, catalogsMap, r, visited, index) {
+		if !pullIn(r, itemName, func() bool { return installWithDeps(dependency, catalogsMap, r, visited, index) }) {
 			if visited[itemName] == depFailed {
 				// a cycle back to this item already recorded it
 				return false
@@ -252,7 +260,7 @@ func installWithDeps(itemName string, catalogsMap map[int]map[string]catalog.Ite
 	// and once-per-run; a deferred or failed referent never reaches here, so its
 	// updaters are skipped (Munki: dependents of skipped work are skipped).
 	for _, updater := range index[itemName] {
-		installWithDeps(updater, catalogsMap, r, visited, index)
+		pullIn(r, itemName, func() bool { return installWithDeps(updater, catalogsMap, r, visited, index) })
 	}
 	return true
 }

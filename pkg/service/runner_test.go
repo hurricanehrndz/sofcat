@@ -352,16 +352,18 @@ func TestOperationProgressUsesActualItemsAndItemScopedPercent(t *testing.T) {
 	const operationID = "op-progress"
 	sr.registerTrackedOperation("DemoOptional", "", CommandResponse{OperationID: operationID})
 
-	emit := sr.operationProgressCallback(operationID)
-	emit(catalog.Item{Name: "DemoDependency", DisplayName: "Demo Dependency"}, "downloading", 0, "download")
-	emit(catalog.Item{Name: "DemoDependency", DisplayName: "Demo Dependency"}, "installing", 50, "install")
-	emit(catalog.Item{Name: "DemoDependency", DisplayName: "Demo Dependency"}, "done", 100, "")
-	emit(catalog.Item{Name: "DemoOptional", DisplayName: "Demo Optional"}, "downloading", 0, "download")
-	emit(catalog.Item{Name: "DemoOptional", DisplayName: "Demo Optional"}, "installing", 50, "install")
-	emit(catalog.Item{Name: "DemoOptional", DisplayName: "Demo Optional"}, "done", 100, "")
-	emit(catalog.Item{Name: "DemoUpdater", DisplayName: "Demo Updater"}, "downloading", 0, "download")
-	emit(catalog.Item{Name: "DemoUpdater", DisplayName: "Demo Updater"}, "failed", 50, "boom")
-	emit(catalog.Item{Name: "DemoOptional", DisplayName: "Demo Optional"}, "removing", 50, "remove")
+	emit := sr.operationProgressCallback(operationID, "DemoOptional")
+	dep := []string{"DemoOptional"}
+	updater := catalog.Item{Name: "DemoUpdater", DisplayName: "Demo Updater", UpdateFor: []string{"DemoOptional"}}
+	emit(catalog.Item{Name: "DemoDependency", DisplayName: "Demo Dependency"}, dep, "downloading", 0, "download")
+	emit(catalog.Item{Name: "DemoDependency", DisplayName: "Demo Dependency"}, dep, "installing", 50, "install")
+	emit(catalog.Item{Name: "DemoDependency", DisplayName: "Demo Dependency"}, dep, "done", 100, "")
+	emit(catalog.Item{Name: "DemoOptional", DisplayName: "Demo Optional"}, nil, "downloading", 0, "download")
+	emit(catalog.Item{Name: "DemoOptional", DisplayName: "Demo Optional"}, nil, "installing", 50, "install")
+	emit(catalog.Item{Name: "DemoOptional", DisplayName: "Demo Optional"}, nil, "done", 100, "")
+	emit(updater, nil, "downloading", 0, "download")
+	emit(updater, nil, "failed", 50, "boom")
+	emit(catalog.Item{Name: "DemoOptional", DisplayName: "Demo Optional"}, nil, "removing", 50, "remove")
 
 	events, done, ok := sr.snapshotTrackedOperation(operationID)
 	if !ok || done {
@@ -397,6 +399,34 @@ func TestOperationProgressUsesActualItemsAndItemScopedPercent(t *testing.T) {
 	}
 	if events[0].ItemName != "DemoOptional" || events[0].DisplayName != "DemoOptional" {
 		t.Fatalf("queued requested-item identity missing: %#v", events[0])
+	}
+}
+
+// TestOperationProgressSkipsOtherPendingItems: a run reconciles every item, so
+// one left pending (a failing install retried each run) is worked on in the run
+// a user's install triggers. Its records must stay off that operation, or the
+// card reads "Installing Demo Failing… 50%".
+func TestOperationProgressSkipsOtherPendingItems(t *testing.T) {
+	sr := newServiceRunner(config.Configuration{}, noopRun)
+	const operationID = "op-unrelated"
+	sr.registerTrackedOperation("DemoOptional", "", CommandResponse{OperationID: operationID})
+
+	emit := sr.operationProgressCallback(operationID, "DemoOptional")
+	failing := catalog.Item{Name: "DemoFailing", DisplayName: "Demo Failing"}
+	emit(failing, nil, "downloading", 0, "Demo Failing")
+	emit(catalog.Item{Name: "FailingDep"}, []string{"DemoFailing"}, "installing", 50, "")
+	emit(failing, nil, "installing", 50, "")
+	emit(failing, nil, "failed", 50, "exit status 1")
+	emit(catalog.Item{Name: "DemoOptional", DisplayName: "Demo Optional"}, nil, "installing", 50, "")
+
+	events, _, _ := sr.snapshotTrackedOperation(operationID)
+	var got []string
+	for _, ev := range events {
+		got = append(got, ev.ItemName+":"+ev.State)
+	}
+	want := []string{"DemoOptional:Queued", "DemoOptional:Installing"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("records = %v, want %v", got, want)
 	}
 }
 

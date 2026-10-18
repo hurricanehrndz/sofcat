@@ -913,7 +913,7 @@ func TestProgressEvents(t *testing.T) {
 	r := newTestRunner()
 
 	var events, messages []string
-	r.Emit = func(item catalog.Item, state string, percent int, message string) {
+	r.Emit = func(item catalog.Item, _ []string, state string, percent int, message string) {
 		events = append(events, fmt.Sprintf("%s:%d", state, percent))
 		messages = append(messages, message)
 	}
