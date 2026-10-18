@@ -3,7 +3,7 @@
 ## Environment
 
 Tools come from [mise](https://mise.jdx.dev): `mise install` reads `mise.toml` and
-provides Go 1.26, Node 22, `just`, `prek`, `golangci-lint`, `actionlint`, and
+provides Go 1.27, Node 24, `just`, `prek`, `golangci-lint`, `actionlint`, and
 `treefmt` with `gofumpt` and `yamlfmt`. Activate mise in your shell (or prefix
 commands with `mise exec --`).
 `just setup` installs the frontend dependencies and the [prek](https://prek.j178.dev)

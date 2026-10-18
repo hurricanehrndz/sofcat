@@ -100,10 +100,10 @@ func getContext(ctx context.Context, url string) ([]byte, error) {
 		client = &http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: tlsConfig,
-				Dial: (&net.Dialer{
+				DialContext: (&net.Dialer{
 					Timeout:   10 * time.Second,
 					KeepAlive: 10 * time.Second,
-				}).Dial,
+				}).DialContext,
 				TLSHandshakeTimeout:   10 * time.Second,
 				ResponseHeaderTimeout: 10 * time.Second,
 				ExpectContinueTimeout: 1 * time.Second,
@@ -113,10 +113,10 @@ func getContext(ctx context.Context, url string) ([]byte, error) {
 		// Setup our http client without tls auth
 		// Defining the transport separately so we can add a `file://` protocol
 		transport := &http.Transport{
-			Dial: (&net.Dialer{
+			DialContext: (&net.Dialer{
 				Timeout:   10 * time.Second,
 				KeepAlive: 10 * time.Second,
-			}).Dial,
+			}).DialContext,
 			TLSHandshakeTimeout:   10 * time.Second,
 			ResponseHeaderTimeout: 10 * time.Second,
 			ExpectContinueTimeout: 1 * time.Second,

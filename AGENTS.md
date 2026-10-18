@@ -79,7 +79,7 @@ installer puts them in `C:\Program Files\SofCat` and registers the service.
 
 - SofCat UI is a Wails v3 application (`package main` in `ui/`) inside
   this repository's root Go module. Its frontend is vanilla TypeScript + Vite.
-- Local tooling prerequisites: `mise install` (see `mise.toml`) supplies Go, Node 22,
+- Local tooling prerequisites: `mise install` (see `mise.toml`) supplies Go, Node 24,
   `just` and the lint and format tools. No other SDK is needed; the shipped Windows
   binary is a pure-Go cross-build.
 - Generated Wails TypeScript bindings under `ui/frontend/bindings/` are
