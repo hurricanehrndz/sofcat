@@ -39,6 +39,20 @@ production build first, then embeds `ui/frontend/dist`. No installer is
 produced by `just build`; `just msi` builds the installer with embala (see
 `installer/embala.toml`). Nothing is signed.
 
+## Releases
+
+Merging to `main` does not release. Push a `vMAJOR.MINOR.PATCH` tag on a commit
+that is on `main`:
+
+```sh
+git fetch origin && git tag v1.11.0 origin/main && git push origin v1.11.0
+```
+
+Build Release (`.github/workflows/build_release.yml`) builds the executables,
+MSI and makecatalogs at that tag, attaches them with a signed provenance bundle
+(`sofcat-<tag>.sigstore.json`) to a prerelease, then runs the released-binary
+integration tests on Windows. It refuses a tag whose commit is not on `main`.
+
 ## Cross-compilation: pure Go, no cgo
 
 The agent is pure Go — it has **zero cgo** (all Windows syscalls go through

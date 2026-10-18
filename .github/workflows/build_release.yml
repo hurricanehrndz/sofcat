@@ -1,24 +1,17 @@
 name: Build Release
-# Trigger on every main branch push
+# Cut a release by pushing a version tag for a commit on main:
+#   git tag v1.11.0 origin/main && git push origin v1.11.0
 on:
   push:
-    branches:
-      - main
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
 permissions:
   contents: read
 jobs:
   build:
     runs-on: ubuntu-latest
-    # The version comes from the latest tag, so builds must not overlap: two at
-    # once compute the same tag and the second fails to cut its release. A
-    # queued build replaced by a newer push is canceled; the newer release
-    # includes its commit. Only this job queues: integration runs after the
-    # release is cut.
-    concurrency:
-      group: build-release
-      cancel-in-progress: false
     permissions:
-      contents: write # push the version tag and cut the release
+      contents: write # cut the release
       id-token: write # sign the provenance with Sigstore
       attestations: write # store the provenance attestation
     steps:
@@ -26,21 +19,18 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
-      - name: Create version tag
-        id: create_tag
-        uses: paulhatch/semantic-version@a8f8f59fd7f0625188492e945240f12d7ad2dca3 # v5.4.0
-        with:
-          tag_prefix: "v"
-          major_pattern: "(MAJOR)"
-          minor_pattern: "/[\\s]*/"
-          version_format: "${major}.${minor}.${patch}"
-          namespace: ''
-          bump_each_commit: false
+          persist-credentials: false
+      - name: Require a commit on main
+        run: |
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" FETCH_HEAD ||
+            { echo "::error::$GITHUB_REF_NAME is not on main"; exit 1; }
       - name: Install toolchain
         uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2.4.4
+        with:
+          cache: false # a release builds from fresh tools, not a restored cache
       - name: Build executables, MSI and makecatalogs
-        run: |
-          just version=${{ steps.create_tag.outputs.version_tag }} msi makecatalogs
+        run: just version="$GITHUB_REF_NAME" msi makecatalogs
       # SLSA build provenance for every release file, also attached to the
       # release so it can be checked offline:
       #   gh attestation verify <file> -R hurricanehrndz/sofcat --bundle sofcat-<tag>.sigstore.json
@@ -56,8 +46,7 @@ jobs:
       - name: Stage provenance bundle
         env:
           BUNDLE: ${{ steps.attest.outputs.bundle-path }}
-          TAG: ${{ steps.create_tag.outputs.version_tag }}
-        run: cp "$BUNDLE" "build/sofcat-${TAG}.sigstore.json"
+        run: cp "$BUNDLE" "build/sofcat-${GITHUB_REF_NAME}.sigstore.json"
       - name: Upload executables workflow artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -74,9 +63,7 @@ jobs:
           allowUpdates: false
           prerelease: true
           artifacts: "./build/sofcat.exe,./build/sofcat-ui.exe,./build/sofcat-*.msi,./build/makecatalogs-*,./build/sofcat-*.sigstore.json"
-          tag: ${{ steps.create_tag.outputs.version_tag }}
-          # Tag the commit that was built, not wherever main points by now.
-          commit: ${{ github.sha }}
+          tag: ${{ github.ref_name }}
           token: ${{ secrets.GITHUB_TOKEN }}
   integration:
     name: Released-binary integration
