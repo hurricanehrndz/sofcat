@@ -3,10 +3,13 @@
 ## Environment
 
 Tools come from [mise](https://mise.jdx.dev): `mise install` reads `mise.toml` and
-provides Go 1.26, Node 22, `just`, `golangci-lint`, `treefmt` with `gofumpt` and
-`yamlfmt`. Activate mise in your shell (or prefix commands with `mise exec --`).
-`just setup` installs the frontend dependencies and a pre-commit hook that runs
-`just pre-commit` (format check plus lint).
+provides Go 1.26, Node 22, `just`, `prek`, `golangci-lint`, `actionlint`, and
+`treefmt` with `gofumpt` and `yamlfmt`. Activate mise in your shell (or prefix
+commands with `mise exec --`).
+`just setup` installs the frontend dependencies and the [prek](https://prek.j178.dev)
+pre-commit hook from `prek.toml`: repository hygiene checks, `treefmt`,
+`golangci-lint` for Linux and Windows, and `actionlint`. `just pre-commit` runs
+them on every file.
 
 The Windows binaries cross-compile with no cgo, so `just build` needs nothing
 else. Compiling or testing the `ui` package for the host (`just test`,

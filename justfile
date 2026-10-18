@@ -13,13 +13,14 @@ vm_dir := manual_test_dir / "vm"
 default:
     @just --list
 
-# One-time contributor setup: frontend deps and the pre-commit hook.
+# One-time contributor setup: frontend deps and the prek pre-commit hook
+# (prek.toml). --force replaces a hook left by an older setup.
 setup: ui-install
-    printf '#!/bin/sh\nexec just pre-commit\n' > .git/hooks/pre-commit
-    chmod +x .git/hooks/pre-commit
+    prek install --force
 
-# What the pre-commit hook runs.
-pre-commit: fmt-check lint
+# Every pre-commit hook, on every file rather than only staged ones.
+pre-commit:
+    prek run --all-files
 
 # Frontend dependencies.
 ui-install:
