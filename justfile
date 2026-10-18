@@ -45,7 +45,7 @@ ui-assets: ui-install
 ui-bindings-check:
     rm -rf build/ui-bindings-check
     mkdir -p build
-    cd ui && go run github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha2.117 generate bindings -clean -ts -noevents -d ../build/ui-bindings-check .
+    cd ui && go run github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.29 generate bindings -clean -ts -noevents -d ../build/ui-bindings-check .
     diff -ru ui/frontend/bindings build/ui-bindings-check
 
 # Type check plus committed-binding verification.
