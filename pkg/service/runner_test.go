@@ -352,7 +352,7 @@ func TestOperationProgressUsesActualItemsAndItemScopedPercent(t *testing.T) {
 	const operationID = "op-progress"
 	sr.registerTrackedOperation("DemoOptional", "", CommandResponse{OperationID: operationID})
 
-	emit := sr.operationProgressCallback(operationID, "DemoOptional")
+	emit := sr.operationProgressCallback()
 	dep := []string{"DemoOptional"}
 	updater := catalog.Item{Name: "DemoUpdater", DisplayName: "Demo Updater", UpdateFor: []string{"DemoOptional"}}
 	emit(catalog.Item{Name: "DemoDependency", DisplayName: "Demo Dependency"}, dep, "downloading", 0, "download")
@@ -411,7 +411,7 @@ func TestOperationProgressSkipsOtherPendingItems(t *testing.T) {
 	const operationID = "op-unrelated"
 	sr.registerTrackedOperation("DemoOptional", "", CommandResponse{OperationID: operationID})
 
-	emit := sr.operationProgressCallback(operationID, "DemoOptional")
+	emit := sr.operationProgressCallback()
 	failing := catalog.Item{Name: "DemoFailing", DisplayName: "Demo Failing"}
 	emit(failing, nil, "downloading", 0, "Demo Failing")
 	emit(catalog.Item{Name: "FailingDep"}, []string{"DemoFailing"}, "installing", 50, "")
@@ -427,6 +427,38 @@ func TestOperationProgressSkipsOtherPendingItems(t *testing.T) {
 	want := []string{"DemoOptional:Queued", "DemoOptional:Installing"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("records = %v, want %v", got, want)
+	}
+}
+
+// TestOperationProgressReachesOtherOpenOperation: when the run one request
+// scheduled works on an item another request is still waiting for, that item's
+// card moves along instead of reading "Waiting…" until its own run.
+func TestOperationProgressReachesOtherOpenOperation(t *testing.T) {
+	sr := newServiceRunner(config.Configuration{}, noopRun)
+	sr.registerTrackedOperation("DemoOptional", "", CommandResponse{OperationID: "op-x"})
+	sr.registerTrackedOperation("DemoOther", "", CommandResponse{OperationID: "op-z"})
+	sr.registerTrackedOperation("DemoFailing", "", CommandResponse{OperationID: "op-done"})
+	sr.appendOperationEvent("op-done", OperationStatus{State: "Failed"})
+
+	emit := sr.operationProgressCallback()
+	emit(catalog.Item{Name: "DemoOther"}, nil, "installing", 50, "")
+	emit(catalog.Item{Name: "OtherDep"}, []string{"DemoOther"}, "installing", 50, "")
+	emit(catalog.Item{Name: "DemoFailing"}, nil, "failed", 50, "exit status 1")
+	emit(catalog.Item{Name: "DemoOptional"}, nil, "installing", 50, "")
+
+	for id, want := range map[string][]string{
+		"op-x":    {"DemoOptional:Queued", "DemoOptional:Installing"},
+		"op-z":    {"DemoOther:Queued", "DemoOther:Installing", "OtherDep:Installing"},
+		"op-done": {"DemoFailing:Queued", "DemoFailing:Failed"},
+	} {
+		events, _, _ := sr.snapshotTrackedOperation(id)
+		var got []string
+		for _, ev := range events {
+			got = append(got, ev.ItemName+":"+ev.State)
+		}
+		if !slices.Equal(got, want) {
+			t.Errorf("%s records = %v, want %v", id, got, want)
+		}
 	}
 }
 
