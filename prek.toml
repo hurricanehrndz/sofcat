@@ -1,0 +1,34 @@
+# Git hooks, installed by `just setup` (prek install). Built-in and local hooks
+# only: nothing is fetched from a hook repository, and the tools come from
+# mise.toml. `just pre-commit` runs the same checks on every file.
+#:schema https://www.schemastore.org/prek.json
+
+[[repos]]
+repo = "builtin"
+hooks = [
+    { id = "no-commit-to-branch", args = ["--branch", "main"] },
+    { id = "check-merge-conflict" },
+    { id = "check-added-large-files" },
+    # pkg/download's TLS tests use throwaway keys.
+    { id = "detect-private-key", exclude = '^pkg/download/testdata/' },
+    # SofCat is checked out and built on Windows too.
+    { id = "check-case-conflict" },
+    { id = "check-illegal-windows-names" },
+    { id = "check-yaml" },
+    { id = "check-toml" },
+    { id = "check-json", exclude = '(^|/)tsconfig[^/]*\.json$' },
+    # Fixtures are byte-exact (some are hash-pinned in catalogs) and the Wails
+    # bindings are generated, so the fixers leave them alone.
+    { id = "end-of-file-fixer", exclude = '(^|/)(testdata|fixtures)/|^ui/frontend/bindings/' },
+    { id = "trailing-whitespace", exclude = '(^|/)(testdata|fixtures)/|^ui/frontend/bindings/', args = ["--markdown-linebreak-ext=md"] },
+]
+
+[[repos]]
+repo = "local"
+hooks = [
+    # treefmt.toml decides which formatter owns which file.
+    { id = "treefmt", name = "treefmt", entry = "treefmt --fail-on-change --no-cache", language = "system", require_serial = true },
+    # Linux and Windows builds, as in CI; packages, not files, so it runs once.
+    { id = "golangci-lint", name = "golangci-lint", entry = "just lint", language = "system", files = '(\.go|^go\.(mod|sum)|^\.golangci\.yml)$', pass_filenames = false },
+    { id = "actionlint", name = "actionlint", entry = "actionlint", language = "system", files = '^\.github/workflows/.*\.ya?ml$' },
+]

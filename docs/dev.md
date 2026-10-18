@@ -3,10 +3,13 @@
 ## Environment
 
 Tools come from [mise](https://mise.jdx.dev): `mise install` reads `mise.toml` and
-provides Go 1.26, Node 22, `just`, `golangci-lint`, `treefmt` with `gofumpt` and
-`yamlfmt`. Activate mise in your shell (or prefix commands with `mise exec --`).
-`just setup` installs the frontend dependencies and a pre-commit hook that runs
-`just pre-commit` (format check plus lint).
+provides Go 1.26, Node 22, `just`, `prek`, `golangci-lint`, `actionlint`, and
+`treefmt` with `gofumpt` and `yamlfmt`. Activate mise in your shell (or prefix
+commands with `mise exec --`).
+`just setup` installs the frontend dependencies and the [prek](https://prek.j178.dev)
+pre-commit hook from `prek.toml`: repository hygiene checks, `treefmt`,
+`golangci-lint` for Linux and Windows, and `actionlint`. `just pre-commit` runs
+them on every file.
 
 The Windows binaries cross-compile with no cgo, so `just build` needs nothing
 else. Compiling or testing the `ui` package for the host (`just test`,
@@ -35,6 +38,20 @@ A normal `just build` produces **both** raw Windows executables:
 production build first, then embeds `ui/frontend/dist`. No installer is
 produced by `just build`; `just msi` builds the installer with embala (see
 `installer/embala.toml`). Nothing is signed.
+
+## Releases
+
+Merging to `main` does not release. Push a `vMAJOR.MINOR.PATCH` tag on a commit
+that is on `main`:
+
+```sh
+git fetch origin && git tag v1.11.0 origin/main && git push origin v1.11.0
+```
+
+Build Release (`.github/workflows/build_release.yml`) builds the executables,
+MSI and makecatalogs at that tag, attaches them with a signed provenance bundle
+(`sofcat-<tag>.sigstore.json`) to a prerelease, then runs the released-binary
+integration tests on Windows. It refuses a tag whose commit is not on `main`.
 
 ## Cross-compilation: pure Go, no cgo
 

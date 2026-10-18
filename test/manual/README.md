@@ -36,7 +36,6 @@ This creates:
 - `build/manual-test/vm/bootstrap-vm-full.ps1`
 - `build/manual-test/vm/bootstrap-vm-full.bat` (URL stamped automatically)
 - `build/manual-test/vm/run-sofcat-check.bat`
-- `build/manual-test/vm/run-release-integration.bat`
 - `build/manual-test/vm/base-url.txt` (resolved URL used for stamping)
 
 `just bootstrap` auto-detects a URL like `http://<your-mac-ip>:8080/`.
@@ -91,27 +90,21 @@ Optional switches:
 
 `-C` runs check-only mode so you can quickly validate config/flow without installing packages.
 
-## 5) Run release integration script from VM
+## 5) Run the release integration tests on the VM
 
-From repo root on the VM:
+CI runs these on every PR (`windows-integration-tests.yml`) and every release
+(`windows-release-integration.yml`). To run them by hand from a checkout on a
+disposable VM with Go and the Windows SDK (MakeAppx, signtool), in an
+elevated PowerShell:
 
-```bat
-.\build\manual-test\vm\run-release-integration.bat
+```powershell
+$thumbprint = ./test/integration/new-sideload-cert.ps1
+./test/integration/prepare-release-integration.ps1 -WorkRoot C:\sofcat-it -MsixCertThumbprint $thumbprint
+./test/integration/run-release-integration.ps1 -WorkRoot C:\sofcat-it -SofCatExePath C:\path\to\sofcat.exe
 ```
 
-This helper now runs both phases in order:
-- `test/integration/prepare-release-integration.ps1`
-- `test/integration/run-release-integration.ps1`
-
-Recommended flow first:
-
-```bat
-.\build\manual-test\vm\bootstrap-vm-full.bat
-```
-
-Optional args:
-- `.\build\manual-test\vm\run-release-integration.bat C:\path\to\sofcat.exe`
-- `.\build\manual-test\vm\run-release-integration.bat C:\path\to\sofcat.exe C:\temp\sofcat-release-integration`
+`new-sideload-cert.ps1` trusts a throwaway certificate machine-wide so the
+msix fixtures install; do not run it on a machine you keep.
 
 ## Chrome end-to-end loop (local file:// repo)
 
