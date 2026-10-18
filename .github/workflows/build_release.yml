@@ -26,7 +26,7 @@ jobs:
           git merge-base --is-ancestor "$GITHUB_SHA" FETCH_HEAD ||
             { echo "::error::$GITHUB_REF_NAME is not on main"; exit 1; }
       - name: Install toolchain
-        uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2.4.4
+        uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8 # v5.1.2
         with:
           cache: false # a release builds from fresh tools, not a restored cache
       - name: Build executables, MSI and makecatalogs
