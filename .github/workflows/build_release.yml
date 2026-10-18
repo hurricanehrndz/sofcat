@@ -11,6 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # push the version tag and cut the release
+      id-token: write # sign the provenance with Sigstore
+      attestations: write # store the provenance attestation
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -31,6 +33,23 @@ jobs:
       - name: Build executables, MSI and makecatalogs
         run: |
           just version=${{ steps.create_tag.outputs.version_tag }} msi makecatalogs
+      # SLSA build provenance for every release file, also attached to the
+      # release so it can be checked offline:
+      #   gh attestation verify <file> -R hurricanehrndz/sofcat --bundle sofcat-<tag>.sigstore.json
+      - name: Attest build provenance
+        id: attest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            build/sofcat.exe
+            build/sofcat-ui.exe
+            build/sofcat-*.msi
+            build/makecatalogs-*
+      - name: Stage provenance bundle
+        env:
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+          TAG: ${{ steps.create_tag.outputs.version_tag }}
+        run: cp "$BUNDLE" "build/sofcat-${TAG}.sigstore.json"
       - name: Upload executables workflow artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -46,7 +65,7 @@ jobs:
         with:
           allowUpdates: false
           prerelease: true
-          artifacts: "./build/sofcat.exe,./build/sofcat-ui.exe,./build/sofcat-*.msi,./build/makecatalogs-*"
+          artifacts: "./build/sofcat.exe,./build/sofcat-ui.exe,./build/sofcat-*.msi,./build/makecatalogs-*,./build/sofcat-*.sigstore.json"
           tag: ${{ steps.create_tag.outputs.version_tag }}
           token: ${{ secrets.GITHUB_TOKEN }}
   integration:
