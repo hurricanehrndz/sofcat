@@ -13,13 +13,14 @@ vm_dir := manual_test_dir / "vm"
 default:
     @just --list
 
-# One-time contributor setup: frontend deps and the pre-commit hook.
+# One-time contributor setup: frontend deps and the prek pre-commit hook
+# (prek.toml). --force replaces a hook left by an older setup.
 setup: ui-install
-    printf '#!/bin/sh\nexec just pre-commit\n' > .git/hooks/pre-commit
-    chmod +x .git/hooks/pre-commit
+    prek install --force
 
-# What the pre-commit hook runs.
-pre-commit: fmt-check lint
+# Every pre-commit hook, on every file rather than only staged ones.
+pre-commit:
+    prek run --all-files
 
 # Frontend dependencies.
 ui-install:
@@ -106,8 +107,7 @@ bootstrap base_url="": build manual-test-server
     rm -rf {{server_root}}/packages/scripts
     cp -R test/manual/fixtures/selfserve/packages/scripts {{server_root}}/packages/scripts
     cp test/manual/bootstrap-vm.ps1 test/manual/bootstrap-vm-full.ps1 \
-       test/manual/templates/run-sofcat-check.bat \
-       test/manual/run-release-integration.bat {{vm_dir}}/
+       test/manual/templates/run-sofcat-check.bat {{vm_dir}}/
     @base_url="{{base_url}}"; \
     if [ -z "$base_url" ]; then \
       case "$(uname)" in \

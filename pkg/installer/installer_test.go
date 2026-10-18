@@ -158,6 +158,7 @@ func TestHelperProcess(t *testing.T) {
 	}
 	// print the command we received
 	fmt.Print(os.Args[3:])
+	fmt.Fprint(os.Stderr, os.Getenv("GO_HELPER_PROCESS_STDERR"))
 	if os.Getenv("GO_HELPER_PROCESS_FAIL") == "1" {
 		os.Exit(1)
 	}
@@ -215,6 +216,40 @@ func TestRunCommand(t *testing.T) {
 
 	if !structsMatch {
 		t.Errorf("\nExpected: %#v\nReceived: %#v", expectedCmd, actualCmd)
+	}
+}
+
+// A failed command's error carries its stderr: PowerShell reports why
+// Add-AppxProvisionedPackage refused a package only there, and "exit status 1"
+// alone left a failed msix install undiagnosable.
+func TestRunCommandFailureIncludesStderr(t *testing.T) {
+	const reason = "Deployment failed with HRESULT: 0x800B0109"
+	execCommand = func(command string, args ...string) *exec.Cmd {
+		cmd := fakeExecCommandFail(command, args...)
+		cmd.Env = append(cmd.Env, "GO_HELPER_PROCESS_STDERR="+reason)
+		return cmd
+	}
+	defer func() { execCommand = origExec }()
+
+	_, err := runCommand("powershell.exe", []string{"Add-AppxProvisionedPackage"})
+
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) || !strings.Contains(err.Error(), reason) {
+		t.Fatalf("err = %v, want the exit error with %q", err, reason)
+	}
+}
+
+func TestWithStderrKeepsTheEnd(t *testing.T) {
+	base := errors.New("exit status 1")
+	long := strings.Repeat("x", maxStderrTail) + "the actual reason"
+
+	err := withStderr(base, []byte(long))
+
+	if !errors.Is(err, base) || !strings.HasSuffix(err.Error(), "the actual reason") || len(err.Error()) > maxStderrTail+64 {
+		t.Fatalf("err = %.80q... (len %d), want the tail of stderr", err.Error(), len(err.Error()))
+	}
+	if got := withStderr(base, []byte(" \r\n")); got.Error() != base.Error() {
+		t.Fatalf("blank stderr changed the error: %v", got)
 	}
 }
 
