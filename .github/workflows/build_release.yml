@@ -6,15 +6,17 @@ on:
       - main
 permissions:
   contents: read
-# The version comes from the latest tag, so runs must not overlap: two at once
-# compute the same tag and the second fails to cut its release. A queued run
-# replaced by a newer push is canceled; the newer release includes its commit.
-concurrency:
-  group: build-release
-  cancel-in-progress: false
 jobs:
   build:
     runs-on: ubuntu-latest
+    # The version comes from the latest tag, so builds must not overlap: two at
+    # once compute the same tag and the second fails to cut its release. A
+    # queued build replaced by a newer push is canceled; the newer release
+    # includes its commit. Only this job queues: integration runs after the
+    # release is cut.
+    concurrency:
+      group: build-release
+      cancel-in-progress: false
     permissions:
       contents: write # push the version tag and cut the release
       id-token: write # sign the provenance with Sigstore
