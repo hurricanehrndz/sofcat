@@ -86,7 +86,7 @@ installer puts them in `C:\Program Files\SofCat` and registers the service.
   committed and must never be hand-edited. Regenerate them from `ui/` with
   the pinned command and commit the result:
 
-      go run github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.29 generate bindings -clean -ts -noevents -d frontend/bindings .
+      go run github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.34 generate bindings -clean -ts -noevents -d frontend/bindings .
 
   `just ui-lint` fails when the committed tree and a fresh generation differ.
 - The service speaks JSON-RPC 2.0 (newline-delimited, one request per connection, plus
