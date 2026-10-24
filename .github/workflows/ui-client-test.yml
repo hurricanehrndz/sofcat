@@ -42,7 +42,7 @@ jobs:
           go-version-file: go.mod
           cache: true
       - name: Set up Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
       - name: Install frontend dependencies
@@ -50,7 +50,7 @@ jobs:
         run: npm ci
       - name: Regenerate Wails bindings
         working-directory: ui
-        run: go run github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.29 generate bindings -clean -ts -noevents -d frontend/bindings .
+        run: go run github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.34 generate bindings -clean -ts -noevents -d frontend/bindings .
       - name: Verify committed bindings are current
         run: |
           $changed = git status --porcelain -- ui/frontend/bindings

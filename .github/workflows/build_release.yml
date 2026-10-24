@@ -26,7 +26,7 @@ jobs:
           git merge-base --is-ancestor "$GITHUB_SHA" FETCH_HEAD ||
             { echo "::error::$GITHUB_REF_NAME is not on main"; exit 1; }
       - name: Install toolchain
-        uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8 # v5.1.2
+        uses: jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e # v5.2.3
         with:
           cache: false # a release builds from fresh tools, not a restored cache
       - name: Build executables, MSI and makecatalogs
@@ -48,7 +48,7 @@ jobs:
           BUNDLE: ${{ steps.attest.outputs.bundle-path }}
         run: cp "$BUNDLE" "build/sofcat-${GITHUB_REF_NAME}.sigstore.json"
       - name: Upload executables workflow artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sofcat-exe-release
           path: |
