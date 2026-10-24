@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"runtime/debug"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -667,7 +668,7 @@ func (sr *serviceRunner) scheduleRunAfterMutation(ctx context.Context, action, i
 	sr.wg.Add(1)
 	go func() {
 		defer sr.wg.Done()
-		run := Command{Action: actionRun, progress: sr.operationProgressCallback(operationID)}
+		run := Command{Action: actionRun, progress: sr.operationProgressCallback()}
 		if requestedBy != "" {
 			run.requestedBy = map[string]string{itemName: requestedBy}
 		}
@@ -702,8 +703,15 @@ func (sr *serviceRunner) scheduleRunAfterMutation(ctx context.Context, action, i
 	}()
 }
 
-func (sr *serviceRunner) operationProgressCallback(operationID string) installer.ProgressFn {
-	return func(item catalog.Item, state string, percent int, message string) {
+// operationProgressCallback records a run's progress on the open operations it
+// concerns. A run reconciles every item, so a record goes to each open
+// operation whose item it is, or whose install or removal brings it along as a
+// dependency or updater: the operation that scheduled the run, and any other
+// still waiting for its own. Records no open operation asked for, such as a
+// failed install retried every run, go only to the service log; on another
+// item's card they would read as that item's progress.
+func (sr *serviceRunner) operationProgressCallback() installer.ProgressFn {
+	return func(item catalog.Item, pulledBy []string, state string, percent int, message string) {
 		mappedState := ""
 		switch state {
 		case "downloading":
@@ -719,13 +727,21 @@ func (sr *serviceRunner) operationProgressCallback(operationID string) installer
 		default:
 			return
 		}
-		sr.appendOperationEvent(operationID, OperationStatus{
-			ItemName:        item.Name,
-			DisplayName:     orDefault(item.DisplayName, item.Name),
-			State:           mappedState,
-			ProgressPercent: percent,
-			Message:         message,
-		})
+		sr.operationsMu.Lock()
+		defer sr.operationsMu.Unlock()
+		for operationID, op := range sr.operations {
+			name := op.requestedItemName
+			if op.done || item.Name != name && !slices.Contains(pulledBy, name) && !slices.Contains(item.UpdateFor, name) {
+				continue
+			}
+			sr.appendOperationEventLocked(operationID, OperationStatus{
+				ItemName:        item.Name,
+				DisplayName:     orDefault(item.DisplayName, item.Name),
+				State:           mappedState,
+				ProgressPercent: percent,
+				Message:         message,
+			})
+		}
 	}
 }
 

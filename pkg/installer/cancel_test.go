@@ -43,7 +43,7 @@ func TestInstallSkipsItemWithdrawnBeforeItStarts(t *testing.T) {
 	r := newTestRunner()
 	r.Cancels = NewCancels()
 	var events []string
-	r.Emit = func(_ catalog.Item, state string, _ int, _ string) { events = append(events, state) }
+	r.Emit = func(_ catalog.Item, _ []string, state string, _ int, _ string) { events = append(events, state) }
 
 	if !r.Cancels.Cancel("GoogleChrome") {
 		t.Fatal("Cancel refused an item no run has touched")

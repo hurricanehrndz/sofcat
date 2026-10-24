@@ -168,3 +168,39 @@ func TestExpandUninstallsWithUpdaters(t *testing.T) {
 		t.Fatalf("cycle expansion\nExpected: %#v\nActual: %#v", want, got)
 	}
 }
+
+// TestInstallsRecordWhoPulledEachItemIn verifies the walk names, while each
+// item installs, the items whose install pulled it in, so the service can tell
+// a requested item's dependencies and updaters from other pending items.
+func TestInstallsRecordWhoPulledEachItemIn(t *testing.T) {
+	pulledBy := map[string][]string{}
+	installerInstall = func(r *installer.Runner, item catalog.Item, _ string) (string, error) {
+		pulledBy[item.Name] = append([]string{}, r.PulledBy...)
+		return "", nil
+	}
+	defer func() { installerInstall = origInstall }()
+
+	catalogs := map[int]map[string]catalog.Item{1: {
+		"App":       item("App", nil, []string{"Dep"}),
+		"Dep":       item("Dep", nil, nil),
+		"AppUpdate": item("AppUpdate", []string{"App"}, []string{"UpdateDep"}),
+		"UpdateDep": item("UpdateDep", nil, nil),
+		"Other":     item("Other", nil, nil),
+	}}
+	r := &installer.Runner{Report: report.New()}
+	Installs([]string{"App", "Other"}, catalogs, r, UpdaterIndex(catalogs))
+
+	want := map[string][]string{
+		"Dep":       {"App"},
+		"App":       {},
+		"AppUpdate": {"App"},
+		"UpdateDep": {"App", "AppUpdate"},
+		"Other":     {},
+	}
+	if !reflect.DeepEqual(want, pulledBy) {
+		t.Fatalf("pulled by\nExpected: %#v\nActual: %#v", want, pulledBy)
+	}
+	if len(r.PulledBy) != 0 {
+		t.Fatalf("PulledBy left set after the walk: %v", r.PulledBy)
+	}
+}
