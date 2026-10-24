@@ -6,7 +6,7 @@ toolchain go1.27.2
 
 require (
 	github.com/hashicorp/go-version v1.9.0
-	github.com/wailsapp/wails/v3 v3.0.0-beta.29
+	github.com/wailsapp/wails/v3 v3.0.0-beta.34
 	go.yaml.in/yaml/v4 v4.0.0-rc.6
 	golang.org/x/sys v0.49.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
