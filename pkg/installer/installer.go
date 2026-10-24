@@ -29,9 +29,10 @@ var ErrBlockingApps = errors.New("blocking applications running")
 var runningBlockingApps = status.RunningBlockingApps
 
 // ProgressFn receives coarse per-item progress events. States emitted per
-// item: `downloading`, `installing`/`removing`, `done`/`failed`. The service
+// item: `downloading`, `installing`/`removing`, `done`/`failed`. pulledBy is
+// Runner.PulledBy at the time; the callback must not keep it. The service
 // attaches an operation-scoped callback for self-service mutations.
-type ProgressFn func(item catalog.Item, state string, percent int, message string)
+type ProgressFn func(item catalog.Item, pulledBy []string, state string, percent int, message string)
 
 // Runner is the run-scoped install context (K7: no cross-run package globals)
 type Runner struct {
@@ -42,12 +43,16 @@ type Runner struct {
 	URLPackages string
 	CachePath   string
 	CheckOnly   bool
+
+	// PulledBy names the items, outermost first, whose install is pulling in
+	// the current one as a dependency or updater; empty for a top-level item.
+	PulledBy []string
 }
 
 // emit sends a progress event if a sink is attached
 func (r *Runner) emit(item catalog.Item, state string, percent int, message string) {
 	if r.Emit != nil {
-		r.Emit(item, state, percent, message)
+		r.Emit(item, r.PulledBy, state, percent, message)
 	}
 }
 

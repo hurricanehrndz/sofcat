@@ -185,9 +185,9 @@ func TestValidateCommandInstallItemRequiresOneArgument(t *testing.T) {
 
 func TestExecuteCommandRunPassesProgressCallback(t *testing.T) {
 	called := false
-	progress := func(catalog.Item, string, int, string) { called = true }
+	progress := func(catalog.Item, []string, string, int, string) { called = true }
 	_, err := executeCommand(config.Configuration{}, Command{Action: actionRun, progress: progress}, func(_ config.Configuration, got installer.ProgressFn, _ *installer.Cancels) (*report.Report, error) {
-		got(catalog.Item{}, "installing", 50, "")
+		got(catalog.Item{}, nil, "installing", 50, "")
 		return nil, nil
 	})
 	if err != nil {
