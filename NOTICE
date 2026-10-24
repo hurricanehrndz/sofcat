@@ -1,0 +1,11 @@
+SofCat
+Copyright 2018-2026 Dustin Davis, Carlos Hernandez, and contributors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+SofCat is derived from Gorilla (https://github.com/1dustindavis/gorilla),
+Copyright 2018 Dustin Davis and contributors, licensed under the Apache
+License, Version 2.0.
+
+This product includes software developed by Kolide
+(pkg/version), Copyright (c) 2017 Kolide, licensed under the MIT License.
