@@ -788,10 +788,10 @@ func TestHalfSentRequestReleasesItsHandlerSlot(t *testing.T) {
 		t.Fatalf("send half a request: %v", err)
 	}
 
-	hungUp := make(chan error, 1)
+	hungUp := make(chan struct{})
 	go func() {
-		_, err := io.ReadAll(conn)
-		hungUp <- err
+		_, _ = io.ReadAll(conn)
+		close(hungUp)
 	}()
 	select {
 	case <-hungUp:
