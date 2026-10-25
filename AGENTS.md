@@ -81,7 +81,9 @@ installer puts them in `C:\Program Files\SofCat` and registers the service.
   this repository's root Go module. Its frontend is vanilla TypeScript + Vite.
 - Local tooling prerequisites: `mise install` (see `mise.toml`) supplies Go, Node 24,
   `just` and the lint and format tools. No other SDK is needed; the shipped Windows
-  binary is a pure-Go cross-build.
+  binary is a pure-Go cross-build. Native Linux builds of `ui/` need GTK 4 and
+  WebKitGTK 6.0; on nix, `.envrc` loads `flake.nix` for exactly those, and the
+  toolchain stays in mise.
 - Generated Wails TypeScript bindings under `ui/frontend/bindings/` are
   committed and must never be hand-edited. Regenerate them from `ui/` with
   the pinned command and commit the result:
