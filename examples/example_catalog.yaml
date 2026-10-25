@@ -78,6 +78,10 @@ vlc:
       - /L=1033
       - /S
     type: exe
+    # Non-zero exit codes that still count as success. exe has no defaults;
+    # msi and nupkg default to [1641, 3010] (restart required).
+    success_codes:
+      - 3010
   uninstaller:
     location: packages/apps/vlc/vlc-3.0.3-uninstall.exe
     hash: 676dcb69da99728feb8af3231e863dbb9639dc09f409749a74dd5c08dc2fb809
