@@ -134,6 +134,11 @@ just build   # build/sofcat.exe and build/sofcat-ui.exe
 just msi     # build/sofcat-<version>-x86_64.msi
 ```
 
+The repo's `.envrc` loads mise through direnv. On Linux with nix it also loads
+`flake.nix`, which only adds the GTK 4/WebKitGTK 6.0 libraries the UI package
+links against for native Linux builds and tests; on other distros install
+those from the package manager.
+
 Both executables are pure Go with no cgo, so they cross-compile from Linux or
 macOS. `just msi` uses [embala](https://github.com/hurricanehrndz/embala), so
 WiX isn't needed either. More in [docs/dev.md](docs/dev.md) and
