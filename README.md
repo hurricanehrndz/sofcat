@@ -47,7 +47,9 @@ What already works:
   a local named pipe, so nobody needs to elevate.
 - **Your branding.** Set the app's title, logo, accent colour and help link
   with policy registry values or `config.yaml`. See
-  [ui/README.md](ui/README.md#branding).
+  [ui/README.md](ui/README.md#branding). To ship it under your own name, icon,
+  service and installer, build a rebrand; see
+  [examples/brand/README.md](examples/brand/README.md).
 - **Inventory for osquery.** Every run writes a Munki-compatible
   `inventory.json`. See [docs/osquery-inventory.md](docs/osquery-inventory.md).
 - **`makecatalogs` anywhere.** Build catalogs on any OS, so your repo's CI

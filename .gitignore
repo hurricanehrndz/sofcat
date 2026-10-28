@@ -50,3 +50,8 @@ mise.local.toml
 
 # direnv (nix flake cache)
 .direnv/
+
+# Private brands for `just brand=branding/<name> build`; see examples/brand/
+/branding/
+# The brand icon `just brand=…` stages for the UI's brand build tag
+/ui/brand-icon.png

@@ -496,7 +496,7 @@ export function withFailure(view: ListView): ListView {
 export function bannerMessage(view: ListView, error: string): string {
   switch (view.source) {
     case "loading":
-      return "Connecting to the SofCat service…";
+      return `Connecting to the ${DEFAULT_PRODUCT} service…`;
     case "cache":
       return "Showing cached software. Refreshing…";
     case "live":
@@ -547,7 +547,9 @@ function formatSavedAt(savedAtUtc: string): string {
 // every field; these checks repeat the ones that guard what the WebView does
 // with a value (open a URL, build a data: URL, set a CSS colour).
 
-const DEFAULT_PRODUCT = "SofCat";
+// The build-time product name (VITE_PRODUCT_NAME, set by `just brand=…`). Node
+// tests have no import.meta.env and get the stock name.
+const DEFAULT_PRODUCT: string = import.meta.env?.VITE_PRODUCT_NAME ?? "SofCat";
 const DEFAULT_HELP_LABEL = "Get help";
 const LOGO_MIMES = new Set(["image/png", "image/jpeg", "image/svg+xml"]);
 
