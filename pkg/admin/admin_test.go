@@ -3,6 +3,7 @@ package admin
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
@@ -85,5 +86,35 @@ func TestCollectCatalogsMissingPackagesInfo(t *testing.T) {
 	repoPath := t.TempDir()
 	if _, err := CollectCatalogs(repoPath); err == nil {
 		t.Fatalf("expected error when packages-info is missing")
+	}
+}
+
+// A malformed installable_condition is caught when the catalog is built, not
+// discovered when agents silently refuse the item. The item stays in the
+// catalog: agents treat the condition as false, which is safe.
+func TestCollectCatalogsInvalidCondition(t *testing.T) {
+	repoPath := t.TempDir()
+	dir := filepath.Join(repoPath, "packages-info")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for name, cond := range map[string]string{"good": `arch == "arm64"`, "bad": `arch = "arm64"`} {
+		info := "item_name: " + name + "\ncatalog: base\ninstallable_condition: '" + cond + "'\ninstaller:\n  type: msi\n  location: x.msi\n"
+		if err := os.WriteFile(filepath.Join(dir, name+".yaml"), []byte(info), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	set, err := CollectCatalogs(repoPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(set.Problems) != 1 || !strings.Contains(set.Problems[0], "bad.yaml: invalid installable_condition") {
+		t.Errorf("problems = %v, want one for bad.yaml", set.Problems)
+	}
+	if got := set.Catalogs["base"]["good"].InstallableCondition; got != `arch == "arm64"` {
+		t.Errorf("good condition = %q, want it carried into the catalog", got)
+	}
+	if _, ok := set.Catalogs["base"]["bad"]; !ok {
+		t.Error("bad item dropped from the catalog")
 	}
 }

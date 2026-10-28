@@ -38,6 +38,8 @@ type planBuilder struct {
 	items       []report.PlanItem
 	seen        map[string]bool
 	warnings    []string
+	// conditions are the facts the run evaluated installable_condition against.
+	conditions map[string]any
 }
 
 func newPlanBuilder() *planBuilder {
@@ -48,15 +50,29 @@ func newPlanBuilder() *planBuilder {
 // catalog item the run acts on. Removals and updates that resolve to no valid
 // catalog item are skipped by the run without a record, so, as Munki does,
 // they are left out with a warning rather than reported pending forever.
-// Install-side items stay: the install walk records their failure.
+// Install-side items stay: the install walk records their failure. An item
+// this machine may not install (installable_condition) is skipped by the run
+// and left out with a warning.
 func (b *planBuilder) add(kind string, selfService bool, names ...string) {
 	for _, name := range names {
 		if name == "" || b.seen[name] {
 			continue
 		}
 		b.seen[name] = true
-		item, ok := process.ResolveItem(name, b.catalogs)
-		if !ok && (kind == report.KindManagedUninstall || kind == report.KindManagedUpdate) {
+		resolve := process.ResolveItem
+		if kind == report.KindManagedUninstall {
+			resolve = process.ResolveRemoval
+		}
+		item, err := resolve(name, b.catalogs)
+		if errors.Is(err, process.ErrNotInstallable) {
+			// The run skips it. An offered optional install the user has not
+			// chosen is simply not offered here, so it is not worth a warning.
+			if kind != report.KindOptionalInstall || selfService {
+				b.warnings = append(b.warnings, fmt.Sprintf("%s %s skipped: %v", kind, name, err))
+			}
+			continue
+		}
+		if err != nil && (kind == report.KindManagedUninstall || kind == report.KindManagedUpdate) {
 			b.warnings = append(b.warnings, fmt.Sprintf("%s %s skipped: not found or invalid in any catalog", kind, name))
 			continue
 		}
@@ -117,8 +133,8 @@ func (b *planBuilder) addAvailable(manifests []manifest.Item, checker *status.Ch
 				continue
 			}
 			b.add(report.KindOptionalInstall, false, name)
-			item, ok := process.ResolveItem(name, b.catalogs)
-			if !ok || scriptOnlyCheck(item) {
+			item, err := process.ResolveItem(name, b.catalogs)
+			if err != nil || scriptOnlyCheck(item) {
 				continue
 			}
 			installed, err := checker.CheckStatus(item, "uninstall", cachePath)
@@ -147,8 +163,8 @@ func (b *planBuilder) checkUpdates(run *report.Report, checker *status.Checker, 
 			!slices.ContainsFunc(run.NoActionItems, func(n report.NoActionItem) bool { return n.Name == pi.Name }) {
 			continue
 		}
-		item, ok := process.ResolveItem(pi.Name, b.catalogs)
-		if !ok {
+		item, err := process.ResolveItem(pi.Name, b.catalogs)
+		if err != nil {
 			continue
 		}
 		installed, err := checker.CheckStatus(item, "uninstall", cachePath)
@@ -174,6 +190,7 @@ func finishInventory(cfg config.Configuration, run *report.Report, b *planBuilde
 		CheckOnly:             cfg.CheckOnly,
 		Warnings:              b.warnings,
 		Items:                 b.items,
+		Conditions:            b.conditions,
 	}
 	if runErr != nil {
 		plan.Errors = append(plan.Errors, runErr.Error())

@@ -6,5 +6,7 @@ optional_installs:
   - DemoBlocked
   - DemoFailing
   - DemoDefault
+  - DemoNotHere
+  - DemoLabOnly
 default_installs:
   - DemoDefault

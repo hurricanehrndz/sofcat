@@ -94,9 +94,9 @@ func ReconcileSelfServe(selfServe *manifest.Item, manifests []manifest.Item) (in
 func PruneSelfServeUninstalls(selfServe *manifest.Item, catalogsMap map[int]map[string]catalog.Item, checker *status.Checker, cachePath string) (changed bool) {
 	kept := make([]string, 0, len(selfServe.Uninstalls))
 	for _, name := range selfServe.Uninstalls {
-		item, ok := firstItem(name, catalogsMap)
+		item, ok := removalItem(name, catalogsMap)
 		if !ok {
-			// firstItem already warned; keep the entry so it can be retried.
+			// removalItem already warned; keep the entry so it can be retried.
 			kept = append(kept, name)
 			continue
 		}

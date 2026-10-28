@@ -7,6 +7,8 @@ icon_name: googlechrome.png
 restart_action: None
 # update_for: names of items this package is an update for
 # blocking_apps: process image names, case-insensitive, trailing `.exe` optional
+# installable_condition: install only where this expression is true; see docs/conditions.md
+# installable_condition: arch == "amd64" && os_build >= 19045
 blocking_apps:
   - chrome
 check:

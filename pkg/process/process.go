@@ -17,38 +17,71 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/report"
 )
 
-// firstItem returns the first valid occurrence of an item in a map of catalogs.
-// It logs warnings for invalid/missing items and returns false when no valid item is found.
-func firstItem(itemName string, catalogsMap map[int]map[string]catalog.Item) (catalog.Item, bool) {
-	item, invalidReasons, ok := resolveItem(itemName, catalogsMap)
-	if ok {
-		return item, true
-	}
+// ErrNotInstallable means every valid occurrence of an item has an
+// installable_condition this machine fails.
+var ErrNotInstallable = errors.New("not installable on this machine")
 
-	// No valid item found. Log why and continue processing other items.
-	if len(invalidReasons) > 0 {
+// errNotResolved means no catalog has a valid occurrence of an item.
+var errNotResolved = errors.New("not found or invalid in any catalog")
+
+// firstItem returns the first valid occurrence of an item that may be
+// installed on this machine. It logs why there is none and returns false.
+func firstItem(itemName string, catalogsMap map[int]map[string]catalog.Item) (catalog.Item, bool) {
+	item, err := resolveLogged(itemName, catalogsMap, false)
+	return item, err == nil
+}
+
+// removalItem is firstItem for removing an item or checking whether it is on
+// disk. When no occurrence may be installed here, the first valid one still
+// serves, so an item stays removable after its installable_condition stops
+// holding.
+func removalItem(itemName string, catalogsMap map[int]map[string]catalog.Item) (catalog.Item, bool) {
+	item, err := resolveLogged(itemName, catalogsMap, true)
+	return item, err == nil
+}
+
+// resolveLogged resolves itemName and logs why it could not.
+func resolveLogged(itemName string, catalogsMap map[int]map[string]catalog.Item, removal bool) (catalog.Item, error) {
+	item, invalidReasons, err := resolveItem(itemName, catalogsMap, removal)
+	switch {
+	case err == nil:
+		return item, nil
+	case errors.Is(err, ErrNotInstallable):
+		slog.Warn("skipping item: not installable on this machine", "item", itemName, "reason", err)
+	case len(invalidReasons) > 0:
 		slog.Warn(
 			"skipping catalog item: missing required installer/uninstaller type/location fields",
 			"item", itemName,
 			"reasons", strings.Join(invalidReasons, "; "),
 		)
-		return catalog.Item{}, false
+	default:
+		slog.Warn("skipping item: not found in any catalog", "item", itemName)
 	}
-	slog.Warn("skipping item: not found in any catalog", "item", itemName)
-	return catalog.Item{}, false
+	return catalog.Item{}, err
 }
 
-// ResolveItem returns the catalog item the run acts on for itemName (the first
-// valid occurrence, as firstItem picks it) without logging. Callers that only
-// report on items use it so they agree with the run.
-func ResolveItem(itemName string, catalogsMap map[int]map[string]catalog.Item) (catalog.Item, bool) {
-	item, _, ok := resolveItem(itemName, catalogsMap)
-	return item, ok
+// ResolveItem returns the catalog item the run installs for itemName (the
+// first valid occurrence this machine may install, as firstItem picks it)
+// without logging. Callers that only report on items use it so they agree
+// with the run. The error wraps ErrNotInstallable when only an
+// installable_condition stands in the way.
+func ResolveItem(itemName string, catalogsMap map[int]map[string]catalog.Item) (catalog.Item, error) {
+	item, _, err := resolveItem(itemName, catalogsMap, false)
+	return item, err
 }
 
-// resolveItem finds the first valid occurrence of itemName and, when there is
-// none, the reasons each occurrence was invalid.
-func resolveItem(itemName string, catalogsMap map[int]map[string]catalog.Item) (catalog.Item, []string, bool) {
+// ResolveRemoval is ResolveItem for an item the run removes, as removalItem
+// picks it.
+func ResolveRemoval(itemName string, catalogsMap map[int]map[string]catalog.Item) (catalog.Item, error) {
+	item, _, err := resolveItem(itemName, catalogsMap, true)
+	return item, err
+}
+
+// resolveItem finds the first valid occurrence of itemName this machine may
+// install and, when there is none, the reasons each occurrence was invalid.
+// With removal set, an occurrence the installable_condition rejects serves
+// when there is nothing better.
+func resolveItem(itemName string, catalogsMap map[int]map[string]catalog.Item, removal bool) (catalog.Item, []string, error) {
 	// Get the keys in the map and sort them so we can loop over them in order
 	keys := make([]int, 0)
 	for k := range catalogsMap {
@@ -57,41 +90,68 @@ func resolveItem(itemName string, catalogsMap map[int]map[string]catalog.Item) (
 	sort.Ints(keys)
 
 	var invalidReasons []string
+	var notInstallable *catalog.Item
 
 	// loop through each catalog and return if we find a match
 	for _, k := range keys {
 		// If
 		if item, exists := catalogsMap[k][itemName]; exists {
-			// If it does exist, we should confirm it is a valid item
-			validInstallItem := (item.Installer.Type != "" && item.Installer.Location != "")
-			validUninstallItem := (item.Uninstaller.Type != "" && item.Uninstaller.Location != "") ||
-				item.Uninstaller.Type == "msix" ||
-				item.Installer.Type == "msix"
-
-			if validInstallItem || validUninstallItem {
-				return item, nil, true
+			missing := missingFields(item)
+			if missing == nil {
+				// A later catalog may hold a variant this machine can install.
+				if item.NotInstallable != "" {
+					if notInstallable == nil {
+						notInstallable = &item
+					}
+					continue
+				}
+				return item, nil, nil
 			}
 
-			missing := []string{}
-			if item.Installer.Type == "" {
-				missing = append(missing, "installer.type")
-			}
-			if item.Installer.Location == "" {
-				missing = append(missing, "installer.location")
-			}
-			if item.Uninstaller.Type == "" {
-				missing = append(missing, "uninstaller.type")
-			}
-			if item.Uninstaller.Location == "" {
-				missing = append(missing, "uninstaller.location")
-			}
 			invalidReasons = append(invalidReasons, fmt.Sprintf("catalog index %d missing required fields: %s", k, strings.Join(missing, ", ")))
 		}
 	}
-	return catalog.Item{}, invalidReasons, false
+	if notInstallable != nil {
+		if removal {
+			return *notInstallable, nil, nil
+		}
+		return catalog.Item{}, nil, fmt.Errorf("%w: %s", ErrNotInstallable, notInstallable.NotInstallable)
+	}
+	return catalog.Item{}, invalidReasons, errNotResolved
 }
 
-// Manifests iterates though the first manifest and any included manifests
+// missingFields lists the installer and uninstaller fields item lacks, or nil
+// when it can be installed or uninstalled. An msix item needs no location: it
+// is removed by package name.
+func missingFields(item catalog.Item) []string {
+	validInstallItem := (item.Installer.Type != "" && item.Installer.Location != "")
+	validUninstallItem := (item.Uninstaller.Type != "" && item.Uninstaller.Location != "") ||
+		item.Uninstaller.Type == "msix" ||
+		item.Installer.Type == "msix"
+	if validInstallItem || validUninstallItem {
+		return nil
+	}
+
+	missing := []string{}
+	if item.Installer.Type == "" {
+		missing = append(missing, "installer.type")
+	}
+	if item.Installer.Location == "" {
+		missing = append(missing, "installer.location")
+	}
+	if item.Uninstaller.Type == "" {
+		missing = append(missing, "uninstaller.type")
+	}
+	if item.Uninstaller.Location == "" {
+		missing = append(missing, "uninstaller.location")
+	}
+	return missing
+}
+
+// Manifests iterates though the first manifest and any included manifests.
+// It drops names with no valid catalog item. Whether this machine may install
+// an item is decided where the run acts on it, so the inventory can say why
+// one was skipped.
 func Manifests(manifests []manifest.Item, catalogsMap map[int]map[string]catalog.Item) (installs, uninstalls, updates []string) {
 	// Compile all of the installs, uninstalls, and updates into arrays
 	for _, manifestItem := range manifests {
@@ -99,7 +159,7 @@ func Manifests(manifests []manifest.Item, catalogsMap map[int]map[string]catalog
 		for _, item := range manifestItem.Installs {
 			// Check for the first valid item from our catalogs
 			// Continue to the next item in the loop if we get an error
-			if _, ok := firstItem(item, catalogsMap); !ok {
+			if _, ok := removalItem(item, catalogsMap); !ok {
 				continue
 			}
 
@@ -110,7 +170,7 @@ func Manifests(manifests []manifest.Item, catalogsMap map[int]map[string]catalog
 		for _, item := range manifestItem.Uninstalls {
 			// Check for the first valid item from our catalogs
 			// Continue to the next item in the loop if we get an error
-			if _, ok := firstItem(item, catalogsMap); !ok {
+			if _, ok := removalItem(item, catalogsMap); !ok {
 				continue
 			}
 
@@ -121,7 +181,7 @@ func Manifests(manifests []manifest.Item, catalogsMap map[int]map[string]catalog
 		for _, item := range manifestItem.Updates {
 			// Check for the first valid item from our catalogs
 			// Continue to the next item in the loop if we get an error
-			if _, ok := firstItem(item, catalogsMap); !ok {
+			if _, ok := removalItem(item, catalogsMap); !ok {
 				continue
 			}
 
@@ -157,6 +217,9 @@ const (
 	depSucceeded
 	depFailed
 	depDeferred
+	// depNotInstallable: the item's installable_condition rejects this
+	// machine. It is skipped, not failed; an item that depends on it fails.
+	depNotInstallable
 )
 
 // recordFailedItem records a gating failure (cycle, missing dep, or skipped
@@ -199,7 +262,7 @@ func installWithDeps(itemName string, catalogsMap map[int]map[string]catalog.Ite
 	switch visited[itemName] {
 	case depSucceeded:
 		return true
-	case depFailed, depDeferred:
+	case depFailed, depDeferred, depNotInstallable:
 		return false
 	case depInProgress:
 		// Cycle: the item's own frame is still on the stack, so this lookup
@@ -211,10 +274,14 @@ func installWithDeps(itemName string, catalogsMap map[int]map[string]catalog.Ite
 		return false
 	}
 
-	// firstItem logs why the item is missing or invalid
-	item, ok := firstItem(itemName, catalogsMap)
-	if !ok {
-		recordFailedItem(r, itemName, "", fmt.Errorf("not found or invalid in any catalog"))
+	// resolveLogged logs why the item is missing, invalid, or not installable
+	item, err := resolveLogged(itemName, catalogsMap, false)
+	if errors.Is(err, ErrNotInstallable) {
+		visited[itemName] = depNotInstallable
+		return false
+	}
+	if err != nil {
+		recordFailedItem(r, itemName, "", err)
 		visited[itemName] = depFailed
 		return false
 	}
@@ -232,6 +299,12 @@ func installWithDeps(itemName string, catalogsMap map[int]map[string]catalog.Ite
 				slog.Info("deferring item: dependency deferred", "item", item.DisplayName, "dependency", dependency)
 				recordDeferredItem(r, item.Name, item.Version, fmt.Sprintf("dependency %s deferred", dependency))
 				visited[itemName] = depDeferred
+				return false
+			}
+			if visited[dependency] == depNotInstallable {
+				slog.Warn("skipping item: dependency not installable on this machine", "item", item.DisplayName, "dependency", dependency)
+				recordFailedItem(r, item.Name, item.Version, fmt.Errorf("dependency %s is not installable on this machine", dependency))
+				visited[itemName] = depFailed
 				return false
 			}
 			slog.Warn("skipping item: dependency failed", "item", item.DisplayName, "dependency", dependency)
@@ -281,7 +354,7 @@ func Uninstalls(uninstalls []string, catalogsMap map[int]map[string]catalog.Item
 	for _, item := range uninstalls {
 		// Get the first valid item from our catalogs
 		// Continue to the next item in the loop if we get an error
-		validItem, ok := firstItem(item, catalogsMap)
+		validItem, ok := removalItem(item, catalogsMap)
 		if !ok {
 			continue
 		}

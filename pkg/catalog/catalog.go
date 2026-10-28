@@ -22,6 +22,13 @@ type Item struct {
 	PostScript          string        `yaml:"postinstall_script,omitempty"`
 	PreUninstallScript  string        `yaml:"preuninstall_script,omitempty"`
 	PostUninstallScript string        `yaml:"postuninstall_script,omitempty"`
+	// InstallableCondition is an expression over this machine's facts that
+	// must be true for the item to be installed here (see docs/conditions.md).
+	InstallableCondition string `yaml:"installable_condition,omitempty"`
+	// NotInstallable says why InstallableCondition rejected this machine. It is
+	// set on the agent by conditions.Apply and is empty when the item may be
+	// installed.
+	NotInstallable string `yaml:"-"`
 }
 
 // InstallerItem holds information about how to install a catalog item

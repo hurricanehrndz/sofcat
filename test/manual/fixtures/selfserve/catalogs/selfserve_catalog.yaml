@@ -101,3 +101,33 @@ DemoRequired:
     location: packages/scripts/demorequired-uninstall.ps1
     hash: 95d52a8d69395e98888c8c8909cb79af7798d07bc2561428d142a96b24b8e6ac
   version: "1.0"
+# DemoNotHere's installable_condition is false on every machine: the service
+# must not offer it, and the run must not warn about it (nobody chose it).
+DemoNotHere:
+  display_name: Demo Not Here
+  installable_condition: hostname == "no-such-host.invalid"
+  check:
+    file:
+      - path: C:\ProgramData\sofcat-c-smoke\never-created.txt
+  installer:
+    type: ps1
+    location: packages/scripts/demofailing-install.ps1
+    hash: d7e53b61d6ec34f5dee0cea5ec0a4e1b4f22a13d2238393e63d843e1086455de
+  version: "1.0"
+# DemoLabOnly is installable only once an admin condition script reports the
+# smoke group; the version() and os_build parts exercise the built-in facts.
+DemoLabOnly:
+  display_name: Demo Lab Only
+  installable_condition: '"e2e" in sofcat_smoke_groups && os_build >= 10240 && version(os_version) >= "10.0.10240"'
+  check:
+    file:
+      - path: C:\ProgramData\sofcat-c-smoke\lab.txt
+  installer:
+    type: ps1
+    location: packages/scripts/demolab-install.ps1
+    hash: ee5e6d8933ce830c1399c363c352760c3ba1cc07dcf214eb71f811c816acdf15
+  uninstaller:
+    type: ps1
+    location: packages/scripts/demolab-uninstall.ps1
+    hash: 51b9d053d527c85c305b552aa28e374256c6c96cb7aa1ec5dbd6f6d93a49311a
+  version: "1.0"

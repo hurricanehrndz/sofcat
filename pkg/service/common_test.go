@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -255,5 +256,49 @@ func TestParseCommandSpecCancelOperation(t *testing.T) {
 	}
 	if _, err := parseCommandSpec("CancelOperation"); err == nil {
 		t.Fatal("CancelOperation without an operationId must be rejected")
+	}
+}
+
+// An optional install this machine's installable_condition rejects is not
+// offered: it is left out of the list and installItem refuses it. A variant in
+// a later catalog that the machine passes is offered instead.
+func TestGetOptionalItemsNotInstallable(t *testing.T) {
+	appData := filepath.Clean(t.TempDir())
+	cfg := config.Configuration{AppDataPath: appData, CachePath: t.TempDir(), Catalogs: []string{"first", "second"}}
+
+	origManifest, origCatalog := manifestGet, catalogGet
+	t.Cleanup(func() { manifestGet, catalogGet = origManifest, origCatalog })
+	manifestGet = func(_ config.Configuration) ([]manifest.Item, []string, error) {
+		return []manifest.Item{{Name: "base", OptionalInstalls: []string{"Anywhere", "Nowhere", "Variant"}}}, nil, nil
+	}
+	never := `hostname == "no-such-host.invalid"`
+	catalogGet = func(_ config.Configuration) (map[int]map[string]catalog.Item, error) {
+		return map[int]map[string]catalog.Item{
+			1: {
+				"Anywhere": {Name: "Anywhere"},
+				"Nowhere":  {Name: "Nowhere", InstallableCondition: never},
+				"Variant":  {Name: "Variant", DisplayName: "Variant A", InstallableCondition: never},
+			},
+			2: {"Variant": {Name: "Variant", DisplayName: "Variant B"}},
+		}, nil
+	}
+
+	items, err := getOptionalItems(cfg)
+	if err != nil {
+		t.Fatalf("getOptionalItems failed: %v", err)
+	}
+	got := map[string]OptionalInstallItem{}
+	for _, it := range items {
+		got[it.ItemName] = it
+	}
+	if _, ok := got["Nowhere"]; ok || len(got) != 2 {
+		t.Errorf("listed %v; want Anywhere and Variant only", got)
+	}
+	if v := got["Variant"]; v.DisplayName != "Variant B" || v.Catalog != "second" {
+		t.Errorf("Variant = %q from %q; want Variant B from second", v.DisplayName, v.Catalog)
+	}
+
+	if _, _, err := addServiceManagedInstall(cfg, "Nowhere"); !errors.Is(err, errItemNotAvailable) {
+		t.Errorf("addServiceManagedInstall(Nowhere) error = %v, want errItemNotAvailable", err)
 	}
 }

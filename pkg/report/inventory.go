@@ -54,6 +54,9 @@ type Inventory struct {
 	RemovedItems          []string        `json:"RemovedItems"`
 	ItemsToInstall        []InventoryItem `json:"ItemsToInstall"`
 	ItemsToRemove         []InventoryItem `json:"ItemsToRemove"`
+	// Conditions are the facts installable_condition was evaluated against,
+	// as Munki reports them.
+	Conditions map[string]any `json:"Conditions,omitempty"`
 }
 
 // InventoryItem is one item in the inventory. The first five keys are Munki's;
@@ -101,6 +104,8 @@ type Plan struct {
 	Errors                []string
 	Warnings              []string
 	Items                 []PlanItem
+	// Conditions are the facts installable_condition was evaluated against.
+	Conditions map[string]any
 }
 
 // Inventory builds the inventory from the plan and the run's real results.
@@ -120,6 +125,7 @@ func (r *Report) Inventory(p Plan) Inventory {
 		RemovedItems:          []string{},
 		ItemsToInstall:        []InventoryItem{},
 		ItemsToRemove:         []InventoryItem{},
+		Conditions:            p.Conditions,
 	}
 	for _, f := range r.FailedItems {
 		inv.Errors = append(inv.Errors, fmt.Sprintf("%s of %s failed: %s", f.Action, f.Name, f.Error))

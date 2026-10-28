@@ -49,13 +49,14 @@ changing it, so readers should ignore keys they don't know.
 | `ManagedInstallVersion` | string | SofCat version. |
 | `ManifestName` | string | The client manifest (`manifest` in config). |
 | `Errors` | []string | Run-level error (e.g. manifest fetch failed), then one `"<action> of <name> failed: <error>"` per failed item. |
-| `Warnings` | []string | Items left out because they resolve to no valid catalog item, e.g. a self-service removal whose catalog entry is gone. |
+| `Warnings` | []string | Items left out because they resolve to no valid catalog item, e.g. a self-service removal whose catalog entry is gone, or because their `installable_condition` rejects this machine. An offered optional install nobody chose is left out without a warning. |
 | `ProblemInstalls` | []item | Install-side items that failed and are not installed. |
 | `ManagedInstalls` | []item | Every item the run considered (see `kind`), except a `managed_update` that is not installed: as in Munki, an update only applies to installed software. |
 | `InstalledItems` | []string | Names of install-side items that are installed. |
 | `RemovedItems` | []string | Names of `managed_uninstall` items that are absent. |
 | `ItemsToInstall` | []item | Install-side items still `pending` or `deferred`. |
 | `ItemsToRemove` | []item | `managed_uninstall` items still `pending` or `deferred`. |
+| `Conditions` | object | The facts `installable_condition` was evaluated against, built-in and admin-provided; see [conditions.md](conditions.md). Munki reports the same key. |
 
 Every list is present, and empty rather than `null`.
 

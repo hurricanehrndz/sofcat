@@ -52,6 +52,9 @@ What already works:
   [examples/brand/README.md](examples/brand/README.md).
 - **Inventory for osquery.** Every run writes a Munki-compatible
   `inventory.json`. See [docs/osquery-inventory.md](docs/osquery-inventory.md).
+- **Installable conditions.** An item can require an architecture, Windows
+  build, model or a fact your own scripts provide, as with Munki's
+  `installable_condition`. See [docs/conditions.md](docs/conditions.md).
 - **`makecatalogs` anywhere.** Build catalogs on any OS, so your repo's CI
   never needs a Windows runner.
 

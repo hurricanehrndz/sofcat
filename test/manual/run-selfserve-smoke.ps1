@@ -6,7 +6,8 @@ Self-serve end-to-end smoke test for SofCat (Workstream C).
 Drives the running SofCat service over the named pipe (via `sofcat.exe -S ...`)
 against the selfserve fixture set and asserts the reconciling-run behavior on
 disk: default_installs assertion, authorized install, write-time authorization,
-deselect -> uninstall with prune, and the once-only default state machine.
+deselect -> uninstall with prune, the once-only default state machine, and
+installable_condition with an admin condition script.
 
 Run AFTER bootstrap-vm.ps1 has installed and started the service against
 -Manifest selfserve_manifest -Catalogs selfserve_catalog.
@@ -430,6 +431,79 @@ Stop-Notepad
 Invoke-SofCat "InstallItem:DemoBlocked" | Out-Null
 Wait-For { Test-Path $blockedTxt } "blocked.txt to appear after the blocker stopped"
 Write-Host "    DemoBlocked defer-then-retry OK" -ForegroundColor Green
+
+# --- installable_condition -------------------------------------------------------
+
+$labTxt = Join-Path $MarkerDir "lab.txt"
+# The admin conditions folder sits beside config.yaml, like inventory.json.
+$conditionsDir = Join-Path (Split-Path $Config) "conditions"
+$conditionScript = Join-Path $conditionsDir "10-smoke.ps1"
+
+# Invoke-Run triggers a full run with an idempotent request (DemoBlocked is
+# installed by now) and waits for it to end. A run refreshes the admin facts;
+# a list call reuses the last run's.
+function Invoke-Run {
+    $out = Invoke-SofCat "InstallItem:DemoBlocked"
+    $opId = Parse-OperationId $out.Out
+    if (-not $opId) { Fail "no operationId returned for InstallItem:DemoBlocked" }
+    $terminal = Stream-TerminalEvent $opId
+    if (-not $terminal -or $terminal.state -ne "Succeeded") {
+        Fail "run for InstallItem:DemoBlocked did not succeed: $($terminal | ConvertTo-Json -Compress)"
+    }
+}
+
+function Read-Inventory {
+    return (Get-Content -LiteralPath $inventoryPath -Raw | ConvertFrom-Json)
+}
+
+Write-Step "installable_condition: items whose condition is false are not offered"
+if (Test-Path $conditionScript) { Remove-Item -LiteralPath $conditionScript -Force }
+Invoke-Run
+foreach ($name in @('DemoNotHere', 'DemoLabOnly')) {
+    if (Get-OptionalItem $name) { Fail "$name is offered although its installable_condition is false" }
+}
+$bad = Invoke-SofCat "InstallItem:DemoLabOnly" -AllowFail
+if ($bad.Code -eq 0 -or ($bad.Out -join "`n") -notmatch 'not available for self-service') {
+    Fail "InstallItem:DemoLabOnly was not refused: $($bad.Out -join ' ')"
+}
+$inventory = Read-Inventory
+foreach ($fact in @('hostname', 'arch', 'os_version', 'os_build', 'os_edition', 'machine_type', 'engine_version')) {
+    if ($null -eq $inventory.Conditions.$fact) { Fail "inventory Conditions lacks built-in fact $fact" }
+}
+if ([int]$inventory.Conditions.os_build -lt 10240) { Fail "os_build is $($inventory.Conditions.os_build)" }
+if (@($inventory.Warnings | Where-Object { $_ -match 'DemoNotHere' }).Count -gt 0) {
+    Fail "an unchosen, not-installable optional install was warned about: $($inventory.Warnings -join '; ')"
+}
+Write-Host ("    hidden and refused; facts: arch={0} os_version={1} machine_type={2}" -f `
+    $inventory.Conditions.arch, $inventory.Conditions.os_version, $inventory.Conditions.machine_type) -ForegroundColor Green
+
+Write-Step "installable_condition: an admin condition script makes DemoLabOnly installable after the next run"
+New-Item -ItemType Directory -Path $conditionsDir -Force | Out-Null
+Set-Content -LiteralPath $conditionScript -Encoding ASCII -Value `
+    '@{ sofcat_smoke_groups = @("e2e", "smoke"); hostname = "spoofed" } | ConvertTo-Json -Compress'
+# The list reuses the last run's facts, so the script has not run yet.
+if (Get-OptionalItem "DemoLabOnly") { Fail "DemoLabOnly offered before a run refreshed the admin facts" }
+Invoke-Run
+$lab = Get-OptionalItem "DemoLabOnly"
+if (-not $lab) { Fail "DemoLabOnly not offered after the admin condition script ran" }
+$inventory = Read-Inventory
+if (@($inventory.Conditions.sofcat_smoke_groups) -notcontains "e2e") {
+    Fail "inventory Conditions lacks the admin fact: $($inventory.Conditions | ConvertTo-Json -Compress)"
+}
+if ($inventory.Conditions.hostname -eq "spoofed") { Fail "an admin script overrode the built-in hostname fact" }
+Invoke-SofCat "InstallItem:DemoLabOnly" | Out-Null
+Wait-For { Test-Path $labTxt } "lab.txt to exist after InstallItem:DemoLabOnly"
+Write-Host "    DemoLabOnly offered and installed; built-in hostname kept" -ForegroundColor Green
+
+Write-Step "installable_condition: an item stays removable after its condition stops holding"
+Remove-Item -LiteralPath $conditionScript -Force
+Invoke-Run
+if (Get-OptionalItem "DemoLabOnly") { Fail "DemoLabOnly still offered after the admin fact went away" }
+if (-not (Test-Path $labTxt)) { Fail "lab.txt removed although nothing asked for it" }
+Invoke-SofCat "RemoveItem:DemoLabOnly" | Out-Null
+Wait-For { -not (Test-Path $labTxt) } "lab.txt to be removed"
+Wait-For { (Get-YamlList $SelfServe "managed_uninstalls").Count -eq 0 } "managed_uninstalls to be pruned empty"
+Write-Host "    DemoLabOnly left installed, then removed on request" -ForegroundColor Green
 
 Write-Host ""
 Write-Host "SELF-SERVE SMOKE PASSED" -ForegroundColor Green
