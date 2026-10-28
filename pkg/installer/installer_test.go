@@ -165,6 +165,13 @@ func TestHelperProcess(t *testing.T) {
 	os.Exit(0)
 }
 
+// fakeExit stands in for *exec.ExitError with codes a Unix helper process
+// cannot exit with, such as MSI's 3010.
+type fakeExit int
+
+func (e fakeExit) Error() string { return fmt.Sprintf("exit status %d", int(e)) }
+func (e fakeExit) ExitCode() int { return int(e) }
+
 func fakeCheckStatus(_ *status.Checker, catalogItem catalog.Item, installType string, cachePath string) (install bool, checkErr error) {
 	// Catch special names used in tests
 	if catalogItem.DisplayName == statusActionNoError {
@@ -1111,6 +1118,73 @@ func TestInstallItemSuccess(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("console output missing %q:\n%s", want, out)
 		}
+	}
+}
+
+// A real *exec.ExitError is what acceptedExitCode sees in production.
+func TestAcceptedExitCodeRealExitError(t *testing.T) {
+	execCommand = fakeExecCommandFail
+	defer func() { execCommand = origExec }()
+
+	_, err := runCommand("setup.exe", nil)
+	if code, ok := acceptedExitCode(err, []int{1}); !ok || code != 1 {
+		t.Fatalf("acceptedExitCode(%v, [1]) = %d, %v; want 1, true", err, code, ok)
+	}
+	if _, ok := acceptedExitCode(err, nil); ok {
+		t.Fatal("exit 1 accepted with no success codes")
+	}
+}
+
+// MSI 3010 ("success, restart required") installs an msi item by default; a
+// catalog success_codes list replaces the defaults, and an explicit empty
+// list turns them off. exe has no defaults, so it needs the list.
+func TestInstallItemSuccessCodes(t *testing.T) {
+	cases := []struct {
+		name  string
+		item  catalog.Item
+		codes []int
+		exit  int
+		ok    bool
+	}{
+		{"msi default accepts 3010", msiItem, nil, 3010, true},
+		{"msi default accepts 1641", msiItem, nil, 1641, true},
+		{"msi default rejects 1603", msiItem, nil, 1603, false},
+		{"msi list replaces default", msiItem, []int{10}, 3010, false},
+		{"msi empty list disables default", msiItem, []int{}, 3010, false},
+		{"exe has no default", exeItem, nil, 3010, false},
+		{"exe list accepts", exeItem, []int{3010}, 3010, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			console := captureConsole(t)
+			installTestOverrides(t)
+			runCommand = func(string, []string) (string, error) { return "", fakeExit(tc.exit) }
+
+			item := tc.item
+			item.DisplayName = statusActionNoError
+			item.Installer.SuccessCodes = tc.codes
+			r := newTestRunner()
+			_, err := r.installItem(item, "https://example.com/")
+
+			if tc.ok {
+				if err != nil {
+					t.Fatalf("installItem: %v", err)
+				}
+				if len(r.Report.InstalledItems) != 1 || len(r.Report.FailedItems) != 0 {
+					t.Fatalf("report installed=%d failed=%d, want 1 and 0", len(r.Report.InstalledItems), len(r.Report.FailedItems))
+				}
+				if out := console.String(); !strings.Contains(out, fmt.Sprintf("accepted non-zero code\" item=%s code=%d", item.DisplayName, tc.exit)) {
+					t.Errorf("console output missing accepted-code line:\n%s", out)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatal("non-zero exit accepted")
+			}
+			if len(r.Report.InstalledItems) != 0 || len(r.Report.FailedItems) != 1 {
+				t.Fatalf("report installed=%d failed=%d, want 0 and 1", len(r.Report.InstalledItems), len(r.Report.FailedItems))
+			}
+		})
 	}
 }
 

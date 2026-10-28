@@ -18,6 +18,8 @@ installer:
   location: packages/google-chrome/GoogleChrome.68.0.3440.106.nupkg
   package_id: GoogleChrome
   type: nupkg
+  # success_codes: non-zero exit codes that still mean success. msi and nupkg
+  # default to [1641, 3010] (restart required); listing codes replaces the default.
 # Uninstall-side scripts, mirroring preinstall_script/postinstall_script
 preuninstall_script: |
   Stop-Process -Name chrome -ErrorAction SilentlyContinue

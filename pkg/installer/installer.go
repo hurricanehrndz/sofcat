@@ -125,6 +125,28 @@ func withStderr(err error, stderr []byte) error {
 	return fmt.Errorf("%w: %s", err, strings.ToValidUTF8(string(msg), ""))
 }
 
+// exitCoder is the part of *exec.ExitError acceptedExitCode needs; tests use
+// it to stand in codes a Unix helper process cannot exit with, such as 3010.
+type exitCoder interface {
+	error
+	ExitCode() int
+}
+
+// acceptedExitCode reports whether err is a process exit whose code is in
+// successCodes, e.g. MSI 3010 (restart required).
+func acceptedExitCode(err error, successCodes []int) (int, bool) {
+	var exitErr exitCoder
+	if !errors.As(err, &exitErr) {
+		return 0, false
+	}
+	for _, code := range successCodes {
+		if exitErr.ExitCode() == code {
+			return code, true
+		}
+	}
+	return 0, false
+}
+
 // Get a Nupkg's id using `choco list`
 func getNupkgIDs(nupkgDir, versionArg string) ([]string, error) {
 	// Compile the arguments needed to get the id
@@ -178,7 +200,14 @@ type typeInstaller interface {
 	installCommand(item catalog.Item, absFile string) (cmd string, args []string, err error)
 	uninstallCommand(item catalog.Item, absFile string) (cmd string, args []string, err error)
 	uninstallNeedsFile() bool
+	// successCodes are the non-zero exit codes this type treats as success
+	// unless the catalog item sets success_codes.
+	successCodes() []int
 }
+
+// msiRestartCodes are MSI's "success, restart required/initiated" exits.
+// Chocolatey passes them through, so nupkg shares them.
+var msiRestartCodes = []int{1641, 3010}
 
 // typeInstallers maps each supported installer type to its implementation.
 var typeInstallers = map[string]typeInstaller{
@@ -203,6 +232,8 @@ func (msiInstaller) uninstallCommand(item catalog.Item, absFile string) (string,
 
 func (msiInstaller) uninstallNeedsFile() bool { return true }
 
+func (msiInstaller) successCodes() []int { return msiRestartCodes }
+
 type exeInstaller struct{}
 
 func (exeInstaller) installCommand(item catalog.Item, absFile string) (string, []string, error) {
@@ -215,6 +246,9 @@ func (exeInstaller) uninstallCommand(item catalog.Item, absFile string) (string,
 
 func (exeInstaller) uninstallNeedsFile() bool { return true }
 
+// Setup.exe wrappers disagree on restart codes, so exe items list their own.
+func (exeInstaller) successCodes() []int { return nil }
+
 type ps1Installer struct{}
 
 func (ps1Installer) installCommand(item catalog.Item, absFile string) (string, []string, error) {
@@ -226,6 +260,8 @@ func (ps1Installer) uninstallCommand(item catalog.Item, absFile string) (string,
 }
 
 func (ps1Installer) uninstallNeedsFile() bool { return true }
+
+func (ps1Installer) successCodes() []int { return nil }
 
 type msixInstaller struct{}
 
@@ -249,6 +285,8 @@ func (msixInstaller) uninstallCommand(item catalog.Item, absFile string) (string
 }
 
 func (msixInstaller) uninstallNeedsFile() bool { return false }
+
+func (msixInstaller) successCodes() []int { return nil }
 
 type nupkgInstaller struct{}
 
@@ -291,6 +329,8 @@ func (nupkgInstaller) uninstallCommand(item catalog.Item, absFile string) (strin
 }
 
 func (nupkgInstaller) uninstallNeedsFile() bool { return true }
+
+func (nupkgInstaller) successCodes() []int { return msiRestartCodes }
 
 // canceled logs that the user withdrew the item and returns ErrCanceled. The
 // service already ended the operation, so no progress event is sent.
@@ -415,6 +455,16 @@ func (r *Runner) actionItem(item catalog.Item, itemURL, action string) (string, 
 	r.emit(item, state, percent, item.DisplayName)
 	slog.Info(verb+"ing", "item", item.DisplayName, "version", item.Version, "installerType", installerItem.Type)
 	out, err := runCommand(cmd, args)
+	// A listed success_codes replaces the type's defaults; an explicit empty
+	// list turns them off.
+	successCodes := installerItem.SuccessCodes
+	if successCodes == nil {
+		successCodes = impl.successCodes()
+	}
+	if code, ok := acceptedExitCode(err, successCodes); ok {
+		slog.Info(verb+"er exited with an accepted non-zero code", "item", item.DisplayName, "code", code)
+		err = nil
+	}
 	if err != nil {
 		slog.Warn(verb+"ation FAILED", "item", item.DisplayName, "version", item.Version, "result", "error", "err", err)
 		r.emit(item, "failed", percent, err.Error())

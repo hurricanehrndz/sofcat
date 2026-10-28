@@ -31,6 +31,10 @@ type InstallerItem struct {
 	Hash      string   `yaml:"hash,omitempty"`
 	PackageID string   `yaml:"package_id,omitempty"`
 	Arguments []string `yaml:"arguments,omitempty"`
+	// SuccessCodes are non-zero exit codes that still mean the action worked.
+	// Unset, the type's defaults apply (msi and nupkg accept 1641 and 3010,
+	// "success, restart required"); a list, even an empty one, replaces them.
+	SuccessCodes []int `yaml:"success_codes,omitempty"`
 }
 
 // InstallCheck holds information about how to check the status of a catalog item
