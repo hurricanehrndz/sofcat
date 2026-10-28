@@ -14,8 +14,10 @@ import (
 
 	"github.com/hurricanehrndz/sofcat/pkg/branding"
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
+	"github.com/hurricanehrndz/sofcat/pkg/conditions"
 	"github.com/hurricanehrndz/sofcat/pkg/config"
 	"github.com/hurricanehrndz/sofcat/pkg/download"
+	"github.com/hurricanehrndz/sofcat/pkg/facts"
 	"github.com/hurricanehrndz/sofcat/pkg/installer"
 	"github.com/hurricanehrndz/sofcat/pkg/manifest"
 	"github.com/hurricanehrndz/sofcat/pkg/report"
@@ -452,6 +454,9 @@ func getOptionalItems(cfg config.Configuration) ([]OptionalInstallItem, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Reuse the last run's admin condition facts: a list call should not run
+	// the scripts.
+	conditions.Apply(catalogs, facts.Collect(facts.Dir(cfg.AppDataPath), false))
 
 	selfServe, err := manifest.LoadSelfServe(manifest.SelfServePath(cfg.AppDataPath))
 	if err != nil {
@@ -490,7 +495,12 @@ func getOptionalItems(cfg config.Configuration) ([]OptionalInstallItem, error) {
 			StatusUpdatedAtUTC: now,
 		}
 
-		catItem, catName, ok := firstCatalogItem(name, catalogs, cfg.Catalogs)
+		catItem, catName, ok, notInstallable := firstCatalogItem(name, catalogs, cfg.Catalogs)
+		if notInstallable {
+			// Not offered on this machine, so not listed, and installItem refuses it.
+			slog.Debug("optional item not installable on this machine, not listed", "item", name)
+			continue
+		}
 		if !ok {
 			// No valid catalog item anywhere — still listed, status Unknown (R9).
 			slog.Warn("optional item has no catalog entry", "item", name)
@@ -543,7 +553,9 @@ func getOptionalItems(cfg config.Configuration) ([]OptionalInstallItem, error) {
 // name of the catalog it came from. Unlike process.firstItem it applies no
 // installer-validity rules — the list is a display surface. catalogNames maps a
 // catalog index (1-based, as manifest.GetCatalogs keys them) to its configured name.
-func firstCatalogItem(name string, catalogs map[int]map[string]catalog.Item, catalogNames []string) (catalog.Item, string, bool) {
+// Occurrences this machine may not install (installable_condition) are passed
+// over; notInstallable reports that name had only those.
+func firstCatalogItem(name string, catalogs map[int]map[string]catalog.Item, catalogNames []string) (_ catalog.Item, _ string, ok, notInstallable bool) {
 	indexes := make([]int, 0, len(catalogs))
 	for k := range catalogs {
 		indexes = append(indexes, k)
@@ -551,14 +563,18 @@ func firstCatalogItem(name string, catalogs map[int]map[string]catalog.Item, cat
 	slices.Sort(indexes)
 	for _, k := range indexes {
 		if item, ok := catalogs[k][name]; ok {
+			if item.NotInstallable != "" {
+				notInstallable = true
+				continue
+			}
 			catName := ""
 			if idx := k - 1; idx >= 0 && idx < len(catalogNames) {
 				catName = catalogNames[idx]
 			}
-			return item, catName, true
+			return item, catName, true, false
 		}
 	}
-	return catalog.Item{}, "", false
+	return catalog.Item{}, "", false, notInstallable
 }
 
 func sliceSet(values []string) map[string]bool {

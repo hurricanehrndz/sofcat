@@ -8,8 +8,10 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/hurricanehrndz/sofcat/pkg/conditions"
 	"github.com/hurricanehrndz/sofcat/pkg/config"
 	"github.com/hurricanehrndz/sofcat/pkg/download"
+	"github.com/hurricanehrndz/sofcat/pkg/facts"
 	"github.com/hurricanehrndz/sofcat/pkg/installer"
 	"github.com/hurricanehrndz/sofcat/pkg/manifest"
 	"github.com/hurricanehrndz/sofcat/pkg/process"
@@ -79,6 +81,12 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve catalog: %w", err)
 	}
+
+	// Decide which catalog items this machine may install (installable_condition).
+	// The run refreshes the admin condition scripts' facts.
+	machineFacts := facts.Collect(facts.Dir(cfg.AppDataPath), true)
+	conditions.Apply(catalogs, machineFacts)
+	plan.conditions = machineFacts
 
 	// Process the manifests into install type groups
 	slog.Info("Processing manifest...")

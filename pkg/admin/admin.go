@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
+	"github.com/hurricanehrndz/sofcat/pkg/conditions"
 	"go.yaml.in/yaml/v4"
 )
 
@@ -126,6 +127,10 @@ func CollectCatalogs(repoPath string) (CatalogSet, error) { //nolint:gocognit //
 		}
 		if prev, ok := source[parsed.Catalog][itemName]; ok {
 			set.Problems = append(set.Problems, fmt.Sprintf("%s: duplicate item %q in catalog %q; replaces %s", packageInfoPath, itemName, parsed.Catalog, prev))
+		}
+		// Kept in the catalog: agents treat an invalid condition as false.
+		if err := conditions.Check(parsed.Item.InstallableCondition); err != nil {
+			set.Problems = append(set.Problems, fmt.Sprintf("%s: invalid installable_condition: %v", packageInfoPath, err))
 		}
 		set.Catalogs[parsed.Catalog][itemName] = parsed.Item
 		source[parsed.Catalog][itemName] = packageInfoPath

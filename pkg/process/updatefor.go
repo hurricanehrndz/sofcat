@@ -68,7 +68,7 @@ func InstalledReferentUpdaters(catalogsMap map[int]map[string]catalog.Item, inde
 		if installsSet[referent] {
 			continue
 		}
-		item, ok := firstItem(referent, catalogsMap)
+		item, ok := removalItem(referent, catalogsMap)
 		if !ok {
 			continue
 		}
