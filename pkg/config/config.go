@@ -10,6 +10,7 @@ import (
 
 	"go.yaml.in/yaml/v4"
 
+	"github.com/hurricanehrndz/sofcat/pkg/identity"
 	"github.com/hurricanehrndz/sofcat/pkg/version"
 )
 
@@ -18,7 +19,7 @@ var (
 	aboutArg          bool
 	aboutDefault      = false
 	configArg         string
-	configDefault     = filepath.Join(os.Getenv("ProgramData"), "SofCat/config.yaml")
+	configDefault     = identity.ConfigPath()
 	debugArg          bool
 	debugDefault      = false
 	helpArg           bool
@@ -221,7 +222,7 @@ func Get() Configuration {
 
 	// If AppDataPath wasn't provided, configure a default
 	if cfg.AppDataPath == "" {
-		cfg.AppDataPath = filepath.Join(os.Getenv("ProgramData"), "SofCat/")
+		cfg.AppDataPath = identity.DataDir()
 	} else {
 		cfg.AppDataPath = filepath.Clean(cfg.AppDataPath)
 	}
@@ -254,13 +255,13 @@ func Get() Configuration {
 
 	// Configure service defaults.
 	if cfg.ServiceName == "" {
-		cfg.ServiceName = "sofcat"
+		cfg.ServiceName = identity.ServiceName()
 	}
 	if cfg.ServiceInterval == "" {
 		cfg.ServiceInterval = "1h"
 	}
 	if cfg.ServicePipeName == "" {
-		cfg.ServicePipeName = "sofcat-service"
+		cfg.ServicePipeName = identity.PipeName()
 	}
 
 	return cfg

@@ -5,11 +5,13 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/hurricanehrndz/sofcat/pkg/identity"
 )
 
 func TestClientDefaults(t *testing.T) {
 	client := NewClient("")
-	if client.PipeName != DefaultPipeName || client.ConnectTimeout != defaultConnectTimeout || client.ResponseTimeout != defaultResponseTimeout {
+	if client.PipeName != identity.PipeName() || client.ConnectTimeout != defaultConnectTimeout || client.ResponseTimeout != defaultResponseTimeout {
 		t.Fatalf("unexpected client defaults: %#v", client)
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/hurricanehrndz/sofcat/pkg/branding"
+	"github.com/hurricanehrndz/sofcat/pkg/identity"
 	"github.com/hurricanehrndz/sofcat/pkg/service"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -28,7 +29,7 @@ const defaultWindowTitle = "SofCat UI"
 var defaultIcon []byte
 
 func main() {
-	pipeName := flag.String("pipe-name", service.DefaultPipeName, "SofCat service pipe name")
+	pipeName := flag.String("pipe-name", identity.PipeName(), "SofCat service pipe name")
 	flag.Parse()
 
 	// ponytail: startup diagnostics go to stderr, which is invisible in the

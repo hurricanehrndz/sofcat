@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 
 	"gopkg.in/natefinch/lumberjack.v2"
+
+	"github.com/hurricanehrndz/sofcat/pkg/identity"
 )
 
 func setupLogger() (*slog.Logger, *lumberjack.Logger, error) {
@@ -19,7 +21,7 @@ func setupLogger() (*slog.Logger, *lumberjack.Logger, error) {
 		return slog.New(slog.DiscardHandler), nil, errors.New("LOCALAPPDATA is not set")
 	}
 
-	directory := filepath.Join(localAppData, "sofcat")
+	directory := filepath.Join(localAppData, identity.Slug)
 	if err := os.MkdirAll(directory, 0o700); err != nil { //nolint:gosec // G703: LOCALAPPDATA comes from the user's own session, which the UI runs as
 		return slog.New(slog.DiscardHandler), nil, err
 	}
