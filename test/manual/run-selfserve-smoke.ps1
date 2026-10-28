@@ -185,7 +185,8 @@ if ((Get-YamlList $SelfServe "default_installs") -notcontains "DemoDefault") {
 Write-Host "    default stayed removed and is still recorded (once-only)" -ForegroundColor Green
 
 $blockedTxt = Join-Path $MarkerDir "blocked.txt"
-$inventoryPath = "$env:ProgramData\SofCat\inventory.json"
+# inventory.json sits beside config.yaml, so -Config also targets a rebrand.
+$inventoryPath = Join-Path (Split-Path $Config) "inventory.json"
 
 # Inventory-Defers returns $true when inventory.json lists $Item in
 # ManagedInstalls with status "deferred". The inventory is rewritten at the end
