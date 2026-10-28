@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	_ "embed"
 	"encoding/base64"
 	"flag"
 	"fmt"
@@ -13,22 +12,17 @@ import (
 	"time"
 
 	"github.com/hurricanehrndz/sofcat/pkg/branding"
+	"github.com/hurricanehrndz/sofcat/pkg/identity"
 	"github.com/hurricanehrndz/sofcat/pkg/service"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-const defaultWindowTitle = "SofCat UI"
-
-// defaultIcon is the window and taskbar icon when no branding logo is set.
-// The executable's own icon resource (assets/sofcat.ico, linked by
-// `just winres`) is what Explorer and the Start menu show; the window icon is
-// set separately.
-//
-//go:embed icon.png
-var defaultIcon []byte
+// defaultWindowTitle names the Wails app and window, and is the window title
+// when no branding title is set.
+var defaultWindowTitle = identity.Name + " UI"
 
 func main() {
-	pipeName := flag.String("pipe-name", service.DefaultPipeName, "SofCat service pipe name")
+	pipeName := flag.String("pipe-name", identity.PipeName(), "SofCat service pipe name")
 	flag.Parse()
 
 	// ponytail: startup diagnostics go to stderr, which is invisible in the
@@ -51,7 +45,7 @@ func main() {
 	// and caption colour. The frontend applies the rest of the branding.
 	brand := startupBranding(client.GetBranding, logger)
 	app := application.New(application.Options{
-		Name:     "SofCat UI",
+		Name:     defaultWindowTitle,
 		Logger:   logger,
 		Services: []application.Service{application.NewService(uiService)},
 		Assets: application.AssetOptions{
@@ -60,7 +54,7 @@ func main() {
 		Icon: windowIcon(brand),
 	})
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Name:            "SofCat UI",
+		Name:            defaultWindowTitle,
 		Title:           windowTitle(brand),
 		URL:             "/",
 		Width:           1100,
@@ -102,7 +96,7 @@ func startupBranding(get func(context.Context) (branding.Branding, error), logge
 	return b
 }
 
-// windowTitle is the branded title, or "SofCat UI" when none is set.
+// windowTitle is the branded title, or defaultWindowTitle when none is set.
 func windowTitle(b branding.Branding) string {
 	if b.Title == "" {
 		return defaultWindowTitle

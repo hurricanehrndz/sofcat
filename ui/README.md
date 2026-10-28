@@ -75,6 +75,9 @@ service resolves the branding and validates it; the UI only asks for it with
 comes from the first source that sets it:
 
 1. Policy values under `HKLM\SOFTWARE\Policies\SofCat\Branding`, all REG_SZ.
+   A rebranded build reads `HKLM\SOFTWARE\Policies\<Name>\Branding` instead,
+   where `<Name>` is its `pkg/identity` name, so profiles for one build never
+   brand another.
 2. The `branding:` block in `config.yaml` (see `examples/example_config.yaml`).
 3. Nothing. The UI then looks exactly as it does unbranded.
 

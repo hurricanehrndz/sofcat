@@ -8,6 +8,7 @@ import (
 	"golang.org/x/sys/windows/registry"
 
 	"github.com/hurricanehrndz/sofcat/pkg/config"
+	"github.com/hurricanehrndz/sofcat/pkg/identity"
 )
 
 // The reader runs against a scratch HKCU key so the test needs no admin token
@@ -16,7 +17,7 @@ func TestReadPolicyFromRegistry(t *testing.T) {
 	path := `Software\SofCatTest\` + t.Name()
 	policyRoot, policyPath = registry.CURRENT_USER, path
 	t.Cleanup(func() {
-		policyRoot, policyPath = registry.LOCAL_MACHINE, `SOFTWARE\Policies\SofCat\Branding`
+		policyRoot, policyPath = registry.LOCAL_MACHINE, identity.PolicyKey()+`\Branding`
 		_ = registry.DeleteKey(registry.CURRENT_USER, path)
 	})
 

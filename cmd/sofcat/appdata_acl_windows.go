@@ -12,6 +12,8 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+
+	"github.com/hurricanehrndz/sofcat/pkg/identity"
 )
 
 // The app data directory holds config.yaml (which may carry auth_user,
@@ -34,11 +36,12 @@ const (
 // links and junctions are skipped, never followed. It is idempotent and keeps
 // going past entries it cannot fix, returning every error.
 func protectAppData(root string) error {
-	// CEILING: only a directory named sofcat is protected, so a mistyped
-	// app_data_path such as C:\ProgramData cannot have its ACL replaced.
-	// Upgrade: an explicit config opt-in for other names if anyone needs one.
-	if !strings.EqualFold(filepath.Base(root), "sofcat") {
-		return fmt.Errorf("not protecting %s: the directory is not named sofcat", root)
+	// CEILING: only a directory named after this build (identity.Name) is
+	// protected, so a mistyped app_data_path such as C:\ProgramData cannot
+	// have its ACL replaced. Upgrade: an explicit config opt-in for other
+	// names if anyone needs one.
+	if !strings.EqualFold(filepath.Base(root), identity.Name) {
+		return fmt.Errorf("not protecting %s: the directory is not named %s", root, identity.Name)
 	}
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		return err

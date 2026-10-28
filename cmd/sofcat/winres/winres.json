@@ -1,17 +1,17 @@
 {
   "RT_GROUP_ICON": {
     "APP": {
-      "0000": "../../../assets/sofcat.ico"
+      "0000": "icon.ico"
     }
   },
   "RT_MANIFEST": {
     "#1": {
       "0409": {
         "identity": {
-          "name": "ca.hrndz.sofcat",
+          "name": "@IDENTIFIER@",
           "version": ""
         },
-        "description": "SofCat service and command-line tool",
+        "description": "@PRODUCT@ service and command-line tool",
         "minimum-os": "win10",
         "execution-level": "as invoker",
         "dpi-awareness": "unaware"
@@ -27,12 +27,12 @@
         },
         "info": {
           "0409": {
-            "CompanyName": "Carlos Hernandez",
-            "FileDescription": "SofCat service and command-line tool",
-            "InternalName": "sofcat",
+            "CompanyName": "@PUBLISHER@",
+            "FileDescription": "@PRODUCT@ service and command-line tool",
+            "InternalName": "@APP@",
             "LegalCopyright": "Copyright (c) Carlos Hernandez. Licensed under Apache-2.0.",
-            "OriginalFilename": "sofcat.exe",
-            "ProductName": "SofCat"
+            "OriginalFilename": "@APP@.exe",
+            "ProductName": "@PRODUCT@"
           }
         }
       }

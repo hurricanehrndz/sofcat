@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/hurricanehrndz/sofcat/pkg/identity"
 )
 
 // TestGet tests that the configuration is retrieved and parsed properly
@@ -235,5 +237,25 @@ func TestGetServiceModeToleratesMissingConfig(t *testing.T) {
 	}
 	if cfg.URL != "" || cfg.Manifest != "" {
 		t.Fatalf("expected an empty configuration, got %+v", cfg)
+	}
+}
+
+// A rebranded build must default to its own service, pipe and data directory,
+// or it collides with a stock install on the same machine.
+func TestGetDefaultsFollowIdentity(t *testing.T) {
+	origSlug, origName := identity.Slug, identity.Name
+	defer func() { identity.Slug, identity.Name = origSlug, origName }()
+	identity.Slug, identity.Name = "acme", "Acme Software Center"
+
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+	origExit := osExit
+	defer func() { osExit = origExit }()
+	osExit = func(code int) { t.Fatalf("unexpected exit %d", code) }
+
+	os.Args = []string{"acme.exe", "--config", filepath.Join(t.TempDir(), "config.yaml"), "-service"}
+	cfg := Get()
+	if cfg.ServiceName != "acme" || cfg.ServicePipeName != "acme-service" || cfg.AppDataPath != identity.DataDir() {
+		t.Fatalf("defaults ignore identity: %+v", cfg)
 	}
 }

@@ -12,9 +12,8 @@ import (
 	"time"
 
 	"github.com/hurricanehrndz/sofcat/pkg/branding"
+	"github.com/hurricanehrndz/sofcat/pkg/identity"
 )
-
-const DefaultPipeName = "sofcat-service"
 
 const (
 	defaultConnectTimeout  = 5 * time.Second
@@ -32,7 +31,7 @@ type Client struct {
 
 func NewClient(pipeName string) *Client {
 	if strings.TrimSpace(pipeName) == "" {
-		pipeName = DefaultPipeName
+		pipeName = identity.PipeName()
 	}
 	return &Client{
 		PipeName:        pipeName,
@@ -284,7 +283,7 @@ func validOperationState(state string) bool {
 
 func (c *Client) pipeName() string {
 	if strings.TrimSpace(c.PipeName) == "" {
-		return DefaultPipeName
+		return identity.PipeName()
 	}
 	return c.PipeName
 }
