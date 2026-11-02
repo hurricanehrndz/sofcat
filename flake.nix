@@ -1,7 +1,7 @@
 # Native libraries the Wails UI links against on Linux (cgo: GTK 4 and
 # WebKitGTK 6.0). NixOS has no global /usr/lib, so the linker only finds them
 # inside this shell. The toolchain itself (Go, Node, linters) stays in
-# mise.toml; .envrc loads this shell first, then mise.
+# mise.toml, which loads this shell through nix-env.sh.
 {
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 

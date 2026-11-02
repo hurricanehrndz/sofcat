@@ -48,8 +48,8 @@ AGENTS.local.md
 # mise per-machine overrides
 mise.local.toml
 
-# direnv (nix flake cache)
-.direnv/
+# nix dev shell cache, written by nix-env.sh
+.nix-env/
 
 # Private brands for `just brand=branding/<name> build`; see examples/brand/
 /branding/
