@@ -141,7 +141,10 @@ func TestPruneSelfServeUninstalls(t *testing.T) {
 		return false, nil
 	}
 
-	ss := manifest.Item{Uninstalls: []string{"Gone", "StillHere", "Errored", "Unresolvable"}}
+	ss := manifest.Item{
+		Uninstalls: []string{"Gone", "StillHere", "Errored", "Unresolvable"},
+		SelectedBy: map[string]string{"Gone": "S-1-5-21-1-2-3-1001", "StillHere": "S-1-5-21-1-2-3-1002"},
+	}
 	changed := PruneSelfServeUninstalls(&ss, catalogs, &status.Checker{}, "cache")
 	if !changed {
 		t.Fatalf("expected changed=true")
@@ -149,5 +152,10 @@ func TestPruneSelfServeUninstalls(t *testing.T) {
 	want := []string{"StillHere", "Errored", "Unresolvable"}
 	if !reflect.DeepEqual(ss.Uninstalls, want) {
 		t.Fatalf("unexpected kept uninstalls: want %#v got %#v", want, ss.Uninstalls)
+	}
+	// A completed removal clears the selector, so the next user to select the
+	// item owns it (R32a); a removal still pending keeps it.
+	if wantBy := map[string]string{"StillHere": "S-1-5-21-1-2-3-1002"}; !reflect.DeepEqual(ss.SelectedBy, wantBy) {
+		t.Fatalf("selected_by after prune = %#v, want %#v", ss.SelectedBy, wantBy)
 	}
 }

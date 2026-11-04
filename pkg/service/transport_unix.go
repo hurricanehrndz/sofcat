@@ -13,6 +13,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"time"
 )
@@ -99,9 +100,27 @@ func (c unixConn) Peer() (peer, error) {
 	id := strconv.FormatUint(uint64(uid), 10)
 	u, err := user.LookupId(id)
 	if err != nil {
-		return peer{ID: id}, fmt.Errorf("look up uid %s: %w", id, err)
+		return peer{ID: id, Admin: uid == 0}, fmt.Errorf("look up uid %s: %w", id, err)
 	}
-	return peer{Name: u.Username, ID: id}, nil
+	return peer{Name: u.Username, ID: id, Admin: unixAdmin(uid, u)}, nil
+}
+
+// unixAdmin reports whether the user is an administrator: root, or on macOS a
+// member of group admin. Elsewhere only root is; the Unix transport there only
+// runs the tests. A failed group lookup is not an administrator.
+func unixAdmin(uid uint32, u *user.User) bool {
+	if uid == 0 {
+		return true
+	}
+	if runtime.GOOS != "darwin" {
+		return false
+	}
+	admin, err := user.LookupGroup("admin")
+	if err != nil {
+		return false
+	}
+	gids, err := u.GroupIds()
+	return err == nil && slices.Contains(gids, admin.Gid)
 }
 
 // trustedServerUID is the user the service runs as: root. Tests, which serve

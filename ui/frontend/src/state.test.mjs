@@ -7,6 +7,7 @@ import {
   REQUESTED_STATE,
   ERROR_STATE,
   STREAM_ENDED_STATE,
+  NOT_AUTHORIZED_TEXT,
   activityLine,
   addActivity,
   bannerMessage,
@@ -36,6 +37,7 @@ import {
   progressText,
   refusalText,
   releaseOperation,
+  requestErrorText,
   restartBadge,
   shouldAcceptRecord,
   showRetry,
@@ -697,6 +699,15 @@ test("a refused cancel shows the service's reason without its error code", () =>
   );
   assert.equal(refusalText("pipe unavailable"), "Pipe unavailable");
   assert.equal(refusalText(""), "The operation can no longer be canceled");
+});
+
+// A refusal for another user's item reads as a sentence, not as the
+// service's code and quoted item name.
+test("a not_authorized refusal reads plainly", () => {
+  const refused = 'not_authorized: only the user who asked for this, or an administrator, can change it: "Slack"';
+  assert.equal(requestErrorText(refused), NOT_AUTHORIZED_TEXT);
+  assert.equal(refusalText(refused), NOT_AUTHORIZED_TEXT);
+  assert.equal(requestErrorText("pipe unavailable"), "pipe unavailable");
 });
 
 test("a user cancel reads plainly on the card and says who in Activity", () => {

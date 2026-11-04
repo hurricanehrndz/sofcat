@@ -142,6 +142,10 @@ Copy `build/manual-test/tapas/vm/bootstrap-vm.ps1` and
 `test/manual/run-tapas-smoke.ps1` to the VM. As an administrator, run
 `bootstrap-vm.ps1 -BaseUrl <url> -Slug tapas-test -ProductName "Tapas Test" -Manifest tapas_manifest -Catalogs tapas -InstallService -StartService -NoPause`,
 then `run-tapas-smoke.ps1`. The gate is exit 0 and `TAPAS SMOKE PASSED`.
+Then run the two-user authorization check elevated in the desktop session,
+since `Start-Process -Credential` fails over SSH:
+`rig run-it --elevated --wait test/manual/run-tapas-authz.ps1` must log
+`TAPAS AUTHZ PASSED` (its log is `C:\sofcat-test\tapas-authz.log`).
 Then copy `test/manual/run-tapas-user-sync.ps1` and run it as the logged-on
 standard user (`rig run-it --wait test/manual/run-tapas-user-sync.ps1`; create
 `C:\sofcat-test\` first): it runs `tapas-test-ui.exe --user-sync` and must

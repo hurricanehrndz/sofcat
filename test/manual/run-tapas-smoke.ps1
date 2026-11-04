@@ -12,10 +12,12 @@ marker and refusal, a placement outside the write roots, the skipped
 user-scope placement and its staged archive in the user-sync plan, the
 marketplace plugins with the generated marketplace.json and settings
 drop-in, a skill deferred until its required Chocolatey package exists, a
-held conditional item, scope exit, and the zip-only build's
-rejection of an exe item and a skill with a postinstall_script.
-run-tapas-user-sync.ps1 then places the user-scope skill as the logged-on
-user.
+held conditional item, scope exit, and the zip-only build's rejection of an
+exe item and a skill with a postinstall_script. The two-user authorization
+check lives in run-tapas-authz.ps1, because starting a process as another
+user fails over SSH; run it elevated in the desktop session after this
+smoke. run-tapas-user-sync.ps1 then places the user-scope skill as the
+logged-on user.
 
 Run once on a clean VM, AFTER bootstrap-vm.ps1 has installed and started the
 branded service:
@@ -164,9 +166,15 @@ function Get-OptionalItem {
 # operation to its end, and returns the terminal status record.
 function Invoke-Operation {
     param([string]$Spec)
-    $res = Invoke-SofCat $Spec
+    return (Wait-Operation (Invoke-SofCat $Spec) $Spec)
+}
+
+# Wait-Operation streams the operation an accepted InstallItem/RemoveItem
+# result names to its end and returns the terminal status record.
+function Wait-Operation {
+    param($Res, [string]$Spec)
     $opId = $null
-    foreach ($l in $res.Out) {
+    foreach ($l in $Res.Out) {
         if ("$l" -match 'operationId:\s*(\S+)') { $opId = $Matches[1]; break }
     }
     if (-not $opId) { Fail "no operationId returned for $Spec" }

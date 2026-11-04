@@ -628,11 +628,30 @@ export function cancelTitle(state: string, pending = false): string {
     : "Can't cancel now: work on this item has started, and a running installer is never interrupted";
 }
 
+/** NOT_AUTHORIZED_TEXT is what a not_authorized refusal reads as on a card. */
+export const NOT_AUTHORIZED_TEXT =
+  "Only the person who added this, or an administrator, can change it.";
+
+function isNotAuthorized(error: string): boolean {
+  return /^\s*not_authorized:/i.test(error);
+}
+
+/**
+ * requestErrorText is the line a refused InstallItem or RemoveItem shows: the
+ * service's error, except not_authorized, which reads as a plain sentence.
+ */
+export function requestErrorText(error: string): string {
+  return isNotAuthorized(error) ? NOT_AUTHORIZED_TEXT : error;
+}
+
 /**
  * refusalText turns a refused CancelOperation into the line the card shows: the
  * service's message without its error code, as a sentence.
  */
 export function refusalText(error: string): string {
+  if (isNotAuthorized(error)) {
+    return NOT_AUTHORIZED_TEXT;
+  }
   const message = error.replace(/^\s*operation_not_cancelable:\s*/i, "").trim();
   return message ? message[0].toUpperCase() + message.slice(1) : "The operation can no longer be canceled";
 }

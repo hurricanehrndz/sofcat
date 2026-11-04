@@ -38,11 +38,15 @@ the named pipe; the "Protocol" section of `ARCHITECTURE.md` is the contract.
 Service errors reach the frontend as `<data.code>: <message>`, for example
 `operation_not_cancelable: ...` or `server_busy: ...`.
 
-SofCat assumes one interactive user per machine. Self-service selections
-belong to the machine, not to a user: on a shared machine (fast user
-switching, Remote Desktop Services) every user sees, and can change, the one
-self-service selection. Operation IDs are 128 random bits, so a user cannot
-guess another user's operation to watch or cancel it.
+Self-service selections belong to the machine: on a shared machine (fast
+user switching, Remote Desktop Services) every user sees the one self-service
+selection. Only the user who selected an item, or a local administrator, can
+remove it, take back its pending removal, or cancel that user's operation;
+anyone else gets `not_authorized`, which the card shows as "Only the person
+who added this, or an administrator, can change it." An item nobody is
+recorded as selecting (a default, or an older selection) stays removable by
+anyone. Operation IDs are 128 random bits, so a user cannot guess another
+user's operation to watch it.
 
 ## Progress semantics
 

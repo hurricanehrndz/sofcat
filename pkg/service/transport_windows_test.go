@@ -155,3 +155,54 @@ func TestListenFailsWhenThePipeNameIsTaken(t *testing.T) {
 		t.Fatalf("listen on a taken name = %v, want an already-exists error", err)
 	}
 }
+
+// openProcessToken opens the test's own token as Peer opens a client's.
+func openProcessToken(t *testing.T) windows.Token {
+	t.Helper()
+	var token windows.Token
+	if err := windows.OpenProcessToken(windows.CurrentProcess(), windows.TOKEN_QUERY|windows.TOKEN_DUPLICATE, &token); err != nil {
+		t.Fatalf("open process token: %v", err)
+	}
+	t.Cleanup(func() { _ = token.Close() })
+	return token
+}
+
+// An elevated token has Administrators enabled, so it is an administrator's;
+// its UAC-filtered linked token has the group deny-only, so it is not. The
+// pipe's Peer gives the same verdict for the connecting process.
+func TestTokenIsAdmin(t *testing.T) {
+	token := openProcessToken(t)
+	admin, err := tokenIsAdmin(token)
+	if err != nil {
+		t.Fatalf("tokenIsAdmin: %v", err)
+	}
+	if token.IsElevated() && !admin {
+		t.Error("an elevated token is not an administrator's")
+	}
+	got, err := connectedPeer(t)
+	if err != nil {
+		t.Fatalf("Peer: %v", err)
+	}
+	if got.Admin != admin {
+		t.Errorf("Peer.Admin = %v, tokenIsAdmin = %v", got.Admin, admin)
+	}
+
+	if !token.IsElevated() {
+		t.Skip("not elevated: no filtered linked token to check")
+	}
+	linked, err := token.GetLinkedToken()
+	if err != nil {
+		t.Skipf("no linked token (UAC off or a non-split session): %v", err)
+	}
+	defer func() { _ = linked.Close() }()
+	if linked.IsElevated() {
+		t.Skip("the linked token is elevated too")
+	}
+	filtered, err := tokenIsAdmin(linked)
+	if err != nil {
+		t.Skipf("cannot check the linked token: %v", err)
+	}
+	if filtered {
+		t.Error("a UAC-filtered token is an administrator's")
+	}
+}

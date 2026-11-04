@@ -4,7 +4,9 @@ package service
 
 import (
 	"os"
+	"os/user"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -68,5 +70,23 @@ func TestListenSocketModesAndStaleSocket(t *testing.T) {
 		if got := info.Mode().Perm(); got != want {
 			t.Errorf("%s mode = %o, want %o", path, got, want)
 		}
+	}
+}
+
+// Root is an administrator everywhere; off macOS nobody else is. The Peer of
+// a connection carries that verdict for the connecting uid.
+func TestUnixPeerAdmin(t *testing.T) {
+	if !unixAdmin(0, &user.User{Uid: "0"}) {
+		t.Error("root is not an administrator")
+	}
+	if runtime.GOOS != "darwin" && unixAdmin(1000, &user.User{Uid: "1000"}) {
+		t.Error("a non-root uid is an administrator off macOS")
+	}
+	got, err := connectedPeer(t)
+	if err != nil {
+		t.Fatalf("Peer: %v", err)
+	}
+	if runtime.GOOS == "linux" && got.Admin != (os.Getuid() == 0) {
+		t.Errorf("Peer.Admin = %v for uid %d", got.Admin, os.Getuid())
 	}
 }

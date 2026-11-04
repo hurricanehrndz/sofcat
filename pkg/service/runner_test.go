@@ -229,7 +229,7 @@ func TestStreamOperationStatusFailedLifecycle(t *testing.T) {
 func TestScheduleRunAfterMutationEmitsCanceledTerminalEvent(t *testing.T) {
 	sr := newServiceRunner(config.Configuration{}, noopRun)
 	operationID := "op-canceled"
-	sr.registerTrackedOperation("Slack", "", CommandResponse{OperationID: operationID})
+	sr.registerTrackedOperation("Slack", "", "", CommandResponse{OperationID: operationID})
 
 	canceledCtx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -361,7 +361,7 @@ func mustStreamTerminal(t *testing.T, cfg config.Configuration, operationID stri
 func TestOperationProgressUsesActualItemsAndItemScopedPercent(t *testing.T) {
 	sr := newServiceRunner(config.Configuration{}, noopRun)
 	const operationID = "op-progress"
-	sr.registerTrackedOperation("DemoOptional", "", CommandResponse{OperationID: operationID})
+	sr.registerTrackedOperation("DemoOptional", "", "", CommandResponse{OperationID: operationID})
 
 	emit := sr.operationProgressCallback()
 	dep := []string{"DemoOptional"}
@@ -420,7 +420,7 @@ func TestOperationProgressUsesActualItemsAndItemScopedPercent(t *testing.T) {
 func TestOperationProgressSkipsOtherPendingItems(t *testing.T) {
 	sr := newServiceRunner(config.Configuration{}, noopRun)
 	const operationID = "op-unrelated"
-	sr.registerTrackedOperation("DemoOptional", "", CommandResponse{OperationID: operationID})
+	sr.registerTrackedOperation("DemoOptional", "", "", CommandResponse{OperationID: operationID})
 
 	emit := sr.operationProgressCallback()
 	failing := catalog.Item{Name: "DemoFailing", DisplayName: "Demo Failing"}
@@ -446,9 +446,9 @@ func TestOperationProgressSkipsOtherPendingItems(t *testing.T) {
 // card moves along instead of reading "Waiting…" until its own run.
 func TestOperationProgressReachesOtherOpenOperation(t *testing.T) {
 	sr := newServiceRunner(config.Configuration{}, noopRun)
-	sr.registerTrackedOperation("DemoOptional", "", CommandResponse{OperationID: "op-x"})
-	sr.registerTrackedOperation("DemoOther", "", CommandResponse{OperationID: "op-z"})
-	sr.registerTrackedOperation("DemoFailing", "", CommandResponse{OperationID: "op-done"})
+	sr.registerTrackedOperation("DemoOptional", "", "", CommandResponse{OperationID: "op-x"})
+	sr.registerTrackedOperation("DemoOther", "", "", CommandResponse{OperationID: "op-z"})
+	sr.registerTrackedOperation("DemoFailing", "", "", CommandResponse{OperationID: "op-done"})
 	sr.appendOperationEvent("op-done", OperationStatus{State: "Failed"})
 
 	emit := sr.operationProgressCallback()
@@ -532,7 +532,7 @@ func TestGetBrandingAnswersWhileRunIsBusy(t *testing.T) {
 // a run that never emits progress for the item names it properly at the end.
 func TestTrackedOperationUsesRegisteredDisplayName(t *testing.T) {
 	sr := newServiceRunner(config.Configuration{}, noopRun)
-	sr.registerTrackedOperation("GoogleChrome", "", CommandResponse{OperationID: "op-named", displayName: "Google Chrome"})
+	sr.registerTrackedOperation("GoogleChrome", "", "", CommandResponse{OperationID: "op-named", displayName: "Google Chrome"})
 	sr.appendOperationEvent("op-named", resolveTerminalEvent("GoogleChrome", nil))
 
 	events, done, _ := sr.snapshotTrackedOperation("op-named")
