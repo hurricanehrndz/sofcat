@@ -188,7 +188,7 @@ func enablePrivilege(name string) func() {
 
 // protectConfig gives config.yaml, which sits beside Data rather than in it
 // and can hold auth_pass and TLS key paths, owner Administrators and
-// configSDDL. A missing config is left alone (the MSI installs none), and
+// configSDDL. A missing config is left alone (the installer ships none), and
 // anything but a regular file is refused, so a symbolic link or other reparse
 // point cannot redirect the ACL. It is the Windows twin of protectConfigFile.
 func protectConfig(path string) error {

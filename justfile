@@ -1,8 +1,8 @@
 # sofcat task runner. All build artifacts go to build/.
-# Tools come from mise.toml (`mise install`); `just setup` wires the git hook.
+# Tools come from mise.toml (`mise install`); `just dev-setup` wires the git hook.
 set shell := ["bash", "-cu"]
 
-# Rebranding: `just brand=branding/acme build` (or msi) takes the values below
+# Rebranding: `just brand=branding/acme build` (or setup) takes the values below
 # from <brand>/brand.env instead of the stock SofCat ones. <brand> is relative
 # to this file or absolute, and may be outside the checkout; see
 # examples/brand/README.md. pkg/identity defaults to the same stock values for
@@ -31,12 +31,12 @@ write_roots := if path_exists(_brand_roots) == "true" { _brand_roots } else { ""
 _svc_tags := trim_start_match((if write_roots == "" { "" } else { "brand_roots" }) + _zip_tag, ",")
 _ui_icon_tag := if icon_png == "" { "" } else { ",brand" }
 _ui_tags := "production" + _ui_icon_tag + (if write_roots == "" { "" } else { ",brand_roots" }) + _zip_tag
-# sed arguments filling the @PLACEHOLDERS@ in installer/embala.toml and
+# sed arguments filling the @PLACEHOLDERS@ in installer/* and
 # */winres/winres.json. brand-check keeps the values free of ' | & \ and ".
 _subst := "-e 's|@APP@|" + app + "|g' -e 's|@PRODUCT@|" + product + "|g' -e 's|@PUBLISHER@|" + publisher + "|g' -e 's|@IDENTIFIER@|" + identifier + "|g' -e 's|@DESCRIPTION@|" + description + "|g' -e 's|@HOMEPAGE@|" + homepage + "|g'"
 _identity := "-X github.com/hurricanehrndz/sofcat/pkg/identity.Slug=" + app + " -X 'github.com/hurricanehrndz/sofcat/pkg/identity.Name=" + product + "' -X github.com/hurricanehrndz/sofcat/pkg/identity.Identifier=" + identifier
 version := `git describe --tags --always --dirty 2>/dev/null || echo dev`
-msi_version := replace_regex(replace_regex(version, "^v", ""), "[-+].*$", "")
+pkg_version := replace_regex(replace_regex(version, "^v", ""), "[-+].*$", "")
 manual_test_dir := "build/manual-test"
 server_root := manual_test_dir / "server-root"
 vm_dir := manual_test_dir / "vm"
@@ -47,7 +47,7 @@ default:
 
 # One-time contributor setup: frontend deps and the prek pre-commit hook
 # (prek.toml). --force replaces a hook left by an older setup.
-setup: ui-install
+dev-setup: ui-install
     prek install --force
 
 # Every pre-commit hook, on every file rather than only staged ones.
@@ -122,14 +122,19 @@ build arch="amd64": ui-assets (winres arch)
         go build -tags {{_ui_tags}} -ldflags "-H windowsgui {{_identity}}" \
         -o build/{{app}}-ui.exe ./ui
 
-# Windows installer -> build/<app>-<msi_version>-x86_64.msi (embala, no WiX).
-# msi_version is the numeric part of version: v1.5.0-3-gabc-dirty -> 1.5.0.
-msi: build
-    rm -rf build/msi
-    mkdir -p build/msi
-    cp build/{{app}}.exe build/{{app}}-ui.exe build/msi/
-    sed -e "s/@VERSION@/{{msi_version}}/" {{_subst}} installer/embala.toml > build/msi/embala.toml
-    embala build --config build/msi/embala.toml --formats msi --out-dir build
+# Windows installer -> build/<app>-<pkg_version>-x86_64-setup.exe (embala's
+# setup format; it builds on any OS, since the stub is prebuilt and embala
+# only appends the payload). pkg_version is the numeric part of version:
+# v1.5.0-3-gabc-dirty -> 1.5.0. installer/install.lua and uninstall.lua are
+# rendered beside embala.toml with the same placeholders.
+setup: build
+    rm -rf build/setup
+    mkdir -p build/setup
+    cp build/{{app}}.exe build/{{app}}-ui.exe build/setup/
+    for f in embala.toml install.lua uninstall.lua; do \
+      sed -e "s/@VERSION@/{{pkg_version}}/" {{_subst}} installer/$f > build/setup/$f || exit 1; \
+    done
+    embala build --config build/setup/embala.toml --formats setup --out-dir build
 
 # The oldest macOS the app and the cgo objects in it are built for.
 macos_min := "13.0"
@@ -184,7 +189,8 @@ build-macos: _require-macos ui-assets
 # would otherwise reset. The plist is what
 # `<app> -serviceinstall` writes for that layout (`-print-launchd-plist`), and
 # the postinstall script bootstraps it, so the daemon starts with no config
-# until config.yaml is written and the daemon kickstarted, as the MSI does.
+# until config.yaml is written and the daemon kickstarted, as the Windows
+# installer does.
 pkg: _require-macos build-macos
     #!/usr/bin/env bash
     set -euo pipefail
@@ -233,8 +239,8 @@ pkg: _require-macos build-macos
 
 # Reject brand values that would break a template or collide with a stock
 # install. SLUG, NAME and IDENTIFIER must all keep or all change the stock
-# values: the service, pipe, ProgramData folder, policy key and MSI upgrade
-# code derive from them. Two custom brands still need distinct values.
+# values: the service, pipe, ProgramData folder, policy key and installer
+# identity derive from them. Two custom brands still need distinct values.
 brand-check:
     #!/usr/bin/env bash
     set -euo pipefail

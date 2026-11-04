@@ -29,8 +29,8 @@ jobs:
         uses: jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e # v5.2.3
         with:
           cache: false # a release builds from fresh tools, not a restored cache
-      - name: Build executables, MSI and makecatalogs
-        run: just version="$GITHUB_REF_NAME" msi makecatalogs
+      - name: Build executables, setup.exe and makecatalogs
+        run: just version="$GITHUB_REF_NAME" setup makecatalogs
       # SLSA build provenance for every release file, also attached to the
       # release so it can be checked offline:
       #   gh attestation verify <file> -R hurricanehrndz/sofcat --bundle sofcat-<tag>.sigstore.json
@@ -41,7 +41,7 @@ jobs:
           subject-path: |
             build/sofcat.exe
             build/sofcat-ui.exe
-            build/sofcat-*.msi
+            build/sofcat-*-setup.exe
             build/makecatalogs-*
       - name: Stage provenance bundle
         env:
@@ -54,7 +54,7 @@ jobs:
           path: |
             ./build/sofcat.exe
             ./build/sofcat-ui.exe
-            ./build/sofcat-*.msi
+            ./build/sofcat-*-setup.exe
             ./build/makecatalogs-*
           if-no-files-found: error
       - name: Cut release
@@ -62,7 +62,7 @@ jobs:
         with:
           allowUpdates: false
           prerelease: true
-          artifacts: "./build/sofcat.exe,./build/sofcat-ui.exe,./build/sofcat-*.msi,./build/makecatalogs-*,./build/sofcat-*.sigstore.json"
+          artifacts: "./build/sofcat.exe,./build/sofcat-ui.exe,./build/sofcat-*-setup.exe,./build/makecatalogs-*,./build/sofcat-*.sigstore.json"
           tag: ${{ github.ref_name }}
           token: ${{ secrets.GITHUB_TOKEN }}
   integration:

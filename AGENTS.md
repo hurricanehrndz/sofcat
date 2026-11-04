@@ -50,15 +50,22 @@ When changes span Go service/CLI and UI protocol layers, run `just test`, `just 
 `just build` produces both raw Windows executables — `build/sofcat.exe` and the
 pure-Go, windows-GUI `build/sofcat-ui.exe`
 (`GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -tags production -ldflags "-H windowsgui"`).
-`just msi` wraps them in an MSI with embala (`installer/embala.toml`); the
-installer puts them in `C:\Program Files\SofCat` and registers the service.
+`just setup` wraps them in embala's `setup.exe` (`installer/embala.toml`,
+`install.lua` and `uninstall.lua`, embala 0.9.0); it builds on Linux. The
+installer copies them into `C:\Program Files\SofCat`, adds the Start-menu
+shortcut and the Add or remove programs entry, then runs
+`sofcat.exe -serviceinstall`, which registers and starts the service and
+writes the HKLM `Run` value `<slug>-user-sync` that starts the per-user
+helper, `<slug>-ui.exe --user-sync`, at logon. Its `uninstall.exe` runs
+`sofcat.exe -serviceremove`, which stops and deletes the service and removes
+the value, then reverses the copies. sofcat owns both on every platform, so
+the installer scripts only call it. `setup.exe /S` and `uninstall.exe /S` are
+the unattended forms; `setup.exe` refuses to install over an existing service.
 Everything the service writes lives under `C:\ProgramData\SofCat`, as under
 `/Library/Application Support/<Name>` on a Mac: `config.yaml`, the `Data`
 directory (the default `app_data_path`, SYSTEM and Administrators only
 except `Data\user-artifacts`, which Users read) and any placement of its own
-(`docs/data-directory.md`). The installer
-also writes the HKLM `Run` value that starts the per-user helper,
-`<slug>-ui.exe --user-sync`, at logon (embala 0.9.0 `[msi].registry`).
+(`docs/data-directory.md`).
 A brand with `INSTALLERS=zip` in its `brand.env` adds the `zip_only` tag to both
 binaries, which compiles out the command installers and catalog scripts
 (`*_command.go`/`*_script.go` versus their `*_zip_only.go` twins); test that
@@ -182,23 +189,31 @@ Then copy `test/manual/run-tapas-user-sync.ps1` and run it as the logged-on
 standard user (`rig run-it --wait test/manual/run-tapas-user-sync.ps1`; create
 `C:\sofcat-test\` first): it runs `tapas-test-ui.exe --user-sync` and must
 print `TAPAS USER SYNC PASSED` (its log is `C:\sofcat-test\tapas-user-sync.log`).
-For the logon path, install the branded MSI
-(`just brand=test/manual/fixtures/tapas/brand msi`) on a clean VM and write its
-config, confirm the HKLM `...\CurrentVersion\Run` value `tapas-test-user-sync`,
-wait for the startup run to stage the archive and store the plan, then
-reboot (the VM autologs on at boot; a plain sign-out does not log back in)
-and check the skill appears without opening the storefront. `msiexec /x`
-must remove the value and the service. It leaves `C:\ProgramData\<Name>`
-alone, the staged archives in `Data\user-artifacts` included, as it leaves
-the config; remove the whole directory by hand for a clean slate.
+For the logon path, install the branded installer
+(`just brand=test/manual/fixtures/tapas/brand setup`) on a clean VM and write
+its config, confirm the HKLM `...\CurrentVersion\Run` value
+`tapas-test-user-sync`, wait for the startup run to stage the archive and
+store the plan, then reboot (the VM autologs on at boot; a plain sign-out does
+not log back in) and check the skill appears without opening the storefront.
+`uninstall.exe /S` must remove the value and the service. It leaves
+`C:\ProgramData\<Name>` alone, the staged archives in `Data\user-artifacts`
+included, as it leaves the config; remove the whole directory by hand for a
+clean slate.
 
-To validate the installer instead of the raw executables: `just msi`, copy
-`build/sofcat-<version>-x86_64.msi` to the VM and run `msiexec /i <msi> /qn`.
-The service starts with no config. Write `C:\ProgramData\SofCat\config.yaml`
-(url, manifest, catalogs), `Restart-Service sofcat`, then run the two gates
-above; the service keeps its state in `C:\ProgramData\SofCat\Data`.
-`msiexec /x <msi> /qn` must remove the service and `C:\Program Files\SofCat`
-and leave `C:\ProgramData\SofCat` alone.
+To validate the installer instead of the raw executables: `just setup`, `rig
+put` `build/sofcat-<version>-x86_64-setup.exe` and
+`test/manual/install-setup.ps1` on the VM, then run
+`install-setup.ps1 -Setup <path to setup.exe>` under `rig ps` (it runs
+`setup.exe /S`, waits for it, since the stub is a GUI executable, and exits
+with its code). The service starts with no config. Write
+`C:\ProgramData\SofCat\config.yaml` (url, manifest, catalogs),
+`Restart-Service sofcat`, then run the two gates above; the service keeps its
+state in `C:\ProgramData\SofCat\Data`. `install-setup.ps1 -Uninstall` runs
+`"C:\Program Files\SofCat\uninstall.exe" /S` the same way; it must remove
+the service, the `Run` value, the shortcut, the Add or remove programs entry
+and `C:\Program Files\SofCat`, and leave `C:\ProgramData\SofCat` alone.
+Running `setup.exe /S` over an existing install must exit non-zero before
+copying anything.
 
 ## macOS Validation Loop
 

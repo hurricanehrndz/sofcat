@@ -5,7 +5,8 @@ Bootstrap SofCat on a Windows VM from prepared manual-test assets.
 .DESCRIPTION
 - Downloads sofcat.exe and sofcat-ui.exe from a provided base URL.
 - Writes config.yaml to ProgramData.
-- Optionally installs/starts service mode.
+- Optionally installs/starts service mode. -serviceinstall also registers the
+  per-user helper at logon, as the setup.exe installer does.
 
 A branded build passes its brand.env SLUG as -Slug and NAME as -ProductName;
 the exe names, service name and default paths follow from them.
@@ -181,6 +182,9 @@ function Remove-ExistingSofCatService {
     }
 
     sc.exe delete $ServiceName | Out-Null
+    # -serviceinstall writes the helper's logon entry beside the service; a
+    # stale one from an install that was never -serviceremove'd goes with it.
+    Remove-ItemProperty -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "$ServiceName-user-sync" -ErrorAction SilentlyContinue
 
     for ($i = 0; $i -lt 30; $i++) {
         Start-Sleep -Milliseconds 250

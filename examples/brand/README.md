@@ -1,6 +1,6 @@
 # Rebranded builds
 
-`just brand=<dir> build` (or `msi`) builds SofCat under another name, the way
+`just brand=<dir> build` (or `setup`) builds SofCat under another name, the way
 [munki-rebrand](https://github.com/TSPARR/munki-rebrand) does for Munki. `<dir>`
 is relative to the checkout or absolute, and may live outside it. Keep
 brands under `branding/`, which git ignores:
@@ -8,7 +8,7 @@ brands under `branding/`, which git ignores:
 ```sh
 mkdir -p branding && cp -R examples/brand branding/acme
 # edit branding/acme/brand.env, add the icons
-just brand=branding/acme msi   # -> build/acme-apps-<version>-x86_64.msi
+just brand=branding/acme setup   # -> build/acme-apps-<version>-x86_64-setup.exe
 ```
 
 `<dir>` holds:

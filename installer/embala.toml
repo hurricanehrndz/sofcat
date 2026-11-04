@@ -1,17 +1,19 @@
 # SofCat installer definition for embala (https://github.com/hurricanehrndz/embala).
-# `just msi` copies the built executables beside a rendered copy of this file
-# under build/msi/ and runs `embala build` there, so `src` paths are plain
-# file names. @VERSION@ is the MSI ProductVersion (major.minor.patch); the
-# other @PLACEHOLDERS@ are the justfile brand values (stock SofCat unless
-# `just brand=…`).
+# `just setup` copies the built executables beside rendered copies of this
+# file, install.lua and uninstall.lua under build/setup/ and runs `embala build`
+# there, so `src` paths are plain file names. @VERSION@ is the package version
+# (major.minor.patch); the other @PLACEHOLDERS@ are the justfile brand values
+# (stock SofCat unless `just brand=…`).
 #
-# The MSI puts both executables in C:\Program Files\SofCat and registers
-# sofcat.exe as the SofCat service. It ships no config.yaml: management
-# tooling writes C:\ProgramData\SofCat\config.yaml, and the service runs with
-# defaults (every managed run failing) until that file exists and the service
-# restarts. It also writes the HKLM Run value @APP@-user-sync, which starts
-# `@APP@-ui.exe --user-sync` at every logon to place the user's user-scope
-# zip items (docs/zip-items.md); `[msi].registry` needs embala 0.9.0.
+# The setup.exe puts both executables in C:\Program Files\SofCat and runs
+# `sofcat.exe -serviceinstall`, which registers and starts the SofCat service
+# and writes the HKLM Run value sofcat-user-sync that starts
+# `sofcat-ui.exe --user-sync` at every logon (docs/zip-items.md); its
+# uninstaller runs `sofcat.exe -serviceremove`, which undoes both. sofcat owns
+# its service and that value, so the scripts only call it. The installer ships
+# no config.yaml: management tooling writes C:\ProgramData\SofCat\config.yaml,
+# and the service runs with defaults (every managed run failing) until that
+# file exists and the service restarts.
 
 [package]
 name = "@APP@"
@@ -23,15 +25,14 @@ description = "@DESCRIPTION@"
 homepage = "@HOMEPAGE@"
 license = "Apache-2.0"
 
-[msi]
+[setup]
 arch = "x86_64"
-# The Start-menu shortcut targets the UI; the service runs the agent.
-main-executable = "@APP@-ui.exe"
+install-mode = "per-machine"
 files = [
   { src = "@APP@.exe", dest = "@APP@.exe" },
   { src = "@APP@-ui.exe", dest = "@APP@-ui.exe" },
 ]
-service = { name = "@APP@", executable = "@APP@.exe", display-name = "@PRODUCT@", description = "@PRODUCT@ application management service", start = "auto", arguments = "-service" }
-# The per-user helper runs at every logon. The MSI writes this value on
-# install and removes it on uninstall; sofcat code never writes it.
-registry = [{ root = "HKLM", key = 'Software\Microsoft\Windows\CurrentVersion\Run', name = "@APP@-user-sync", value = '"[INSTALLDIR]@APP@-ui.exe" --user-sync' }]
+# Raw scripts: the shortcut and ARP entry live in install.lua, since `script`
+# cannot be combined with `main-executable` or `shortcuts`.
+script = "install.lua"
+uninstall-script = "uninstall.lua"
