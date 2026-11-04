@@ -248,7 +248,10 @@ passwordless sudo.
    `sudo "/Library/Application Support/Tapas Test/bin/tapas-test" -serviceremove`
    and remove `/Applications/Tapas Test.app`,
    `/Library/Application Support/Tapas Test` and
-   `/Library/Application Support/tapas-test-*`.
+   `/Library/Application Support/tapas-test-*`. Run that removal through
+   `sudo sh -c '...'`: the login shell over SSH is zsh, which aborts the
+   whole command when a glob such as `tapas-test-*` matches nothing, and a
+   smoke on the leftovers fails at step 8 with "not a clean Mac?".
 
 ## Diagnostics
 
