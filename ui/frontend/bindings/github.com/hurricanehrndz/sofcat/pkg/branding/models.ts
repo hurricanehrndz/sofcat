@@ -17,6 +17,11 @@ export class Branding {
     "logoMime": string;
     "logoBase64": string;
 
+    /**
+     * ListHeading replaces the UI's "Available software" heading when set.
+     */
+    "listHeading": string;
+
     /** Creates a new Branding instance. */
     constructor($$source: Partial<Branding> = {}) {
         if (!("title" in $$source)) {
@@ -39,6 +44,9 @@ export class Branding {
         }
         if (!("logoBase64" in $$source)) {
             this["logoBase64"] = "";
+        }
+        if (!("listHeading" in $$source)) {
+            this["listHeading"] = "";
         }
 
         Object.assign(this, $$source);

@@ -28,6 +28,10 @@ type Item struct {
 	// RequiresSoftware lists software the item needs and sofcat never
 	// installs. While any is missing, installs and updates are deferred.
 	RequiresSoftware []RequiredSoftware `yaml:"requires_software,omitempty"`
+	// CustomActionLabels replaces the storefront's button and status labels,
+	// keyed by ActionLabelKeys (Munki's keys plus cancel). A key it leaves
+	// out falls back to the item's placements, then the built-in label.
+	CustomActionLabels map[string]string `yaml:"custom_action_labels,omitempty"`
 	// NotInstallable says why InstallableCondition rejected this machine. It is
 	// set on the agent by conditions.Apply and is empty when the item may be
 	// installed.
@@ -96,3 +100,7 @@ type AppxCheck struct {
 	Name    string `yaml:"name,omitempty"`
 	Version string `yaml:"version,omitempty"`
 }
+
+// ActionLabelKeys are the keys of custom_action_labels and of a harness
+// placement's action_labels: Munki's, plus sofcat's cancel.
+var ActionLabelKeys = []string{"install", "installing", "installed", "remove", "removing", "update", "cancel"}

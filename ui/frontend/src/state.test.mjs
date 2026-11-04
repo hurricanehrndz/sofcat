@@ -128,10 +128,12 @@ test("action derivation covers every status and managed combination", () => {
     ["", true, "Remove", "RemoveItem"],
     ["", false, "Install", "InstallItem"],
   ];
+  const kinds = { Cancel: "cancel", Remove: "undo", Install: "do" };
   for (const [status, isManaged, label, method] of cases) {
+    const kind = kinds[label];
     assert.deepEqual(
       deriveAction(item({ status, isManaged })),
-      { label, method },
+      { kind, label, method },
       `${status || "(blank)"} isManaged=${isManaged}`,
     );
   }
@@ -149,6 +151,7 @@ test("a required item has no action and says the organisation manages it", () =>
   }
   assert.equal(REQUIRED_LABEL, "Managed by your organisation");
   assert.deepEqual(deriveAction(item({ status: "Installed", isManaged: true, isRequired: false })), {
+    kind: "undo",
     label: "Remove",
     method: "RemoveItem",
   });
@@ -558,7 +561,7 @@ test("the strip shows the running operation the service is working on, as n of N
   const operation = (operationId, itemName, outcome, records) => ({
     operationId,
     item: item({ itemName, displayName: itemName }),
-    action: { label: "Install", method: "InstallItem" },
+    action: { kind: "do", label: "Install", method: "InstallItem" },
     records,
     outcome,
   });

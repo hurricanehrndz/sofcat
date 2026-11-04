@@ -8,8 +8,10 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -145,6 +147,7 @@ func CollectCatalogs(repoPath string) (CatalogSet, error) { //nolint:gocognit //
 			set.Problems = append(set.Problems, fmt.Sprintf("%s: invalid installable_condition: %v", packageInfoPath, err))
 		}
 		set.Problems = append(set.Problems, checkRequiresSoftware(packageInfoPath, parsed.Item.RequiresSoftware)...)
+		set.Problems = append(set.Problems, checkActionLabels(packageInfoPath, parsed.Item.CustomActionLabels)...)
 		if parsed.Item.Installer.Type == "zip" {
 			set.Problems = append(set.Problems, checkZipItem(packageInfoPath, parsed.Item.Installer, harnesses)...)
 		}
@@ -231,6 +234,18 @@ func checkRequiresSoftware(path string, reqs []catalog.RequiredSoftware) []strin
 		}
 		if req.Munki == "" && req.Chocolatey == "" {
 			problems = append(problems, fmt.Sprintf("%s: requires_software[%d] needs munki or chocolatey", path, i))
+		}
+	}
+	return problems
+}
+
+// checkActionLabels reports custom_action_labels keys the storefront does
+// not know, which it would silently ignore.
+func checkActionLabels(path string, labels map[string]string) []string {
+	var problems []string
+	for _, key := range slices.Sorted(maps.Keys(labels)) {
+		if !slices.Contains(catalog.ActionLabelKeys, key) {
+			problems = append(problems, fmt.Sprintf("%s: custom_action_labels: unknown key %q", path, key))
 		}
 	}
 	return problems

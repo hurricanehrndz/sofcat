@@ -114,6 +114,8 @@ type Branding struct {
 	HelpURL   string `yaml:"help_url,omitempty"`
 	HelpLabel string `yaml:"help_label,omitempty"`
 	Accent    string `yaml:"accent,omitempty"`
+	// ListHeading replaces the UI's "Available software" heading.
+	ListHeading string `yaml:"list_heading,omitempty"`
 }
 
 func init() {

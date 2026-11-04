@@ -18,3 +18,4 @@ app_data_path: c:/cpe/sofcat/cache
 #   help_url: https://help.example.com/               # http or https only
 #   help_label: Get help
 #   accent: "#0b6e4f"                                 # 6-digit hex
+#   list_heading: Software for your team              # replaces "Available software"

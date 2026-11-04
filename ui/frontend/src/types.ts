@@ -6,8 +6,16 @@ export type { OperationStatus, OptionalInstallItem } from "./api.ts";
 
 export type ActionMethod = "InstallItem" | "RemoveItem";
 
+/**
+ * ActionKind is what an action does to the item: do installs it, undo removes
+ * it, cancel takes back a pending request.
+ */
+export type ActionKind = "do" | "undo" | "cancel";
+
 export type ItemAction = {
-  label: "Install" | "Remove" | "Cancel";
+  kind: ActionKind;
+  /** Catalog or harness text, shown only through textContent. */
+  label: string;
   method: ActionMethod;
 };
 
@@ -36,6 +44,8 @@ export type ActivityRecord = {
   detail?: string;
   /** Who ended a Canceled operation: "user" or "service". */
   canceledBy?: string;
+  /** The wire errorCode of a Failed or Deferred record, such as missing_software. */
+  errorCode?: string;
 };
 
 /** OperationOutcome is where a locally initiated operation has got to. */
@@ -86,4 +96,6 @@ export type BrandingView = {
   /** The title's initial, or "" to show the SofCat icon. */
   productMark: string;
   showBanner: boolean;
+  /** The Software view's heading: the admin's list_heading or "Available software". */
+  listHeading: string;
 };

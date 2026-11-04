@@ -42,6 +42,8 @@ func TestGet(t *testing.T) {
 			HelpURL:   "https://example.com/help",
 			HelpLabel: "Get help",
 			Accent:    "#0b6e4f",
+
+			ListHeading: "Software for your team",
 		},
 		ConfigPath: "testdata/test_config.yaml",
 	}

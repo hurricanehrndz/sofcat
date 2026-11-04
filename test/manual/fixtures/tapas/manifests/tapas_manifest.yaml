@@ -12,6 +12,7 @@ optional_installs:
   - tapas-foreign-skill
   - tapas-outside-skill
   - tapas-optional-plugin
+  - tapas-second-plugin
   - tapas-scripted-skill
   - tapas-choco-skill
 conditional_items:
