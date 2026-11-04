@@ -86,7 +86,9 @@ flowchart LR
 
    The MSI puts both executables in `C:\Program Files\SofCat`, registers the
    `sofcat` service and adds a Start-menu shortcut to the app. It ships no
-   config.
+   config. SofCat never writes under `C:\Program Files`: its config, its
+   `Data` directory and any placement of its own live under
+   `C:\ProgramData\SofCat`.
 
 2. Write `C:\ProgramData\SofCat\config.yaml` and point it at your repo:
 
@@ -95,7 +97,6 @@ flowchart LR
    manifest: example_manifest
    catalogs:
      - example_catalog
-   app_data_path: C:/ProgramData/SofCat
    ```
 
 3. `Restart-Service sofcat`.

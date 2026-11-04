@@ -32,6 +32,10 @@ TAPAS SMOKE PASSED at the end. PowerShell 5.1 compatible.
 param(
     [string]$SofCat      = "$env:ProgramFiles\Tapas Test\tapas-test.exe",
     [string]$Config      = "$env:ProgramData\Tapas Test\config.yaml",
+    # The data directory (app_data_path), beside config.yaml: the receipts,
+    # inventory.json, the self-service manifest, the admin conditions folder
+    # and the user-artifacts staging directory.
+    [string]$DataDir     = "$env:ProgramData\Tapas Test\Data",
     [string]$Slug        = "tapas-test",
     # The brand's write root and a sibling outside it; see
     # test/manual/fixtures/tapas/brand/write-roots.yaml and harnesses.yaml.
@@ -43,14 +47,11 @@ param(
 $ErrorActionPreference = "Stop"
 $stepNum = 0
 
-# The data directory holds config.yaml, the receipts, inventory.json, the
-# self-service manifest and the admin conditions folder.
-$dataDir       = Split-Path $Config
-$receiptDir    = Join-Path $dataDir "receipts"
-$inventoryPath = Join-Path $dataDir "inventory.json"
-$logPath       = Join-Path $dataDir "sofcat.log"
-$SelfServe     = Join-Path $dataDir "service-manifest.yaml"
-$conditionsDir = Join-Path $dataDir "conditions"
+$receiptDir    = Join-Path $DataDir "receipts"
+$inventoryPath = Join-Path $DataDir "inventory.json"
+$logPath       = Join-Path $DataDir "sofcat.log"
+$SelfServe     = Join-Path $DataDir "service-manifest.yaml"
+$conditionsDir = Join-Path $DataDir "conditions"
 $conditionScript = Join-Path $conditionsDir "10-tapas-smoke.ps1"
 
 # Placement roots from harnesses.yaml.
@@ -316,7 +317,7 @@ foreach ($fact in @('tapas_smoke_scope', 'tapas_smoke_held')) {
 Pass "tapas-scoped-skill and tapas-held-skill held, not placed"
 
 Write-Step "The service staged the Codex archive and lists it for the user helper"
-$userArtifacts = Join-Path (Split-Path $SofCat) "user-artifacts"
+$userArtifacts = Join-Path $DataDir "user-artifacts"
 $codex = $null
 foreach ($l in (Invoke-SofCat "ListUserPlacements").Out) {
     $t = "$l".Trim()

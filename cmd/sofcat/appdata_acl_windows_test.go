@@ -10,22 +10,39 @@ import (
 	"testing"
 
 	"golang.org/x/sys/windows"
+
+	"github.com/hurricanehrndz/sofcat/pkg/identity"
 )
 
-// TestProtectAppData: after protectAppData, a standard user must have no
-// access to anything in the data directory, whatever ACLs and owners
-// entries had before (as on a tree an older version created, where Users could
-// create files), while inventory.json keeps its stricter DACL and a junction a
-// user planted is not followed.
+const (
+	admins    = "O:BA"
+	inherited = "(A;ID;FA;;;SY)(A;ID;FA;;;BA)"
+	dirInh    = "(A;OICIID;FA;;;SY)(A;OICIID;FA;;;BA)"
+	usersRX   = "0x1200a9"
+)
+
+// TestProtectAppData: after protectAppData on <Name>\Data, a standard user
+// must have no access to anything in the data directory, whatever ACLs and
+// owners entries had before (as on a tree an older version created, where
+// Users could create files), except the staged archives in user-artifacts,
+// which the per-user helper reads. inventory.json keeps its stricter DACL, a
+// junction a user planted is not followed, and the parent <Name> gets its
+// own DACL without a walk: only administrators create entries there, and
+// Users read sofcat's own placements beside Data.
 func TestProtectAppData(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "sofcat")
-	mkdir(t, root, filepath.Join(root, "cache", "packages"))
-	write(t, filepath.Join(root, "config.yaml"),
+	parent := filepath.Join(t.TempDir(), identity.Name)
+	root := filepath.Join(parent, "Data")
+	artifacts := filepath.Join(root, "user-artifacts")
+	marketplace := filepath.Join(parent, "marketplace")
+	archive := filepath.Join(artifacts, "abc.zip")
+	mkdir(t, root, filepath.Join(root, "cache", "packages"), artifacts, marketplace)
+	write(t, filepath.Join(parent, "config.yaml"), archive,
 		filepath.Join(root, "cache", "packages", "setup.msi"), filepath.Join(root, "service-manifest.yaml"),
 		filepath.Join(root, inventoryFile))
-	// A planted manifest that only Everyone may read, and inventory.json as
-	// pkg/report writes it.
+	// A planted manifest that only Everyone may read, an archive locked to
+	// SYSTEM, and inventory.json as pkg/report writes it.
 	setDACL(t, filepath.Join(root, "service-manifest.yaml"), "D:P(A;;FA;;;WD)")
+	setDACL(t, archive, "D:P(A;;FA;;;SY)")
 	setDACL(t, filepath.Join(root, inventoryFile), "D:P(A;;FA;;;SY)(A;;FR;;;BA)")
 	inventoryBefore := daclSDDL(t, filepath.Join(root, inventoryFile))
 
@@ -45,22 +62,24 @@ func TestProtectAppData(t *testing.T) {
 		}
 	}
 
-	const (
-		admins    = "O:BA"
-		inherited = "(A;ID;FA;;;SY)(A;ID;FA;;;BA)"
-		dirInh    = "(A;OICIID;FA;;;SY)(A;OICIID;FA;;;BA)"
-	)
 	want := map[string]string{
+		parent:                       admins + "D:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;" + usersRX + ";;;BU)",
 		root:                         admins + "D:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)",
 		filepath.Join(root, "cache"): admins + "D:AI" + dirInh,
 		filepath.Join(root, "cache", "packages", "setup.msi"): admins + "D:AI" + inherited,
-		filepath.Join(root, "config.yaml"):                    admins + "D:AI" + inherited,
 		filepath.Join(root, "service-manifest.yaml"):          admins + "D:AI" + inherited,
+		artifacts: admins + "D:AI(A;OICI;" + usersRX + ";;;BU)" + dirInh,
+		archive:   admins + "D:AI(A;ID;" + usersRX + ";;;BU)" + inherited,
 	}
 	for path, w := range want {
 		if got := sddl(t, path); got != w {
 			t.Errorf("%s:\n got %s\nwant %s", path, got, w)
 		}
+	}
+	// The parent is not walked: a placement there only inherits, keeping its
+	// owner; config.yaml is protectConfig's.
+	if got, w := daclSDDL(t, marketplace), "D:AI(A;OICIID;FA;;;SY)(A;OICIID;FA;;;BA)(A;OICIID;"+usersRX+";;;BU)"; got != w {
+		t.Errorf("%s:\n got %s\nwant %s", marketplace, got, w)
 	}
 	if got := daclSDDL(t, filepath.Join(root, inventoryFile)); got != inventoryBefore {
 		t.Errorf("inventory.json changed: got %s, want %s", got, inventoryBefore)
@@ -70,14 +89,77 @@ func TestProtectAppData(t *testing.T) {
 	}
 }
 
-func TestProtectAppDataRefusesOtherNames(t *testing.T) {
-	dir := t.TempDir()
-	before := sddl(t, dir)
-	if err := protectAppData(dir); err == nil {
-		t.Fatal("protectAppData accepted a directory not named sofcat")
+// TestProtectAppDataLegacyRoot: an older config that still points
+// app_data_path at the bare <Name> keeps its protection, including the
+// staging directory, and nothing above it is touched.
+func TestProtectAppDataLegacyRoot(t *testing.T) {
+	base := t.TempDir()
+	baseBefore := sddl(t, base)
+	root := filepath.Join(base, strings.ToLower(identity.Name))
+	mkdir(t, root)
+	write(t, filepath.Join(root, "service-manifest.yaml"))
+	if err := protectAppData(root); err != nil {
+		t.Fatalf("protectAppData: %v", err)
 	}
-	if got := sddl(t, dir); got != before {
-		t.Errorf("ACL changed:\n got %s\nwant %s", got, before)
+	want := map[string]string{
+		root: admins + "D:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)",
+		filepath.Join(root, "service-manifest.yaml"): admins + "D:AI" + inherited,
+		filepath.Join(root, "user-artifacts"):        admins + "D:AI(A;OICI;" + usersRX + ";;;BU)" + dirInh,
+	}
+	for path, w := range want {
+		if got := sddl(t, path); got != w {
+			t.Errorf("%s:\n got %s\nwant %s", path, got, w)
+		}
+	}
+	if got := sddl(t, base); got != baseBefore {
+		t.Errorf("parent of a legacy root changed:\n got %s\nwant %s", got, baseBefore)
+	}
+}
+
+func TestProtectAppDataRefusesOtherNames(t *testing.T) {
+	base := t.TempDir()
+	for _, root := range []string{base, filepath.Join(base, "Other", "Data")} {
+		mkdir(t, root)
+		before := sddl(t, root)
+		if err := protectAppData(root); err == nil || !strings.Contains(err.Error(), "not protecting") {
+			t.Fatalf("%s: err = %v, want a refusal", root, err)
+		}
+		if got := sddl(t, root); got != before {
+			t.Errorf("%s ACL changed:\n got %s\nwant %s", root, got, before)
+		}
+	}
+}
+
+// TestProtectConfig: config.yaml, which a user could create under
+// ProgramData's default ACL before an administrator wrote one, ends up owned
+// by Administrators with SYSTEM and Administrators only; a missing config is
+// left alone and anything but a regular file is refused.
+func TestProtectConfig(t *testing.T) {
+	dir := t.TempDir()
+	cfg := filepath.Join(dir, "config.yaml")
+	write(t, cfg)
+	setDACL(t, cfg, "D:P(A;;FA;;;WD)")
+	for range 2 {
+		if err := protectConfig(cfg); err != nil {
+			t.Fatalf("protectConfig: %v", err)
+		}
+	}
+	if got, want := sddl(t, cfg), admins+"D:PAI(A;;FA;;;SY)(A;;FA;;;BA)"; got != want {
+		t.Errorf("config.yaml:\n got %s\nwant %s", got, want)
+	}
+
+	if err := protectConfig(filepath.Join(dir, "missing.yaml")); err != nil {
+		t.Errorf("missing config: %v", err)
+	}
+
+	notFile := filepath.Join(dir, "dir.yaml")
+	mkdir(t, notFile)
+	before := sddl(t, notFile)
+	if err := protectConfig(notFile); err == nil || !strings.Contains(err.Error(), "not a regular file") {
+		t.Errorf("directory: err = %v, want a refusal", err)
+	}
+	if got := sddl(t, notFile); got != before {
+		t.Errorf("directory ACL changed:\n got %s\nwant %s", got, before)
 	}
 }
 

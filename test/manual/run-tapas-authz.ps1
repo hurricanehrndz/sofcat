@@ -23,6 +23,8 @@ the end. PowerShell 5.1 compatible.
 param(
     [string]$SofCat      = "$env:ProgramFiles\Tapas Test\tapas-test.exe",
     [string]$Config      = "$env:ProgramData\Tapas Test\config.yaml",
+    # The data directory (app_data_path), beside config.yaml.
+    [string]$DataDir     = "$env:ProgramData\Tapas Test\Data",
     [string]$Slug        = "tapas-test",
     # The brand's write root; see test/manual/fixtures/tapas/brand/harnesses.yaml.
     [string]$SmokeRoot   = "$env:ProgramData\tapas-test-smoke",
@@ -33,9 +35,8 @@ param(
 $ErrorActionPreference = "Stop"
 $stepNum = 0
 
-$dataDir    = Split-Path $Config
-$receiptDir = Join-Path $dataDir "receipts"
-$SelfServe  = Join-Path $dataDir "service-manifest.yaml"
+$receiptDir = Join-Path $DataDir "receipts"
+$SelfServe  = Join-Path $DataDir "service-manifest.yaml"
 $claudeRoot = Join-Path $SmokeRoot "claude\skills"
 
 function Log {
@@ -89,9 +90,9 @@ function Invoke-SofCat {
 # user's own standard token, and returns @{Code=<int>; Out=<string[]>}.
 function Invoke-SofCatAs {
     param([pscredential]$Credential, [string]$Spec)
-    # The data directory is locked to SYSTEM and Administrators, so a standard
-    # user cannot read the service's config.yaml. The client only needs the
-    # pipe name from it: give the user a copy under Public, which anyone reads.
+    # config.yaml is locked to SYSTEM and Administrators, so a standard user
+    # cannot read the service's. The client only needs the pipe name from it:
+    # give the user a copy under Public, which anyone reads.
     $userConfig = "C:\Users\Public\tapas-authz-config.yaml"
     if (-not (Test-Path -LiteralPath $userConfig)) { Copy-Item -LiteralPath $Config -Destination $userConfig }
     $base = Join-Path $env:TEMP ("tapas-authz-" + [guid]::NewGuid().ToString('N'))

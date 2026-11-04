@@ -14,7 +14,7 @@ placements:
     # for that OS is user.
     paths:
       darwin: /Library/Application Support/ClaudeCode/.claude/skills
-      windows: ${ProgramFiles}\ClaudeCode\.claude\skills
+      windows: ${ProgramData}\ClaudeCode\.claude\skills
     # Harness display names, shown in the self-service app.
     works_in: [Claude Code]
     # Optional overrides for the app's labels. Keys: install, installing,
@@ -40,7 +40,7 @@ placements:
     kind: marketplace
     paths:
       darwin: /Library/Application Support/Acme/marketplace
-      windows: ${ProgramFiles}\Acme\marketplace
+      windows: ${ProgramData}\Acme\marketplace
     works_in: [Claude Code, Codex]
     # Refuse to write into this directory if it already exists, is not empty
     # and sofcat did not create it.
@@ -66,7 +66,7 @@ placements:
     kind: settings
     paths:
       darwin: /Library/Application Support/ClaudeCode/managed-settings.d/50-acme.json
-      windows: ${ProgramFiles}\ClaudeCode\managed-settings.d\50-acme.json
+      windows: ${ProgramData}\ClaudeCode\managed-settings.d\50-acme.json
     works_in: [Claude Code]
     # Only on kind settings: the marketplace placement this file registers.
     registers: acme-marketplace

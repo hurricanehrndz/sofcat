@@ -51,7 +51,12 @@ When changes span Go service/CLI and UI protocol layers, run `just test`, `just 
 pure-Go, windows-GUI `build/sofcat-ui.exe`
 (`GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -tags production -ldflags "-H windowsgui"`).
 `just msi` wraps them in an MSI with embala (`installer/embala.toml`); the
-installer puts them in `C:\Program Files\SofCat` and registers the service. It
+installer puts them in `C:\Program Files\SofCat` and registers the service.
+Everything the service writes lives under `C:\ProgramData\SofCat`, as under
+`/Library/Application Support/<Name>` on a Mac: `config.yaml`, the `Data`
+directory (the default `app_data_path`, SYSTEM and Administrators only
+except `Data\user-artifacts`, which Users read) and any placement of its own
+(`docs/data-directory.md`). The installer
 also writes the HKLM `Run` value that starts the per-user helper,
 `<slug>-ui.exe --user-sync`, at logon (embala 0.9.0 `[msi].registry`).
 A brand with `INSTALLERS=zip` in its `brand.env` adds the `zip_only` tag to both
@@ -183,16 +188,17 @@ config, confirm the HKLM `...\CurrentVersion\Run` value `tapas-test-user-sync`,
 wait for the startup run to stage the archive and store the plan, then
 reboot (the VM autologs on at boot; a plain sign-out does not log back in)
 and check the skill appears without opening the storefront. `msiexec /x`
-must remove the value and the service. It leaves
-`C:\Program Files\<Name>\user-artifacts` behind, because the staged archives
-are not MSI-owned files; remove that directory by hand.
+must remove the value and the service. It leaves `C:\ProgramData\<Name>`
+alone, the staged archives in `Data\user-artifacts` included, as it leaves
+the config; remove the whole directory by hand for a clean slate.
 
 To validate the installer instead of the raw executables: `just msi`, copy
 `build/sofcat-<version>-x86_64.msi` to the VM and run `msiexec /i <msi> /qn`.
 The service starts with no config. Write `C:\ProgramData\SofCat\config.yaml`
-(url, manifest, catalogs, app_data_path), `Restart-Service sofcat`, then run
-the two gates above. `msiexec /x <msi> /qn` must remove the service and
-`C:\Program Files\SofCat` and leave `C:\ProgramData\SofCat` alone.
+(url, manifest, catalogs), `Restart-Service sofcat`, then run the two gates
+above; the service keeps its state in `C:\ProgramData\SofCat\Data`.
+`msiexec /x <msi> /qn` must remove the service and `C:\Program Files\SofCat`
+and leave `C:\ProgramData\SofCat` alone.
 
 ## macOS Validation Loop
 

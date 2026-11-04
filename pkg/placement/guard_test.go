@@ -4,9 +4,11 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/hurricanehrndz/sofcat/pkg/harness"
+	"github.com/hurricanehrndz/sofcat/pkg/identity"
 )
 
 // TestGuard covers R7: a placement is written only inside a write root for
@@ -127,5 +129,26 @@ func TestParseRoots(t *testing.T) {
 	}
 	if _, err := ParseRoots([]byte("linux: [/a]\n")); err == nil {
 		t.Error("unknown key accepted")
+	}
+}
+
+// TestStockRootsWindows: without write-roots.yaml a Windows build places
+// under ${ProgramData}\<Name>, beside its config and Data, so a marketplace
+// of its own is accepted while Data itself stays refused.
+func TestStockRootsWindows(t *testing.T) {
+	t.Setenv("ProgramData", t.TempDir())
+	root := StockRoots().Windows[0]
+	if root != `${ProgramData}\`+identity.Name {
+		t.Fatalf("stock Windows root = %s", root)
+	}
+	// The test host's separator: the guard cleans and resolves real paths.
+	root = strings.ReplaceAll(root, `\`, string(filepath.Separator))
+	g := Guard{GOOS: harness.Windows, Roots: StockRoots(), DataDir: identity.DataDirFor(harness.Windows)}
+	g.Roots.Windows = []string{root}
+	if _, err := g.Resolve(filepath.Join(root, "marketplace"), harness.ScopeMachine); err != nil {
+		t.Errorf("a placement beside Data refused: %v", err)
+	}
+	if _, err := g.Resolve(filepath.Join(root, "Data", "x"), harness.ScopeMachine); !errors.Is(err, ErrRefused) || !strings.Contains(err.Error(), "inside the data directory") {
+		t.Errorf("a placement inside Data not refused as such: %v", err)
 	}
 }
