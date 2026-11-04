@@ -11,3 +11,7 @@ yamlfmt = "0.21"
 "github:hurricanehrndz/embala" = "0.8.0"
 prek = "0.5.7"
 actionlint = "1.7.12"
+
+# On Linux with nix, also load flake.nix (GTK/WebKit for the UI); see the script.
+[env]
+_.source = "nix-env.sh"
