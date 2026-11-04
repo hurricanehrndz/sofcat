@@ -153,3 +153,31 @@ FirefoxLangPack:
       - /S
     type: exe
   version: 128.0
+hello-world:
+  display_name: Hello World
+  # A zip item places a directory tree, such as an AI skill, instead of running
+  # an installer. variants maps a placement in harnesses.yaml to an OS (darwin
+  # or windows) to one zip. makecatalogs zip-item writes this block; see
+  # docs/zip-items.md. A zip item needs no check block or uninstaller.
+  installer:
+    type: zip
+    variants:
+      claude-code-skills:
+        darwin:
+          location: packages/skills/hello-world-1.0.0-ffaa66a85382.zip
+          hash: f035805d1c8f3571a7622db7be1a968b65eb815fc7c82afcdb16926a64654e91
+          tree_hash: sha256:ffaa66a853824549c6f1e1047d0fc3ffd1d3e4c33919cfa4ce15c3d3ef94d9b0
+        windows:
+          location: packages/skills/hello-world-1.0.0-ffaa66a85382.zip
+          hash: f035805d1c8f3571a7622db7be1a968b65eb815fc7c82afcdb16926a64654e91
+          tree_hash: sha256:ffaa66a853824549c6f1e1047d0fc3ffd1d3e4c33919cfa4ce15c3d3ef94d9b0
+      codex-skills:
+        darwin:
+          location: packages/skills/hello-world-1.0.0-774fb461affd.zip
+          hash: 384fa1b7678e9037aef0e5fa0b730ba018ae00a2740fd6402b4742701fc64c21
+          tree_hash: sha256:774fb461affdb37fec40f5fd882e154020f45d703122f6df40d9de1fd3b38163
+        windows:
+          location: packages/skills/hello-world-1.0.0-774fb461affd.zip
+          hash: 384fa1b7678e9037aef0e5fa0b730ba018ae00a2740fd6402b4742701fc64c21
+          tree_hash: sha256:774fb461affdb37fec40f5fd882e154020f45d703122f6df40d9de1fd3b38163
+  version: 1.0.0

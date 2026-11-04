@@ -1,6 +1,7 @@
 // Command makecatalogs compiles a SofCat repository's packages-info files
 // into its catalogs, like Munki's makecatalogs. It runs on any platform and
-// reads no agent configuration.
+// reads no agent configuration. Its pack, tree-hash and zip-item subcommands
+// build zip items (see docs/zip-items.md).
 package main
 
 import (
@@ -15,11 +16,20 @@ import (
 )
 
 const usage = `Usage: makecatalogs [options] <repo_path>
+       makecatalogs pack|tree-hash|zip-item ... (-h for each)
 
 Compiles <repo_path>/packages-info/*.yaml into <repo_path>/catalogs/.
 
 Options:
 `
+
+// subcommands are matched on the first argument only, so a repo path never
+// collides with one unless it is spelled exactly like it; use ./pack then.
+var subcommands = map[string]func(args []string, stdout, stderr io.Writer) int{
+	"pack":      runPack,
+	"tree-hash": runTreeHash,
+	"zip-item":  runZipItem,
+}
 
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
@@ -27,6 +37,12 @@ func main() {
 
 // run executes makecatalogs and returns the process exit code.
 func run(args []string, stdout, stderr io.Writer) int {
+	if len(args) > 0 {
+		if sub, ok := subcommands[args[0]]; ok {
+			return sub(args[1:], stdout, stderr)
+		}
+	}
+
 	flags := flag.NewFlagSet("makecatalogs", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	check := flags.Bool("check", false, "validate the repo and report what would be written, without writing; exit nonzero on any problem")

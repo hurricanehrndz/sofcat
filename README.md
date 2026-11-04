@@ -55,6 +55,8 @@ What already works:
 - **Installable conditions.** An item can require an architecture, Windows
   build, model or a fact your own scripts provide, as with Munki's
   `installable_condition`. See [docs/conditions.md](docs/conditions.md).
+- **Zip items.** Package directory trees, such as AI skills, as deterministic
+  zips with `makecatalogs`. See [docs/zip-items.md](docs/zip-items.md).
 - **`makecatalogs` anywhere.** Build catalogs on any OS, so your repo's CI
   never needs a Windows runner.
 

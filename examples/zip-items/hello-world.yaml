@@ -1,0 +1,8 @@
+# Input to makecatalogs zip-item: a package-info file without installer.
+# zip-item adds installer.type zip and its variants; see
+# generated/hello-world.yaml and docs/zip-items.md.
+item_name: hello-world
+display_name: Hello World
+description: A skill that greets you
+catalog: skills
+version: 1.0.0
