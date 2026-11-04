@@ -53,3 +53,12 @@ func createProtectedTemp(dir, prefix string) (*os.File, error) {
 	}
 	return nil, errors.New("create protected temp file: too many name collisions")
 }
+
+// renameRetryable reports whether a rename failed because another process
+// holds the target open without delete sharing: Windows refuses to replace it
+// with ERROR_ACCESS_DENIED, or ERROR_SHARING_VIOLATION on some paths. The
+// handle is usually a reader's, such as a poller running Get-Content on
+// inventory.json, and it closes within milliseconds.
+func renameRetryable(err error) bool {
+	return errors.Is(err, windows.ERROR_ACCESS_DENIED) || errors.Is(err, windows.ERROR_SHARING_VIOLATION)
+}
