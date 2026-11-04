@@ -249,7 +249,7 @@ function sequence(item: OptionalInstallItem, removing: boolean): MockEvent[] {
     [
       600,
       {
-        state: "Installing",
+        state: "Downloading",
         progressPercent: 10,
         itemName: "DemoUpdater",
         displayName: "Demo Updater",
@@ -264,7 +264,8 @@ function sequence(item: OptionalInstallItem, removing: boolean): MockEvent[] {
         displayName: "Demo Updater",
       },
     ],
-    [1200, { state: phase, progressPercent: 55 }],
+    // The service measures only downloads; an install or removal has no percent.
+    [1200, { state: phase }],
     [1600, { state: "ItemCompleted", progressPercent: 100 }],
     [2000, { state: "Succeeded", message: "run completed" }],
   ];
@@ -328,7 +329,6 @@ function watch(operationId: string): Promise<void> {
             itemName: item.itemName,
             displayName: item.displayName,
             state: "",
-            progressPercent: 0,
             message: "",
             requestedBy: MOCK_USER,
             ...partial,

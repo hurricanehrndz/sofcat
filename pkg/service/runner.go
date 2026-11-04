@@ -723,7 +723,7 @@ func (sr *serviceRunner) scheduleRunAfterMutation(ctx context.Context, action, i
 			)
 			sr.appendOperationEvent(operationID, OperationStatus{
 				State:           "Failed",
-				ProgressPercent: 100,
+				ProgressPercent: new(100),
 				Message:         "Operation failed",
 				ErrorCode:       "managed_run_failed",
 				// The run's error can name repository URLs and local paths;
@@ -771,7 +771,7 @@ func (sr *serviceRunner) operationProgressCallback() installer.ProgressFn {
 				ItemName:        item.Name,
 				DisplayName:     orDefault(item.DisplayName, item.Name),
 				State:           mappedState,
-				ProgressPercent: percent,
+				ProgressPercent: measured(percent),
 				Message:         message,
 			})
 		}
@@ -789,7 +789,7 @@ func resolveTerminalEvent(itemName string, rep *report.Report) OperationStatus {
 			if failed.Name == itemName {
 				return OperationStatus{
 					State:           "Failed",
-					ProgressPercent: 100,
+					ProgressPercent: new(100),
 					Message:         "Operation failed",
 					ErrorCode:       orDefault(failed.Code, "item_failed"),
 					ErrorMessage:    failed.Error,
@@ -800,7 +800,7 @@ func resolveTerminalEvent(itemName string, rep *report.Report) OperationStatus {
 			if deferred.Name == itemName {
 				return OperationStatus{
 					State:           "Deferred",
-					ProgressPercent: 100,
+					ProgressPercent: new(100),
 					Message:         deferred.Reason,
 					ErrorCode:       orDefault(deferred.Code, "blocked_by_running_app"),
 					ErrorMessage:    deferred.Reason,
@@ -810,7 +810,7 @@ func resolveTerminalEvent(itemName string, rep *report.Report) OperationStatus {
 	}
 	return OperationStatus{
 		State:           "Succeeded",
-		ProgressPercent: 100,
+		ProgressPercent: new(100),
 		Message:         "Operation completed",
 	}
 }
@@ -1040,4 +1040,13 @@ func (sr *serviceRunner) closeActiveConnections() {
 		conn.Abort()
 		_ = conn.Close()
 	}
+}
+
+// measured is a progress event's percent on the wire: nil, so the field is
+// left out, when the installer measured nothing (installer.NoPercent).
+func measured(percent int) *int {
+	if percent < 0 {
+		return nil
+	}
+	return &percent
 }

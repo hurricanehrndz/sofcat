@@ -370,7 +370,7 @@ func TestOperationProgressUsesActualItemsAndItemScopedPercent(t *testing.T) {
 	emit(catalog.Item{Name: "DemoDependency", DisplayName: "Demo Dependency"}, dep, "installing", 50, "install")
 	emit(catalog.Item{Name: "DemoDependency", DisplayName: "Demo Dependency"}, dep, "done", 100, "")
 	emit(catalog.Item{Name: "DemoOptional", DisplayName: "Demo Optional"}, nil, "downloading", 0, "download")
-	emit(catalog.Item{Name: "DemoOptional", DisplayName: "Demo Optional"}, nil, "installing", 50, "install")
+	emit(catalog.Item{Name: "DemoOptional", DisplayName: "Demo Optional"}, nil, "installing", installer.NoPercent, "install")
 	emit(catalog.Item{Name: "DemoOptional", DisplayName: "Demo Optional"}, nil, "done", 100, "")
 	emit(updater, nil, "downloading", 0, "download")
 	emit(updater, nil, "failed", 50, "boom")
@@ -390,8 +390,16 @@ func TestOperationProgressUsesActualItemsAndItemScopedPercent(t *testing.T) {
 			t.Fatalf("event %d seq=%d operationId=%q", i, events[i].Seq, events[i].OperationID)
 		}
 	}
-	if events[3].ProgressPercent != 100 || events[4].ProgressPercent != 0 {
-		t.Fatalf("expected percent reset at item boundary, got %d -> %d", events[3].ProgressPercent, events[4].ProgressPercent)
+	if *events[3].ProgressPercent != 100 || *events[4].ProgressPercent != 0 {
+		t.Fatalf("expected percent reset at item boundary, got %d -> %d", *events[3].ProgressPercent, *events[4].ProgressPercent)
+	}
+	// A phase the installer did not measure leaves the field off the wire, so
+	// the UI shows an indeterminate bar rather than a measured 0%.
+	if events[5].ProgressPercent != nil {
+		t.Fatalf("unmeasured install carried percent %d", *events[5].ProgressPercent)
+	}
+	if wire, _ := json.Marshal(events[5]); strings.Contains(string(wire), "progressPercent") {
+		t.Fatalf("unmeasured install on the wire: %s", wire)
 	}
 	if events[1].ItemName != "DemoDependency" || events[1].DisplayName != "Demo Dependency" {
 		t.Fatalf("dependency identity lost: %#v", events[1])
@@ -481,14 +489,14 @@ func TestTrackedOperationPruningDropsOldCompletedEntries(t *testing.T) {
 	for i := 0; i < trackedOperationsMaxCount+50; i++ {
 		id := fmt.Sprintf("done-%d", i)
 		sr.operations[id] = &trackedOperation{
-			events:      []OperationStatus{{State: "Succeeded", ProgressPercent: 100, Message: "done"}},
+			events:      []OperationStatus{{State: "Succeeded", ProgressPercent: new(100), Message: "done"}},
 			done:        true,
 			lastUpdated: now.Add(-time.Duration(i) * time.Minute),
 			completedAt: now.Add(-time.Duration(i) * time.Minute),
 		}
 	}
 	sr.operations["active-op"] = &trackedOperation{
-		events:      []OperationStatus{{State: "Installing", ProgressPercent: 60, Message: "running"}},
+		events:      []OperationStatus{{State: "Installing", ProgressPercent: new(60), Message: "running"}},
 		done:        false,
 		lastUpdated: now,
 	}

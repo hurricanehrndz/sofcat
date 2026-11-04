@@ -111,7 +111,7 @@ func TestFileHash(t *testing.T) {
 	defer ts.Close()
 
 	// Run the code
-	if err := fileContext(context.Background(), dir, ts.URL+"/hashtest.txt"); err != nil {
+	if err := fileContext(context.Background(), dir, ts.URL+"/hashtest.txt", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -136,7 +136,7 @@ func TestFileHashLocal(t *testing.T) {
 
 	// Run the code
 	fmt.Println("Downloading from local path:", testPath)
-	if err := fileContext(context.Background(), dir, "file://"+testPath); err != nil {
+	if err := fileContext(context.Background(), dir, "file://"+testPath, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -163,7 +163,7 @@ func TestFileTimeout(t *testing.T) {
 	defer ts.Close()
 
 	// Run the code
-	fileErr := fileContext(context.Background(), dir, ts.URL+"/timeout")
+	fileErr := fileContext(context.Background(), dir, ts.URL+"/timeout", nil)
 
 	// Check the error output to confirm we timedout
 	if fileErr != nil {
@@ -185,7 +185,7 @@ func TestFileStatus(t *testing.T) {
 	defer ts.Close()
 
 	// Run the code
-	fileErr := fileContext(context.Background(), dir, ts.URL+"/404")
+	fileErr := fileContext(context.Background(), dir, ts.URL+"/404", nil)
 
 	// Check the error output to confirm we received a 404
 	if fileErr != nil {
@@ -211,7 +211,7 @@ func TestFileBasicAuth(t *testing.T) {
 	downloadCfg.AuthPass = "beans"
 
 	// Run the code
-	fileErr := fileContext(context.Background(), dir, ts.URL+"/basicauth")
+	fileErr := fileContext(context.Background(), dir, ts.URL+"/basicauth", nil)
 
 	// Check that we did not receive an error
 	if fileErr != nil {
@@ -267,7 +267,7 @@ func TestFileTLS(t *testing.T) {
 	tlsURL := "https://localhost:" + u.Port() + "/tlsauth"
 
 	// Run the code
-	fileErr := fileContext(context.Background(), dir, tlsURL)
+	fileErr := fileContext(context.Background(), dir, tlsURL, nil)
 
 	// Check that we did not receive an error
 	if fileErr != nil {
@@ -326,7 +326,7 @@ func TestIfNeededValid(t *testing.T) {
 	defer ts.Close()
 
 	// Run the function with our test data and a validHash
-	valid := IfNeeded(context.Background(), tempFile, ts.URL+"/hashtest.txt", validHash)
+	valid := IfNeeded(context.Background(), tempFile, ts.URL+"/hashtest.txt", validHash, nil)
 	if !valid {
 		t.Error("Unable to download valid file: ", ts.URL+"/hashtest.txt")
 	}
@@ -367,7 +367,7 @@ func TestIfNeededInvalid(t *testing.T) {
 	defer ts.Close()
 
 	// Run the function with our test data and a validHash
-	valid := IfNeeded(context.Background(), tempFile, ts.URL+"/hashtest.txt", validHash)
+	valid := IfNeeded(context.Background(), tempFile, ts.URL+"/hashtest.txt", validHash, nil)
 	if !valid {
 		t.Error("Unable to download valid file: ", ts.URL+"/hashtest.txt")
 	}
@@ -413,10 +413,60 @@ func TestIfNeededStopsWhenContextIsCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	time.AfterFunc(100*time.Millisecond, cancel)
 	begin := time.Now()
-	if IfNeeded(ctx, filepath.Join(t.TempDir(), "slow.msi"), ts.URL+"/slow.msi", validHash) {
+	if IfNeeded(ctx, filepath.Join(t.TempDir(), "slow.msi"), ts.URL+"/slow.msi", validHash, nil) {
 		t.Fatal("IfNeeded reported a valid file for a cancelled download")
 	}
 	if took := time.Since(begin); took > 5*time.Second {
 		t.Fatalf("IfNeeded took %v after its context was cancelled", took)
+	}
+}
+
+// The UI's bar follows these reports, so a sized download must climb to 100
+// and the file must still arrive whole; a body of unknown length must report
+// nothing rather than a percentage nobody measured.
+func TestFileContextProgress(t *testing.T) {
+	body := strings.Repeat("x", 64*1024)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/unsized" {
+			// A flush before the end sends the body chunked, with no length.
+			_, _ = io.WriteString(w, body[:1024])
+			w.(http.Flusher).Flush()
+			_, _ = io.WriteString(w, body[1024:])
+			return
+		}
+		w.Header().Set("Content-Length", fmt.Sprint(len(body)))
+		for i := 0; i < len(body); i += 4096 {
+			_, _ = io.WriteString(w, body[i:i+4096])
+			w.(http.Flusher).Flush()
+		}
+	}))
+	defer ts.Close()
+
+	dir := t.TempDir()
+	var got []int
+	if err := fileContext(context.Background(), dir, ts.URL+"/sized", func(p int) { got = append(got, p) }); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) < 2 || got[len(got)-1] != 100 {
+		t.Fatalf("progress = %v, want several reports ending at 100", got)
+	}
+	for i := 1; i < len(got); i++ {
+		if got[i] <= got[i-1] {
+			t.Fatalf("progress = %v, want each report higher than the last", got)
+		}
+	}
+	if data, err := os.ReadFile(filepath.Join(dir, "sized")); err != nil || string(data) != body {
+		t.Fatalf("sized download: %d bytes, err %v", len(data), err)
+	}
+
+	got = nil
+	if err := fileContext(context.Background(), dir, ts.URL+"/unsized", func(p int) { got = append(got, p) }); err != nil {
+		t.Fatal(err)
+	}
+	if got != nil {
+		t.Fatalf("unsized download reported %v, want nothing", got)
+	}
+	if data, _ := os.ReadFile(filepath.Join(dir, "unsized")); string(data) != body {
+		t.Fatalf("unsized download: %d bytes, want %d", len(data), len(body))
 	}
 }

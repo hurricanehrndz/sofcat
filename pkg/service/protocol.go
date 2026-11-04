@@ -203,7 +203,9 @@ type cancelOperationResponse struct {
 // service recorded them, so a client can order records that arrive out of
 // order. RequestedBy is the user whose request started the operation, "" when
 // the service could not resolve it. ProgressPercent is scoped to ItemName and
-// may reset when the item changes; it is not aggregate operation progress.
+// may reset when the item changes; it is not aggregate operation progress. It
+// is omitted when nothing was measured (a download of unknown length, an
+// install or removal), so a client never reads an unmeasured phase as 0%.
 // Only Succeeded, Failed, Deferred, and Canceled end an operation.
 type OperationStatus struct {
 	OperationID     string `json:"operationId"`
@@ -212,7 +214,7 @@ type OperationStatus struct {
 	ItemName        string `json:"itemName"`
 	DisplayName     string `json:"displayName"`
 	State           string `json:"state"`
-	ProgressPercent int    `json:"progressPercent"`
+	ProgressPercent *int   `json:"progressPercent,omitempty"`
 	Message         string `json:"message"`
 	ErrorCode       string `json:"errorCode,omitempty"`
 	ErrorMessage    string `json:"errorMessage,omitempty"`

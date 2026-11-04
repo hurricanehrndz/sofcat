@@ -285,7 +285,7 @@ func consumeOperationStream(dec *json.Decoder, operationID string, callback func
 			return fmt.Errorf("unexpected stream operationId %q", record.OperationID)
 		}
 		if !validOperationState(record.State) || strings.TrimSpace(record.ItemName) == "" || strings.TrimSpace(record.DisplayName) == "" ||
-			record.ProgressPercent < 0 || record.ProgressPercent > 100 || strings.TrimSpace(record.TimestampUTC) == "" || record.Seq != lastSeq+1 {
+			record.ProgressPercent != nil && (*record.ProgressPercent < 0 || *record.ProgressPercent > 100) || strings.TrimSpace(record.TimestampUTC) == "" || record.Seq != lastSeq+1 {
 			return errors.New("malformed operation event")
 		}
 		lastSeq = record.Seq

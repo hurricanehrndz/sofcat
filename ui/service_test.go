@@ -164,9 +164,9 @@ func TestUIServiceWatchEmitsEveryRecordWithOperationID(t *testing.T) {
 	app := testApplication()
 	records := []sofcatservice.OperationStatus{
 		{OperationID: "op-many", ItemName: "DemoOptional", DisplayName: "Demo Optional", State: "Queued"},
-		{OperationID: "op-many", ItemName: "DemoUpdater", DisplayName: "Demo Updater", State: "Installing", ProgressPercent: 10},
+		{OperationID: "op-many", ItemName: "DemoUpdater", DisplayName: "Demo Updater", State: "Installing", ProgressPercent: new(10)},
 		{OperationID: "op-many", ItemName: "DemoUpdater", DisplayName: "Demo Updater", State: "ItemFailed"},
-		{OperationID: "op-many", ItemName: "DemoOptional", DisplayName: "Demo Optional", State: "Installing", ProgressPercent: 5},
+		{OperationID: "op-many", ItemName: "DemoOptional", DisplayName: "Demo Optional", State: "Installing", ProgressPercent: new(5)},
 		{OperationID: "op-many", ItemName: "DemoOptional", DisplayName: "Demo Optional", State: "Succeeded"},
 	}
 	client := &fakeServiceClient{stream: func(_ context.Context, callback func(sofcatservice.OperationStatus) error) error {
@@ -210,7 +210,7 @@ func TestUIServiceWatchEmitsEveryRecordWithOperationID(t *testing.T) {
 // must never receive a fabricated terminal record.
 func TestUIServiceWatchErrorEmitsNoTerminalEvent(t *testing.T) {
 	app := testApplication()
-	progress := sofcatservice.OperationStatus{OperationID: "op-broken", ItemName: "DemoOptional", DisplayName: "Demo Optional", State: "Downloading", ProgressPercent: 40}
+	progress := sofcatservice.OperationStatus{OperationID: "op-broken", ItemName: "DemoOptional", DisplayName: "Demo Optional", State: "Downloading", ProgressPercent: new(40)}
 	want := errors.New("operation stream ended before a terminal event")
 	client := &fakeServiceClient{stream: func(_ context.Context, callback func(sofcatservice.OperationStatus) error) error {
 		if err := callback(progress); err != nil {

@@ -33,10 +33,16 @@ var runningBlockingApps = status.RunningBlockingApps
 var missingSoftware = software.Missing
 
 // ProgressFn receives coarse per-item progress events. States emitted per
-// item: `downloading`, `installing`/`removing`, `done`/`failed`. pulledBy is
+// item: `downloading`, `installing`/`removing`, `done`/`failed`. percent is
+// the measured share of the item done, or NoPercent when the phase measured
+// nothing: only a download of known length is measured, and `done` is 100.
+// pulledBy is
 // Runner.PulledBy at the time; the callback must not keep it. The service
 // attaches an operation-scoped callback for self-service mutations.
 type ProgressFn func(item catalog.Item, pulledBy []string, state string, percent int, message string)
+
+// NoPercent is a progress event's percent when nothing was measured.
+const NoPercent = -1
 
 // Runner is the run-scoped install context (K7: no cross-run package globals)
 type Runner struct {

@@ -127,6 +127,15 @@ them, and `timestampUtc` is RFC 3339 UTC with milliseconds. Records can reach
 the frontend out of order (Wails emits each event on its own goroutine), so the
 frontend files them by `seq`, and Activity by time and then `seq`.
 
+`progressPercent` is present only when the service measured it, and is left
+out otherwise. The only measured phase is a download whose server sent the
+body's length: the item's percent climbs to 100 across all its archives,
+reported at each whole-percent change. A download of unknown length, an
+install, a removal and an `ItemFailed` record carry none. An `ItemCompleted`
+record and the terminal record carry 100. A client must not read a missing
+value as 0. Activity files a record only when it changes the item or the
+state, so the percent updates of one download are a single entry.
+
 Every local user can read what the service sends, so messages name items, not
 locations. A `Downloading` record's message is the item's display name; the
 package URL, which can carry a signed-query token, goes only to the debug log.
@@ -220,10 +229,12 @@ disabled while the item's operation runs; the card's line also appears for a
 `Failed` or `Deferred` outcome or a refused request. The only bar is in the
 bottom `#operation-strip`, which reports one running operation — the earliest
 the service has started work on — as "n of N" with a `<progress max="100">`
-that is determinate only when the latest record carries a percentage. The
-percentage is still the record's item's, not an aggregate. The record timeline is shown only in Activity, never on the Home view. No
-percentage is fabricated for status checks, no-action items, blocking-app checks,
-or pre/post scripts.
+that is determinate only when the latest record carries a percentage, so a
+download of known length fills it and an install shows it indeterminate. The
+percentage is still the record's item's, not an aggregate. The record
+timeline is shown only in Activity, never on the Home view. No percentage is
+fabricated for installs, removals, status checks, no-action items,
+blocking-app checks, or pre/post scripts.
 
 The app bar carries the connection state (a dot and the cached/stale message
 with Retry). Above it, the `#banner` section stays hidden until branding

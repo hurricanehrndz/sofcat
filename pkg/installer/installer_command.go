@@ -319,13 +319,12 @@ func (r *Runner) actionItem(item catalog.Item, itemURL, action string) (string, 
 	impl, ok := typeInstallers[installerItem.Type]
 	if !ok {
 		err := fmt.Errorf("unsupported %ser type %q for %s", action, installerItem.Type, item.DisplayName)
-		r.emit(item, "failed", 0, err.Error())
+		r.emit(item, "failed", NoPercent, err.Error())
 		return "", r.recordFailure(item, action, err)
 	}
 
 	// Download the item if this action needs the file on disk
 	var absFile string
-	percent := 0
 	if action == "install" || impl.uninstallNeedsFile() {
 		relPath, fileName := path.Split(installerItem.Location)
 		absFile = filepath.Join(r.CachePath, relPath, fileName)
@@ -336,8 +335,10 @@ func (r *Runner) actionItem(item catalog.Item, itemURL, action string) (string, 
 		// Progress reaches every local user, so it names the item; the URL,
 		// which can carry signed-query tokens, stays in the debug log.
 		slog.Debug("Downloading", "item", item.DisplayName, "url", itemURL)
-		r.emit(item, "downloading", percent, item.DisplayName)
-		valid := download.IfNeeded(ctx, absFile, itemURL, installerItem.Hash)
+		r.emit(item, "downloading", NoPercent, item.DisplayName)
+		valid := download.IfNeeded(ctx, absFile, itemURL, installerItem.Hash, func(percent int) {
+			r.emit(item, "downloading", percent, item.DisplayName)
+		})
 		withdrawn := ctx.Err() != nil // read before done(), which cancels ctx
 		done()
 		if withdrawn {
@@ -346,10 +347,9 @@ func (r *Runner) actionItem(item catalog.Item, itemURL, action string) (string, 
 		if !valid {
 			err := fmt.Errorf("unable to download a valid installer for %s", item.DisplayName)
 			slog.Warn("Unable to download valid file", "item", item.DisplayName)
-			r.emit(item, "failed", percent, err.Error())
+			r.emit(item, "failed", NoPercent, err.Error())
 			return "", r.recordFailure(item, action, err)
 		}
-		percent = 50
 	}
 
 	// Build the command via the type implementation
@@ -363,7 +363,7 @@ func (r *Runner) actionItem(item catalog.Item, itemURL, action string) (string, 
 	}
 	if err != nil {
 		slog.Warn("Unable to build command", "item", item.DisplayName, "installerType", installerItem.Type, "err", err)
-		r.emit(item, "failed", percent, err.Error())
+		r.emit(item, "failed", NoPercent, err.Error())
 		return "", r.recordFailure(item, action, err)
 	}
 
@@ -373,7 +373,7 @@ func (r *Runner) actionItem(item catalog.Item, itemURL, action string) (string, 
 	}
 
 	// Run the command
-	r.emit(item, state, percent, item.DisplayName)
+	r.emit(item, state, NoPercent, item.DisplayName)
 	slog.Info(verb+"ing", "item", item.DisplayName, "version", item.Version, "installerType", installerItem.Type)
 	out, err := runCommand(cmd, args)
 	// A listed success_codes replaces the type's defaults; an explicit empty
@@ -388,7 +388,7 @@ func (r *Runner) actionItem(item catalog.Item, itemURL, action string) (string, 
 	}
 	if err != nil {
 		slog.Warn(verb+"ation FAILED", "item", item.DisplayName, "version", item.Version, "result", "error", "err", err)
-		r.emit(item, "failed", percent, err.Error())
+		r.emit(item, "failed", NoPercent, err.Error())
 		return out, r.recordFailure(item, action, err)
 	}
 	slog.Info(verb+"ation SUCCESSFUL", "item", item.DisplayName, "version", item.Version, "result", "success")

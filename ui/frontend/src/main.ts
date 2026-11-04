@@ -29,6 +29,7 @@ import {
   httpUrl,
   insertRecord,
   isItemActive,
+  isProgressTick,
   isTerminalState,
   localErrorState,
   localRecord,
@@ -434,10 +435,16 @@ function render(): void {
   renderStrip();
 }
 
-/** pushRecord files a record in its operation and in Activity; false for a duplicate. */
+/**
+ * pushRecord files a record in its operation and, unless it is only a
+ * percentage update, in Activity; false for a duplicate.
+ */
 function pushRecord(operation: OperationView, record: ActivityRecord): boolean {
   if (!insertRecord(operation.records, record)) {
     return false;
+  }
+  if (isProgressTick(operation.records, record)) {
+    return true;
   }
   activity = addActivity(activity, record, ACTIVITY_LIMIT);
   saveActivity(storage, activity);

@@ -294,6 +294,17 @@ export function insertRecord(records: ActivityRecord[], record: ActivityRecord):
   return true;
 }
 
+/**
+ * isProgressTick is true for a record, already filed in records, that only
+ * moves its phase's percentage: the record before it is the same item in the
+ * same state. Activity keeps phases, not ticks, so a download that reports
+ * every percent does not push the rest of the history out.
+ */
+export function isProgressTick(records: ActivityRecord[], record: ActivityRecord): boolean {
+  const previous = records[records.indexOf(record) - 1];
+  return previous !== undefined && previous.itemName === record.itemName && previous.state === record.state;
+}
+
 /** isNewer is whether a belongs above b in newest-first Activity. */
 function isNewer(a: ActivityRecord, b: ActivityRecord): boolean {
   const at = Date.parse(a.timestampUtc);
@@ -337,7 +348,7 @@ export function statusRecord(status: OperationStatus): ActivityRecord {
     message: [message, detail && detail !== message ? `(${detail})` : ""].filter(Boolean).join(" "),
     timestampUtc: status.timestampUtc,
     ...(typeof status.seq === "number" ? { seq: status.seq } : {}),
-    progressPercent: status.progressPercent,
+    ...(typeof status.progressPercent === "number" ? { progressPercent: status.progressPercent } : {}),
     ...(detail ? { detail } : {}),
     ...(status.state === "Canceled" && status.canceledBy ? { canceledBy: status.canceledBy } : {}),
     ...(status.errorCode ? { errorCode: status.errorCode } : {}),

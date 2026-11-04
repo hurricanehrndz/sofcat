@@ -300,7 +300,7 @@ func TestZipFetchRefusesHostileLocation(t *testing.T) {
 	cache := t.TempDir()
 	z := &ZipInstaller{CachePath: filepath.Join(cache, "cache"), URLPackages: "http://127.0.0.1:1/"}
 	for _, location := range []string{`..\..\x.zip`, "a/../../x.zip", "CON.zip", "packages/CON.zip", ""} {
-		got, err := z.Fetch(context.Background(), Target{Placement: "skills", Variant: catalog.Variant{Location: location, Hash: "00"}})
+		got, err := z.Fetch(context.Background(), Target{Placement: "skills", Variant: catalog.Variant{Location: location, Hash: "00"}}, nil)
 		if err == nil || !strings.Contains(err.Error(), "refused") {
 			t.Errorf("location %q: Fetch = %q, %v; want refused", location, got, err)
 		}

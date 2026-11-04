@@ -874,7 +874,7 @@ func TestProgressEvents(t *testing.T) {
 	if _, err := r.installItem(msiItem, "https://example.com/"); err != nil {
 		t.Fatalf("installItem returned an error: %v", err)
 	}
-	want := []string{"downloading:0", "installing:50", "done:100"}
+	want := []string{"downloading:-1", "installing:-1", "done:100"}
 	if !reflect.DeepEqual(want, events) {
 		t.Errorf("\nExpected: %#v\nReceived: %#v", want, events)
 	}
@@ -885,7 +885,7 @@ func TestProgressEvents(t *testing.T) {
 	if _, err := r.installItem(msiItem, "https://example.com/"); err == nil {
 		t.Fatalf("expected an error from a failing installer command")
 	}
-	want = []string{"downloading:0", "installing:50", "failed:50"}
+	want = []string{"downloading:-1", "installing:-1", "failed:-1"}
 	if !reflect.DeepEqual(want, events) {
 		t.Errorf("\nExpected: %#v\nReceived: %#v", want, events)
 	}
@@ -896,7 +896,7 @@ func TestProgressEvents(t *testing.T) {
 	if _, err := r.uninstallItem(msiItem, "https://example.com/"); err != nil {
 		t.Fatalf("uninstallItem returned an error: %v", err)
 	}
-	want = []string{"downloading:0", "removing:50", "done:100"}
+	want = []string{"downloading:-1", "removing:-1", "done:100"}
 	if !reflect.DeepEqual(want, events) {
 		t.Errorf("\nExpected: %#v\nReceived: %#v", want, events)
 	}

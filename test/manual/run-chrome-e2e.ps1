@@ -181,6 +181,8 @@ function Assert-ItemProgress {
     }
     $previous = $null
     foreach ($ev in $itemEvents) {
+        # Only a measured record carries a percent; one without it is no reset.
+        if ($null -eq $ev.progressPercent) { continue }
         if ($null -ne $previous -and [int]$ev.progressPercent -lt [int]$previous.progressPercent) {
             Fail "progress reset within $Name : $($previous.progressPercent) -> $($ev.progressPercent)"
         }

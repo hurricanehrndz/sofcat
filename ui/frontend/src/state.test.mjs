@@ -27,6 +27,7 @@ import {
   isHexColor,
   isItemActive,
   isItemPhase,
+  isProgressTick,
   isTerminalState,
   localErrorState,
   localRecord,
@@ -388,6 +389,23 @@ test("status records keep the event's own item identity and percentage", () => {
     errorMessage: "boom",
   });
   assert.equal(duplicated.message, "boom", "an identical errorMessage is not repeated");
+
+  // The service leaves the percent off a phase it did not measure. The record
+  // must stay unmeasured, so the strip's bar is indeterminate and its line
+  // reads "Installing…" rather than a false "Installing… 0%".
+  const unmeasured = statusRecord({
+    operationId: "op-1",
+    seq: 8,
+    timestampUtc: "2026-07-21T12:00:08Z",
+    itemName: "DemoOptional",
+    displayName: "Demo Optional",
+    state: "Installing",
+    message: "",
+  });
+  assert.equal("progressPercent" in unmeasured, false);
+  const progress = cardProgress({ itemName: "DemoOptional" }, [unmeasured], "active");
+  assert.equal(progress.percent, undefined);
+  assert.equal(progressText(progress), "Installing…");
 });
 
 test("local records label request failures and premature stream ends", () => {
@@ -772,4 +790,33 @@ test("the connection label is short in every state while the message keeps the r
   assert.equal(connectionLabel({ items: [], source: "live", savedAtUtc: "" }), "Service connected");
   assert.equal(connectionLabel({ items: [], source: "loading", savedAtUtc: "" }), "Connecting…");
   assert.equal(connectionLabel({ items: [], source: "cache", savedAtUtc: "" }), "Showing cached software");
+});
+
+// Activity keeps the newest ACTIVITY_LIMIT records. A measured download sends
+// a record per percent, so filing each one would flush the user's history;
+// only a change of item or state is a new Activity entry.
+test("a download's percent updates are progress ticks, not new Activity entries", () => {
+  const record = (seq, itemName, state, progressPercent) => ({
+    operationId: "op-1",
+    seq,
+    itemName,
+    displayName: itemName,
+    state,
+    message: "",
+    timestampUtc: "2026-07-21T12:00:00Z",
+    ...(progressPercent === undefined ? {} : { progressPercent }),
+  });
+  const records = [];
+  const filed = [
+    record(1, "Chrome", "Queued"),
+    record(2, "Chrome", "Downloading"),
+    record(3, "Chrome", "Downloading", 1),
+    record(4, "Chrome", "Downloading", 2),
+    record(5, "Updater", "Downloading", 1),
+    record(6, "Chrome", "Installing"),
+  ].filter((r) => insertRecord(records, r) && !isProgressTick(records, r));
+  assert.deepEqual(
+    filed.map((r) => r.seq),
+    [1, 2, 5, 6],
+  );
 });

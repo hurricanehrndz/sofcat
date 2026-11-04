@@ -62,8 +62,8 @@ func TestDecodeResponseReturnsServiceError(t *testing.T) {
 
 func TestConsumeOperationStreamTerminalAndItemFailure(t *testing.T) {
 	operationID := "op-" + t.Name()
-	input := statusNotification(t, OperationStatus{OperationID: operationID, Seq: 1, ItemName: "Dependency", DisplayName: "Dependency", State: "ItemFailed", ProgressPercent: 50}) +
-		statusNotification(t, OperationStatus{OperationID: operationID, Seq: 2, ItemName: "Requested", DisplayName: "Requested", State: "Deferred", ProgressPercent: 100})
+	input := statusNotification(t, OperationStatus{OperationID: operationID, Seq: 1, ItemName: "Dependency", DisplayName: "Dependency", State: "ItemFailed"}) +
+		statusNotification(t, OperationStatus{OperationID: operationID, Seq: 2, ItemName: "Requested", DisplayName: "Requested", State: "Deferred", ProgressPercent: new(100)})
 	var got []OperationStatus
 	if err := consumeOperationStream(json.NewDecoder(strings.NewReader(input)), operationID, func(status OperationStatus) error {
 		got = append(got, status)
@@ -71,6 +71,7 @@ func TestConsumeOperationStreamTerminalAndItemFailure(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("consume stream: %v", err)
 	}
+	// The first record measured nothing, so it has no percent; that is not malformed.
 	if len(got) != 2 || got[0].State != "ItemFailed" || got[1].State != "Deferred" || got[1].Seq != 2 {
 		t.Fatalf("unexpected statuses: %#v", got)
 	}
@@ -81,7 +82,7 @@ func TestConsumeOperationStreamTerminalAndItemFailure(t *testing.T) {
 
 func TestConsumeOperationStreamErrors(t *testing.T) {
 	operationID := "op-" + t.Name()
-	record := OperationStatus{OperationID: operationID, Seq: 1, ItemName: "Item", DisplayName: "Item", State: "Installing", ProgressPercent: 50}
+	record := OperationStatus{OperationID: operationID, Seq: 1, ItemName: "Item", DisplayName: "Item", State: "Installing", ProgressPercent: new(50)}
 	input := statusNotification(t, record)
 
 	callbackErr := errors.New("stop")
@@ -96,7 +97,9 @@ func TestConsumeOperationStreamErrors(t *testing.T) {
 	malformed.ItemName = ""
 	skipped := record
 	skipped.Seq = 2
-	for name, bad := range map[string]OperationStatus{"identity": malformed, "seq gap": skipped} {
+	over := record
+	over.ProgressPercent = new(101)
+	for name, bad := range map[string]OperationStatus{"identity": malformed, "seq gap": skipped, "percent over 100": over} {
 		if err := consumeOperationStream(json.NewDecoder(strings.NewReader(statusNotification(t, bad))), operationID, func(OperationStatus) error { return nil }); err == nil || !strings.Contains(err.Error(), "malformed") {
 			t.Fatalf("%s: expected malformed record error, got %v", name, err)
 		}

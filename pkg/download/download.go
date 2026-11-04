@@ -28,7 +28,7 @@ func SetConfig(cfg config.Configuration) {
 	downloadCfg = cfg
 }
 
-func fileContext(ctx context.Context, file string, url string) error {
+func fileContext(ctx context.Context, file string, url string, progress Progress) error {
 	// Get the absolute file path
 	_, fileName := path.Split(url)
 	absPath := filepath.Join(file, fileName)
@@ -46,19 +46,20 @@ func fileContext(ctx context.Context, file string, url string) error {
 	}
 	defer f.Close()
 
-	// get the content at the provided url
-	responseBody, err := getContext(ctx, url)
+	resp, err := open(ctx, url)
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
 
-	// Write the responseBody to the file we opened
-	_, err = f.Write(responseBody)
-	if err != nil {
-		return err
+	// Stream the body to the file, so an installer is never held in memory,
+	// counting it when the length is known.
+	var dst io.Writer = f
+	if progress != nil && resp.ContentLength > 0 {
+		dst = io.MultiWriter(f, &progressWriter{total: resp.ContentLength, report: progress})
 	}
-
-	return nil
+	_, err = io.Copy(dst, resp.Body)
+	return err
 }
 
 // StatusError is a download the server answered with a status other than 200.
@@ -79,7 +80,9 @@ func Get(url string) ([]byte, error) {
 	return getContext(context.Background(), url)
 }
 
-func getContext(ctx context.Context, url string) ([]byte, error) {
+// open sends the request and returns the response of a 200; the caller
+// closes its body.
+func open(ctx context.Context, url string) (*http.Response, error) {
 	// Declare the http client
 	var client *http.Client
 
@@ -157,20 +160,43 @@ func getContext(ctx context.Context, url string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
 
 	// Check that the request was successful
 	if resp.StatusCode != 200 {
+		resp.Body.Close()
 		return nil, &StatusError{URL: url, Code: resp.StatusCode}
 	}
+	return resp, nil
+}
 
-	// Copy the download to a a buffer
-	responseBody, err := io.ReadAll(resp.Body)
+func getContext(ctx context.Context, url string) ([]byte, error) {
+	resp, err := open(ctx, url)
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
+	return io.ReadAll(resp.Body)
+}
 
-	return responseBody, nil
+// Progress receives a download's whole percentage each time it changes. It
+// is called only when the server sent the body's length.
+type Progress func(percent int)
+
+// progressWriter counts the bytes written through it against total and
+// reports each new whole percentage.
+type progressWriter struct {
+	total, done int64
+	last        int
+	report      Progress
+}
+
+func (w *progressWriter) Write(p []byte) (int, error) {
+	w.done += int64(len(p))
+	if percent := int(min(w.done*100/w.total, 100)); percent != w.last {
+		w.last = percent
+		w.report(percent)
+	}
+	return len(p), nil
 }
 
 // Verify compares a provided hash to the actual hash of a file
@@ -199,7 +225,8 @@ func Verify(file string, sha string) bool {
 // If the hash does not match, it will attempt to download the file
 // Once downloaded it will attempt to verify the hash again
 // Cancelling ctx aborts a download in progress, and IfNeeded returns false.
-func IfNeeded(ctx context.Context, absFile string, url string, hash string) bool {
+// progress, when not nil, follows a download whose length the server sent.
+func IfNeeded(ctx context.Context, absFile string, url string, hash string, progress Progress) bool {
 	// If the file exists, check the hash
 	verified := false
 	if _, err := os.Stat(absFile); err == nil {
@@ -211,7 +238,7 @@ func IfNeeded(ctx context.Context, absFile string, url string, hash string) bool
 		absPath, _ := filepath.Split(absFile)
 		slog.Info("Downloading", "url", url, "path", absPath)
 		// Download the installer
-		err := fileContext(ctx, absPath, url)
+		err := fileContext(ctx, absPath, url, progress)
 		if err != nil {
 			slog.Warn("Unable to retrieve package", "url", url, "err", err)
 			return verified
