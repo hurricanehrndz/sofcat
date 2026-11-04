@@ -157,7 +157,14 @@ const items: OptionalInstallItem[] = [
     isInstalled: false,
     status: "NotInstalled",
     statusUpdatedAtUtc: "2026-07-21T12:00:00Z",
-    actionLabels: { install: "Make available", installing: "Making available…", installed: "Available", remove: "Withdraw" },
+    actionLabels: {
+      install: "Make available",
+      installing: "Making available…",
+      installed: "Available",
+      remove: "Withdraw",
+      pending_install: "Will be available",
+      pending_remove: "Will be withdrawn",
+    },
     worksIn: ["Claude Code"],
   },
 ];

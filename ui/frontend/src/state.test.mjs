@@ -32,6 +32,7 @@ import {
   localRecord,
   monogram,
   myItems,
+  needsAttention,
   onAccent,
   progressLabel,
   progressText,
@@ -584,7 +585,7 @@ test("the strip shows the running operation the service is working on, as n of N
   assert.equal(stripLine(waiting), "Waiting… · 1 of 2");
 
   // The second one is the one actually reporting: it is shown as 2 of 2 with
-  // its percentage; the first stays "Waiting…" on its own card.
+  // its percentage.
   const working = stripView([
     operation("op-0", "Done", "terminal", [record("op-0", "Done", "Failed")]),
     operation("op-1", "Chrome", "active", [record("op-1", "Chrome", REQUESTED_STATE), record("op-1", "Chrome", "Queued")]),
@@ -601,6 +602,23 @@ test("the strip shows the running operation the service is working on, as n of N
   ]);
   assert.equal(unmeasured.progress.percent, undefined);
   assert.equal(progressText(unmeasured.progress), "Item Completed…");
+
+  // A refused cancel came from the strip's own button, and Home cards show no
+  // running state, so the strip is where its reason must appear.
+  const refused = stripView([
+    { ...operation("op-4", "Chrome", "active", [record("op-4", "Chrome", "Installing")]), notice: NOT_AUTHORIZED_TEXT },
+  ]);
+  assert.equal(stripLine(refused), `${NOT_AUTHORIZED_TEXT} · 1 of 1`);
+});
+
+test("a Home card shows only outcomes the user has to act on", () => {
+  // The button already names the item's state and the strip shows running
+  // work, so anything else on the card is noise.
+  assert.equal(needsAttention(null), false, "idle or succeeded");
+  assert.equal(needsAttention({ label: "Installing…", percent: 50, outcome: "active" }), false);
+  assert.equal(needsAttention({ label: "Canceled", outcome: "terminal", plain: true }), false);
+  assert.equal(needsAttention({ label: "Waiting: close chrome to continue", outcome: "terminal" }), true);
+  assert.equal(needsAttention({ label: "Request failed · pipe closed", outcome: "error" }), true);
 });
 
 // With nothing configured the shell must look exactly as it does unbranded.

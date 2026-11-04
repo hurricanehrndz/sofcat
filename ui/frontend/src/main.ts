@@ -21,6 +21,7 @@ import {
   canCancel,
   cancelTitle,
   cardProgress,
+  cardStatus,
   categories,
   deriveAction,
   fromCache,
@@ -33,6 +34,7 @@ import {
   localRecord,
   monogram,
   myItems,
+  needsAttention,
   progressText,
   refusalText,
   releaseOperation,
@@ -258,9 +260,10 @@ function card(item: OptionalInstallItem): HTMLElement {
   worksIn.textContent = worksInLine(item);
   worksIn.hidden = worksIn.textContent === "";
 
-  // The status line is the card's one live region: progress and outcome
-  // updates are written into it in place (see updateCardProgress), so a screen
-  // reader hears "Installing… 50%" without the whole grid being re-read.
+  // The status line shows only what the button cannot: a pending or required
+  // item's status, or a failure or deferral reason (see cardStatus and
+  // updateCardProgress). It is a live region, so a change is announced without
+  // the whole grid being re-read.
   const status = statusLine();
 
   const actions = document.createElement("p");
@@ -292,7 +295,7 @@ function card(item: OptionalInstallItem): HTMLElement {
   actions.append(details);
   article.append(glyph, name, meta, worksIn, status, actions);
   article.dataset.item = item.itemName;
-  updateCardProgress(article, item, statusLabel(item));
+  updateCardProgress(article, item, cardStatus(item), true);
   return article;
 }
 
@@ -311,9 +314,16 @@ function latestOperation(itemName: string): OperationView | undefined {
  * updateCardProgress writes the item's operation state into its status line:
  * idleText when nothing is going on (an empty one hides the line), otherwise a
  * spinner and one line while the operation runs and the outcome afterwards.
- * The bar is only in the bottom strip and the full timeline only in Activity.
+ * warningsOnly (a Home card) shows idleText in place of running work and keeps
+ * only outcomes that need attention. The bar is only in the bottom strip and
+ * the full timeline only in Activity.
  */
-function updateCardProgress(container: HTMLElement, item: OptionalInstallItem, idleText: string): void {
+function updateCardProgress(
+  container: HTMLElement,
+  item: OptionalInstallItem,
+  idleText: string,
+  warningsOnly = false,
+): void {
   const status = container.querySelector<HTMLParagraphElement>(".card-status");
   const text = status?.querySelector<HTMLSpanElement>(".status-text");
   const spinner = status?.querySelector<SVGElement>(".spinner");
@@ -324,7 +334,7 @@ function updateCardProgress(container: HTMLElement, item: OptionalInstallItem, i
   const progress = operation
     ? cardProgress(item, operation.records, operation.outcome, operation.action.method, operation.notice)
     : null;
-  if (!progress) {
+  if (!progress || (warningsOnly && !needsAttention(progress))) {
     text.textContent = idleText;
     status.hidden = idleText === "";
     delete status.dataset.outcome;
@@ -343,7 +353,7 @@ function renderCardFor(itemName: string): void {
   const article = grid.querySelector<HTMLElement>(`[data-item="${CSS.escape(itemName)}"]`);
   const item = view.items.find((candidate) => candidate.itemName === itemName);
   if (article && item) {
-    updateCardProgress(article, item, statusLabel(item));
+    updateCardProgress(article, item, cardStatus(item), true);
   }
   if (item && detailItemName === itemName) {
     updateCardProgress(viewDetail, item, "");
@@ -540,8 +550,8 @@ api.onOperationStatus((status) => {
     void refresh();
     return;
   }
-  // The item's card status line is its own aria-live region, so updating it in
-  // place announces the new state without re-reading the whole grid.
+  // Status lines and the strip are live regions, so updating them in place
+  // announces the new state without re-reading the whole grid.
   renderCardFor(operation.item.itemName);
   renderStrip();
 });

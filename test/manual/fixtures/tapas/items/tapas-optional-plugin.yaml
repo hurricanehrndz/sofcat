@@ -4,7 +4,8 @@ display_name: Tapas Optional Plugin
 description: A self-service plugin, offered but not enabled
 catalog: tapas
 version: 1.0.0
-# Its own install label wins over tapas-marketplace's; the other labels come
-# from the placement.
+# Its own install and pending_install labels win over tapas-marketplace's; the
+# other labels come from the placement.
 custom_action_labels:
   install: Enable for me
+  pending_install: Will be enabled for you

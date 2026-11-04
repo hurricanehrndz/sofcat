@@ -134,6 +134,8 @@ export const BUILT_IN_LABELS = {
   removing: "Removing…",
   update: "Update",
   cancel: "Cancel",
+  pending_install: "Will be installed",
+  pending_remove: "Will be removed",
 } as const;
 
 export type LabelKey = keyof typeof BUILT_IN_LABELS;
@@ -162,17 +164,32 @@ export const REQUIRED_LABEL = "Managed by your organisation";
 /**
  * statusLabel is the catalog status in sentence case: "Will be installed". An
  * item the organisation requires says so instead; it has no action to take.
- * An installed item uses its installed label.
+ * An installed or pending item uses its installed or pending label.
  */
 export function statusLabel(item: OptionalInstallItem): string {
   if (item.isRequired) {
     return REQUIRED_LABEL;
   }
-  if (item.status === "Installed") {
-    return actionLabel(item, "installed");
+  switch (item.status) {
+    case "Installed":
+      return actionLabel(item, "installed");
+    case "WillBeInstalled":
+      return actionLabel(item, "pending_install");
+    case "WillBeRemoved":
+      return actionLabel(item, "pending_remove");
   }
   const label = stateLabel(item.status);
   return label[0] + label.slice(1).toLowerCase();
+}
+
+/**
+ * cardStatus is a Home card's idle line: only what its button cannot say. A
+ * pending item's button reads only "Cancel", and a required item has none;
+ * otherwise the button already names the state, so the line is "".
+ */
+export function cardStatus(item: OptionalInstallItem): string {
+  const pending = item.status === "WillBeInstalled" || item.status === "WillBeRemoved";
+  return item.isRequired || pending ? statusLabel(item) : "";
 }
 
 /** REQUESTED_STATE is local: the service accepted the request, no event yet. */
@@ -463,6 +480,15 @@ export function cardProgress(
   return { label: outcomeLabel(latest, method), outcome, ...(latest.state === "Canceled" ? { plain: true } : {}) };
 }
 
+/**
+ * needsAttention is true for a finished outcome the user has to act on: a
+ * failure or a deferral. Only these appear on a Home card; the button already
+ * shows the item's state and the bottom strip shows running work.
+ */
+export function needsAttention(progress: CardProgress | null): boolean {
+  return progress !== null && progress.outcome !== "active" && !progress.plain;
+}
+
 /** progressText is a progress line as it reads: the label, then any percentage. */
 export function progressText(progress: CardProgress): string {
   return typeof progress.percent === "number" ? `${progress.label} ${progress.percent}%` : progress.label;
@@ -496,7 +522,8 @@ export function stripView(operations: Iterable<OperationView>): StripView | null
   const operation = running[index];
   return {
     operation,
-    progress: cardProgress(operation.item, operation.records, "active") ?? {
+    // A refused cancel's reason replaces the phase: the strip's Cancel asked.
+    progress: cardProgress(operation.item, operation.records, "active", operation.action.method, operation.notice) ?? {
       label: "Waiting…",
       outcome: "active",
     },

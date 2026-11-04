@@ -18,7 +18,8 @@ placements:
     # Harness display names, shown in the self-service app.
     works_in: [Claude Code]
     # Optional overrides for the app's labels. Keys: install, installing,
-    # installed, remove, removing, update, cancel.
+    # installed, remove, removing, update, cancel, pending_install,
+    # pending_remove.
     action_labels:
       install: Add
       installed: Added
