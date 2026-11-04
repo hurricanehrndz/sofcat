@@ -39,3 +39,26 @@ placements:
     paths:
       windows: ${ProgramData}\tapas-test-outside\skills
     works_in: [Claude Code]
+  # A marketplace sofcat creates, so it gets the marker: plugins under
+  # plugins\<item>, and a generated .claude-plugin\marketplace.json.
+  tapas-marketplace:
+    kind: marketplace
+    paths:
+      darwin: /Library/Application Support/Tapas Test/marketplace
+      windows: ${ProgramData}\tapas-test-smoke\marketplace
+    works_in: [Claude Code, Codex]
+    exclusive: true
+    marketplace:
+      name: tapas-test
+      owner: {name: Tapas Test}
+      renames: {old-plugin: tapas-managed-plugin}
+      allowCrossMarketplaceDependenciesOn: [other]
+  # The drop-in that registers tapas-marketplace and enables its managed
+  # plugins.
+  tapas-settings:
+    kind: settings
+    paths:
+      darwin: /Library/Application Support/Tapas Test/claude/managed-settings.d/50-tapas-test.json
+      windows: ${ProgramData}\tapas-test-smoke\claude\managed-settings.d\50-tapas-test.json
+    works_in: [Claude Code]
+    registers: tapas-marketplace

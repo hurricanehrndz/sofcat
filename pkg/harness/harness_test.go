@@ -122,6 +122,12 @@ placements:
 		"marketplace without owner": {`
 placements:
   m: {kind: marketplace, paths: {darwin: /m}, marketplace: {name: acme}}`, "name and owner"},
+		"marketplace manifest outside the root": {`
+placements:
+  m: {kind: marketplace, paths: {darwin: /m}, marketplace: {name: a, owner: b, manifest_files: [../x.json]}}`, "manifest_files"},
+		"user-scope marketplace": {`
+placements:
+  m: {kind: marketplace, paths: {windows: '${USERPROFILE}\m'}, scope: {windows: user}, marketplace: {name: a, owner: b}}`, "kind directory only"},
 		"marketplace block on directory": {`
 placements:
   p: {kind: directory, paths: {darwin: /p}, marketplace: {name: a, owner: b}}`, "marketplace block on kind"},

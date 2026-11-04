@@ -141,9 +141,13 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 
 	// Build the run-scoped installer context (K7). Zip items' status comes
 	// from their receipts, for every status reader in the run.
+	// A held item is never removed (not by managed_uninstalls, a pending
+	// self-service removal, or scope exit), nor its managed flag rewritten.
+	heldSet := heldItems(held)
 	zip := newZipInstaller(cfg, harnesses)
 	managed := managedInstalls(manifests)
 	zip.Managed = func(item string) bool { return managed[item] }
+	zip.Held = func(item string) bool { return heldSet[item] }
 	runner := &installer.Runner{
 		Report:      run,
 		Checker:     &status.Checker{Zip: zip.Installed},
@@ -171,9 +175,6 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 	plan.add(report.KindManagedUninstall, false, uninstalls...)
 	plan.addUpdaters(index)
 
-	// A held item is never removed: not by managed_uninstalls, a pending
-	// self-service removal, or scope exit.
-	heldSet := heldItems(held)
 	uninstalls = dropHeld(uninstalls, heldSet)
 
 	// Prepare and install
@@ -193,6 +194,11 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 	keep := func(item string) bool { return desired[item] || heldSet[item] || removed[item] }
 	if err := runner.ScopeExit(keep); err != nil {
 		slog.Warn("scope exit skipped", "err", err)
+	}
+	// Rewrite every marketplace's generated files from the receipts, so one
+	// deleted or refused on an earlier run is restored.
+	if !cfg.CheckOnly {
+		runner.Regenerate()
 	}
 
 	// Prune self-serve uninstalls that are confirmed gone so the user can

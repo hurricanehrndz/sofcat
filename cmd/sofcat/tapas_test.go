@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"maps"
@@ -672,4 +673,201 @@ conditional_items:
 	if !exists(filepath.Join(heldTree, "SKILL.md")) {
 		t.Error("held item removed")
 	}
+}
+
+// tapasMarketplace is the generated marketplace.json, as far as the tests
+// read it.
+type tapasMarketplace struct {
+	Name    string         `json:"name"`
+	Owner   map[string]any `json:"owner"`
+	Renames map[string]any `json:"renames"`
+	Allow   []any          `json:"allowCrossMarketplaceDependenciesOn"`
+	Plugins []struct {
+		Name           string `json:"name"`
+		Source         string `json:"source"`
+		Version        string `json:"version"`
+		DefaultEnabled bool   `json:"defaultEnabled"`
+	} `json:"plugins"`
+}
+
+// tapasDropIn is the generated settings drop-in.
+type tapasDropIn struct {
+	ExtraKnownMarketplaces map[string]struct {
+		Source struct {
+			Source string `json:"source"`
+			Path   string `json:"path"`
+		} `json:"source"`
+	} `json:"extraKnownMarketplaces"`
+	EnabledPlugins map[string]bool `json:"enabledPlugins"`
+}
+
+func readJSON(t *testing.T, path string, v any) {
+	t.Helper()
+	if err := json.Unmarshal([]byte(readFile(t, path)), v); err != nil {
+		t.Fatalf("%s: %v", path, err)
+	}
+}
+
+// TestTapasMarketplace: plugins placed into a marketplace placement, the
+// marketplace manifest and settings drop-in regenerated from the receipts
+// after each run that changes them. Harnesses enable what the drop-in lists,
+// so a managed plugin is enabled, a self-service one only offered, a held
+// one keeps the flag its receipt records even when another list desires it,
+// and with no plugin left the drop-in goes and the manifest stays valid.
+// Every run rewrites the files, so a drop-in refused on one run is written on
+// the next with no tree change.
+func TestTapasMarketplace(t *testing.T) {
+	e := newTapasEnv(t)
+	market := filepath.Join(e.roots, "market")
+	dropIn := filepath.Join(e.roots, "claude", "managed-settings.d", "50-tapas-test.json")
+	setHarnesses := func(dropIn string) {
+		e.put("harnesses.yaml", []byte(`placements:
+  market:
+    kind: marketplace
+    paths: {`+tapasOS+`: '`+market+`'}
+    exclusive: true
+    marketplace:
+      name: tapas-test
+      owner: {name: Tapas Test}
+      renames: {old-plugin: managed-plugin}
+      allowCrossMarketplaceDependenciesOn: [other]
+  drop-in:
+    kind: settings
+    paths: {`+tapasOS+`: '`+dropIn+`'}
+    registers: market
+`))
+	}
+	// The first run's drop-in path is outside the write roots.
+	outside := filepath.Join(t.TempDir(), "managed-settings.d", "50-tapas-test.json")
+	setHarnesses(outside)
+	plugin := func(name string) map[string]map[string]string {
+		return map[string]map[string]string{"market": {
+			".claude-plugin/plugin.json": `{"name": "` + name + `", "version": "1.0.0"}`,
+			"README.md":                  name,
+		}}
+	}
+	for _, name := range []string{"managed-plugin", "optional-plugin", "held-plugin"} {
+		e.zipItem(name, "1.0.0", plugin(name))
+	}
+	e.publishCatalog()
+	setManifest := func(body string) {
+		e.put("manifests/tapas.yaml", []byte("name: tapas\ncatalogs: [tapas]\n"+body))
+	}
+	setManifest(`managed_installs: [managed-plugin]
+optional_installs: [optional-plugin, held-plugin]
+conditional_items:
+  - condition: '"lab" in machine_groups'
+    managed_installs: [held-plugin]
+`)
+	selfServe := func(entry manifest.Item) {
+		if err := manifest.SaveSelfServe(manifest.SelfServePath(e.cfg.AppDataPath), entry); err != nil {
+			t.Fatal(err)
+		}
+	}
+	selfServe(manifest.Item{Installs: []string{"held-plugin"}})
+
+	// An earlier run placed held-plugin as managed; its block is now held.
+	// The user's selection puts it in the run's install list while Managed
+	// reports false, but the run cannot tell, so it keeps the flag.
+	heldTree := writeFiles(t, filepath.Join(market, "plugins", "held-plugin"), plugin("held-plugin")["market"])
+	heldHash, err := artifact.TreeHash(heldTree, tapasOS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFiles(t, market, map[string]string{".tapas-test-owned": ""})
+	heldRc := receipt.Receipt{Item: "held-plugin", Version: "1.0.0", Placement: "market", Path: heldTree, TreeHash: heldHash, Managed: true, InstalledAtUTC: time.Now().UTC().Truncate(time.Second)}
+	if err := receipt.Write(e.receiptDir(), heldRc); err != nil {
+		t.Fatal(err)
+	}
+
+	type entry struct {
+		version string
+		enabled bool
+	}
+	check := func(step string, wantPlugins map[string]entry, wantEnabled []string) {
+		t.Helper()
+		var m tapasMarketplace
+		readJSON(t, filepath.Join(market, ".claude-plugin", "marketplace.json"), &m)
+		if m.Name != "tapas-test" || m.Owner["name"] != "Tapas Test" || m.Renames["old-plugin"] != "managed-plugin" ||
+			len(m.Allow) != 1 || m.Allow[0] != "other" || m.Plugins == nil {
+			t.Errorf("%s: marketplace header = %+v", step, m)
+		}
+		got := map[string]entry{}
+		for _, p := range m.Plugins {
+			if p.Source != "./plugins/"+p.Name {
+				t.Errorf("%s: %s source = %q", step, p.Name, p.Source)
+			}
+			got[p.Name] = entry{p.Version, p.DefaultEnabled}
+		}
+		if !maps.Equal(got, wantPlugins) {
+			t.Errorf("%s: plugins = %v, want %v", step, got, wantPlugins)
+		}
+		if wantEnabled == nil {
+			if exists(dropIn) {
+				t.Errorf("%s: drop-in kept with no plugin left", step)
+			}
+			return
+		}
+		var d tapasDropIn
+		readJSON(t, dropIn, &d)
+		if src := d.ExtraKnownMarketplaces["tapas-test"].Source; len(d.ExtraKnownMarketplaces) != 1 || src.Source != "directory" || src.Path != market {
+			t.Errorf("%s: extraKnownMarketplaces = %+v", step, d.ExtraKnownMarketplaces)
+		}
+		if got := slices.Sorted(maps.Keys(d.EnabledPlugins)); !slices.Equal(got, wantEnabled) {
+			t.Errorf("%s: enabledPlugins = %v, want %v", step, got, wantEnabled)
+		}
+	}
+
+	// The startup run places managed-plugin, but the drop-in is refused: the
+	// run reports it against the marketplace, from the per-run pass.
+	rep := e.run()
+	if readFile(t, filepath.Join(market, "plugins", "managed-plugin", "README.md")) != "managed-plugin" {
+		t.Error("managed-plugin not placed at <root>/plugins/<item>")
+	}
+	if i := slices.IndexFunc(rep.FailedItems, func(f report.FailedItem) bool { return f.Name == "market" }); i < 0 ||
+		rep.FailedItems[i].Action != "generate" || rep.FailedItems[i].Code != report.CodePlacementRefused {
+		t.Errorf("refused run: failed %+v, want market generate placement_refused", rep.FailedItems)
+	}
+	if exists(filepath.Dir(outside)) || exists(dropIn) {
+		t.Error("refused drop-in written")
+	}
+
+	// The next run, with the drop-in inside the roots, changes no tree but
+	// writes it.
+	setHarnesses(dropIn)
+	rep = e.run()
+	if len(rep.InstalledItems) != 0 || len(rep.FailedItems) != 0 {
+		t.Fatalf("healing run: installed %v, failed %+v", rep.InstalledItems, rep.FailedItems)
+	}
+	check("startup run",
+		map[string]entry{"managed-plugin": {"1.0.0", true}, "held-plugin": {"1.0.0", true}},
+		[]string{"held-plugin@tapas-test", "managed-plugin@tapas-test"})
+	if rc, _, _ := receipt.Read(e.receiptDir(), "market", "held-plugin"); rc != heldRc {
+		t.Errorf("held receipt changed: %+v", rc)
+	}
+
+	// The user selects the optional plugin: offered, not enabled.
+	selfServe(manifest.Item{Installs: []string{"held-plugin", "optional-plugin"}})
+	e.run()
+	check("optional selected",
+		map[string]entry{"managed-plugin": {"1.0.0", true}, "held-plugin": {"1.0.0", true}, "optional-plugin": {"1.0.0", false}},
+		[]string{"held-plugin@tapas-test", "managed-plugin@tapas-test"})
+
+	// ... and removes it.
+	selfServe(manifest.Item{Installs: []string{"held-plugin"}, Uninstalls: []string{"optional-plugin"}})
+	e.run()
+	if exists(filepath.Join(market, "plugins", "optional-plugin")) {
+		t.Error("optional-plugin not removed")
+	}
+	check("optional removed",
+		map[string]entry{"managed-plugin": {"1.0.0", true}, "held-plugin": {"1.0.0", true}},
+		[]string{"held-plugin@tapas-test", "managed-plugin@tapas-test"})
+
+	// Every plugin leaves the desired set: scope exit removes them all.
+	setManifest("managed_installs: []\n")
+	rep = e.run()
+	if len(rep.FailedItems) != 0 {
+		t.Errorf("last removal failed: %+v", rep.FailedItems)
+	}
+	check("last plugin removed", map[string]entry{}, nil)
 }

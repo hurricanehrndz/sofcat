@@ -237,3 +237,21 @@ func (r *Runner) ScopeExit(keep func(item string) bool) error {
 	}
 	return nil
 }
+
+// Regenerate rewrites every marketplace's generated files from the receipts
+// (ZipInstaller.RegenerateAll), recording each failure as a FailedItem named
+// for the placement, with action generate.
+func (r *Runner) Regenerate() {
+	if r.Zip == nil {
+		return
+	}
+	for _, res := range r.Zip.RegenerateAll() {
+		slog.Warn("Regenerating placement FAILED", "placement", res.Placement, "code", res.Code(), "err", res.Err)
+		r.Report.FailedItems = append(r.Report.FailedItems, report.FailedItem{
+			Name:   res.Placement,
+			Action: "generate",
+			Error:  res.Err.Error(),
+			Code:   res.Code(),
+		})
+	}
+}

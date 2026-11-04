@@ -23,7 +23,8 @@ hello-world:
   `tree_hash` the tree hash of its contents.
 - The zip's root holds the item's files directly, such as `SKILL.md`, with
   no `<item>/` folder around them. The tree is placed at
-  `<placement path>/<item_name>`.
+  `<placement path>/<item_name>`, or `<placement path>/plugins/<item_name>`
+  in a marketplace.
 - A zip item needs no `check` block and no `uninstaller`.
 
 Do not write the `installer` block by hand. `makecatalogs zip-item` writes it.
@@ -41,12 +42,11 @@ data directory. The per-user helper `<slug>-ui.exe --user-sync`, which runs
 at every logon and storefront start, fetches that stored plan, so it needs no
 repository access, and places the trees in each user's profile under the
 `windows_user` roots, with receipts in `%LOCALAPPDATA%\<NAME>\receipts`
-([Protocol](../ui/ARCHITECTURE.md#protocol)). Only `directory` placements are
-written so far. The item succeeds when every machine-scope placement does; a
-failed placement leaves the others alone and is reported on its own.
+([Protocol](../ui/ARCHITECTURE.md#protocol)). The item succeeds when every
+machine-scope placement does; a failed placement leaves the others alone and
+is reported on its own.
 
-For each placement, sofcat checks the tree at `<placement path>/<item_name>`
-in this order:
+For each placement, sofcat checks the item's tree in this order:
 
 1. No tree: install it.
 2. The tree equals the catalog's `tree_hash`: nothing to do. If it has no
@@ -70,6 +70,87 @@ fails with `placement_conflict` and the tree stays. Items held by an unknown
 
 A zip item's installed status comes from its receipts and trees, never from a
 `check` block.
+
+### Marketplace and settings placements
+
+A `marketplace` placement is a directory that Claude Code and Codex read as a
+local marketplace. Each plugin's tree goes to `<placement path>/plugins/<item_name>`,
+under the same rules as a `directory` placement: the check order above,
+receipts, the exclusive marker at the placement path, and the refusals.
+
+After every change to a marketplace (an install, an upgrade, an adoption, a
+removal, or a receipt whose `managed` flag changed), sofcat rewrites its
+generated files from that placement's receipts, not from the run. A held or
+failed plugin keeps its entry. The files have no receipts: sofcat owns them,
+and status and scope exit ignore them. Every run also rewrites the generated
+files from the receipts, so a deleted or refused file is restored on the next
+run. Every path in the block's
+`manifest_files` (default `.claude-plugin/marketplace.json`), relative to the
+placement path, gets the same content:
+
+```json
+{
+  "name": "acme",
+  "owner": {
+    "name": "Acme IT"
+  },
+  "renames": {
+    "old-plugin": "new-plugin"
+  },
+  "allowCrossMarketplaceDependenciesOn": [
+    "other-marketplace"
+  ],
+  "plugins": [
+    {
+      "name": "hello-plugin",
+      "source": "./plugins/hello-plugin",
+      "version": "1.0.0",
+      "defaultEnabled": true
+    }
+  ]
+}
+```
+
+`owner`, `renames` and `allowCrossMarketplaceDependenciesOn` are copied from
+the `marketplace` block. Map keys come out sorted, and the last two are left
+out when the block does not set them. Plugins are sorted by name. `version` is
+the catalog version the receipt records. Bump it when a plugin's files change,
+because Codex may not reload them otherwise. `defaultEnabled` is the receipt's
+`managed` flag: true when a manifest lists the item in `managed_installs`. A run
+updates the flag only for items it decides. An item held by an unknown
+`conditional_items` condition keeps its recorded flag. With no plugin left, the
+manifest still lists `"plugins": []`.
+
+A `settings` placement is one JSON file, never an item's target. A variant
+that names one fails with `placement_refused`. Whenever sofcat regenerates the
+marketplace that the file `registers`, it rewrites the file through a
+temporary file in the same directory and creates the directory if needed:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "acme": {
+      "source": {
+        "source": "directory",
+        "path": "C:\\Program Files\\Acme\\marketplace"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "hello-plugin@acme": true
+  }
+}
+```
+
+`path` is the marketplace's resolved path. `enabledPlugins` lists only the
+managed plugins, keyed `<plugin>@<marketplace name>`. When the marketplace
+holds no plugin, sofcat removes the file. The file's path passes the same
+write-root and data and binary directory checks as a placement path. A refused
+path fails the item that triggered the rewrite with `placement_refused`; the
+per-run rewrite reports it under the marketplace placement's name, action
+`generate`.
+Generated files are written by the service only: marketplace and settings
+placements cannot be `user` scope.
 
 ### Receipts
 
@@ -189,7 +270,7 @@ placements:
 | key | The placement name. Variants and rendered trees use it. |
 | `kind` | `directory`, `marketplace` or `settings`. |
 | `paths` | The placement root, keyed by `darwin` and `windows`. |
-| `scope` | `machine` or `user`, keyed like `paths`. An OS left out is `machine`. `darwin: user` is not supported. |
+| `scope` | `machine` or `user`, keyed like `paths`. An OS left out is `machine`. `darwin: user` is not supported, and `user` only on kind `directory`. |
 | `works_in` | Harness display names, such as `[Claude Code]`. |
 | `action_labels` | Optional label overrides. Keys: `install`, `installing`, `installed`, `remove`, `removing`, `update`, `cancel`. |
 | `exclusive` | Optional. When true, sofcat does not write into an existing, non-empty root it did not create. |
