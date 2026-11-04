@@ -45,6 +45,10 @@ type ZipInstaller struct {
 	// Managed reports whether a manifest lists item in managed_installs, for
 	// the receipt's managed flag. Nil means never.
 	Managed func(item string) bool
+	// Held reports whether a held conditional block lists item. A held
+	// item's managed flag is never rewritten: the run cannot tell whether it
+	// is managed. Nil means nothing is held.
+	Held func(item string) bool
 
 	now func() time.Time
 }
@@ -93,7 +97,8 @@ const (
 // OutcomeRefused and OutcomeFailed.
 type Result struct {
 	Placement string
-	// Path is the tree's directory, <placement root>/<item>, when known.
+	// Path is the tree's directory, <placement root>/<item> (in a
+	// marketplace, <placement root>/plugins/<item>), when known.
 	Path    string
 	Outcome Outcome
 	Err     error
@@ -183,15 +188,33 @@ func (z *ZipInstaller) root(t Target) (string, error) {
 	if !t.Known {
 		return "", fmt.Errorf("%w: placement %q is not in harnesses.yaml", placement.ErrRefused, t.Placement)
 	}
-	if t.Spec.Kind != harness.KindDirectory {
-		// Marketplace and settings placements have their own writers.
-		return "", fmt.Errorf("%w: placement %q is kind %s, which this build does not write", placement.ErrRefused, t.Placement, t.Spec.Kind)
+	if t.Spec.Kind != harness.KindDirectory && t.Spec.Kind != harness.KindMarketplace {
+		// A settings placement is one generated file, never an item's target.
+		return "", fmt.Errorf("%w: placement %q is kind %s, which takes no item trees", placement.ErrRefused, t.Placement, t.Spec.Kind)
 	}
-	raw, ok := t.Spec.Path(z.Guard.GOOS)
+	return z.resolve(t.Placement, t.Spec)
+}
+
+// resolve expands, resolves and checks placement name's path on this OS.
+func (z *ZipInstaller) resolve(name string, spec harness.Placement) (string, error) {
+	raw, ok := spec.Path(z.Guard.GOOS)
 	if !ok {
-		return "", fmt.Errorf("%w: placement %q has no path on %s", placement.ErrRefused, t.Placement, z.Guard.GOOS)
+		return "", fmt.Errorf("%w: placement %q has no path on %s", placement.ErrRefused, name, z.Guard.GOOS)
 	}
-	return z.Guard.Resolve(raw, t.Spec.ScopeFor(z.Guard.GOOS))
+	path, err := z.Guard.Resolve(raw, spec.ScopeFor(z.Guard.GOOS))
+	if err != nil {
+		return "", fmt.Errorf("placement %q: %w", name, err)
+	}
+	return path, nil
+}
+
+// treeIn is item's tree under its placement root: <root>/<item>, or
+// <root>/plugins/<item> in a marketplace.
+func treeIn(spec harness.Placement, root, item string) string {
+	if spec.Kind == harness.KindMarketplace {
+		return filepath.Join(root, pluginsDir, item)
+	}
+	return filepath.Join(root, item)
 }
 
 // checkItemName refuses an item name that cannot be one directory under a
@@ -253,15 +276,25 @@ func fail(t Target, tree string, err error) Result {
 // missing, then catalog-equal (current or adopted), then receipt-equal
 // (unchanged), then conflict.
 func (z *ZipInstaller) Inspect(item catalog.Item, t Target) Result {
+	res, _ := z.inspect(item, t)
+	return res
+}
+
+// inspect is Inspect, also returning the placement root once resolved.
+func (z *ZipInstaller) inspect(item catalog.Item, t Target) (Result, string) {
 	if err := checkItemName(item.Name); err != nil {
-		return fail(t, "", err)
+		return fail(t, "", err), ""
 	}
 	root, err := z.root(t)
 	if err != nil {
-		return fail(t, "", err)
+		return fail(t, "", err), ""
 	}
-	tree := filepath.Join(root, item.Name)
-	if err = z.checkExclusive(t, root); err != nil {
+	return z.inspectTree(item, t, root), root
+}
+
+func (z *ZipInstaller) inspectTree(item catalog.Item, t Target, root string) Result {
+	tree := treeIn(t.Spec, root, item.Name)
+	if err := z.checkExclusive(t, root); err != nil {
 		return fail(t, tree, err)
 	}
 	res := Result{Placement: t.Placement, Path: tree}
@@ -305,9 +338,14 @@ func (z *ZipInstaller) Inspect(item catalog.Item, t Target) Result {
 
 // managedChanged reports whether rc's managed flag is stale, as when a run
 // moves the item between optional and managed installs. An installer without
-// a Managed func (the service's list call) cannot tell and reports false.
+// a Managed func (the service's list call) cannot tell and reports false, as
+// it does for a held item.
 func (z *ZipInstaller) managedChanged(rc receipt.Receipt) bool {
-	return z.Managed != nil && rc.Managed != z.Managed(rc.Item)
+	return z.Managed != nil && !z.held(rc.Item) && rc.Managed != z.Managed(rc.Item)
+}
+
+func (z *ZipInstaller) held(item string) bool {
+	return z.Held != nil && z.Held(item)
 }
 
 // Fetch downloads t's archive into the cache unless a verified copy is there,
@@ -331,8 +369,13 @@ func (z *ZipInstaller) Fetch(ctx context.Context, t Target) (string, error) {
 // Apply brings item's tree at t to the catalog version from archive, a
 // verified copy of t's variant (see Fetch), following Inspect's decision.
 // archive is read only when a tree is written.
+//
+// After it changes a marketplace placement (an install, an upgrade, or a
+// receipt adopted or refreshed, as when only the managed flag changed) it
+// regenerates the marketplace's generated files; a failure there fails the
+// result.
 func (z *ZipInstaller) Apply(item catalog.Item, t Target, archive string) Result {
-	res := z.Inspect(item, t)
+	res, root := z.inspect(item, t)
 	switch res.Outcome {
 	case OutcomeMissing, OutcomeUnchanged:
 	case OutcomeAdopted:
@@ -340,16 +383,20 @@ func (z *ZipInstaller) Apply(item catalog.Item, t Target, archive string) Result
 			return fail(t, res.Path, err)
 		}
 		slog.Info("Adopted placed tree", "item", item.Name, "placement", t.Placement, "path", res.Path)
-		return res
+		return z.regenerated(t, res)
 	default:
 		return res
 	}
 
-	root := filepath.Dir(res.Path)
 	if err := z.prepareRoot(t, root); err != nil {
 		return fail(t, res.Path, err)
 	}
-	stage := filepath.Join(root, "."+z.slug()+"-staging-"+item.Name)
+	// The tree's directory: the root, or a marketplace's plugins directory.
+	parent := filepath.Dir(res.Path)
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		return fail(t, res.Path, err)
+	}
+	stage := filepath.Join(parent, "."+z.slug()+"-staging-"+item.Name)
 	if err := os.RemoveAll(stage); err != nil {
 		return fail(t, res.Path, err)
 	}
@@ -365,6 +412,15 @@ func (z *ZipInstaller) Apply(item catalog.Item, t Target, archive string) Result
 	}
 	slog.Info("Placed tree", "item", item.Name, "version", item.Version, "placement", t.Placement, "path", res.Path)
 	res.Outcome = OutcomeInstalled
+	return z.regenerated(t, res)
+}
+
+// regenerated regenerates the generated files of t's placement after res
+// changed it, failing res when that fails.
+func (z *ZipInstaller) regenerated(t Target, res Result) Result {
+	if err := z.regenerate(t.Placement); err != nil {
+		return fail(t, res.Path, err)
+	}
 	return res
 }
 
@@ -413,20 +469,33 @@ func (z *ZipInstaller) swap(item, stage, tree string, replace bool) error {
 	return nil
 }
 
+// writeReceipt records item's tree at t. A held item keeps the managed flag
+// its existing receipt records.
 func (z *ZipInstaller) writeReceipt(item catalog.Item, t Target, tree string) error {
+	managed := z.Managed != nil && z.Managed(item.Name)
+	if z.held(item.Name) {
+		rc, ok, err := receipt.Read(z.ReceiptDir, t.Placement, item.Name)
+		if err != nil {
+			return err
+		}
+		if ok {
+			managed = rc.Managed
+		}
+	}
 	return receipt.Write(z.ReceiptDir, receipt.Receipt{
 		Item:           item.Name,
 		Version:        item.Version,
 		Placement:      t.Placement,
 		Path:           tree,
 		TreeHash:       t.Variant.TreeHash,
-		Managed:        z.Managed != nil && z.Managed(item.Name),
+		Managed:        managed,
 		InstalledAtUTC: z.clock(),
 	})
 }
 
 // Remove removes the tree rc records, under R15: only when the tree still
-// matches the receipt. A tree already gone just drops the receipt.
+// matches the receipt. A tree already gone just drops the receipt. Like
+// Apply, removing a marketplace plugin regenerates the generated files.
 func (z *ZipInstaller) Remove(rc receipt.Receipt) Result {
 	t := Target{Placement: rc.Placement}
 	res := Result{Placement: rc.Placement, Path: rc.Path}
@@ -467,7 +536,7 @@ func (z *ZipInstaller) Remove(rc receipt.Receipt) Result {
 	}
 	slog.Info("Removed placed tree", "item", rc.Item, "placement", rc.Placement, "path", rc.Path)
 	res.Outcome = OutcomeRemoved
-	return res
+	return z.regenerated(t, res)
 }
 
 // Installed is a zip item's install status (R15), from receipts and placed

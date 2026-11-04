@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -221,12 +223,24 @@ func (t Table) validatePlacement(name string) []error {
 func (t Table) validateKindBlocks(p Placement) []error {
 	var errs []error
 	fail := func(format string, args ...any) { errs = append(errs, fmt.Errorf(format, args...)) }
+	if p.Kind != KindDirectory && (p.ScopeFor(Darwin) == ScopeUser || p.ScopeFor(Windows) == ScopeUser) {
+		// Generated files are written by the service only.
+		fail("scope: user is supported on kind directory only")
+	}
 	if p.Kind == KindMarketplace {
 		switch {
 		case p.Marketplace == nil:
 			fail("kind marketplace needs a marketplace block")
 		case p.Marketplace.Name == "" || p.Marketplace.Owner == nil:
 			fail("marketplace: name and owner are required")
+		}
+		if p.Marketplace != nil {
+			for _, f := range p.Marketplace.ManifestFiles {
+				// Slash-separated on every OS, like the default.
+				if !filepath.IsLocal(f) || strings.Contains(f, `\`) || f != path.Clean(f) {
+					fail("marketplace: manifest_files: %q is not a clean relative path", f)
+				}
+			}
 		}
 	} else if p.Marketplace != nil {
 		fail("marketplace block on kind %q", p.Kind)

@@ -21,7 +21,8 @@ type Receipt struct {
 	Item      string `json:"item"`
 	Version   string `json:"version"`
 	Placement string `json:"placement"`
-	// Path is the tree's directory, <placement root>/<item>.
+	// Path is the tree's directory: <placement root>/<item>, or
+	// <placement root>/plugins/<item> in a marketplace.
 	Path     string `json:"path"`
 	TreeHash string `json:"tree_hash"`
 	// Managed is true when a manifest lists the item in managed_installs.

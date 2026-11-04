@@ -33,8 +33,10 @@ placements:
       windows: user
     works_in: [Codex]
   acme-marketplace:
-    # marketplace: plugins at <path>/plugins/<item_name>, plus a manifest that
-    # sofcat regenerates.
+    # marketplace: plugins at <path>/plugins/<item_name>, plus manifests that
+    # sofcat regenerates from the receipts after every change (one entry per
+    # plugin, defaultEnabled when a manifest lists it in managed_installs).
+    # Machine scope only.
     kind: marketplace
     paths:
       darwin: /Library/Application Support/Acme/marketplace
@@ -58,7 +60,9 @@ placements:
         - .claude-plugin/marketplace.json
   claude-code-settings:
     # settings: one JSON drop-in that registers a marketplace and enables its
-    # managed plugins.
+    # managed plugins, keyed <plugin>@<marketplace name>. sofcat rewrites it
+    # with the marketplace and removes it when no plugin is left. Machine
+    # scope only.
     kind: settings
     paths:
       darwin: /Library/Application Support/ClaudeCode/managed-settings.d/50-acme.json
