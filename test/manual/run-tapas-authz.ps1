@@ -1,28 +1,50 @@
 <#
 .SYNOPSIS
-Per-user authorization check for the Tapas Test fixture brand.
+Per-user authorization check for the Tapas Test fixture brand, one step per run.
 
 .DESCRIPTION
-Creates two local standard users. User A selects tapas-optional-skill through
-`tapas-test.exe -S InstallItem:...`, user B's RemoveItem is refused with
-not_authorized and changes nothing, then this elevated session removes it as
-an administrator. Removes the two users itself.
+Only the user who selected tapas-optional-skill, or an administrator, may
+remove it. Each -Step runs under the caller's own token, so two SSH sessions
+drive the check: the rig administrator (whose full token the service sees as
+an administrator) and the rig's standard user. test/manual/run-tapas-authz.sh
+runs the steps in this order from the host, after run-tapas-smoke.ps1:
 
-Starting a process as another user (Start-Process -Credential) fails with
-0xC0000142 in an SSH session, so run this AFTER run-tapas-smoke.ps1 has
-passed, elevated in the logged-on user's desktop session, for example with
-`rig run-it --elevated --wait test/manual/run-tapas-authz.ps1`.
-Desktop-session output is otherwise invisible, so every line also goes to
--LogPath.
+  admin  prepare          service up, no selector, config copied for the standard user
+  admin  select           InstallItem succeeds; selected_by is the admin's SID
+  std    remove-refused   RemoveItem exits non-zero with not_authorized
+  admin  verify-unchanged selection, selected_by and the placed tree as before
+  admin  remove           RemoveItem succeeds; tree, receipt and selector gone
+  std    select           InstallItem succeeds
+  admin  verify-selector  selected_by is the standard user's SID (-Selector)
+  admin  remove-other     the administrator removes the standard user's item
+  std    select           InstallItem succeeds
+  std    remove-own       the selector removes its own item
+  admin  verify-clean     nothing placed, no selector; the Public copy removed
 
-Exits non-zero on the first failed assertion; prints TAPAS AUTHZ PASSED at
-the end. PowerShell 5.1 compatible.
+Standard-user steps read the config copy under C:\Users\Public, because
+config.yaml and service-manifest.yaml are readable by SYSTEM and
+Administrators only, so only administrator steps assert on the manifest.
+`select` prints `AUTHZ CALLER <sid>`; the driver passes the standard user's
+SID to verify-selector as -Selector.
+
+Each step exits non-zero on its first failed assertion and prints
+`AUTHZ STEP <name> PASSED` at its end. Every line also goes to -LogPath.
+PowerShell 5.1 compatible.
 #>
 
 [CmdletBinding()]
 param(
+    # Not Mandatory: a prompt for it would hang an SSH session.
+    [ValidateSet('prepare', 'select', 'remove-refused', 'verify-unchanged', 'remove',
+        'verify-selector', 'remove-other', 'remove-own', 'verify-clean')]
+    [string]$Step        = "",
+    # The SID verify-selector expects as the item's selector (from the
+    # standard user's `select` output). Defaults to the caller's own SID.
+    [string]$Selector    = "",
     [string]$SofCat      = "$env:ProgramFiles\Tapas Test\tapas-test.exe",
     [string]$Config      = "$env:ProgramData\Tapas Test\config.yaml",
+    # The copy of the config a standard user can read; only its pipe name matters.
+    [string]$UserConfig  = "C:\Users\Public\tapas-authz-config.yaml",
     # The data directory (app_data_path), beside config.yaml.
     [string]$DataDir     = "$env:ProgramData\Tapas Test\Data",
     [string]$Slug        = "tapas-test",
@@ -33,22 +55,16 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$stepNum = 0
 
 $receiptDir = Join-Path $DataDir "receipts"
 $SelfServe  = Join-Path $DataDir "service-manifest.yaml"
 $claudeRoot = Join-Path $SmokeRoot "claude\skills"
+$optionalItem = "tapas-optional-skill"
 
 function Log {
     param([string]$Message)
     Write-Host $Message
     try { Add-Content -LiteralPath $LogPath -Value ("{0:o} {1}" -f (Get-Date), $Message) } catch { }
-}
-
-function Write-Step {
-    param([string]$Message)
-    $script:stepNum++
-    Log ("[{0}] {1}" -f $script:stepNum, $Message)
 }
 
 function Fail {
@@ -84,59 +100,6 @@ function Invoke-SofCat {
         Fail "$Slug -S $Spec exited $code"
     }
     return @{ Code = $code; Out = $lines }
-}
-
-# Invoke-SofCatAs runs a service command as another local user, with that
-# user's own standard token, and returns @{Code=<int>; Out=<string[]>}.
-function Invoke-SofCatAs {
-    param([pscredential]$Credential, [string]$Spec)
-    # config.yaml is locked to SYSTEM and Administrators, so a standard user
-    # cannot read the service's. The client only needs the pipe name from it:
-    # give the user a copy under Public, which anyone reads.
-    $userConfig = "C:\Users\Public\tapas-authz-config.yaml"
-    if (-not (Test-Path -LiteralPath $userConfig)) { Copy-Item -LiteralPath $Config -Destination $userConfig }
-    $base = Join-Path $env:TEMP ("tapas-authz-" + [guid]::NewGuid().ToString('N'))
-    $outFile = "$base.out"
-    $errFile = "$base.err"
-    # Start-Process joins the arguments with spaces, so quote the config path.
-    $proc = Start-Process -FilePath $SofCat -ArgumentList @('-c', "`"$userConfig`"", '-S', $Spec) `
-        -Credential $Credential -LoadUserProfile -WorkingDirectory (Split-Path $SofCat) `
-        -NoNewWindow -Wait -PassThru -RedirectStandardOutput $outFile -RedirectStandardError $errFile
-    $lines = @(@(Get-Content -LiteralPath $outFile -ErrorAction SilentlyContinue) +
-        @(Get-Content -LiteralPath $errFile -ErrorAction SilentlyContinue) | ForEach-Object { "$_" })
-    Remove-Item -LiteralPath $outFile, $errFile -Force -ErrorAction SilentlyContinue
-    $code = $proc.ExitCode
-    Log ("    {0} -S {1} as {2} (exit {3})" -f $Slug, $Spec, $Credential.UserName, $code)
-    $lines | ForEach-Object { Log "      $_" }
-    if ($null -eq $code) { Fail "no exit code from $Slug -S $Spec as $($Credential.UserName)" }
-    if ($code -eq -1073741502) { Fail "$Slug could not start as $($Credential.UserName) (0xC0000142): this session cannot launch a process for another user" }
-    return @{ Code = $code; Out = $lines }
-}
-
-# New-SmokeUser creates a local standard user (member of Users only) with a
-# generated password and returns its credential. The password is never printed.
-function New-SmokeUser {
-    param([string]$Name)
-    $plain = "Tp1!" + [guid]::NewGuid().ToString('N') + "aZ"
-    $secure = ConvertTo-SecureString $plain -AsPlainText -Force
-    $plain = $null
-    New-LocalUser -Name $Name -Password $secure -AccountNeverExpires -PasswordNeverExpires `
-        -Description "tapas smoke: per-user authorization" | Out-Null
-    try {
-        Add-LocalGroupMember -SID "S-1-5-32-545" -Member $Name -ErrorAction Stop
-    } catch [Microsoft.PowerShell.Commands.MemberExistsException] {
-        # New-LocalUser already made it a member of Users.
-    }
-    return (New-Object System.Management.Automation.PSCredential ("$env:COMPUTERNAME\$Name", $secure))
-}
-
-function Remove-SmokeUser {
-    param([string]$Name)
-    $u = Get-LocalUser -Name $Name -ErrorAction SilentlyContinue
-    if (-not $u) { return }
-    Get-CimInstance Win32_UserProfile | Where-Object { $_.SID -eq $u.SID.Value } |
-        Remove-CimInstance -ErrorAction SilentlyContinue
-    Remove-LocalUser -Name $Name
 }
 
 # Get-YamlList parses a top-level YAML sequence value ("key:\n  - a\n  - b").
@@ -274,68 +237,116 @@ function Wait-Pruned {
     Wait-For { @(Get-YamlList $SelfServe "managed_uninstalls").Count -eq 0 } "managed_uninstalls to be pruned empty"
 }
 
-$userA = "tapas-smoke-a"
-$userB = "tapas-smoke-b"
-$optionalItem = "tapas-optional-skill"
+function Get-Selector {
+    return (Get-YamlMap $SelfServe "selected_by")[$optionalItem]
+}
+
+# Assert-Selected checks the item is selected, placed and recorded to $Sid.
+function Assert-Selected {
+    param([string]$Sid)
+    if (@(Get-YamlList $SelfServe "managed_installs") -notcontains $optionalItem -or
+        @(Get-YamlList $SelfServe "managed_uninstalls") -contains $optionalItem) {
+        Fail "$optionalItem is not selected"
+    }
+    $selector = Get-Selector
+    if ($selector -ne $Sid) { Fail "selected_by.$optionalItem = '$selector', want $Sid" }
+    Assert-Placed $claudeRoot "claude-skills" $optionalItem | Out-Null
+}
+
+# Assert-Removed waits for the tree, receipt and removal entry to go, then
+# checks the selector was cleared with them.
+function Assert-Removed {
+    Wait-Removed $claudeRoot "claude-skills" $optionalItem
+    Wait-Pruned
+    if ((Get-YamlMap $SelfServe "selected_by").ContainsKey($optionalItem)) { Fail "selected_by still records $optionalItem after its removal completed" }
+}
 
 try {
+    if (-not $Step) { Fail "usage: run-tapas-authz.ps1 -Step <name> [-Selector <sid>]" }
     New-Item -ItemType Directory -Path (Split-Path $LogPath) -Force -ErrorAction SilentlyContinue | Out-Null
-    Set-Content -LiteralPath $LogPath -Value "" -ErrorAction SilentlyContinue
+    if ($Step -eq 'prepare') { Set-Content -LiteralPath $LogPath -Value "" -ErrorAction SilentlyContinue }
 
-    # Creating users needs an administrator, and this session's RemoveItem is
-    # the administrator's removal under test.
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
-    Log "Running as $($identity.Name)"
-    if (-not (New-Object Security.Principal.WindowsPrincipal $identity).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-        Fail "this check needs an elevated administrator token"
+    $sid = $identity.User.Value
+    $isAdmin = (New-Object Security.Principal.WindowsPrincipal $identity).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    Log ("[{0}] running as {1} ({2})" -f $Step, $identity.Name, $(if ($isAdmin) { "administrator" } else { "standard user" }))
+    Log "AUTHZ CALLER $sid"
+    # `select` runs as either; the others belong to one caller, and running
+    # them as the other would pass or fail for the wrong reason.
+    $stdSteps = @('remove-refused', 'remove-own')
+    if ($Step -ne 'select') {
+        if ($isAdmin -and $stdSteps -contains $Step) { Fail "step $Step must run as a standard user, not an administrator" }
+        if (-not $isAdmin -and $stdSteps -notcontains $Step) { Fail "step $Step needs an administrator token" }
     }
     if (-not (Test-Path -LiteralPath $SofCat -PathType Leaf)) { Fail "$SofCat is not installed" }
-
-    Write-Step "Two standard users: only the user who selected an item, or an admin, removes it"
-    foreach ($n in @($userA, $userB)) {
-        if (Get-LocalUser -Name $n -ErrorAction SilentlyContinue) { Fail "local user $n exists before the check created it (not a clean VM?)" }
+    if (-not $isAdmin) {
+        if (-not (Test-Path -LiteralPath $UserConfig -PathType Leaf)) { Fail "$UserConfig is missing: run the prepare step first" }
+        $Config = $UserConfig
     }
-    if ((Get-YamlMap $SelfServe "selected_by").ContainsKey($optionalItem)) { Fail "$optionalItem has a recorded selector before the check" }
-    try {
-        $credA = New-SmokeUser $userA
-        $credB = New-SmokeUser $userB
-        $sidA = (Get-LocalUser -Name $userA).SID.Value
+    if (-not $Selector) { $Selector = $sid }
 
-        $resA = Invoke-SofCatAs $credA "InstallItem:$optionalItem"
-        if ($resA.Code -ne 0) { Fail "InstallItem:$optionalItem as $userA exited $($resA.Code)" }
-        $terminal = Wait-Operation $resA "InstallItem:$optionalItem"
-        if ($terminal.state -ne "Succeeded") { Fail "$userA's install ended $($terminal.state): $($terminal | ConvertTo-Json -Compress)" }
-        Assert-Placed $claudeRoot "claude-skills" $optionalItem | Out-Null
-        $selector = (Get-YamlMap $SelfServe "selected_by")[$optionalItem]
-        if ($selector -ne $sidA) { Fail "selected_by.$optionalItem = '$selector', want $userA's SID $sidA" }
-        Pass "$userA installed $optionalItem; selected_by records $sidA"
-
-        $resB = Invoke-SofCatAs $credB "RemoveItem:$optionalItem"
-        $textB = $resB.Out -join "`n"
-        if ($resB.Code -eq 0) { Fail "RemoveItem:$optionalItem as $userB was accepted" }
-        if ($textB -notmatch 'not_authorized') { Fail "RemoveItem as $userB was not refused with not_authorized: $textB" }
-        if (@(Get-YamlList $SelfServe "managed_installs") -notcontains $optionalItem -or
-            @(Get-YamlList $SelfServe "managed_uninstalls") -contains $optionalItem) {
-            Fail "the refused removal changed the selection"
+    switch ($Step) {
+        'prepare' {
+            Invoke-SofCat "GetServiceInfo" | Out-Null
+            if ((Get-YamlMap $SelfServe "selected_by").ContainsKey($optionalItem)) { Fail "$optionalItem has a recorded selector before the check" }
+            if (Test-Path -LiteralPath (Join-Path $claudeRoot $optionalItem)) { Fail "$optionalItem is placed before the check" }
+            # config.yaml is locked to SYSTEM and Administrators, so a standard
+            # user cannot read the service's. The client only needs the pipe
+            # name from it: give the user a copy under Public. Public's own ACL
+            # admits interactive logons only, and the standard user's SSH
+            # session is a network logon, so grant Users read explicitly.
+            Copy-Item -LiteralPath $Config -Destination $UserConfig -Force
+            icacls $UserConfig /grant '*S-1-5-32-545:R' | Out-Null
+            if ($LASTEXITCODE -ne 0) { Fail "icacls could not grant Users read on $UserConfig" }
+            Pass "service up, $optionalItem unselected; config copied to $UserConfig"
         }
-        if ((Get-YamlMap $SelfServe "selected_by")[$optionalItem] -ne $sidA) { Fail "the refused removal changed selected_by" }
-        Assert-Placed $claudeRoot "claude-skills" $optionalItem | Out-Null
-        Pass "$userB's RemoveItem refused with not_authorized; still selected and placed"
-
-        Assert-Succeeded "RemoveItem:$optionalItem"
-        Wait-Removed $claudeRoot "claude-skills" $optionalItem
-        Wait-Pruned
-        if ((Get-YamlMap $SelfServe "selected_by").ContainsKey($optionalItem)) { Fail "selected_by still records $optionalItem after its removal completed" }
-        Pass "the administrator's RemoveItem succeeded; tree and receipt gone, selector cleared"
-    } finally {
-        foreach ($n in @($userA, $userB)) { Remove-SmokeUser $n }
+        'select' {
+            Assert-Succeeded "InstallItem:$optionalItem"
+            if ($isAdmin) {
+                Assert-Selected $sid
+                Pass "installed $optionalItem; selected_by records $sid"
+            } else {
+                Pass "installed $optionalItem as a standard user"
+            }
+        }
+        'remove-refused' {
+            $res = Invoke-SofCat "RemoveItem:$optionalItem" -AllowFail
+            $text = $res.Out -join "`n"
+            if ($res.Code -eq 0) { Fail "RemoveItem:$optionalItem by another standard user was accepted" }
+            if ($text -notmatch 'not_authorized') { Fail "RemoveItem was not refused with not_authorized: $text" }
+            Pass "RemoveItem by another standard user refused with not_authorized"
+        }
+        'verify-unchanged' {
+            Assert-Selected $Selector
+            Pass "the refused removal changed nothing: still selected by $Selector and placed"
+        }
+        'remove' {
+            Assert-Succeeded "RemoveItem:$optionalItem"
+            Assert-Removed
+            Pass "the administrator's RemoveItem succeeded; tree and receipt gone, selector cleared"
+        }
+        'verify-selector' {
+            if ($Selector -eq $sid) { Fail "-Selector is this administrator's own SID; pass the standard user's" }
+            Assert-Selected $Selector
+            Pass "selected_by records the standard user $Selector"
+        }
+        'remove-other' {
+            Assert-Succeeded "RemoveItem:$optionalItem"
+            Assert-Removed
+            Pass "the administrator removed the standard user's item; selector cleared"
+        }
+        'remove-own' {
+            Assert-Succeeded "RemoveItem:$optionalItem"
+            Pass "the standard user removed its own item"
+        }
+        'verify-clean' {
+            Assert-Removed
+            Remove-Item -LiteralPath $UserConfig -Force -ErrorAction SilentlyContinue
+            Pass "nothing placed, no selector; $UserConfig removed"
+        }
     }
-    foreach ($n in @($userA, $userB)) {
-        if (Get-LocalUser -Name $n -ErrorAction SilentlyContinue) { Fail "local user $n was not removed" }
-    }
 
-    Log ""
-    Log "TAPAS AUTHZ PASSED"
+    Log "AUTHZ STEP $Step PASSED"
     exit 0
 }
 catch {
