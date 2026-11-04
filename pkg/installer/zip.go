@@ -350,7 +350,7 @@ func (z *ZipInstaller) held(item string) bool {
 
 // Fetch downloads t's archive into the cache unless a verified copy is there,
 // and returns its path. Cancelling ctx aborts the download.
-func (z *ZipInstaller) Fetch(ctx context.Context, t Target) (string, error) {
+func (z *ZipInstaller) Fetch(ctx context.Context, t Target, progress download.Progress) (string, error) {
 	// The location names the cached copy, so a crafted one must not leave
 	// the cache: every segment of the cleaned path must be a plain name.
 	rel := path.Clean(t.Variant.Location)
@@ -360,7 +360,7 @@ func (z *ZipInstaller) Fetch(ctx context.Context, t Target) (string, error) {
 		}
 	}
 	archive := filepath.Join(z.CachePath, filepath.FromSlash(rel))
-	if !download.IfNeeded(ctx, archive, z.URLPackages+t.Variant.Location, t.Variant.Hash) {
+	if !download.IfNeeded(ctx, archive, z.URLPackages+t.Variant.Location, t.Variant.Hash, progress) {
 		return "", fmt.Errorf("unable to download a valid archive for placement %q", t.Placement)
 	}
 	return archive, nil

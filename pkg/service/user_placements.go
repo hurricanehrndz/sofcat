@@ -205,7 +205,7 @@ func StageUserArtifacts(ctx context.Context, zip *installer.ZipInstaller, plan [
 			continue
 		}
 		t := installer.Target{Placement: e.Placement, Variant: catalog.Variant{Location: e.location, Hash: e.Hash, TreeHash: e.TreeHash}}
-		cached, err := zip.Fetch(ctx, t)
+		cached, err := zip.Fetch(ctx, t, nil)
 		if err == nil {
 			err = copyFileAtomic(cached, e.Archive)
 		}

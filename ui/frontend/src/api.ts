@@ -18,7 +18,8 @@ export type OperationStatus = {
   itemName: string;
   displayName: string;
   state: string;
-  progressPercent: number;
+  /** The item's measured percent; absent when nothing was measured. */
+  progressPercent?: number;
   message: string;
   errorCode?: string;
   errorMessage?: string;

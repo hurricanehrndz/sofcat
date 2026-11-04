@@ -316,6 +316,8 @@ function Assert-DemoOptionalProgress {
         if (-not $ev.itemName -or -not $ev.displayName) {
             Fail "stream event missing item identity: $($ev | ConvertTo-Json -Compress)"
         }
+        # Only a measured record carries a percent; one without it is no reset.
+        if ($null -eq $ev.progressPercent) { continue }
         if ($null -ne $previous -and
             $ev.itemName -eq $previous.itemName -and
             [int]$ev.progressPercent -lt [int]$previous.progressPercent) {

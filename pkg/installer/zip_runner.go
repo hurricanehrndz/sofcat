@@ -127,13 +127,27 @@ func (r *Runner) placeZip(item catalog.Item, installerType string) (string, erro
 	if !ok {
 		return "", r.canceled(item)
 	}
-	r.emit(item, "downloading", 0, item.DisplayName)
+	r.emit(item, "downloading", NoPercent, item.DisplayName)
 	archives := make(map[string]string, len(pending))
 	fetchErrs := make(map[string]error)
+	fetches := 0
 	for _, t := range pending {
 		if needsArchive[t.Placement] {
-			archives[t.Placement], fetchErrs[t.Placement] = r.Zip.Fetch(ctx, t)
+			fetches++
 		}
+	}
+	fetched := 0
+	for _, t := range pending {
+		if !needsArchive[t.Placement] {
+			continue
+		}
+		// The item's percentage spans all its archives, so it never resets
+		// between placements; each archive counts the same.
+		before := fetched
+		archives[t.Placement], fetchErrs[t.Placement] = r.Zip.Fetch(ctx, t, func(percent int) {
+			r.emit(item, "downloading", (before*100+percent)/fetches, item.DisplayName)
+		})
+		fetched++
 	}
 	withdrawn := ctx.Err() != nil
 	done()
@@ -144,7 +158,7 @@ func (r *Runner) placeZip(item catalog.Item, installerType string) (string, erro
 		return "", r.canceled(item)
 	}
 
-	r.emit(item, "installing", 50, item.DisplayName)
+	r.emit(item, "installing", NoPercent, item.DisplayName)
 	failed, placed := false, false
 	for _, t := range pending {
 		var res Result
@@ -162,7 +176,7 @@ func (r *Runner) placeZip(item catalog.Item, installerType string) (string, erro
 		placed = placed || res.Outcome == OutcomeInstalled
 	}
 	if failed {
-		r.emit(item, "failed", 100, errZipFailed.Error())
+		r.emit(item, "failed", NoPercent, errZipFailed.Error())
 		return "", errZipFailed
 	}
 	if placed {
@@ -197,9 +211,9 @@ func (r *Runner) removeZip(item catalog.Item) (string, error) {
 	if !r.Cancels.act(item.Name) {
 		return "", r.canceled(item)
 	}
-	r.emit(item, "removing", 0, item.DisplayName)
+	r.emit(item, "removing", NoPercent, item.DisplayName)
 	if !r.removeReceipts(item, rcs) {
-		r.emit(item, "failed", 100, errZipFailed.Error())
+		r.emit(item, "failed", NoPercent, errZipFailed.Error())
 		return "", errZipFailed
 	}
 	r.emit(item, "done", 100, "")

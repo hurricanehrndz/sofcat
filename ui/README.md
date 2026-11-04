@@ -29,8 +29,8 @@ objects.
 
 Six bound methods and exactly one event channel, `sofcat:operation-status`.
 Each status record carries `operationId`, `seq`, `itemName`, `displayName`,
-`state`, item-scoped `progressPercent`, `message`, a millisecond `timestampUtc`,
-and terminal error/cancellation fields. The frontend subscribes once, routes
+`state`, item-scoped `progressPercent` (only when measured), `message`, a
+millisecond `timestampUtc`, and terminal error/cancellation fields. The frontend subscribes once, routes
 records by `operationId` and orders each operation's records by `seq`.
 
 Behind the bindings, `pkg/service.Client` talks JSON-RPC 2.0 to the service over
@@ -52,11 +52,13 @@ user's operation to watch it.
 
 - `progressPercent` is **per item**. It may reset when the event's item changes
   (for example when a dependency or updater runs). It is never aggregate
-  operation progress. An item's detail page shows its current phase beside a
-  spinner; a Home card shows no progress, only a pending or required item's
-  status and a failure or deferral reason. The one bar is in the bottom strip, for the operation being worked on, and is
-  indeterminate for a phase without a percentage. The record timeline is only in
-  Activity.
+  operation progress, and is present only when measured: a download of known
+  length is; an install or removal is not. An item's detail page shows its
+  current phase beside a spinner; a Home card shows no progress, only a
+  pending or required item's status and a failure or deferral reason. The one
+  bar is in the bottom strip, for the operation being worked on, and is
+  indeterminate for a phase without a percentage. The record timeline is only
+  in Activity.
 - `ItemCompleted` and `ItemFailed` are **non-terminal**. A dependency failure does
   not end the operation.
 - Only `Succeeded`, `Failed`, `Deferred`, and `Canceled` end an operation.

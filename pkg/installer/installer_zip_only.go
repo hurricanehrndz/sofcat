@@ -32,7 +32,7 @@ func commandUnavailable(action string) func(*Runner, catalog.Item, string) (stri
 			installerType = item.Uninstaller.Type
 		}
 		err := fmt.Errorf("installer type %q is not available in this build", installerType)
-		r.emit(item, "failed", 0, err.Error())
+		r.emit(item, "failed", NoPercent, err.Error())
 		return "", r.recordFailure(item, action, err)
 	}
 }
