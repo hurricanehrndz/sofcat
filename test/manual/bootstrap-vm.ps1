@@ -9,6 +9,10 @@ Bootstrap SofCat on a Windows VM from prepared manual-test assets.
 
 A branded build passes its brand.env SLUG as -Slug and NAME as -ProductName;
 the exe names, service name and default paths follow from them.
+
+-ListHeading writes a branding: block with list_heading, the storefront's
+heading in place of "Available software". config.yaml is written as ASCII,
+so the heading must be ASCII.
 #>
 
 [CmdletBinding()]
@@ -21,6 +25,7 @@ param(
     [string]$AppDataPath = "$env:ProgramData\$ProductName",
     [string]$Manifest = "example_manifest",
     [string[]]$Catalogs = @("example_catalog"),
+    [string]$ListHeading = "",
     [switch]$InstallService,
     [switch]$StartService,
     [switch]$NoPause
@@ -50,7 +55,8 @@ function Write-SofCatConfig {
         [string]$URLValue,
         [string]$ManifestValue,
         [string[]]$CatalogList,
-        [string]$AppDataPathValue
+        [string]$AppDataPathValue,
+        [string]$ListHeadingValue = ""
     )
 
     $configDir = Split-Path -Parent $ConfigFilePath
@@ -71,6 +77,15 @@ app_data_path: $yamlAppDataPath
 # service_interval: 1h
 # service_pipe_name: $Slug-service
 "@
+
+    if ($ListHeadingValue) {
+        if ($ListHeadingValue -match '[^\x20-\x7E]') {
+            throw "-ListHeading must be printable ASCII: config.yaml is written as ASCII"
+        }
+        # A single-quoted YAML scalar takes any printable text; only ' is doubled.
+        $quoted = "'" + ($ListHeadingValue -replace "'", "''") + "'"
+        $content += "`r`nbranding:`r`n  list_heading: $quoted"
+    }
 
     Set-Content -Path $ConfigFilePath -Value $content -Encoding ASCII
 }
@@ -200,7 +215,7 @@ Write-Step "Downloading $ProductName UI binary from $uiBinaryUrl"
 Invoke-WebRequest -Uri $uiBinaryUrl -OutFile $uiBinaryPath
 
 Write-Step "Writing config to $ConfigPath"
-Write-SofCatConfig -ConfigFilePath $ConfigPath -URLValue $BaseUrl -ManifestValue $Manifest -CatalogList $Catalogs -AppDataPathValue $AppDataPath
+Write-SofCatConfig -ConfigFilePath $ConfigPath -URLValue $BaseUrl -ManifestValue $Manifest -CatalogList $Catalogs -AppDataPathValue $AppDataPath -ListHeadingValue $ListHeading
 Ensure-PathEntry -DirectoryPath $InstallPath
 
 if ($InstallService) {

@@ -122,16 +122,54 @@ export function restartBadge(item: OptionalInstallItem): string {
   return RESTART_LABELS[fold(raw)] ?? raw;
 }
 
+/**
+ * BUILT_IN_LABELS are the storefront's own words for each custom_action_labels
+ * key. The service sends only the keys an item or its placements override.
+ */
+export const BUILT_IN_LABELS = {
+  install: "Install",
+  installing: "Installing…",
+  installed: "Installed",
+  remove: "Remove",
+  removing: "Removing…",
+  update: "Update",
+  cancel: "Cancel",
+} as const;
+
+export type LabelKey = keyof typeof BUILT_IN_LABELS;
+
+/**
+ * actionLabel is the item's label for key: the service's resolved label, used
+ * verbatim (it is only ever set as textContent), else the built-in one.
+ */
+export function actionLabel(item: Pick<OptionalInstallItem, "actionLabels">, key: LabelKey): string {
+  const custom: unknown = item.actionLabels?.[key];
+  return typeof custom === "string" && custom.trim() ? custom : BUILT_IN_LABELS[key];
+}
+
+/** worksInLine names the harnesses the item reaches, or "" when it names none. */
+export function worksInLine(item: Pick<OptionalInstallItem, "worksIn">): string {
+  // A cached list is untrusted shape-wise, so keep only real names.
+  const names = Array.isArray(item.worksIn)
+    ? item.worksIn.filter((name): name is string => typeof name === "string" && name.trim() !== "")
+    : [];
+  return names.length ? `Works in: ${names.join(", ")}` : "";
+}
+
 /** REQUIRED_LABEL is the status of an item an admin manifest requires. */
 export const REQUIRED_LABEL = "Managed by your organisation";
 
 /**
  * statusLabel is the catalog status in sentence case: "Will be installed". An
  * item the organisation requires says so instead; it has no action to take.
+ * An installed item uses its installed label.
  */
 export function statusLabel(item: OptionalInstallItem): string {
   if (item.isRequired) {
     return REQUIRED_LABEL;
+  }
+  if (item.status === "Installed") {
+    return actionLabel(item, "installed");
   }
   const label = stateLabel(item.status);
   return label[0] + label.slice(1).toLowerCase();
@@ -285,6 +323,7 @@ export function statusRecord(status: OperationStatus): ActivityRecord {
     progressPercent: status.progressPercent,
     ...(detail ? { detail } : {}),
     ...(status.state === "Canceled" && status.canceledBy ? { canceledBy: status.canceledBy } : {}),
+    ...(status.errorCode ? { errorCode: status.errorCode } : {}),
   };
 }
 
@@ -345,15 +384,31 @@ export type CardProgress = {
 // Records that arrive before the service has started work on anything.
 const WAITING_STATES = new Set([REQUESTED_STATE, "Queued"]);
 
-// The installer's deferral reason when a blocking application is running.
+// The installer's deferral reason when a blocking application is running. An
+// older service sends no errorCode, so the message is matched as well.
 const BLOCKING_APPS = /^blocking application\(s\) running: (.+)$/i;
+
+/**
+ * phaseLabel is a running phase's line. The item's own install or removal uses
+ * its installing or removing label; another item's phase (who) is named.
+ */
+function phaseLabel(item: Pick<OptionalInstallItem, "actionLabels">, state: string, who: string): string {
+  if (!who && state === "Installing") {
+    return actionLabel(item, "installing");
+  }
+  if (!who && state === "Removing") {
+    return actionLabel(item, "removing");
+  }
+  return `${stateLabel(state)}${who}…`;
+}
 
 /** outcomeLabel words a finished operation for its card: what happened, then why. */
 function outcomeLabel(record: ActivityRecord, method: ActionMethod): string {
   const message = record.message.trim();
   switch (record.state) {
     case "Deferred": {
-      const apps = BLOCKING_APPS.exec(message)?.[1];
+      // missing_software's message already says what to install (Needs …).
+      const apps = record.errorCode === "missing_software" ? undefined : BLOCKING_APPS.exec(message)?.[1];
       return apps ? `Waiting: close ${apps} to continue` : message || "Deferred";
     }
     case "Canceled":
@@ -369,7 +424,7 @@ function outcomeLabel(record: ActivityRecord, method: ActionMethod): string {
 }
 
 export function cardProgress(
-  item: Pick<OptionalInstallItem, "itemName">,
+  item: Pick<OptionalInstallItem, "itemName" | "actionLabels">,
   records: ActivityRecord[],
   outcome: OperationOutcome,
   method: ActionMethod = "InstallItem",
@@ -390,7 +445,7 @@ export function cardProgress(
       // percentage (which is scoped to that item) is not read as this item's.
       const who = own ? "" : ` ${latest.displayName || latest.itemName}`;
       return {
-        label: `${stateLabel(latest.state)}${who}…`,
+        label: phaseLabel(item, latest.state, who),
         percent: typeof latest.progressPercent === "number" ? latest.progressPercent : undefined,
         outcome,
       };
@@ -467,13 +522,13 @@ export function deriveAction(item: OptionalInstallItem): ItemAction | null {
   }
   switch (item.status) {
     case "WillBeInstalled":
-      return { label: "Cancel", method: "RemoveItem" };
+      return { kind: "cancel", label: actionLabel(item, "cancel"), method: "RemoveItem" };
     case "WillBeRemoved":
-      return { label: "Cancel", method: "InstallItem" };
+      return { kind: "cancel", label: actionLabel(item, "cancel"), method: "InstallItem" };
     default:
       return item.isManaged
-        ? { label: "Remove", method: "RemoveItem" }
-        : { label: "Install", method: "InstallItem" };
+        ? { kind: "undo", label: actionLabel(item, "remove"), method: "RemoveItem" }
+        : { kind: "do", label: actionLabel(item, "install"), method: "InstallItem" };
   }
 }
 
@@ -551,6 +606,7 @@ function formatSavedAt(savedAtUtc: string): string {
 // tests have no import.meta.env and get the stock name.
 const DEFAULT_PRODUCT: string = import.meta.env?.VITE_PRODUCT_NAME ?? "SofCat";
 const DEFAULT_HELP_LABEL = "Get help";
+const DEFAULT_LIST_HEADING = "Available software";
 const LOGO_MIMES = new Set(["image/png", "image/jpeg", "image/svg+xml"]);
 
 export function isHexColor(value: string): boolean {
@@ -606,6 +662,7 @@ export function brandingView(payload: unknown): BrandingView {
     productName: title || DEFAULT_PRODUCT,
     productMark: (Array.from(title)[0] ?? "").toUpperCase(),
     showBanner: Boolean(title || tagline || logoSrc || helpUrl),
+    listHeading: text(raw, "listHeading") || DEFAULT_LIST_HEADING,
   };
 }
 

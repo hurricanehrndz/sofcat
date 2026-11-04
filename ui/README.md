@@ -97,6 +97,7 @@ comes from the first source that sets it:
 | `HelpUrl` | `help_url` | Absolute `http` or `https` URL, opened in the system browser. |
 | `HelpLabel` | `help_label` | Plain text, up to 60 characters. Defaults to "Get help". |
 | `Accent` | `accent` | `#rrggbb`. Recolours buttons, links and the banner, and on Windows 11 the native title bar (Windows 10 keeps its default caption). |
+| `ListHeading` | `list_heading` | Plain text, up to 120 characters. Replaces the "Available software" heading; "My items" is unchanged. |
 
 Set the policy values with Intune (a custom OMA-URI or a registry script), Group
 Policy Preferences, or `reg add`:

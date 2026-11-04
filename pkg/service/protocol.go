@@ -170,6 +170,11 @@ type OptionalInstallItem struct {
 	Status             string `json:"status"`
 	StatusUpdatedAtUTC string `json:"statusUpdatedAtUtc"`
 	LastOperationID    string `json:"lastOperationId,omitempty"`
+	// ActionLabels holds the labels the item or its placements set, keyed
+	// by catalog.ActionLabelKeys; the UI supplies the rest.
+	ActionLabels map[string]string `json:"actionLabels,omitempty"`
+	// WorksIn names the harnesses the item's placements reach.
+	WorksIn []string `json:"worksIn,omitempty"`
 }
 
 type listOptionalInstallsResponse struct {

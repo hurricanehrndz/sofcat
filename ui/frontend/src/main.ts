@@ -12,6 +12,7 @@ import {
 import {
   ALL_CATEGORIES,
   REQUESTED_STATE,
+  actionLabel,
   activityLine,
   addActivity,
   bannerMessage,
@@ -47,6 +48,7 @@ import {
   visibleItems,
   withFailure,
   withLive,
+  worksInLine,
 } from "./state.ts";
 import type {
   ActiveOperations,
@@ -147,6 +149,9 @@ function applyBranding(next: BrandingView): void {
   bannerHelp.hidden = !next.helpUrl;
   bannerHelp.textContent = next.helpLabel;
   need<HTMLSpanElement>("#product-name").textContent = next.productName;
+  if (currentView !== "mine") {
+    homeHeading.textContent = next.listHeading;
+  }
   if (next.logoSrc) {
     productMark.replaceChildren(logoImage(next.logoSrc));
   } else if (next.productMark) {
@@ -248,6 +253,11 @@ function card(item: OptionalInstallItem): HTMLElement {
   meta.textContent = [item.category, item.developer].filter(Boolean).join(" · ");
   meta.hidden = meta.textContent === "";
 
+  const worksIn = document.createElement("p");
+  worksIn.className = "card-meta";
+  worksIn.textContent = worksInLine(item);
+  worksIn.hidden = worksIn.textContent === "";
+
   // The status line is the card's one live region: progress and outcome
   // updates are written into it in place (see updateCardProgress), so a screen
   // reader hears "Installing… 50%" without the whole grid being re-read.
@@ -261,8 +271,8 @@ function card(item: OptionalInstallItem): HTMLElement {
   if (derived) {
     const action = document.createElement("button");
     action.type = "button";
-    // Board B draws Remove outlined; the other primary actions are solid.
-    action.className = `pill ${derived.label === "Remove" ? "pill-outline" : "pill-primary"}`;
+    // Board B draws the undo action (Remove) outlined; the others are solid.
+    action.className = `pill ${derived.kind === "undo" ? "pill-outline" : "pill-primary"}`;
     action.textContent = derived.label;
     // Only the item that owns an in-flight operation is disabled; other items
     // stay actionable and route independently by operation ID.
@@ -280,7 +290,7 @@ function card(item: OptionalInstallItem): HTMLElement {
   details.addEventListener("click", () => openDetail(item, details));
 
   actions.append(details);
-  article.append(glyph, name, meta, status, actions);
+  article.append(glyph, name, meta, worksIn, status, actions);
   article.dataset.item = item.itemName;
   updateCardProgress(article, item, statusLabel(item));
   return article;
@@ -344,7 +354,7 @@ function renderGrid(): void {
   const mine = currentView === "mine";
   const listed = mine ? myItems(view.items) : view.items;
   const shown = visibleItems(listed, searchInput.value, categorySelect.value);
-  homeHeading.textContent = mine ? "My items" : "Available software";
+  homeHeading.textContent = mine ? "My items" : branding.listHeading;
   grid.replaceChildren(...shown.map(card));
   if (listed.length === 0) {
     resultStatus.textContent =
@@ -390,7 +400,8 @@ function renderStrip(): void {
   stripCancel.disabled = pending || !canCancel(latest);
   stripCancel.title = cancelTitle(latest, pending);
   const what = shown.operation.action.method === "RemoveItem" ? "removal" : "install";
-  stripCancel.setAttribute("aria-label", `Cancel ${what} of ${item.displayName}`);
+  stripCancel.textContent = actionLabel(item, "cancel");
+  stripCancel.setAttribute("aria-label", `${stripCancel.textContent} ${what} of ${item.displayName}`);
   stripCancel.dataset.operationId = shown.operation.operationId;
 }
 
@@ -552,6 +563,9 @@ function renderDetail(): void {
   setGlyph(need<HTMLElement>("#detail-glyph"), item);
   setText("#detail-name", item.displayName, item.itemName);
   setText("#detail-developer", item.developer ?? "", "");
+  const worksIn = need<HTMLParagraphElement>("#detail-works-in");
+  worksIn.textContent = worksInLine(item);
+  worksIn.hidden = worksIn.textContent === "";
   setText("#detail-description", item.description ?? "", "No description is published for this item.");
   setText("#detail-developer-value", item.developer ?? "");
   setText("#detail-version", item.version);
@@ -562,7 +576,7 @@ function renderDetail(): void {
   const derived = deriveAction(item);
   detailAction.hidden = derived === null;
   if (derived) {
-    detailAction.className = `pill pill-large ${derived.label === "Remove" ? "pill-outline" : "pill-primary"}`;
+    detailAction.className = `pill pill-large ${derived.kind === "undo" ? "pill-outline" : "pill-primary"}`;
     detailAction.textContent = derived.label;
     detailAction.disabled = isItemActive(active, item.itemName);
     detailAction.setAttribute("aria-label", `${derived.label} ${item.displayName}`);

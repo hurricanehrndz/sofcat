@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/hurricanehrndz/sofcat/pkg/catalog"
 )
 
 // The sample table under examples/ is documentation; it must stay valid.
@@ -152,5 +154,58 @@ placements:
 				t.Fatalf("error %v, want one containing %q", err, tc.want)
 			}
 		})
+	}
+}
+
+// Labels resolve item first, then the first placement in table order (not
+// variant or map order) that sets the key; works_in is the ordered union.
+// A placement without a variant on this OS contributes nothing.
+func TestStorefront(t *testing.T) {
+	table, err := Parse([]byte(`
+placements:
+  skills:
+    kind: directory
+    paths: {windows: 'C:\skills'}
+    works_in: [Claude Code]
+    action_labels: {install: Add, installing: Adding, installed: Added}
+  market:
+    kind: marketplace
+    paths: {windows: 'C:\market'}
+    works_in: [Claude Code, Codex]
+    action_labels: {install: Make available, installing: Making available, remove: Withdraw}
+    marketplace: {name: m, owner: {name: o}}
+  mac-only:
+    kind: directory
+    paths: {darwin: /skills}
+    works_in: [Cursor]
+    action_labels: {cancel: Stop}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	variant := map[string]catalog.Variant{Windows: {}}
+	item := catalog.Item{
+		CustomActionLabels: map[string]string{"install": "Enable for me", "removing": "  "},
+		Installer: catalog.InstallerItem{Type: "zip", Variants: map[string]map[string]catalog.Variant{
+			"market": variant, "skills": variant, "mac-only": {Darwin: {}},
+		}},
+	}
+	labels, worksIn := table.Storefront(item, Windows)
+	want := map[string]string{"install": "Enable for me", "installing": "Adding", "installed": "Added", "remove": "Withdraw"}
+	if !reflect.DeepEqual(labels, want) {
+		t.Errorf("labels = %v, want %v", labels, want)
+	}
+	if want := []string{"Claude Code", "Codex"}; !reflect.DeepEqual(worksIn, want) {
+		t.Errorf("worksIn = %v, want %v", worksIn, want)
+	}
+
+	// A non-zip item has no placements: only its own labels apply.
+	plain := catalog.Item{CustomActionLabels: map[string]string{"cancel": "Stop"}, Installer: catalog.InstallerItem{Type: "msi"}}
+	labels, worksIn = table.Storefront(plain, Windows)
+	if !reflect.DeepEqual(labels, map[string]string{"cancel": "Stop"}) || worksIn != nil {
+		t.Errorf("non-zip item: labels %v, worksIn %v", labels, worksIn)
+	}
+	if labels, worksIn = table.Storefront(catalog.Item{}, Windows); labels != nil || worksIn != nil {
+		t.Errorf("unlabelled item: labels %v, worksIn %v, want both nil", labels, worksIn)
 	}
 }

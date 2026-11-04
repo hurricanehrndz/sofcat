@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -119,4 +120,51 @@ func stubZipList(t *testing.T, catalogs map[int]map[string]catalog.Item, get fun
 	}
 	catalogGet = func(config.Configuration) (map[int]map[string]catalog.Item, error) { return catalogs, nil }
 	harnessGet = get
+}
+
+// TestListStorefrontFields: the list call carries each item's resolved labels
+// and works-in harnesses, and an item with neither on this OS sends neither
+// key, so the UI falls back to its built-in labels.
+func TestListStorefrontFields(t *testing.T) {
+	const goos = harness.Windows
+	table := harness.Table{
+		Placements: map[string]harness.Placement{
+			"skills": {Kind: harness.KindDirectory, WorksIn: []string{"Claude Code"}, ActionLabels: map[string]string{"install": "Add", "installed": "Added"}},
+			"codex":  {Kind: harness.KindDirectory, WorksIn: []string{"Codex", "Claude Code"}, ActionLabels: map[string]string{"install": "Place"}},
+		},
+		Order: []string{"skills", "codex"},
+	}
+	variants := map[string]map[string]catalog.Variant{"codex": {goos: {}}, "skills": {goos: {}}}
+	catalogs := map[int]map[string]catalog.Item{1: {
+		"Skill": {Name: "Skill", CustomActionLabels: map[string]string{"installed": "Ready"}, Installer: catalog.InstallerItem{Type: "zip", Variants: variants}},
+		// Its only variant is for another OS, so none of its placements count.
+		"Tool": {Name: "Tool", Installer: catalog.InstallerItem{Type: "zip", Variants: map[string]map[string]catalog.Variant{"skills": {harness.Darwin: {}}}}},
+	}}
+	stubZipList(t, catalogs, func(config.Configuration) (harness.Table, error) { return table, nil })
+	newZipInstaller = func(cfg config.Configuration, table harness.Table) *installer.ZipInstaller {
+		z := installer.NewMachineZip(cfg, table)
+		z.Guard = placement.Guard{GOOS: goos, DataDir: cfg.AppDataPath}
+		return z
+	}
+
+	items, err := getOptionalItems(config.Configuration{AppDataPath: t.TempDir(), CachePath: t.TempDir(), Catalogs: []string{"production"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, it := range items {
+		line, err := json.Marshal(it)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var fields map[string]json.RawMessage
+		_ = json.Unmarshal(line, &fields)
+		got[it.ItemName] = string(fields["actionLabels"]) + " " + string(fields["worksIn"])
+	}
+	if want := `{"install":"Add","installed":"Ready"} ["Claude Code","Codex"]`; got["Skill"] != want {
+		t.Errorf("Skill = %s, want %s", got["Skill"], want)
+	}
+	if got["Tool"] != " " {
+		t.Errorf("Tool = %q, want no actionLabels or worksIn keys", got["Tool"])
+	}
 }

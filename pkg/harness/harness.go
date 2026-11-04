@@ -14,6 +14,8 @@ import (
 	"strings"
 
 	"go.yaml.in/yaml/v4"
+
+	"github.com/hurricanehrndz/sofcat/pkg/catalog"
 )
 
 // Placement kinds.
@@ -38,12 +40,6 @@ const (
 // DefaultManifestFiles is where a marketplace's manifest is written when its
 // block lists no manifest_files.
 var DefaultManifestFiles = []string{".claude-plugin/marketplace.json"}
-
-// actionLabelKeys are the label keys a placement may override.
-var actionLabelKeys = map[string]bool{
-	"install": true, "installing": true, "installed": true,
-	"remove": true, "removing": true, "update": true, "cancel": true,
-}
 
 // Table is a parsed harnesses.yaml.
 type Table struct {
@@ -106,6 +102,43 @@ func (p Placement) ScopeFor(goos string) string {
 // order wherever an order matters, such as label fallback.
 func (t Table) Names() []string {
 	return slices.Clone(t.Order)
+}
+
+// Storefront returns what the storefront shows for item on goos: its action
+// labels and the harnesses it works in. A label comes from the item's
+// custom_action_labels, else from the first of its placements with a variant
+// on goos, in table order, that sets it; a key set nowhere is left out, for
+// the UI's built-in label. worksIn is the union of those placements'
+// works_in, in table order. Only a zip item has placements.
+func (t Table) Storefront(item catalog.Item, goos string) (labels map[string]string, worksIn []string) {
+	var placements []Placement
+	if item.Installer.Type == "zip" {
+		for _, name := range t.Names() {
+			if _, ok := item.Installer.Variants[name][goos]; ok {
+				placements = append(placements, t.Placements[name])
+			}
+		}
+	}
+	for _, key := range catalog.ActionLabelKeys {
+		label := item.CustomActionLabels[key]
+		for i := 0; strings.TrimSpace(label) == "" && i < len(placements); i++ {
+			label = placements[i].ActionLabels[key]
+		}
+		if strings.TrimSpace(label) != "" {
+			if labels == nil {
+				labels = map[string]string{}
+			}
+			labels[key] = label
+		}
+	}
+	for _, p := range placements {
+		for _, harness := range p.WorksIn {
+			if !slices.Contains(worksIn, harness) {
+				worksIn = append(worksIn, harness)
+			}
+		}
+	}
+	return labels, worksIn
 }
 
 // Parse decodes harnesses.yaml, rejecting unknown fields, and validates it.
@@ -211,7 +244,7 @@ func (t Table) validatePlacement(name string) []error {
 		fail("scope: darwin: user is not supported")
 	}
 	for key := range p.ActionLabels {
-		if !actionLabelKeys[key] {
+		if !slices.Contains(catalog.ActionLabelKeys, key) {
 			fail("action_labels: unknown key %q", key)
 		}
 	}

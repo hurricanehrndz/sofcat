@@ -53,8 +53,8 @@ answer echoes the `id` with a `result` or an `error`:
 | Method | Params | Result |
 | --- | --- | --- |
 | `getServiceInfo` | none | `{version, protocolVersion: "2.0", apiVersion: 1, capabilities: [methods], busy, uptimeSeconds}` |
-| `listOptionalInstalls` | none | `{items: [OptionalInstallItem]}` |
-| `getBranding` | none | `Branding` |
+| `listOptionalInstalls` | none | `{items: [OptionalInstallItem]}` (shape below) |
+| `getBranding` | none | `Branding`: `{title, tagline, helpUrl, helpLabel, accent, logoMime, logoBase64, listHeading}` |
 | `installItem` | `{itemName}` | `AcceptedOperation` |
 | `removeItem` | `{itemName}` | `AcceptedOperation` |
 | `cancelOperation` | `{operationId}` | `{canceled: true}` |
@@ -66,6 +66,24 @@ answer echoes the `id` with a `result` or an `error`:
 command queue and answer while a managed run is under way;
 `listOptionalInstalls` waits behind it. `apiVersion` changes only for a breaking
 change to these methods; additions show up in `capabilities`.
+
+An `OptionalInstallItem` is `{itemName, displayName, version, catalog,
+description?, category?, developer?, iconName?, restartAction?, isManaged,
+isRequired, isInstalled, status, statusUpdatedAtUtc, lastOperationId?,
+actionLabels?, worksIn?}`. `actionLabels` holds only the label keys
+(`install`, `installing`, `installed`, `remove`, `removing`, `update`,
+`cancel`) that resolved: from the catalog item's `custom_action_labels`, else
+from the first of its placements with a variant on this OS, in
+`harnesses.yaml` order, whose `action_labels` sets the key. `worksIn` is the
+union of those placements' `works_in`, in table order, without repeats. Both
+are left out when empty, and only zip items have placements, so another item
+gets at most its own labels. The UI fills in its built-in labels ("Install",
+"Installing…", "Installed", "Remove", "Removing…", "Update", "Cancel") for
+the keys left out:
+
+```json
+{"itemName":"tapas-optional-plugin","displayName":"Tapas Optional Plugin","version":"1.0.0","catalog":"tapas","isManaged":false,"isRequired":false,"isInstalled":false,"status":"NotInstalled","statusUpdatedAtUtc":"2026-11-03T12:00:00Z","actionLabels":{"install":"Enable for me","installed":"Available","installing":"Making available…","remove":"Withdraw"},"worksIn":["Claude Code","Codex"]}
+```
 
 The two user-placement methods serve the per-user helper, `<slug>-ui.exe
 --user-sync`, and are not bound into Wails. SYSTEM never writes into a user
@@ -205,7 +223,22 @@ or pre/post scripts.
 The app bar carries the connection state (a dot and the cached/stale message
 with Retry). Above it, the `#banner` section stays hidden until branding
 fills it (see Branding). "My items" is the same list filtered on the client to installed or
-managed items; it is not a separate service call.
+managed items; it is not a separate service call. The Software view's heading
+is the branding `listHeading`, or "Available software"; "My items" keeps its
+name.
+
+Buttons and status text use the item's labels: `install` on the install
+button, `remove` on the remove button, `cancel` on the Cancel of a pending
+request and on the strip's Cancel, `installing` and `removing` while the
+item's own install or removal runs, and `installed` as an installed item's
+status. Nothing shows an update action yet, so `update` is accepted but
+unused. A card and the detail page add "Works in: Claude Code, Codex" when
+`worksIn` is set. Labels, the heading and the works-in line are catalog or
+admin text and go into the DOM only as `textContent`. A `Deferred` card shows
+the deferral reason: for `missing_software` the service's message ("Needs Git
+for Windows. Install it first, then try again."), for
+`blocked_by_running_app` "Waiting: close <apps> to continue" (also matched on
+the message, for services that send no code).
 
 ## Cancel
 
@@ -247,13 +280,15 @@ Branding is admin configuration, not catalog data. The SYSTEM service resolves
 it on each `GetBranding` call, field by field, first match wins:
 
 1. REG_SZ values under `HKLM\SOFTWARE\Policies\SofCat\Branding` (`Title`,
-   `Tagline`, `LogoPath`, `HelpUrl`, `HelpLabel`, `Accent`), for MDM and GPO.
+   `Tagline`, `LogoPath`, `HelpUrl`, `HelpLabel`, `Accent`, `ListHeading`), for
+   MDM and GPO.
 2. The `branding:` block in `config.yaml`.
 3. Nothing, and the UI keeps its default look.
 
 `pkg/branding` validates after the merge, so a bad policy value is dropped rather
 than replaced by the config value. Text is trimmed, stripped of control
-characters and capped (title 120, tagline 240, help label 60 runes). The help
+characters and capped (title 120, tagline 240, help label 60, list heading 120
+runes). The help
 URL must be absolute http or https. The accent must match `#rrggbb`. The logo is
 read from its local path on every call, capped at 512 KiB, and kept only if its
 bytes sniff as PNG, JPEG or SVG. A dropped field is logged at debug level and

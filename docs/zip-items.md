@@ -316,8 +316,8 @@ placements:
 | `kind` | `directory`, `marketplace` or `settings`. |
 | `paths` | The placement root, keyed by `darwin` and `windows`. |
 | `scope` | `machine` or `user`, keyed like `paths`. An OS left out is `machine`. `darwin: user` is not supported, and `user` only on kind `directory`. |
-| `works_in` | Harness display names, such as `[Claude Code]`. |
-| `action_labels` | Optional label overrides. Keys: `install`, `installing`, `installed`, `remove`, `removing`, `update`, `cancel`. |
+| `works_in` | Harness display names, such as `[Claude Code]`. The storefront shows "Works in: …" for an item (see Storefront labels). |
+| `action_labels` | Optional storefront label overrides for the placement's items. Keys: `install`, `installing`, `installed`, `remove`, `removing`, `update`, `cancel`. |
 | `exclusive` | Optional. When true, sofcat does not write into an existing, non-empty root it did not create. |
 | `marketplace` | `marketplace` kind only, and required there: `name`, `owner`, optional `renames`, `allowCrossMarketplaceDependenciesOn` and `manifest_files` (default `[.claude-plugin/marketplace.json]`). `owner`, `renames` and `allowCrossMarketplaceDependenciesOn` are copied into the manifest unchanged. |
 | `registers` | `settings` kind only, and required there: the marketplace placement the drop-in registers. |
@@ -326,6 +326,32 @@ Windows paths may use `${ProgramFiles}` and `${ProgramData}`. A path may use
 `${USERPROFILE}` only when its OS has `user` scope.
 
 Where order matters, placements are taken in file order.
+
+### Storefront labels
+
+Each label key resolves from the item's own `custom_action_labels` (the same
+seven keys), then from the first of the item's placements, in file order,
+whose `action_labels` sets it, then from the storefront's built-in label.
+Only placements with a variant for the machine's OS count, for labels and for
+`works_in`. An item's "Works in" line is the union of those placements'
+`works_in`, in file order, without repeats. For example:
+
+```yaml
+# harnesses.yaml
+placements:
+  tapas-marketplace:
+    kind: marketplace
+    works_in: [Claude Code]
+    action_labels: {install: Make available, remove: Withdraw}
+    # paths and marketplace block as above
+
+# packages-info/tapas-optional-plugin.yaml
+custom_action_labels: {install: Enable for me}
+```
+
+The storefront shows "Enable for me" from the item, "Withdraw" from the
+placement, and the built-in "Cancel", since neither sets `cancel`. The remove
+label stays "Remove" unless a layer sets `remove`.
 
 ## makecatalogs -check
 
@@ -337,5 +363,6 @@ checks every zip item. It reports:
 - a variant OS other than `darwin` or `windows`
 - a variant placement that `harnesses.yaml` does not define
 - a zip item in a repository with no `harnesses.yaml`
+- a `custom_action_labels` key other than the seven above, on any item
 
 A normal run warns about these; `makecatalogs -check` fails on them.

@@ -259,14 +259,15 @@ func brandingSummary(b branding.Branding) (string, error) {
 		return "", fmt.Errorf("failed to decode branding logo: %w", err)
 	}
 	line, err := json.Marshal(struct {
-		Title     string `json:"title"`
-		Tagline   string `json:"tagline"`
-		HelpURL   string `json:"helpUrl"`
-		HelpLabel string `json:"helpLabel"`
-		Accent    string `json:"accent"`
-		LogoMime  string `json:"logoMime"`
-		LogoBytes int    `json:"logoBytes"`
-	}{b.Title, b.Tagline, b.HelpURL, b.HelpLabel, b.Accent, b.LogoMime, len(logo)})
+		Title       string `json:"title"`
+		Tagline     string `json:"tagline"`
+		HelpURL     string `json:"helpUrl"`
+		HelpLabel   string `json:"helpLabel"`
+		Accent      string `json:"accent"`
+		LogoMime    string `json:"logoMime"`
+		LogoBytes   int    `json:"logoBytes"`
+		ListHeading string `json:"listHeading"`
+	}{b.Title, b.Tagline, b.HelpURL, b.HelpLabel, b.Accent, b.LogoMime, len(logo), b.ListHeading})
 	return string(line), err
 }
 
@@ -587,7 +588,8 @@ func getOptionalItems(cfg config.Configuration) ([]OptionalInstallItem, error) {
 	slices.Sort(names)
 
 	// One shared checker so the registry snapshot amortizes across items.
-	checker := &status.Checker{Zip: newZipInstaller(cfg, table).Installed}
+	zip := newZipInstaller(cfg, table)
+	checker := &status.Checker{Zip: zip.Installed}
 	now := nowRFC3339UTC()
 
 	items := make([]OptionalInstallItem, 0, len(names))
@@ -622,6 +624,7 @@ func getOptionalItems(cfg config.Configuration) ([]OptionalInstallItem, error) {
 		item.Developer = catItem.Developer
 		item.IconName = catItem.IconName
 		item.RestartAction = catItem.RestartAction
+		item.ActionLabels, item.WorksIn = table.Storefront(catItem, zip.Guard.GOOS)
 
 		// Script-only checks are not run on a list call (R9/OQ-C4): report Unknown.
 		if catItem.Check.Script != "" &&

@@ -1,0 +1,6 @@
+# Input to makecatalogs zip-item; just bootstrap-tapas packs rendered/tapas-second-plugin.
+item_name: tapas-second-plugin
+display_name: Tapas Second Plugin
+description: A self-service plugin with no labels of its own, so tapas-marketplace's apply
+catalog: tapas
+version: 1.0.0

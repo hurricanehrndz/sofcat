@@ -25,6 +25,7 @@ const (
 	maxTitle     = 120
 	maxTagline   = 240
 	maxHelpLabel = 60
+	maxHeading   = 120
 	maxHelpURL   = 2048
 	MaxLogoBytes = 512 << 10
 )
@@ -40,6 +41,8 @@ type Branding struct {
 	Accent     string `json:"accent"`
 	LogoMime   string `json:"logoMime"`
 	LogoBase64 string `json:"logoBase64"`
+	// ListHeading replaces the UI's "Available software" heading when set.
+	ListHeading string `json:"listHeading"`
 }
 
 // Resolve reads the policy registry values, merges them over cfg and returns
@@ -65,6 +68,8 @@ func merge(policy, cfg config.Branding) config.Branding {
 		HelpURL:   pick(policy.HelpURL, cfg.HelpURL),
 		HelpLabel: pick(policy.HelpLabel, cfg.HelpLabel),
 		Accent:    pick(policy.Accent, cfg.Accent),
+
+		ListHeading: pick(policy.ListHeading, cfg.ListHeading),
 	}
 }
 
@@ -74,6 +79,8 @@ func resolve(in config.Branding) Branding {
 		Tagline:   plainText(in.Tagline, maxTagline),
 		HelpURL:   helpURL(in.HelpURL),
 		HelpLabel: plainText(in.HelpLabel, maxHelpLabel),
+
+		ListHeading: plainText(in.ListHeading, maxHeading),
 	}
 	if accent := strings.TrimSpace(in.Accent); accentPattern.MatchString(accent) {
 		out.Accent = strings.ToLower(accent)

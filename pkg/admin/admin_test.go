@@ -157,3 +157,31 @@ requires_software:
 		t.Errorf("requires_software = %+v, want it carried into the catalog", got)
 	}
 }
+
+// A custom_action_labels key the storefront does not know would be ignored
+// without a word, so -check reports it; the known keys pass.
+func TestCollectCatalogsActionLabels(t *testing.T) {
+	repoPath := t.TempDir()
+	dir := filepath.Join(repoPath, "packages-info")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	info := `item_name: tool
+catalog: base
+installer: {type: msi, location: x.msi}
+custom_action_labels: {install: Get, cancel: Stop, uninstall: Drop}
+`
+	if err := os.WriteFile(filepath.Join(dir, "tool.yaml"), []byte(info), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	set, err := CollectCatalogs(repoPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(set.Problems) != 1 || !strings.Contains(set.Problems[0], `custom_action_labels: unknown key "uninstall"`) {
+		t.Errorf("problems = %v, want one for the uninstall key", set.Problems)
+	}
+	if got := set.Catalogs["base"]["tool"].CustomActionLabels["install"]; got != "Get" {
+		t.Errorf("install label = %q, want it carried into the catalog", got)
+	}
+}

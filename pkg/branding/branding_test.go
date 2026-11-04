@@ -45,6 +45,21 @@ func TestResolveValidatesText(t *testing.T) {
 	}
 }
 
+// The list heading is admin text shown in place of "Available software": it
+// is validated like the title, and a policy value overrides the config one.
+func TestResolveListHeading(t *testing.T) {
+	if got := resolve(config.Branding{ListHeading: "  Skills\nand plugins  "}).ListHeading; got != "Skillsand plugins" {
+		t.Errorf("heading %q kept control characters or padding", got)
+	}
+	if n := len([]rune(resolve(config.Branding{ListHeading: strings.Repeat("x", maxHeading+9)}).ListHeading)); n != maxHeading {
+		t.Errorf("heading has %d runes, want the %d cap", n, maxHeading)
+	}
+	merged := merge(config.Branding{ListHeading: "Policy heading"}, config.Branding{ListHeading: "Config heading"})
+	if merged.ListHeading != "Policy heading" {
+		t.Errorf("merged heading %q, want the policy value", merged.ListHeading)
+	}
+}
+
 // The help link is opened in the system browser, so anything but an absolute
 // http(s) URL (javascript:, file:, a bare path) must never reach the UI.
 func TestResolveHelpURL(t *testing.T) {

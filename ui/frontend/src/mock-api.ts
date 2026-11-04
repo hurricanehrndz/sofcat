@@ -127,6 +127,39 @@ const items: OptionalInstallItem[] = [
     status: "Installed",
     statusUpdatedAtUtc: "2026-07-21T12:00:00Z",
   },
+  // Zip items: labels and works-in come resolved from the item and harness table.
+  {
+    itemName: "DemoSkill",
+    displayName: "Demo Skill",
+    version: "1.0.0",
+    catalog: "selfserve_catalog",
+    description: "A skill whose placements relabel its actions and name the harnesses it reaches.",
+    category: "Development",
+    developer: "SofCat",
+    isManaged: false,
+    isRequired: false,
+    isInstalled: false,
+    status: "NotInstalled",
+    statusUpdatedAtUtc: "2026-07-21T12:00:00Z",
+    actionLabels: { install: "Add", installing: "Adding…", installed: "Added" },
+    worksIn: ["Claude Code", "Codex"],
+  },
+  {
+    itemName: "DemoPlugin",
+    displayName: "Demo Plugin",
+    version: "0.4.0",
+    catalog: "selfserve_catalog",
+    description: "Deferred because software it requires is missing.",
+    category: "Development",
+    developer: "SofCat",
+    isManaged: false,
+    isRequired: false,
+    isInstalled: false,
+    status: "NotInstalled",
+    statusUpdatedAtUtc: "2026-07-21T12:00:00Z",
+    actionLabels: { install: "Make available", installing: "Making available…", installed: "Available", remove: "Withdraw" },
+    worksIn: ["Claude Code"],
+  },
 ];
 
 const handlers: ((status: OperationStatus) => void)[] = [];
@@ -173,11 +206,27 @@ function sequence(item: OptionalInstallItem, removing: boolean): MockEvent[] {
     ];
   }
 
+  if (item.itemName === "DemoPlugin") {
+    const reason = "Needs Git for Windows. Install it first, then try again.";
+    return [
+      queued,
+      [900, { state: "Deferred", message: reason, errorCode: "missing_software", errorMessage: reason }],
+    ];
+  }
+
   if (item.itemName === "DemoBlocked") {
     return [
       queued,
       [400, { state: "Downloading", progressPercent: 60 }],
-      [900, { state: "Deferred", message: "blocking application(s) running: demoblocked" }],
+      [
+        900,
+        {
+          state: "Deferred",
+          message: "blocking application(s) running: demoblocked",
+          errorCode: "blocked_by_running_app",
+          errorMessage: "blocking application(s) running: demoblocked",
+        },
+      ],
     ];
   }
 
@@ -350,6 +399,7 @@ export const api: SofCatApi = {
       accent: branded() ? "#0b6e4f" : "",
       logoMime: "",
       logoBase64: "",
+      listHeading: branded() ? "Software for Acme" : "",
     }),
   openExternal(url) {
     window.open(url, "_blank", "noopener,noreferrer");
