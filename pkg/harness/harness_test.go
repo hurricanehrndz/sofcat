@@ -172,7 +172,7 @@ placements:
     kind: marketplace
     paths: {windows: 'C:\market'}
     works_in: [Claude Code, Codex]
-    action_labels: {install: Make available, installing: Making available, remove: Withdraw}
+    action_labels: {install: Make available, installing: Making available, remove: Withdraw, pending_remove: Will be withdrawn}
     marketplace: {name: m, owner: {name: o}}
   mac-only:
     kind: directory
@@ -191,7 +191,10 @@ placements:
 		}},
 	}
 	labels, worksIn := table.Storefront(item, Windows)
-	want := map[string]string{"install": "Enable for me", "installing": "Adding", "installed": "Added", "remove": "Withdraw"}
+	want := map[string]string{
+		"install": "Enable for me", "installing": "Adding", "installed": "Added", "remove": "Withdraw",
+		"pending_remove": "Will be withdrawn",
+	}
 	if !reflect.DeepEqual(labels, want) {
 		t.Errorf("labels = %v, want %v", labels, want)
 	}

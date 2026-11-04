@@ -7,6 +7,7 @@ import {
   actionLabel,
   brandingView,
   cardProgress,
+  cardStatus,
   deriveAction,
   statusLabel,
   statusRecord,
@@ -76,6 +77,7 @@ test("a resolved label is used verbatim and a missing key falls back to the buil
   assert.equal(actionLabel(item({ actionLabels: { install: "  ", remove: 7 } }), "remove"), "Remove");
   assert.deepEqual(Object.values(BUILT_IN_LABELS), [
     "Install", "Installing…", "Installed", "Remove", "Removing…", "Update", "Cancel",
+    "Will be installed", "Will be removed",
   ]);
 });
 
@@ -120,4 +122,20 @@ test("a deferral reads as the missing software or the blocking app", () => {
   );
   // An older service sends the blocking-app message without a code.
   assert.equal(deferred({ message: blocked }), "Waiting: close chrome to continue");
+});
+
+// A card shows only what its button cannot: a pending item's button reads just
+// "Cancel" and a required item has none. The rest would repeat the button,
+// and a built-in "Installed" beside a custom "Withdraw" reads as a mismatch.
+test("a card's idle line is the pending or required status, worded by the item's labels", () => {
+  const labelled = item({ actionLabels: { pending_install: "Will be enabled for you", pending_remove: "Will be withdrawn" } });
+  assert.equal(cardStatus({ ...labelled, status: "WillBeInstalled" }), "Will be enabled for you");
+  assert.equal(cardStatus({ ...labelled, isManaged: true, status: "WillBeRemoved" }), "Will be withdrawn");
+  assert.equal(cardStatus(item({ status: "WillBeInstalled" })), "Will be installed");
+  assert.equal(cardStatus(item({ status: "WillBeRemoved" })), "Will be removed");
+  assert.equal(cardStatus(item({ isRequired: true, isManaged: true, status: "Installed" })), "Managed by your organisation");
+  assert.equal(cardStatus(item({ status: "NotInstalled" })), "");
+  assert.equal(cardStatus(item({ isManaged: true, status: "Installed", actionLabels: { installed: "Available" } })), "");
+  // The detail page keeps the full status, with the same labels.
+  assert.equal(statusLabel({ ...labelled, status: "WillBeInstalled" }), "Will be enabled for you");
 });

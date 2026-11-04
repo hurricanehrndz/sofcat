@@ -15,13 +15,15 @@ ColorPrinter:
     - Canon-Drivers
   display_name: Color Printer
   # custom_action_labels: storefront labels for this item, Munki's keys plus
-  # cancel (install, installing, installed, remove, removing, update, cancel).
+  # cancel and the pending statuses (install, installing, installed, remove,
+  # removing, update, cancel, pending_install, pending_remove).
   # A key left out falls back to the item's placements (zip items, see
   # docs/zip-items.md), then the built-in label. Shown as plain text.
   custom_action_labels:
     install: Add printer
     installing: Adding printer…
     installed: Printer added
+    pending_install: Printer will be added
   # requires_software: software the item needs and sofcat never installs.
   # While any entry is missing on this OS, installs and updates are deferred
   # (missing_software). macOS checks munki, Windows checks chocolatey.

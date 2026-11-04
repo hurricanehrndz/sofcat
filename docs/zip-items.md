@@ -323,7 +323,7 @@ placements:
 | `paths` | The placement root, keyed by `darwin` and `windows`. |
 | `scope` | `machine` or `user`, keyed like `paths`. An OS left out is `machine`. `darwin: user` is not supported, and `user` only on kind `directory`. |
 | `works_in` | Harness display names, such as `[Claude Code]`. The storefront shows "Works in: …" for an item (see Storefront labels). |
-| `action_labels` | Optional storefront label overrides for the placement's items. Keys: `install`, `installing`, `installed`, `remove`, `removing`, `update`, `cancel`. |
+| `action_labels` | Optional storefront label overrides for the placement's items. Keys: `install`, `installing`, `installed`, `remove`, `removing`, `update`, `cancel`, `pending_install`, `pending_remove`. |
 | `exclusive` | Optional. When true, sofcat does not write into an existing, non-empty root it did not create. |
 | `marketplace` | `marketplace` kind only, and required there: `name`, `owner`, optional `renames`, `allowCrossMarketplaceDependenciesOn` and `manifest_files` (default `[.claude-plugin/marketplace.json]`). `owner`, `renames` and `allowCrossMarketplaceDependenciesOn` are copied into the manifest unchanged. |
 | `registers` | `settings` kind only, and required there: the marketplace placement the drop-in registers. |
@@ -336,7 +336,7 @@ Where order matters, placements are taken in file order.
 ### Storefront labels
 
 Each label key resolves from the item's own `custom_action_labels` (the same
-seven keys), then from the first of the item's placements, in file order,
+nine keys), then from the first of the item's placements, in file order,
 whose `action_labels` sets it, then from the storefront's built-in label.
 Only placements with a variant for the machine's OS count, for labels and for
 `works_in`. An item's "Works in" line is the union of those placements'
@@ -359,6 +359,11 @@ The storefront shows "Enable for me" from the item, "Withdraw" from the
 placement, and the built-in "Cancel", since neither sets `cancel`. The remove
 label stays "Remove" unless a layer sets `remove`.
 
+`pending_install` and `pending_remove` word the status of a request waiting
+for the next run ("Will be installed", "Will be removed"), which the card
+shows beside its Cancel button. Set them along with `install` and `remove`,
+so the status reads in the same words as the button that made the request.
+
 ## makecatalogs -check
 
 `makecatalogs` validates `harnesses.yaml` when the repository has one, and
@@ -369,6 +374,6 @@ checks every zip item. It reports:
 - a variant OS other than `darwin` or `windows`
 - a variant placement that `harnesses.yaml` does not define
 - a zip item in a repository with no `harnesses.yaml`
-- a `custom_action_labels` key other than the seven above, on any item
+- a `custom_action_labels` key other than the nine above, on any item
 
 A normal run warns about these; `makecatalogs -check` fails on them.

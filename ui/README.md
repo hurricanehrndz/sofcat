@@ -52,8 +52,9 @@ user's operation to watch it.
 
 - `progressPercent` is **per item**. It may reset when the event's item changes
   (for example when a dependency or updater runs). It is never aggregate
-  operation progress. An item's card shows its current phase beside a spinner;
-  the one bar is in the bottom strip, for the operation being worked on, and is
+  operation progress. An item's detail page shows its current phase beside a
+  spinner; a Home card shows no progress, only a pending or required item's
+  status and a failure or deferral reason. The one bar is in the bottom strip, for the operation being worked on, and is
   indeterminate for a phase without a percentage. The record timeline is only in
   Activity.
 - `ItemCompleted` and `ItemFailed` are **non-terminal**. A dependency failure does

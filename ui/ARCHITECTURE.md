@@ -73,14 +73,14 @@ description?, category?, developer?, iconName?, restartAction?, isManaged,
 isRequired, isInstalled, status, statusUpdatedAtUtc, lastOperationId?,
 actionLabels?, worksIn?}`. `actionLabels` holds only the label keys
 (`install`, `installing`, `installed`, `remove`, `removing`, `update`,
-`cancel`) that resolved: from the catalog item's `custom_action_labels`, else
+`cancel`, `pending_install`, `pending_remove`) that resolved: from the catalog item's `custom_action_labels`, else
 from the first of its placements with a variant on this OS, in
 `harnesses.yaml` order, whose `action_labels` sets the key. `worksIn` is the
 union of those placements' `works_in`, in table order, without repeats. Both
 are left out when empty, and only zip items have placements, so another item
 gets at most its own labels. The UI fills in its built-in labels ("Install",
-"Installing…", "Installed", "Remove", "Removing…", "Update", "Cancel") for
-the keys left out:
+"Installing…", "Installed", "Remove", "Removing…", "Update", "Cancel",
+"Will be installed", "Will be removed") for the keys left out:
 
 ```json
 {"itemName":"tapas-optional-plugin","displayName":"Tapas Optional Plugin","version":"1.0.0","catalog":"tapas","isManaged":false,"isRequired":false,"isInstalled":false,"status":"NotInstalled","statusUpdatedAtUtc":"2026-11-03T12:00:00Z","actionLabels":{"install":"Enable for me","installed":"Available","installing":"Making available…","remove":"Withdraw"},"worksIn":["Claude Code","Codex"]}
@@ -211,14 +211,17 @@ and `Canceled` — from the requested item's real run report, a service
 cancellation or error, or a user cancel — end an operation.
 
 `progressPercent` is scoped to the record's `itemName` and may reset at an item
-boundary. Each item's card (and its detail page) shows one status line with a
-spinner while its operation runs, naming the record's item when a dependency or
-updater takes over. The only bar is in the bottom `#operation-strip`, which
-reports one running operation — the earliest the service has started work on —
-as "n of N" with a `<progress max="100">` that is determinate only when the
-latest record carries a percentage; other running items read "Waiting…" on
-their cards. The percentage is still the record's item's, not an aggregate. The
-record timeline is shown only in Activity, never on the Home view. No
+boundary. An item's detail page shows one status line with a spinner while its
+operation runs, naming the record's item when a dependency or updater takes
+over. A Home card shows no progress, and a status only where its button
+cannot say it: a pending item's (its button reads only Cancel) and a required
+item's (it has no button). Otherwise the button names the state, and is
+disabled while the item's operation runs; the card's line also appears for a
+`Failed` or `Deferred` outcome or a refused request. The only bar is in the
+bottom `#operation-strip`, which reports one running operation — the earliest
+the service has started work on — as "n of N" with a `<progress max="100">`
+that is determinate only when the latest record carries a percentage. The
+percentage is still the record's item's, not an aggregate. The record timeline is shown only in Activity, never on the Home view. No
 percentage is fabricated for status checks, no-action items, blocking-app checks,
 or pre/post scripts.
 
@@ -232,9 +235,10 @@ name.
 Buttons and status text use the item's labels: `install` on the install
 button, `remove` on the remove button, `cancel` on the Cancel of a pending
 request and on the strip's Cancel, `installing` and `removing` while the
-item's own install or removal runs, and `installed` as an installed item's
-status. Nothing shows an update action yet, so `update` is accepted but
-unused. A card and the detail page add "Works in: Claude Code, Codex" when
+item's own install or removal runs, `installed` as an installed item's status
+on the detail page, and `pending_install` and `pending_remove` as a pending
+item's status on its card and detail page. Nothing shows an update action yet,
+so `update` is accepted but unused. A card and the detail page add "Works in: Claude Code, Codex" when
 `worksIn` is set. Labels, the heading and the works-in line are catalog or
 admin text and go into the DOM only as `textContent`. A `Deferred` card shows
 the deferral reason: for `missing_software` the service's message ("Needs Git
@@ -251,10 +255,11 @@ skips the command queue, since the run it would stop holds that queue. The
 service accepts it only while the operation is open and no run has started the
 item's install or uninstall command; a running installer is never interrupted.
 Anything else (item acted on, operation finished, unknown ID) is refused with
-`operation_not_cancelable`, and the card shows the service's message without
-changing the item. A cancel from anyone but the operation's requester or a local
-administrator is refused with `not_authorized`, and the card says only that
-person or an administrator can change the item.
+`operation_not_cancelable`, and the strip (and the detail page) shows the
+service's message without changing the item. A cancel from anyone but the
+operation's requester or a local administrator is refused with
+`not_authorized`, and the strip says only that person or an administrator can
+change the item.
 
 An accepted cancel does three things. It puts back the self-serve selection the
 `InstallItem` or `RemoveItem` replaced, so a later scheduled run does not

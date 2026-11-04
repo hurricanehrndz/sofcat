@@ -169,7 +169,7 @@ func TestCollectCatalogsActionLabels(t *testing.T) {
 	info := `item_name: tool
 catalog: base
 installer: {type: msi, location: x.msi}
-custom_action_labels: {install: Get, cancel: Stop, uninstall: Drop}
+custom_action_labels: {install: Get, cancel: Stop, pending_install: Getting soon, uninstall: Drop}
 `
 	if err := os.WriteFile(filepath.Join(dir, "tool.yaml"), []byte(info), 0o644); err != nil {
 		t.Fatal(err)

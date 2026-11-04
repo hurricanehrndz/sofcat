@@ -55,6 +55,8 @@ placements:
       installing: Making available…
       installed: Available
       remove: Withdraw
+      pending_install: Will be available
+      pending_remove: Will be withdrawn
     exclusive: true
     marketplace:
       name: tapas-test
