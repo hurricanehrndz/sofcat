@@ -138,7 +138,7 @@ func TestGetOptionalItemsNotInstallable(t *testing.T) {
 		t.Errorf("Variant = %q from %q; want Variant B from second", v.DisplayName, v.Catalog)
 	}
 
-	if _, _, err := addServiceManagedInstall(cfg, "Nowhere"); !errors.Is(err, errItemNotAvailable) {
+	if _, _, err := addServiceManagedInstall(cfg, testAdmin, "Nowhere"); !errors.Is(err, errItemNotAvailable) {
 		t.Errorf("addServiceManagedInstall(Nowhere) error = %v, want errItemNotAvailable", err)
 	}
 }

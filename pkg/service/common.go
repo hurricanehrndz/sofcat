@@ -45,6 +45,9 @@ type Command struct {
 	// requestedBy maps the item of the mutation a run carries out to the user
 	// who asked for it, for the inventory. Only on an actionRun.
 	requestedBy map[string]string
+	// caller is who sent an InstallItem or RemoveItem, as authorization sees
+	// them: the zero peer when unresolved.
+	caller peer
 }
 
 type CommandResponse struct {
@@ -279,22 +282,22 @@ func executeCommand(cfg config.Configuration, cmd Command, managedRun func(confi
 		rep, err := managedRun(cfg, cmd.progress, cmd.cancels)
 		return CommandResponse{Status: "ok", report: rep}, err
 	case actionInstallItem:
-		displayName, prior, err := addServiceManagedInstall(cfg, cmd.Items[0])
+		displayName, prior, err := addServiceManagedInstall(cfg, cmd.caller, cmd.Items[0])
 		if err != nil {
 			return CommandResponse{}, err
 		}
 		// A new request starts the item's cancel bookkeeping afresh.
 		cmd.cancels.Reset(cmd.Items[0])
 		operationID := newOperationID()
-		return CommandResponse{Status: "ok", OperationID: operationID, displayName: displayName, prior: prior, requested: selectedForInstall}, nil
+		return CommandResponse{Status: "ok", OperationID: operationID, displayName: displayName, prior: prior, requested: prior.next(selectedForInstall, cmd.caller)}, nil
 	case actionRemoveItem:
-		prior, err := removeServiceManagedInstall(cfg, cmd.Items[0])
+		prior, err := removeServiceManagedInstall(cfg, cmd.caller, cmd.Items[0])
 		if err != nil {
 			return CommandResponse{}, err
 		}
 		cmd.cancels.Reset(cmd.Items[0])
 		operationID := newOperationID()
-		return CommandResponse{Status: "ok", OperationID: operationID, prior: prior, requested: selectedForRemoval}, nil
+		return CommandResponse{Status: "ok", OperationID: operationID, prior: prior, requested: prior.next(selectedForRemoval, cmd.caller)}, nil
 	case actionListOptionalInstalls:
 		items, err := getOptionalItems(cfg)
 		if err != nil {
@@ -329,6 +332,8 @@ func serviceLocalManifestPath(cfg config.Configuration) string {
 type selection struct {
 	install   bool // listed in managed_installs
 	uninstall bool // listed in managed_uninstalls
+	// selectedBy is the item's selected_by entry, "" when none is recorded.
+	selectedBy string
 }
 
 var (
@@ -340,19 +345,69 @@ var (
 	selectedForRemoval = selection{uninstall: true}
 )
 
+// next is the selection caller's request for want sets on an item whose
+// selection is s. Selecting keeps the recorded selector, or records caller
+// when there is none. A removal records its remover, who then owns the
+// pending removal (R32a); an unresolved remover, who can only remove an
+// unowned item, records nobody.
+func (s selection) next(want selection, caller peer) selection {
+	want.selectedBy = s.selectedBy
+	switch {
+	case want.uninstall && caller.ID != "":
+		want.selectedBy = caller.ID
+	case want.install && want.selectedBy == "":
+		want.selectedBy = caller.ID
+	}
+	return want
+}
+
+// authorized reports whether caller may undo what owner asked for: owner
+// itself or an administrator, or anyone when no owner is recorded. An
+// unresolved caller has no ID, so it matches no owner (R32).
+func authorized(owner string, caller peer) bool {
+	return owner == "" || caller.Admin || caller.ID != "" && caller.ID == owner
+}
+
 // setSelection sets name's selection in the self-serve manifest and returns
 // the selection it replaced. Both lists stay deduplicated and sorted.
-func setSelection(cfg config.Configuration, name string, want selection) (selection, error) {
+//
+// With a caller it is that caller's request, checked and recorded under the
+// file's lock: a removal, or an install that would undo a pending removal, is
+// refused with errNotAuthorized unless the caller is the item's selector or an
+// administrator (R32, R32a), and the selector is kept or recorded as next
+// says: a removal's selector is its remover. Without one it sets want as given, selector included: a cancel putting
+// back a selection the service already authorized.
+func setSelection(cfg config.Configuration, name string, want selection, caller *peer) (selection, error) {
 	var prior selection
+	var refused error
 	err := manifest.UpdateSelfServe(serviceLocalManifestPath(cfg), func(entry *manifest.Item) bool {
 		prior = selection{
-			install:   slices.Contains(entry.Installs, name),
-			uninstall: slices.Contains(entry.Uninstalls, name),
+			install:    slices.Contains(entry.Installs, name),
+			uninstall:  slices.Contains(entry.Uninstalls, name),
+			selectedBy: entry.SelectedBy[name],
+		}
+		if caller != nil {
+			if (want.uninstall || prior.uninstall) && !authorized(prior.selectedBy, *caller) {
+				refused = fmt.Errorf("%w: %q", errNotAuthorized, name)
+				return false
+			}
+			want = prior.next(want, *caller)
 		}
 		entry.Installs = setMember(entry.Installs, name, want.install)
 		entry.Uninstalls = setMember(entry.Uninstalls, name, want.uninstall)
+		if want.selectedBy == "" {
+			delete(entry.SelectedBy, name)
+		} else {
+			if entry.SelectedBy == nil {
+				entry.SelectedBy = make(map[string]string)
+			}
+			entry.SelectedBy[name] = want.selectedBy
+		}
 		return prior != want
 	})
+	if err == nil {
+		err = refused
+	}
 	return prior, err
 }
 
@@ -370,8 +425,8 @@ func setMember(list []string, name string, member bool) []string {
 
 // addServiceManagedInstall selects name for install. It returns name's catalog
 // display name, which the authorization lookup has already resolved, and the
-// selection it replaced.
-func addServiceManagedInstall(cfg config.Configuration, name string) (string, selection, error) {
+// selection it replaced. caller is who asked, for setSelection.
+func addServiceManagedInstall(cfg config.Configuration, caller peer, name string) (string, selection, error) {
 	// Authorize the requested name against the currently available optional
 	// installs before writing anything (R3). An unknown name is rejected and the
 	// file is left untouched; the service answers item_not_available.
@@ -383,7 +438,7 @@ func addServiceManagedInstall(cfg config.Configuration, name string) (string, se
 	if i < 0 {
 		return "", selection{}, fmt.Errorf("%w: %q", errItemNotAvailable, name)
 	}
-	prior, err := setSelection(cfg, name, selectedForInstall)
+	prior, err := setSelection(cfg, name, selectedForInstall, &caller)
 	return available[i].DisplayName, prior, err
 }
 
@@ -392,8 +447,9 @@ func addServiceManagedInstall(cfg config.Configuration, name string) (string, se
 // admin manifests offer (optional_installs or default_installs) or one already
 // in the self-serve lists, so a deselected item stays removable after it
 // leaves the offer. An item an admin manifest requires (managed_installs) is
-// never removable, even when it is also offered.
-func removeServiceManagedInstall(cfg config.Configuration, name string) (selection, error) {
+// never removable, even when it is also offered. Only its selector or an
+// administrator may remove an item with a recorded selector (setSelection).
+func removeServiceManagedInstall(cfg config.Configuration, caller peer, name string) (selection, error) {
 	download.SetConfig(cfg)
 	manifests, _, _, err := adminManifests(cfg)
 	if err != nil {
@@ -412,7 +468,7 @@ func removeServiceManagedInstall(cfg config.Configuration, name string) (selecti
 	if !offered && !slices.Contains(selfServe.Installs, name) && !slices.Contains(selfServe.Uninstalls, name) {
 		return selection{}, fmt.Errorf("%w: %q is not a self-service item", errItemNotRemovable, name)
 	}
-	return setSelection(cfg, name, selectedForRemoval)
+	return setSelection(cfg, name, selectedForRemoval, &caller)
 }
 
 // requiredItems is the set of names the admin manifests list in
@@ -437,6 +493,9 @@ var (
 	// self-service item or that an admin manifest requires, sent as
 	// item_not_removable.
 	errItemNotRemovable = errors.New("item cannot be removed through self-service")
+	// errNotAuthorized refuses a caller who may not undo another user's
+	// request (R32), sent as not_authorized.
+	errNotAuthorized = errors.New("only the user who asked for this, or an administrator, can change it")
 )
 
 // withdrawItem is the item side of CancelOperation. It puts back the selection
@@ -445,13 +504,13 @@ var (
 // item first, it restores the request's own selection and returns
 // errNotCancelable.
 func withdrawItem(cfg config.Configuration, cancels *installer.Cancels, name string, prior, requested selection) error {
-	if _, err := setSelection(cfg, name, prior); err != nil {
+	if _, err := setSelection(cfg, name, prior, nil); err != nil {
 		return err
 	}
 	if cancels.Cancel(name) {
 		return nil
 	}
-	if _, err := setSelection(cfg, name, requested); err != nil {
+	if _, err := setSelection(cfg, name, requested, nil); err != nil {
 		slog.Warn("unable to restore the self-service selection after a refused cancel", "item", name, "err", err)
 	}
 	return errNotCancelable

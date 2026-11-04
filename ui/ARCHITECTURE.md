@@ -6,7 +6,7 @@ The Wails process runs as the interactive standard user. The SYSTEM SofCat servi
 
 Any local user can reach the service, so it authorizes each mutation by item, not by caller. `installItem` accepts only an item offered in the admin manifests' `optional_installs`. `removeItem` accepts an item offered there or in `default_installs`, or one already in the self-serve manifest's own lists, so an item stays removable after it leaves the offer. An item an admin manifest lists in `managed_installs` is never removable, even when it is also offered: the service refuses with `item_not_removable`, and the managed run also skips a self-serve uninstall of such an item. `listOptionalInstalls` marks it `isRequired`, and the UI shows it as "Managed by your organisation" with Details but no Install or Remove.
 
-SofCat assumes one interactive user per machine. The self-serve manifest is per machine, as in Munki, so on a shared machine (fast user switching, Remote Desktop Services) every user shares one self-service selection and can reverse another user's request. Operations are not owned either: anyone who knows an operation ID can stream or cancel it. IDs are therefore 128 random bits from `crypto/rand`, hex encoded, which no other user can guess. The service records who requested each operation (see Protocol) for audit, not for authorization.
+The self-serve manifest is per machine, as in Munki, so on a shared machine (fast user switching, Remote Desktop Services) every user sees one self-service selection. The service also authorizes by caller, so one user cannot undo another's request. It records who selected each item in the self-serve manifest's `selected_by` (item name to SID on Windows, uid elsewhere), from the connection, when `installItem` selects an item that has none recorded; a second user selecting the same item succeeds and leaves the record alone. `removeItem`, and an `installItem` for an item waiting for removal (which takes the removal back), are accepted only from that selector or a local administrator; `cancelOperation` only from the user who requested the operation or an administrator. Anyone else gets `not_authorized`, before anything changes. An administrator is a caller whose pipe client token has `BUILTIN\Administrators` enabled (a UAC-filtered token, where the group is deny-only, is not one); on macOS uid 0 or a member of group `admin`. A caller the service cannot resolve is never an administrator and matches no recorded user. An item with no recorded selector (a `default_installs` item, or one selected before selectors were recorded) stays removable by anyone. The selector is cleared when the item's removal completes, in the same file update that prunes its `managed_uninstalls` entry, so the next user to select it becomes its selector; a cancel that puts back the selection also puts back the selector it had. Streaming is not owned: anyone who knows an operation ID can stream it. IDs are therefore 128 random bits from `crypto/rand`, hex encoded, which no other user can guess.
 
 `UIService` binds exactly six calls backed by the shared `pkg/service.Client`:
 
@@ -122,8 +122,9 @@ log), elsewhere from the socket's peer credentials (the user name). It is in
 the `AcceptedOperation`, on every record of the operation, in the service log
 at info level with the operation ID, and in `inventory.json` as `requested_by`
 on the item, for the run the operation triggered. When the service cannot
-resolve the user it records `""` and logs why at debug; it never refuses a
-request for it. It is an audit record, not an authorization check.
+resolve the user it records `""` and logs why at debug. The name is an audit
+record; authorization (see Boundary) uses the SID or uid, and refuses an
+unresolved caller only where a recorded selector or requester must match.
 
 Errors use the standard codes for malformed requests and the server range for
 application errors. `data.code` is the stable string clients branch on, and
@@ -146,6 +147,7 @@ application errors. `data.code` is the stable string clients branch on, and
 | -32003 | `unknown_operation` | stream of an operation the service does not track |
 | -32004 | `item_not_available` | `installItem` for an item not offered for self-service |
 | -32005 | `item_not_removable` | `removeItem` for an item that is not a self-service item, or that an admin manifest requires |
+| -32006 | `not_authorized` | `removeItem`, `cancelOperation`, or an `installItem` that would take back a pending removal, from a caller who is neither the item's selector (the operation's requester, for a cancel) nor a local administrator |
 
 The service does not support batches, and it does not act on a request without
 an `id` (a notification): it closes the connection without a reply. The
@@ -215,7 +217,9 @@ service accepts it only while the operation is open and no run has started the
 item's install or uninstall command; a running installer is never interrupted.
 Anything else (item acted on, operation finished, unknown ID) is refused with
 `operation_not_cancelable`, and the card shows the service's message without
-changing the item.
+changing the item. A cancel from anyone but the operation's requester or a local
+administrator is refused with `not_authorized`, and the card says only that
+person or an administrator can change the item.
 
 An accepted cancel does three things. It puts back the self-serve selection the
 `InstallItem` or `RemoveItem` replaced, so a later scheduled run does not

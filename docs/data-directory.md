@@ -10,8 +10,9 @@ its own ACL.
 ## What it protects
 
 - `config.yaml` may hold `auth_user`, `auth_pass` and TLS client keys.
-- `service-manifest.yaml` is the self-serve state. A user who can write it
-  skips the authorization that the service pipe applies.
+- `service-manifest.yaml` is the self-serve state, including `selected_by`,
+  who selected each item. A user who can write it skips the authorization
+  that the service pipe applies, including the per-user check on removals.
 - `cache\` holds installers and scripts that run as SYSTEM.
 - `sofcat.log` may name paths and items.
 

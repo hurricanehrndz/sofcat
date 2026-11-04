@@ -64,6 +64,7 @@ const (
 	codeUnknownOperation       = -32003
 	codeItemNotAvailable       = -32004
 	codeItemNotRemovable       = -32005
+	codeNotAuthorized          = -32006
 )
 
 // appCodes maps each JSON-RPC error code to its data.code string.
@@ -79,6 +80,7 @@ var appCodes = map[int]string{
 	codeUnknownOperation:       "unknown_operation",
 	codeItemNotAvailable:       "item_not_available",
 	codeItemNotRemovable:       "item_not_removable",
+	codeNotAuthorized:          "not_authorized",
 }
 
 type rpcRequest struct {

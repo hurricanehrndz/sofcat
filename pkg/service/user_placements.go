@@ -305,7 +305,8 @@ func (sr *serviceRunner) dispatchUserPlacements(conn clientConn, req rpcRequest,
 	if err != nil || params.Results == nil {
 		return nil, newError(codeInvalidParams, req.Method+" requires params.results", "")
 	}
-	logUserPlacementResults(requester(conn, logger), params.Results)
+	who, _ := requester(conn, logger)
+	logUserPlacementResults(who, params.Results)
 	return reportUserPlacementsResponse{}, nil
 }
 

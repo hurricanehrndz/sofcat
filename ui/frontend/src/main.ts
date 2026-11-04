@@ -35,6 +35,7 @@ import {
   progressText,
   refusalText,
   releaseOperation,
+  requestErrorText,
   restartBadge,
   shouldAcceptRecord,
   showRetry,
@@ -453,7 +454,7 @@ async function runAction(item: OptionalInstallItem, action: ItemAction): Promise
     operations.set(failed.operationId, failed);
     pushRecord(
       failed,
-      localRecord(failed.operationId, item, localErrorState(reason(error)), reason(error), started),
+      localRecord(failed.operationId, item, localErrorState(reason(error)), requestErrorText(reason(error)), started),
     );
     renderCardFor(item.itemName);
     return;

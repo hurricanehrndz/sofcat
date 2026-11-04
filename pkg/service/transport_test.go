@@ -8,10 +8,10 @@ import (
 	"time"
 )
 
-// The service records who asked for each mutation from the connection
-// itself, so a client cannot claim to be someone else. Here the client is the
-// test, so the peer is the test's own user.
-func TestAcceptedConnectionPeerIsTheConnectingUser(t *testing.T) {
+// connectedPeer connects to a fresh listener as the test's own user and
+// returns what the accepted connection's Peer resolves.
+func connectedPeer(t *testing.T) (peer, error) {
+	t.Helper()
 	name := testPipeName(t)
 	ln, err := listen(name)
 	if err != nil {
@@ -36,8 +36,14 @@ func TestAcceptedConnectionPeerIsTheConnectingUser(t *testing.T) {
 	}
 	defer func() { _ = server.Close() }()
 	_ = ln.Close()
+	return server.Peer()
+}
 
-	got, err := server.Peer()
+// The service records who asked for each mutation from the connection
+// itself, so a client cannot claim to be someone else. Here the client is the
+// test, so the peer is the test's own user.
+func TestAcceptedConnectionPeerIsTheConnectingUser(t *testing.T) {
+	got, err := connectedPeer(t)
 	if err != nil {
 		t.Fatalf("Peer: %v", err)
 	}
