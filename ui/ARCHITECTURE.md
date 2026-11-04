@@ -38,9 +38,10 @@ SYSTEM process can set, and refuses the pipe otherwise; it also connects at
 identification level, so the server can tell who it is but never act as it.
 (The owner stands in for the server process's token, which a standard user
 cannot open.) Elsewhere it is the Unix socket
-`/run/sofcat/sofcat-service.sock` (Linux) or `/var/run/sofcat/...` (macOS),
-mode 0666 in a 0755 directory, and a client refuses a socket whose peer
-credentials are not root's; only tests run the service there today.
+`/var/run/<slug>/<slug>-service.sock` (macOS, the launchd daemon's) or
+`/run/<slug>/...` (Linux, where only tests run the service), mode 0666 in a
+0755 directory, and a client refuses a socket whose peer credentials are not
+root's.
 
 A request has a string `id`, a camelCase `method` and an object `params`. The
 answer echoes the `id` with a `result` or an `error`:

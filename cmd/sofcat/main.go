@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"strings"
@@ -19,14 +20,30 @@ var (
 	runServiceActionFunc   = service.RunAction
 	serviceStatusFunc      = service.ServiceStatus
 	protectAppDataFunc     = protectAppData
+	protectConfigFunc      = protectConfig
 )
 
 func main() {
+	if printLaunchdPlist(os.Args, os.Stdout) {
+		return
+	}
 	cfg := config.Get()
 	if err := route(cfg); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+// printLaunchdPlist handles the hidden -print-launchd-plist, for `just pkg`:
+// it writes the launchd plist the package installs, the same bytes
+// -serviceinstall writes for the installed layout. It needs no config, so
+// main runs it before config.Get.
+func printLaunchdPlist(args []string, w io.Writer) bool {
+	if len(args) != 2 || args[1] != "-print-launchd-plist" {
+		return false
+	}
+	_, _ = w.Write(service.InstalledLaunchdPlist())
+	return true
 }
 
 func route(cfg config.Configuration) error { //nolint:gocognit // CEILING: known-complex, split in Workstream B (kernel-repair)
@@ -35,6 +52,9 @@ func route(cfg config.Configuration) error { //nolint:gocognit // CEILING: known
 		// fixes the tree. The service applies it again at every start.
 		if err := protectAppDataFunc(cfg.AppDataPath); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: unable to protect %s: %v\n", cfg.AppDataPath, err)
+		}
+		if err := protectConfigFunc(cfg.ConfigPath); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: unable to protect %s: %v\n", cfg.ConfigPath, err)
 		}
 		if err := runServiceActionFunc(cfg, "install"); err != nil {
 			return err
@@ -150,16 +170,19 @@ func printRunSummary(rep *report.Report) {
 	}
 }
 
-// runService protects the data directory, then hands over to the service
-// manager. Protecting it at every start fixes a tree deployed by hand or by an
-// older version. A failure is only logged: the run-time guard on admin-managed
-// items still holds.
+// runService protects the data directory and the config file, then hands
+// over to the service manager. Protecting them at every start fixes a tree
+// deployed by hand or by an older version. A failure is only logged: the
+// run-time guard on admin-managed items still holds.
 func runService(cfg config.Configuration) error {
 	if err := sofcatlog.NewLog(cfg); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 	}
 	if err := protectAppDataFunc(cfg.AppDataPath); err != nil {
 		slog.Warn("unable to protect the data directory", "path", cfg.AppDataPath, "err", err)
+	}
+	if err := protectConfigFunc(cfg.ConfigPath); err != nil {
+		slog.Warn("unable to protect the config file", "path", cfg.ConfigPath, "err", err)
 	}
 	return service.Run(cfg, managedRunFunc)
 }

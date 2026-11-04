@@ -115,30 +115,48 @@ In Munki's predicate syntax, `os_vers BEGINSWITH "10"` becomes
 | Fact | Type | Example |
 |---|---|---|
 | `hostname` | string | `LAB-GPU-01` |
-| `domain` | string | `corp.example.com`; empty when not joined |
+| `domain` | string | `corp.example.com`; empty when not joined. Windows only. |
 | `os` | string | `windows`, `darwin` or `linux` |
 | `arch` | string | `amd64`, `arm64` or `x86`: the machine's, not SofCat's |
-| `os_version` | string | `10.0.22631.4460` (major.minor.build.UBR) |
-| `os_build` | int | `22631`; Windows 11 is `>= 22000` |
-| `os_edition` | string | `Enterprise`, `Professional` |
-| `machine_manufacturer` | string | `LENOVO` |
-| `machine_model` | string | `20XW0055US` |
-| `machine_type` | string | `laptop` for a portable chassis, otherwise `desktop` |
+| `os_version` | string | `10.0.22631.4460` (Windows: major.minor.build.UBR), `15.1` (macOS) |
+| `os_build` | int | `22631`; Windows 11 is `>= 22000`. Windows only. |
+| `os_edition` | string | `Enterprise`, `Professional`. Windows only. |
+| `machine_manufacturer` | string | `LENOVO`; `Apple` on macOS |
+| `machine_model` | string | `20XW0055US`, `Mac16,12` |
+| `machine_type` | string | `laptop` for a portable chassis (on macOS a MacBook model or a Mac with an internal battery), otherwise `desktop` |
 | `serial_number` | string | `PF1ABCDE` |
 | `ipv4_address` | []string | `["10.20.1.5"]`, without loopback |
 | `engine_version` | string | `v1.4.0`, SofCat's version. It is the same in a rebranded build. |
 
-The manufacturer, model, type and serial come from SMBIOS. If SMBIOS can't be
-read, those four are missing and conditions that use them are unknown.
-Off Windows, only `hostname`, `os`, `arch`, `ipv4_address` and
-`engine_version` are set.
+On Windows the manufacturer, model, type and serial come from SMBIOS. If SMBIOS
+can't be read, those four are missing and conditions that use them are
+unknown.
+
+On macOS `os_version` comes from `sw_vers -productVersion`, `machine_model`
+from `sysctl -n hw.model`, `serial_number` from `ioreg -rd1 -c
+IOPlatformExpertDevice`, and `machine_type` from the model or, on Apple
+silicon, whose models do not say `MacBook`, from `ioreg -rd1 -c
+AppleSmartBattery`. Each command gets the same 60 seconds as an admin script.
+A command that fails leaves its facts missing, so conditions that use them are
+unknown. macOS sets no `os_build`, `os_edition` or `domain`: its build string
+is not a Windows build number.
+
+On Linux, where SofCat runs only for development, only `hostname`, `os`,
+`arch`, `ipv4_address` and `engine_version` are set.
 
 ## Admin-provided facts
 
 Put scripts in the `conditions` folder of the app data directory
-(`C:\ProgramData\SofCat\conditions` by default). Each run executes every
-`.ps1` (with Windows PowerShell) and `.exe` there as SYSTEM, in name order.
-Each script prints one JSON object on stdout:
+(`C:\ProgramData\SofCat\conditions` or
+`/Library/Application Support/SofCat/Data/conditions` by default). Each run
+executes them in name order and reads one JSON object from each one's stdout:
+
+- On Windows, every `.ps1` (with Windows PowerShell) and `.exe`, as SYSTEM.
+- On macOS, every file that is owned by root, not group- or world-writable,
+  and executable, run directly as root, so it needs a `#!` line. Any other
+  file, a symbolic link included, is skipped and logged.
+
+For example:
 
 ```powershell
 # C:\ProgramData\SofCat\conditions\10-groups.ps1
@@ -160,7 +178,9 @@ Then `"lab" in machine_groups` and `site == "east"` work in conditions.
 
 The folder inherits the app data directory's ACL (SYSTEM and Administrators
 only; see [data-directory.md](data-directory.md)), so a standard user can't
-add a script that runs as SYSTEM.
+add a script that runs as SYSTEM. On macOS the Data directory is root-owned
+with mode 0700, and the ownership and mode rule above holds for each script
+as well.
 
 The scripts run at the start of each managed run. The self-service app's
 list reuses the facts from the last run, so opening the app does not run

@@ -16,21 +16,17 @@ import (
 	"slices"
 	"strconv"
 	"time"
+
+	"github.com/hurricanehrndz/sofcat/pkg/identity"
 )
 
-// The Unix transport is a Unix domain socket, <socketDir>/<name>.sock. It
-// exists so the portable service core runs and is tested off Windows; the
-// service itself is still only installed on Windows.
+// The Unix transport is a Unix domain socket, <socketDir>/<name>.sock: the
+// macOS launchd daemon's, and on Linux the one the portable service core is
+// tested over.
 
-// socketDir is where sockets live; tests point it at a temporary directory.
-var socketDir = defaultSocketDir()
-
-func defaultSocketDir() string {
-	if runtime.GOOS == "linux" {
-		return "/run/sofcat"
-	}
-	return "/var/run/sofcat"
-}
+// socketDir is where sockets live, /var/run/<slug> on macOS and /run/<slug> on
+// Linux; tests point it at a temporary directory.
+var socketDir = identity.SocketDir()
 
 func socketPath(name string) string {
 	return filepath.Join(socketDir, name+".sock")

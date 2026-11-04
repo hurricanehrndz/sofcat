@@ -52,7 +52,7 @@ func BinaryDirs(goos string) []string {
 		dirs = append(dirs, filepath.Dir(exe))
 	}
 	if goos == harness.Darwin {
-		dirs = append(dirs, "/Library/Application Support/"+identity.Name+"/bin")
+		dirs = append(dirs, identity.BinDir())
 	}
 	return dirs
 }

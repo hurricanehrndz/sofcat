@@ -5,6 +5,8 @@ package facts
 import (
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 	"unsafe"
 
@@ -94,4 +96,19 @@ func firmwareTable() ([]byte, error) {
 		return nil, err
 	}
 	return buf[:n], nil
+}
+
+var commandPs1 = filepath.Join(os.Getenv("WINDIR"), "system32", "WindowsPowershell", "v1.0", "powershell.exe")
+
+// scriptCommand runs a .ps1 with Windows PowerShell and an .exe directly.
+// Other files are skipped.
+func scriptCommand(path string) (string, []string, error) {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".ps1":
+		return commandPs1, []string{"-NoProfile", "-NoLogo", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", path}, nil
+	case ".exe":
+		return path, nil, nil
+	default:
+		return "", nil, fmt.Errorf("%w: unsupported script type %q: use .ps1 or .exe", errSkipped, filepath.Ext(path))
+	}
 }

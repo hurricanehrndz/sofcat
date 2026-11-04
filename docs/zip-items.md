@@ -210,7 +210,10 @@ requires_software:
   `%ProgramData%\chocolatey\lib\<id>` is a directory.
 - `munki` is a Munki item name, checked on macOS: present when it is listed
   under `InstalledItems` in `/Library/Managed Installs/ManagedInstallReport.plist`.
-  A missing, unreadable or binary report counts as missing.
+  A missing, unreadable or binary report counts as missing. The macOS smoke
+  points sofcat at its own report with the `SOFCAT_TEST_MUNKI_REPORT`
+  environment variable in the daemon's plist; it is a test hook, not a
+  setting.
 - An entry with no key for the OS sofcat runs on is skipped.
 
 Before an install or update does anything (download, placement, scripts),
