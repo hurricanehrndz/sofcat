@@ -1,10 +1,11 @@
+//go:build !zip_only
+
 package installer
 
 import (
 	"bytes"
 	"errors"
 	"fmt"
-	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,20 +18,16 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/download"
 	"github.com/hurricanehrndz/sofcat/pkg/report"
 	"github.com/hurricanehrndz/sofcat/pkg/sofcatlog"
-	"github.com/hurricanehrndz/sofcat/pkg/status"
 )
 
 // A lot of ideas taken from https://npf.io/2015/06/testing-exec-command/
 
 var (
 	// store original data to restore after each test
-	origExec            = execCommand
-	origCheckStatus     = statusCheckStatus
-	origInstallItemFunc = installItemFunc
-	origRunCommand      = runCommand
+	origExec       = execCommand
+	origRunCommand = runCommand
 
-	// These tore the URL that `Install` generates during testing
-	installItemURL   string
+	// uninstallItemURL stores the URL that `Install` generates during testing
 	uninstallItemURL string
 
 	// Define a testing config for `download`
@@ -51,21 +48,6 @@ var (
 			Hash:      `a3fb64e1cadce0fd5bd08a7b01ce991c8c8bfb5618fa7e0975b6a7387dc26cba`,
 			Location:  `packages/chef-client/chef-client-14.3.37-1-x64uninst.nupkg`,
 			Type:      `nupkg`,
-		},
-		Version: "1.2.3",
-	}
-	msiItem = catalog.Item{
-		Installer: catalog.InstallerItem{
-			Arguments: []string{`/L=1033`, `/S`},
-			Hash:      `a1d4982abbb2bd2ccc238372ae688c790659c2c120efcee329fcca49c7c8fa9a`,
-			Location:  `packages/chef-client/chef-client-14.3.37-1-x64.msi`,
-			Type:      `msi`,
-		},
-		Uninstaller: catalog.InstallerItem{
-			Arguments: []string{`/U=1033`, `/S`},
-			Hash:      `069068fea26346a7c006f39f8d84ced2ebb6b874a35143f52ed979d29f11ef3d`,
-			Location:  `packages/chef-client/chef-client-14.3.37-1-x64uninst.msi`,
-			Type:      `msi`,
 		},
 		Version: "1.2.3",
 	}
@@ -113,12 +95,6 @@ var (
 		},
 		Version: "1.0.0",
 	}
-
-	// Define different options to bypass status checks during tests
-	statusActionNoError   = `_sofcat_dev_action_noerror_`
-	statusNoActionNoError = `_sofcat_dev_noaction_noerror_`
-	statusActionError     = `_sofcat_dev_action_error_`
-	statusNoActionError   = `_sofcat_dev_noaction_error_`
 )
 
 // fakeExecCommand provides a method for validating what is passed to exec.Command
@@ -171,38 +147,6 @@ type fakeExit int
 
 func (e fakeExit) Error() string { return fmt.Sprintf("exit status %d", int(e)) }
 func (e fakeExit) ExitCode() int { return int(e) }
-
-func fakeCheckStatus(_ *status.Checker, catalogItem catalog.Item, installType string, cachePath string) (install bool, checkErr error) {
-	// Catch special names used in tests
-	if catalogItem.DisplayName == statusActionNoError {
-		slog.Warn("Running Development Tests!", "item", catalogItem.DisplayName)
-		return true, nil
-	} else if catalogItem.DisplayName == statusNoActionNoError {
-		slog.Warn("Running Development Tests!", "item", catalogItem.DisplayName)
-		return false, nil
-	} else if catalogItem.DisplayName == statusActionError {
-		slog.Warn("Running Development Tests!", "item", catalogItem.DisplayName)
-		return true, fmt.Errorf("testing %v", catalogItem.DisplayName)
-	} else if catalogItem.DisplayName == statusNoActionError {
-		slog.Warn("Running Development Tests!", "item", catalogItem.DisplayName)
-		return false, fmt.Errorf("testing %v", catalogItem.DisplayName)
-	}
-
-	fmt.Println(catalogItem.DisplayName)
-	fmt.Println(installType)
-	return false, nil
-}
-
-// newTestRunner returns a fresh run-scoped Runner wired for tests (K7: state
-// is per-run, so tests no longer share or reset package globals).
-func newTestRunner() *Runner {
-	return &Runner{
-		Report:      report.New(),
-		Checker:     &status.Checker{},
-		URLPackages: "https://example.com/",
-		CachePath:   "testdata/",
-	}
-}
 
 // TestRunCommand verifies that the command and it's arguments are processed correctly
 func TestRunCommand(t *testing.T) {
@@ -966,11 +910,6 @@ func TestProgressEvents(t *testing.T) {
 	}
 }
 
-func fakeInstallItem(_ *Runner, item catalog.Item, itemURL string) (string, error) {
-	installItemURL = itemURL
-	return "", nil
-}
-
 // TestInstallURL validates that the url for an installer is properly generated
 func TestInstallURL(t *testing.T) {
 	// Override checkStatus and installItemFunc with our fake versions
@@ -1463,129 +1402,5 @@ func TestPrePostUninstallScriptsSuccess(t *testing.T) {
 	}
 	if len(r.Report.FailedItems) != 0 {
 		t.Errorf("expected no failed items, got %#v", r.Report.FailedItems)
-	}
-}
-
-// origBlockingApps restores the blocking-app snapshot seam after each gate test.
-var origBlockingApps = runningBlockingApps
-
-// TestBlockingGateDefers verifies a running blocking app defers the install:
-// ErrBlockingApps returned, a DeferredItem recorded (by catalog key Name), and
-// nothing in FailedItems or InstalledItems (spec R6/R12).
-func TestBlockingGateDefers(t *testing.T) {
-	statusCheckStatus = fakeCheckStatus
-	installItemFunc = func(_ *Runner, item catalog.Item, itemURL string) (string, error) {
-		t.Error("installer ran despite a running blocking app")
-		return "", nil
-	}
-	runningBlockingApps = func(apps []string) ([]string, error) { return []string{"notepad.exe"}, nil }
-	defer func() {
-		statusCheckStatus = origCheckStatus
-		installItemFunc = origInstallItemFunc
-		runningBlockingApps = origBlockingApps
-	}()
-
-	item := msiItem
-	item.Name = "DemoBlocked"
-	item.DisplayName = statusActionNoError
-	item.BlockingApps = []string{"notepad"}
-
-	r := newTestRunner()
-	_, err := r.Install(item, "install")
-	if !errors.Is(err, ErrBlockingApps) {
-		t.Fatalf("expected ErrBlockingApps, got %v", err)
-	}
-	if len(r.Report.DeferredItems) != 1 {
-		t.Fatalf("expected 1 deferred item, got %#v", r.Report.DeferredItems)
-	}
-	if d := r.Report.DeferredItems[0]; d.Name != "DemoBlocked" || d.Action != "install" || !strings.Contains(d.Reason, "notepad") {
-		t.Errorf("unexpected deferred item: %#v", d)
-	}
-	if len(r.Report.FailedItems) != 0 {
-		t.Errorf("deferred item must not be in FailedItems: %#v", r.Report.FailedItems)
-	}
-	if len(r.Report.InstalledItems) != 0 {
-		t.Errorf("deferred item must not be in InstalledItems: %#v", r.Report.InstalledItems)
-	}
-}
-
-// TestBlockingGateOnlyWhenActionNeeded verifies an already-satisfied item is
-// never deferred: the gate lives behind the actionNeeded check, so the blocking
-// snapshot is never even taken (spec R6).
-func TestBlockingGateOnlyWhenActionNeeded(t *testing.T) {
-	statusCheckStatus = fakeCheckStatus
-	runningBlockingApps = func(apps []string) ([]string, error) {
-		t.Error("blocking snapshot taken for an already-satisfied item")
-		return []string{"notepad.exe"}, nil
-	}
-	defer func() {
-		statusCheckStatus = origCheckStatus
-		runningBlockingApps = origBlockingApps
-	}()
-
-	item := msiItem
-	item.DisplayName = statusNoActionNoError // no action needed
-	item.BlockingApps = []string{"notepad"}
-
-	r := newTestRunner()
-	if _, err := r.Install(item, "install"); err != nil {
-		t.Fatalf("Install returned an error: %v", err)
-	}
-	if len(r.Report.DeferredItems) != 0 {
-		t.Errorf("already-satisfied item must not be deferred: %#v", r.Report.DeferredItems)
-	}
-}
-
-// TestBlockingGateUninstall verifies the uninstall arm is gated too.
-func TestBlockingGateUninstall(t *testing.T) {
-	statusCheckStatus = fakeCheckStatus
-	uninstallItemFunc = func(_ *Runner, item catalog.Item, itemURL string) (string, error) {
-		t.Error("uninstaller ran despite a running blocking app")
-		return "", nil
-	}
-	runningBlockingApps = func(apps []string) ([]string, error) { return []string{"notepad.exe"}, nil }
-	defer func() {
-		statusCheckStatus = origCheckStatus
-		uninstallItemFunc = (*Runner).uninstallItem
-		runningBlockingApps = origBlockingApps
-	}()
-
-	item := msiItem
-	item.Name = "DemoBlocked"
-	item.DisplayName = statusActionNoError
-	item.BlockingApps = []string{"notepad"}
-
-	r := newTestRunner()
-	_, err := r.Install(item, "uninstall")
-	if !errors.Is(err, ErrBlockingApps) {
-		t.Fatalf("expected ErrBlockingApps, got %v", err)
-	}
-	if len(r.Report.DeferredItems) != 1 || r.Report.DeferredItems[0].Action != "uninstall" {
-		t.Errorf("expected 1 uninstall deferral, got %#v", r.Report.DeferredItems)
-	}
-}
-
-// TestBlockingGateSnapshotErrorProceeds verifies a snapshot error does not block
-// the run: the action proceeds (Munki treats a failed listing as none running).
-func TestBlockingGateSnapshotErrorProceeds(t *testing.T) {
-	statusCheckStatus = fakeCheckStatus
-	installItemFunc = fakeInstallItem
-	runningBlockingApps = func(apps []string) ([]string, error) { return nil, fmt.Errorf("snapshot boom") }
-	defer func() {
-		statusCheckStatus = origCheckStatus
-		installItemFunc = origInstallItemFunc
-		runningBlockingApps = origBlockingApps
-	}()
-
-	item := msiItem
-	item.DisplayName = statusActionNoError
-	item.BlockingApps = []string{"notepad"}
-
-	r := newTestRunner()
-	if _, err := r.Install(item, "install"); err != nil {
-		t.Fatalf("snapshot error should proceed, got %v", err)
-	}
-	if len(r.Report.DeferredItems) != 0 {
-		t.Errorf("snapshot error must not defer: %#v", r.Report.DeferredItems)
 	}
 }

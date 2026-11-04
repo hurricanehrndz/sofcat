@@ -3,18 +3,23 @@
 set shell := ["bash", "-cu"]
 
 # Rebranding: `just brand=branding/acme build` (or msi) takes the values below
-# from <brand>/brand.env, a path relative to this file, instead of the stock
-# SofCat ones; see examples/brand/README.md. pkg/identity defaults to the same
-# stock values for builds that bypass just.
+# from <brand>/brand.env instead of the stock SofCat ones. <brand> is relative
+# to this file or absolute, and may be outside the checkout; see
+# examples/brand/README.md. pkg/identity defaults to the same stock values for
+# builds that bypass just.
 brand := ""
 _brand_env := if brand == "" { "" } else { brand / "brand.env" }
-_read := 'unset SLUG NAME PUBLISHER IDENTIFIER DESCRIPTION HOMEPAGE; [ -z "$1" ] || . "$1"; printf %s "${!2:-$3}"'
+_read := 'unset SLUG NAME PUBLISHER IDENTIFIER DESCRIPTION HOMEPAGE INSTALLERS; [ -z "$1" ] || . "$1"; printf %s "${!2:-$3}"'
 app := shell(_read, _brand_env, "SLUG", "sofcat")
 product := shell(_read, _brand_env, "NAME", "SofCat")
 publisher := shell(_read, _brand_env, "PUBLISHER", "Carlos Hernandez")
 identifier := shell(_read, _brand_env, "IDENTIFIER", "ca.hrndz.sofcat")
 description := shell(_read, _brand_env, "DESCRIPTION", "A catalog for anything you can put on disk or run")
 homepage := shell(_read, _brand_env, "HOMEPAGE", "https://github.com/hurricanehrndz/sofcat")
+# INSTALLERS=zip builds both binaries with the zip_only tag: no command
+# installers or catalog scripts are compiled in (docs/zip-items.md).
+installers := shell(_read, _brand_env, "INSTALLERS", "")
+_zip_tag := if installers == "zip" { ",zip_only" } else { "" }
 _brand_ico := if brand == "" { "" } else { brand / "icon.ico" }
 _brand_png := if brand == "" { "" } else { brand / "icon.png" }
 icon_ico := if path_exists(_brand_ico) == "true" { _brand_ico } else { "assets/sofcat.ico" }
@@ -23,9 +28,9 @@ icon_png := if path_exists(_brand_png) == "true" { _brand_png } else { "" }
 # both binaries under the brand_roots tag; without it the stock roots apply.
 _brand_roots := if brand == "" { "" } else { brand / "write-roots.yaml" }
 write_roots := if path_exists(_brand_roots) == "true" { _brand_roots } else { "" }
-_svc_tags := if write_roots == "" { "" } else { "brand_roots" }
+_svc_tags := trim_start_match((if write_roots == "" { "" } else { "brand_roots" }) + _zip_tag, ",")
 _ui_icon_tag := if icon_png == "" { "" } else { ",brand" }
-_ui_tags := "production" + _ui_icon_tag + if write_roots == "" { "" } else { ",brand_roots" }
+_ui_tags := "production" + _ui_icon_tag + (if write_roots == "" { "" } else { ",brand_roots" }) + _zip_tag
 # sed arguments filling the @PLACEHOLDERS@ in installer/embala.toml and
 # */winres/winres.json. brand-check keeps the values free of ' | & \ and ".
 _subst := "-e 's|@APP@|" + app + "|g' -e 's|@PRODUCT@|" + product + "|g' -e 's|@PUBLISHER@|" + publisher + "|g' -e 's|@IDENTIFIER@|" + identifier + "|g' -e 's|@DESCRIPTION@|" + description + "|g' -e 's|@HOMEPAGE@|" + homepage + "|g'"
@@ -105,6 +110,7 @@ winres arch="amd64": brand-check
 # A brand icon.png is staged as ui/brand-icon.png (gitignored) for the brand tag,
 # and a brand write-roots.yaml as pkg/placement/brand-write-roots.yaml
 # (gitignored) for the brand_roots tag.
+# A brand with INSTALLERS=zip adds the zip_only tag to both.
 build arch="amd64": ui-assets (winres arch)
     mkdir -p build
     {{ if write_roots == "" { "true" } else { "cp '" + write_roots + "' pkg/placement/brand-write-roots.yaml" } }}
@@ -147,6 +153,8 @@ brand-check:
         fail "'$value' must be printable ASCII without \" \\ ' | or &"
     done
     [[ {{quote(homepage)}} == http://* || {{quote(homepage)}} == https://* ]] || fail "HOMEPAGE must be an http(s) URL"
+    installers={{quote(installers)}}
+    case $installers in ''|zip) ;; *) fail "INSTALLERS '$installers' must be unset or zip" ;; esac
     stock=0
     [ "$app" = sofcat ] && stock=$((stock + 1))
     [ "$(printf %s "$product" | tr A-Z a-z)" = sofcat ] && stock=$((stock + 1))
@@ -215,8 +223,9 @@ tapas_vm_dir := manual_test_dir / "tapas" / "vm"
 
 # Zip-item manual-test assets for the Tapas Test fixture brand under
 # build/manual-test/tapas/: its binaries and a repository whose zip items
-# makecatalogs zip-item packs from test/manual/fixtures/tapas/rendered. The
-# VM gate is test/manual/run-tapas-smoke.ps1.
+# makecatalogs zip-item packs from test/manual/fixtures/tapas/rendered, plus
+# the hand-written package-info files in packages-info/ (an exe item the
+# zip-only brand must reject). The VM gate is test/manual/run-tapas-smoke.ps1.
 bootstrap-tapas base_url="": manual-test-server
     {{quote(just_executable())}} --justfile {{quote(justfile())}} brand={{tapas_brand}} build
     go build -ldflags "-X github.com/hurricanehrndz/sofcat/pkg/version.version={{version}}" \
@@ -225,6 +234,7 @@ bootstrap-tapas base_url="": manual-test-server
     mkdir -p {{tapas_server_root}}/manifests {{tapas_server_root}}/packages-info {{tapas_vm_dir}}
     cp build/{{tapas_app}}.exe build/{{tapas_app}}-ui.exe {{tapas_fixtures}}/harnesses.yaml {{tapas_server_root}}/
     cp {{tapas_fixtures}}/manifests/*.yaml {{tapas_server_root}}/manifests/
+    cp {{tapas_fixtures}}/packages-info/*.yaml {{tapas_server_root}}/packages-info/
     for item in {{tapas_fixtures}}/items/*.yaml; do \
       name=$(basename "$item" .yaml); \
       build/makecatalogs zip-item --harnesses {{tapas_fixtures}}/harnesses.yaml --item "$item" \
@@ -263,6 +273,10 @@ vet:
 # Go tests.
 test:
     go test -cover -race ./...
+
+# Go tests under the zip_only tag, the rule set INSTALLERS=zip builds.
+test-zip-only:
+    go test -cover -race -tags zip_only ./...
 
 # Whole-tree lint gate. The second pass lints the *_windows.go files, which a
 # Linux or macOS run skips.

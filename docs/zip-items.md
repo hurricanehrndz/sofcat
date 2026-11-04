@@ -180,6 +180,19 @@ and lacks the marker file `.<slug>-owned` is refused too; a root sofcat
 creates gets the marker. A repository without `harnesses.yaml` fails every
 zip item with `placement_refused`.
 
+### Zip-only builds
+
+A brand whose `brand.env` sets `INSTALLERS=zip` builds both binaries with the
+`zip_only` Go build tag. Such a binary has no code for the `msi`, `exe`, `ps1`,
+`msix` and `nupkg` installers or for catalog scripts. It treats a catalog item
+as invalid when it has an `installer.type` other than `zip`, an
+`uninstaller.type` set to anything but `zip`, or any of `preinstall_script`,
+`postinstall_script`, `preuninstall_script`, `postuninstall_script` and
+`check.script`. It logs the reason (`rejected by this zip-only build`) once per
+item and reason for the life of the process, the run neither installs nor
+removes the item, `ListOptionalInstalls` leaves it out and `InstallItem` refuses it with `item_not_available`. Admin
+fact scripts (`<data dir>/conditions`) still run.
+
 ## The archive
 
 `makecatalogs pack` writes the same bytes for the same tree on every OS:

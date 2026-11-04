@@ -20,6 +20,7 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/facts"
 	"github.com/hurricanehrndz/sofcat/pkg/installer"
 	"github.com/hurricanehrndz/sofcat/pkg/manifest"
+	"github.com/hurricanehrndz/sofcat/pkg/process"
 	"github.com/hurricanehrndz/sofcat/pkg/report"
 	"github.com/hurricanehrndz/sofcat/pkg/status"
 )
@@ -597,10 +598,12 @@ func getOptionalItems(cfg config.Configuration) ([]OptionalInstallItem, error) {
 
 // firstCatalogItem returns the first-catalog-wins catalog item for name and the
 // name of the catalog it came from. Unlike process.firstItem it applies no
-// installer-validity rules — the list is a display surface. catalogNames maps a
-// catalog index (1-based, as manifest.GetCatalogs keys them) to its configured name.
-// Occurrences this machine may not install (installable_condition) are passed
-// over; notInstallable reports that name had only those.
+// installer-validity rules — the list is a display surface — except a zip-only
+// build's (process.ZipOnlyReason), since that binary cannot install the item.
+// catalogNames maps a catalog index (1-based, as manifest.GetCatalogs keys
+// them) to its configured name. Occurrences this machine may not install
+// (installable_condition) or a zip-only build rejects are passed over;
+// notInstallable reports that name had only those.
 func firstCatalogItem(name string, catalogs map[int]map[string]catalog.Item, catalogNames []string) (_ catalog.Item, _ string, ok, notInstallable bool) {
 	indexes := make([]int, 0, len(catalogs))
 	for k := range catalogs {
@@ -609,6 +612,11 @@ func firstCatalogItem(name string, catalogs map[int]map[string]catalog.Item, cat
 	slices.Sort(indexes)
 	for _, k := range indexes {
 		if item, ok := catalogs[k][name]; ok {
+			if reason := process.ZipOnlyReason(item); reason != "" {
+				process.WarnZipOnly(name, reason)
+				notInstallable = true
+				continue
+			}
 			if item.NotInstallable != "" {
 				notInstallable = true
 				continue
