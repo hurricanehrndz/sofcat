@@ -19,6 +19,13 @@ _brand_ico := if brand == "" { "" } else { brand / "icon.ico" }
 _brand_png := if brand == "" { "" } else { brand / "icon.png" }
 icon_ico := if path_exists(_brand_ico) == "true" { _brand_ico } else { "assets/sofcat.ico" }
 icon_png := if path_exists(_brand_png) == "true" { _brand_png } else { "" }
+# A brand's write-roots.yaml (where zip items may be placed) is compiled into
+# both binaries under the brand_roots tag; without it the stock roots apply.
+_brand_roots := if brand == "" { "" } else { brand / "write-roots.yaml" }
+write_roots := if path_exists(_brand_roots) == "true" { _brand_roots } else { "" }
+_svc_tags := if write_roots == "" { "" } else { "brand_roots" }
+_ui_icon_tag := if icon_png == "" { "" } else { ",brand" }
+_ui_tags := "production" + _ui_icon_tag + if write_roots == "" { "" } else { ",brand_roots" }
 # sed arguments filling the @PLACEHOLDERS@ in installer/embala.toml and
 # */winres/winres.json. brand-check keeps the values free of ' | & \ and ".
 _subst := "-e 's|@APP@|" + app + "|g' -e 's|@PRODUCT@|" + product + "|g' -e 's|@PUBLISHER@|" + publisher + "|g' -e 's|@IDENTIFIER@|" + identifier + "|g' -e 's|@DESCRIPTION@|" + description + "|g' -e 's|@HOMEPAGE@|" + homepage + "|g'"
@@ -95,15 +102,18 @@ winres arch="amd64": brand-check
     done
 
 # Windows binaries (pure Go, no cgo) -> build/<app>.exe and build/<app>-ui.exe.
-# A brand icon.png is staged as ui/brand-icon.png (gitignored) for the brand tag.
+# A brand icon.png is staged as ui/brand-icon.png (gitignored) for the brand tag,
+# and a brand write-roots.yaml as pkg/placement/brand-write-roots.yaml
+# (gitignored) for the brand_roots tag.
 build arch="amd64": ui-assets (winres arch)
     mkdir -p build
+    {{ if write_roots == "" { "true" } else { "cp '" + write_roots + "' pkg/placement/brand-write-roots.yaml" } }}
     GOOS=windows GOARCH={{arch}} CGO_ENABLED=0 \
-        go build -ldflags "-X github.com/hurricanehrndz/sofcat/pkg/version.appName={{app}} -X github.com/hurricanehrndz/sofcat/pkg/version.version={{version}} {{_identity}}" \
+        go build -tags "{{_svc_tags}}" -ldflags "-X github.com/hurricanehrndz/sofcat/pkg/version.appName={{app}} -X github.com/hurricanehrndz/sofcat/pkg/version.version={{version}} {{_identity}}" \
         -o build/{{app}}.exe ./cmd/sofcat
     {{ if icon_png == "" { "true" } else { "cp '" + icon_png + "' ui/brand-icon.png" } }}
     GOOS=windows GOARCH={{arch}} CGO_ENABLED=0 \
-        go build -tags {{ if icon_png == "" { "production" } else { "production,brand" } }} -ldflags "-H windowsgui {{_identity}}" \
+        go build -tags {{_ui_tags}} -ldflags "-H windowsgui {{_identity}}" \
         -o build/{{app}}-ui.exe ./ui
 
 # Windows installer -> build/<app>-<msi_version>-x86_64.msi (embala, no WiX).
@@ -195,6 +205,52 @@ bootstrap base_url="": build manual-test-server
 # bootstrap, then serve the assets on :8080.
 bootstrap-run base_url="": (bootstrap base_url)
     ./build/manual-test-server -root {{server_root}} -addr :8080
+
+tapas_fixtures := "test/manual/fixtures/tapas"
+tapas_brand := tapas_fixtures / "brand"
+tapas_app := shell(_read, tapas_brand / "brand.env", "SLUG", "")
+tapas_product := shell(_read, tapas_brand / "brand.env", "NAME", "")
+tapas_server_root := manual_test_dir / "tapas" / "server-root"
+tapas_vm_dir := manual_test_dir / "tapas" / "vm"
+
+# Zip-item manual-test assets for the Tapas Test fixture brand under
+# build/manual-test/tapas/: its binaries and a repository whose zip items
+# makecatalogs zip-item packs from test/manual/fixtures/tapas/rendered. The
+# VM gate is test/manual/run-tapas-smoke.ps1.
+bootstrap-tapas base_url="": manual-test-server
+    {{quote(just_executable())}} --justfile {{quote(justfile())}} brand={{tapas_brand}} build
+    go build -ldflags "-X github.com/hurricanehrndz/sofcat/pkg/version.version={{version}}" \
+        -o build/makecatalogs ./cmd/makecatalogs
+    rm -rf {{tapas_server_root}} {{tapas_vm_dir}}
+    mkdir -p {{tapas_server_root}}/manifests {{tapas_server_root}}/packages-info {{tapas_vm_dir}}
+    cp build/{{tapas_app}}.exe build/{{tapas_app}}-ui.exe {{tapas_fixtures}}/harnesses.yaml {{tapas_server_root}}/
+    cp {{tapas_fixtures}}/manifests/*.yaml {{tapas_server_root}}/manifests/
+    for item in {{tapas_fixtures}}/items/*.yaml; do \
+      name=$(basename "$item" .yaml); \
+      build/makecatalogs zip-item --harnesses {{tapas_fixtures}}/harnesses.yaml --item "$item" \
+        --rendered {{tapas_fixtures}}/rendered/$name --location-prefix packages/tapas \
+        -o {{tapas_server_root}} > {{tapas_server_root}}/packages-info/$name.yaml || exit 1; \
+    done
+    build/makecatalogs {{tapas_server_root}}
+    build/makecatalogs -check {{tapas_server_root}}
+    cp test/manual/bootstrap-vm.ps1 {{tapas_vm_dir}}/
+    @base_url="{{base_url}}"; \
+    if [ -z "$base_url" ]; then \
+      case "$(uname)" in \
+        Darwin) ip=$(ipconfig getifaddr "$(route -n get default 2>/dev/null | awk '/interface:/{print $2}' | head -n1)" 2>/dev/null || true) ;; \
+        Linux) ip=$(hostname -I 2>/dev/null | awk '{print $1}') ;; \
+        *) ip="" ;; \
+      esac; \
+      base_url="http://${ip:-localhost}:8080/"; \
+    fi; \
+    args='-Slug {{tapas_app}} -ProductName "{{tapas_product}}" -Manifest tapas_manifest -Catalogs tapas -InstallService -StartService'; \
+    sed -e "s#@DEFAULT_BASE_URL@#$base_url#g" -e "s#-NoPause %\*#-NoPause $args %*#" \
+      test/manual/templates/bootstrap-vm.bat > {{tapas_vm_dir}}/bootstrap-vm.bat; \
+    echo "$base_url" > {{tapas_vm_dir}}/base-url.txt; \
+    echo "Using manual-test base URL: $base_url"; \
+    echo "Prepared Tapas assets in {{tapas_server_root}}; VM scripts in {{tapas_vm_dir}}"; \
+    echo "Run: ./build/manual-test-server -root {{tapas_server_root}} -addr :8080"; \
+    echo "VM:  bootstrap-vm.ps1 -BaseUrl $base_url $args -NoPause; then run-tapas-smoke.ps1"
 
 # Guard that the tree keeps cross-compiling on Linux (CI-without-Windows goal).
 check-xplat:

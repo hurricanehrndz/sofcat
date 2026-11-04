@@ -42,6 +42,11 @@ type Checker struct {
 	// registryItems caches the applications found in the registry,
 	// lazily populated on first registry check
 	registryItems map[string]RegistryApplication
+
+	// Zip reports whether a zip item is installed, from its receipts and
+	// placed trees (installer.ZipInstaller.Installed). A zip item never has a
+	// check block; with Zip nil it reads as not installed.
+	Zip func(catalog.Item) bool
 }
 
 // Invalidate drops the cached registry snapshot so the next registry check
@@ -315,6 +320,17 @@ func checkAppx(catalogItem catalog.Item, installType string) (actionNeeded bool,
 
 // CheckStatus determines the method for checking status
 func (c *Checker) CheckStatus(catalogItem catalog.Item, installType, cachePath string) (actionNeeded bool, checkErr error) {
+	if catalogItem.Installer.Type == "zip" {
+		installed := c.Zip != nil && c.Zip(catalogItem)
+		switch installType {
+		case "uninstall":
+			return installed, nil
+		case "update":
+			return false, nil // the zip installer decides updates itself
+		default:
+			return !installed, nil
+		}
+	}
 	if catalogItem.Check.Script != "" {
 		slog.Info("Checking status via script", "item", catalogItem.DisplayName)
 		return checkScript(catalogItem, cachePath, installType)

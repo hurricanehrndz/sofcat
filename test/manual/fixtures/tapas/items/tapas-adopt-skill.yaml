@@ -1,0 +1,6 @@
+# Input to makecatalogs zip-item; just bootstrap-tapas packs rendered/tapas-adopt-skill.
+item_name: tapas-adopt-skill
+display_name: Tapas Adopt Skill
+description: A self-service skill placed by hand and adopted
+catalog: tapas
+version: 1.0.0

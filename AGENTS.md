@@ -130,6 +130,14 @@ to use and the exact commands for each step below.
 5. Clean up afterwards: stop the local test server and anything that exposes it
    to the VM, and remove temporary scheduled tasks.
 
+Zip items (placements, receipts, scope exit) have their own loop on the Tapas
+Test fixture brand (`test/manual/fixtures/tapas/`). Start from a clean VM, run
+`just bootstrap-tapas <url>`, and serve `build/manual-test/tapas/server-root`.
+Copy `build/manual-test/tapas/vm/bootstrap-vm.ps1` and
+`test/manual/run-tapas-smoke.ps1` to the VM. As an administrator, run
+`bootstrap-vm.ps1 -BaseUrl <url> -Slug tapas-test -ProductName "Tapas Test" -Manifest tapas_manifest -Catalogs tapas -InstallService -StartService -NoPause`,
+then `run-tapas-smoke.ps1`. The gate is exit 0 and `TAPAS SMOKE PASSED`.
+
 To validate the installer instead of the raw executables: `just msi`, copy
 `build/sofcat-<version>-x86_64.msi` to the VM and run `msiexec /i <msi> /qn`.
 The service starts with no config. Write `C:\ProgramData\SofCat\config.yaml`

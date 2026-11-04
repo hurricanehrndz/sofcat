@@ -1,0 +1,6 @@
+# Input to makecatalogs zip-item; just bootstrap-tapas packs rendered/tapas-held-skill.
+item_name: tapas-held-skill
+display_name: Tapas Held Skill
+description: A managed skill under a held condition
+catalog: tapas
+version: 1.0.0

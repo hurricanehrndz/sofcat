@@ -758,7 +758,7 @@ func resolveTerminalEvent(itemName string, rep *report.Report) OperationStatus {
 					State:           "Failed",
 					ProgressPercent: 100,
 					Message:         "Operation failed",
-					ErrorCode:       "item_failed",
+					ErrorCode:       orDefault(failed.Code, "item_failed"),
 					ErrorMessage:    failed.Error,
 				}
 			}
@@ -769,7 +769,7 @@ func resolveTerminalEvent(itemName string, rep *report.Report) OperationStatus {
 					State:           "Deferred",
 					ProgressPercent: 100,
 					Message:         deferred.Reason,
-					ErrorCode:       "blocked_by_running_app",
+					ErrorCode:       orDefault(deferred.Code, "blocked_by_running_app"),
 					ErrorMessage:    deferred.Reason,
 				}
 			}

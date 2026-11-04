@@ -270,6 +270,17 @@ func TestResolveTerminalEvent(t *testing.T) {
 	if ev := resolveTerminalEvent("DemoOptional", rep); ev.State != "Succeeded" {
 		t.Errorf("neither should be Succeeded, got %#v", ev)
 	}
+
+	// A specific code reaches the client, so the UI can tell a user's edited
+	// tree from a generic failure.
+	rep.FailedItems = append(rep.FailedItems, report.FailedItem{Name: "Skill", Error: "edited", Code: report.CodePlacementConflict})
+	rep.DeferredItems = append(rep.DeferredItems, report.DeferredItem{Name: "Later", Reason: "r", Code: "some_code"})
+	if ev := resolveTerminalEvent("Skill", rep); ev.State != "Failed" || ev.ErrorCode != "placement_conflict" {
+		t.Errorf("failed code not passed through: %#v", ev)
+	}
+	if ev := resolveTerminalEvent("Later", rep); ev.State != "Deferred" || ev.ErrorCode != "some_code" {
+		t.Errorf("deferred code not passed through: %#v", ev)
+	}
 	if ev := resolveTerminalEvent("DemoOptional", nil); ev.State != "Succeeded" {
 		t.Errorf("nil report should be Succeeded, got %#v", ev)
 	}

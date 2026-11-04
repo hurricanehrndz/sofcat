@@ -27,6 +27,10 @@ import (
 var (
 	manifestGet = manifest.Get
 	catalogGet  = manifest.GetCatalogs
+	harnessGet  = manifest.GetHarnesses
+	// newZipInstaller builds the installer whose receipts give zip items'
+	// status; tests swap in one with temporary write roots.
+	newZipInstaller = installer.NewMachineZip
 )
 
 type Command struct {
@@ -470,6 +474,14 @@ func getOptionalItems(cfg config.Configuration) ([]OptionalInstallItem, error) {
 	}
 	conditions.Apply(catalogs, machineFacts)
 
+	// Zip items' status comes from receipts and placed trees, located through
+	// the harness table, never from a check block. Every list call fetches it
+	// (R6); a repository without one has an empty table.
+	table, err := harnessGet(cfg)
+	if err != nil {
+		return nil, err
+	}
+
 	selfServe, err := manifest.LoadSelfServe(manifest.SelfServePath(cfg.AppDataPath))
 	if err != nil {
 		return nil, err
@@ -493,7 +505,7 @@ func getOptionalItems(cfg config.Configuration) ([]OptionalInstallItem, error) {
 	slices.Sort(names)
 
 	// One shared checker so the registry snapshot amortizes across items.
-	checker := &status.Checker{}
+	checker := &status.Checker{Zip: newZipInstaller(cfg, table).Installed}
 	now := nowRFC3339UTC()
 
 	items := make([]OptionalInstallItem, 0, len(names))

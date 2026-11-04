@@ -2,12 +2,24 @@ package report
 
 import "github.com/hurricanehrndz/sofcat/pkg/catalog"
 
+// Error codes a FailedItem may carry. An empty Code is the generic one:
+// item_failed for a failure, blocked_by_running_app for a deferral.
+const (
+	// CodePlacementConflict: a placed tree differs from both the catalog and
+	// its receipt, so sofcat left it alone.
+	CodePlacementConflict = "placement_conflict"
+	// CodePlacementRefused: the placement is unknown, outside the build's write
+	// roots, or an exclusive root sofcat does not own.
+	CodePlacementRefused = "placement_refused"
+)
+
 // FailedItem records an item whose action failed during this run
 type FailedItem struct {
 	Name    string
 	Version string
 	Action  string
 	Error   string
+	Code    string
 }
 
 // DeferredItem records an item whose action was deferred (e.g. a blocking app
@@ -17,6 +29,7 @@ type DeferredItem struct {
 	Version string
 	Action  string
 	Reason  string
+	Code    string
 }
 
 // NoActionItem records an item whose status check found nothing to do: an

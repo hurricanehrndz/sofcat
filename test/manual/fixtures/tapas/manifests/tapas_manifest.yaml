@@ -1,0 +1,20 @@
+name: tapas_manifest
+catalogs:
+  - tapas
+managed_installs:
+  - tapas-managed-skill
+  - tapas-exclusive-skill
+optional_installs:
+  - tapas-optional-skill
+  - tapas-adopt-skill
+  - tapas-foreign-skill
+  - tapas-outside-skill
+conditional_items:
+  # run-tapas-smoke.ps1 sets these facts with an admin condition script. Until
+  # it does, both facts are missing, so both blocks are held.
+  - condition: tapas_smoke_scope == "in"
+    managed_installs:
+      - tapas-scoped-skill
+  - condition: tapas_smoke_held == "yes"
+    managed_installs:
+      - tapas-held-skill

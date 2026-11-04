@@ -6,14 +6,19 @@ Bootstrap SofCat on a Windows VM from prepared manual-test assets.
 - Downloads sofcat.exe and sofcat-ui.exe from a provided base URL.
 - Writes config.yaml to ProgramData.
 - Optionally installs/starts service mode.
+
+A branded build passes its brand.env SLUG as -Slug and NAME as -ProductName;
+the exe names, service name and default paths follow from them.
 #>
 
 [CmdletBinding()]
 param(
     [string]$BaseUrl = "http://localhost:8080/",
-    [string]$InstallPath = "$env:ProgramFiles\SofCat",
-    [string]$ConfigPath = "$env:ProgramData\SofCat\config.yaml",
-    [string]$AppDataPath = "$env:ProgramData\SofCat",
+    [string]$Slug = "sofcat",
+    [string]$ProductName = "SofCat",
+    [string]$InstallPath = "$env:ProgramFiles\$ProductName",
+    [string]$ConfigPath = "$env:ProgramData\$ProductName\config.yaml",
+    [string]$AppDataPath = "$env:ProgramData\$ProductName",
     [string]$Manifest = "example_manifest",
     [string[]]$Catalogs = @("example_catalog"),
     [switch]$InstallService,
@@ -62,9 +67,9 @@ manifest: $ManifestValue
 catalogs:
 $yamlCatalogs
 app_data_path: $yamlAppDataPath
-# service_name: sofcat
+# service_name: $Slug
 # service_interval: 1h
-# service_pipe_name: sofcat-service
+# service_pipe_name: $Slug-service
 "@
 
     Set-Content -Path $ConfigFilePath -Value $content -Encoding ASCII
@@ -101,7 +106,7 @@ function Ensure-PathEntry {
 }
 
 function Remove-ExistingSofCatService {
-    param([string]$ServiceName = "sofcat")
+    param([string]$ServiceName = $Slug)
 
     $existingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
     if (-not $existingService) {
@@ -175,23 +180,23 @@ if (-not $BaseUrl.EndsWith("/")) {
 }
 
 New-Item -ItemType Directory -Path $InstallPath -Force | Out-Null
-$binaryPath = Join-Path $InstallPath "sofcat.exe"
-$binaryUrl = "$BaseUrl" + "sofcat.exe"
-$uiBinaryPath = Join-Path $InstallPath "sofcat-ui.exe"
-$uiBinaryUrl = "$BaseUrl" + "sofcat-ui.exe"
+$binaryPath = Join-Path $InstallPath "$Slug.exe"
+$binaryUrl = "$BaseUrl" + "$Slug.exe"
+$uiBinaryPath = Join-Path $InstallPath "$Slug-ui.exe"
+$uiBinaryUrl = "$BaseUrl" + "$Slug-ui.exe"
 
 Remove-ExistingSofCatService
 
-Write-Step "Downloading SofCat binary from $binaryUrl"
+Write-Step "Downloading $ProductName binary from $binaryUrl"
 Invoke-WebRequest -Uri $binaryUrl -OutFile $binaryPath
-$runningUI = @(Get-Process -Name "sofcat-ui" -ErrorAction SilentlyContinue)
+$runningUI = @(Get-Process -Name "$Slug-ui" -ErrorAction SilentlyContinue)
 if ($runningUI.Count -gt 0) {
-    Write-Step "Stopping running SofCat UI so $uiBinaryPath can be replaced"
+    Write-Step "Stopping running $ProductName UI so $uiBinaryPath can be replaced"
     $runningUI | Stop-Process -Force
     Start-Sleep -Seconds 2
 }
 
-Write-Step "Downloading SofCat UI binary from $uiBinaryUrl"
+Write-Step "Downloading $ProductName UI binary from $uiBinaryUrl"
 Invoke-WebRequest -Uri $uiBinaryUrl -OutFile $uiBinaryPath
 
 Write-Step "Writing config to $ConfigPath"
@@ -199,12 +204,12 @@ Write-SofCatConfig -ConfigFilePath $ConfigPath -URLValue $BaseUrl -ManifestValue
 Ensure-PathEntry -DirectoryPath $InstallPath
 
 if ($InstallService) {
-    Write-Step "Installing SofCat Windows service"
+    Write-Step "Installing $ProductName Windows service"
     & $binaryPath -c $ConfigPath -serviceinstall
 }
 
 if ($StartService) {
-    Write-Step "Starting SofCat Windows service"
+    Write-Step "Starting $ProductName Windows service"
     & $binaryPath -c $ConfigPath -servicestart
 }
 

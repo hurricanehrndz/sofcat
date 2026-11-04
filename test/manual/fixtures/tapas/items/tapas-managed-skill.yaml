@@ -1,0 +1,6 @@
+# Input to makecatalogs zip-item; just bootstrap-tapas packs rendered/tapas-managed-skill.
+item_name: tapas-managed-skill
+display_name: Tapas Managed Skill
+description: A managed skill, placed per machine and skipped per user
+catalog: tapas
+version: 1.0.0
