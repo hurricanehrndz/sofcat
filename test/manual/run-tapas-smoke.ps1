@@ -14,9 +14,9 @@ marketplace plugins with the generated marketplace.json and settings
 drop-in, a skill deferred until its required Chocolatey package exists, a
 held conditional item, scope exit, and the zip-only build's rejection of an
 exe item and a skill with a postinstall_script. The two-user authorization
-check lives in run-tapas-authz.ps1, because starting a process as another
-user fails over SSH; run it elevated in the desktop session after this
-smoke. run-tapas-user-sync.ps1 then places the user-scope skill as the
+check lives in run-tapas-authz.ps1, which run-tapas-authz.sh drives from the
+host after this smoke over an administrator's and a standard user's SSH
+session. run-tapas-user-sync.ps1 then places the user-scope skill as the
 logged-on user.
 
 Run once on a clean VM, AFTER bootstrap-vm.ps1 has installed and started the
