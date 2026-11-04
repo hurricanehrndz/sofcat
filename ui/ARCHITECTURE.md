@@ -102,7 +102,8 @@ repository, so it answers at logon even while the repository is unreachable;
 a helper that runs before the first run gets an empty plan. `path` is the
 unexpanded placement root, `archive` the staged copy, and `held` marks an
 item under an undecided `conditional_items` block, which the helper neither
-places nor removes. The helper, run at logon by the MSI's HKLM `Run` value
+places nor removes. The helper, run at logon by the HKLM `Run` value
+`<slug>.exe -serviceinstall` writes
 and in the background whenever the storefront starts, retries a service it
 cannot connect to every 5 seconds for up to a minute (without a plan it
 removes nothing), expands `${USERPROFILE}` itself, checks the path against

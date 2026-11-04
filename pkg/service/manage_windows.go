@@ -11,9 +11,30 @@ import (
 	"time"
 
 	"github.com/hurricanehrndz/sofcat/pkg/config"
+	"github.com/hurricanehrndz/sofcat/pkg/identity"
 	"golang.org/x/sys/windows"
+	"golang.org/x/sys/windows/registry"
 	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/mgr"
+)
+
+// The SCM and registry calls -serviceinstall and -serviceremove make, as
+// variables so the Windows tests can replace them.
+var (
+	serviceExistsFunc  = serviceExists
+	createServiceFunc  = createService
+	startServiceFunc   = startWindowsService
+	stopServiceFunc    = stopWindowsService
+	deleteServiceFunc  = deleteWindowsService
+	setRunValueFunc    = setRunValue
+	deleteRunValueFunc = deleteRunValue
+)
+
+// The key whose values Windows starts at every logon, in the 64-bit view.
+// Variables so the Windows test can point the writer at a scratch key.
+var (
+	runRoot = registry.LOCAL_MACHINE
+	runKey  = `Software\Microsoft\Windows\CurrentVersion\Run`
 )
 
 func serviceVerboseEnabled(cfg config.Configuration) bool {
@@ -158,30 +179,79 @@ func installWindowsService(m *mgr.Mgr, cfg config.Configuration) error {
 	startArgs := serviceInstallArgs(configPath)
 	serviceVerbose(cfg, "install config: exe=%q config=%q args=%q start_type=automatic account=%q", exePath, configPath, startArgs, "LocalSystem")
 
-	if existing, openErr := m.OpenService(cfg.ServiceName); openErr == nil {
-		existing.Close()
+	if exists, existsErr := serviceExistsFunc(m, cfg.ServiceName); existsErr != nil {
+		return fmt.Errorf("failed to query existing service %q: %w", cfg.ServiceName, existsErr)
+	} else if exists {
 		return fmt.Errorf("service %q already exists", cfg.ServiceName)
-	} else if !errors.Is(openErr, windows.ERROR_SERVICE_DOES_NOT_EXIST) {
-		return fmt.Errorf("failed to query existing service %q: %w", cfg.ServiceName, openErr)
 	}
 
-	s, err := m.CreateService(
-		cfg.ServiceName,
-		exePath,
-		mgr.Config{
-			DisplayName:      "SofCat",
-			Description:      "SofCat application management service",
-			StartType:        mgr.StartAutomatic,
-			ServiceStartName: "LocalSystem",
-		},
-		startArgs...,
-	)
-	if err != nil {
+	serviceConfig := mgr.Config{
+		DisplayName:      identity.Name,
+		Description:      identity.Name + " application management service",
+		StartType:        mgr.StartAutomatic,
+		ServiceStartName: "LocalSystem",
+	}
+	if err := createServiceFunc(m, cfg.ServiceName, exePath, serviceConfig, startArgs...); err != nil {
 		return fmt.Errorf("failed to create service %q: %w", cfg.ServiceName, err)
 	}
-	defer s.Close()
+
+	// The helper beside this executable runs at every logon. A failure from
+	// here on undoes the registration, so a retried install does not meet a
+	// half-finished service and refuse.
+	name, data := userSyncRunValue(filepath.Join(filepath.Dir(exePath), identity.Slug+"-ui.exe"))
+	if err := setRunValueFunc(name, data); err != nil {
+		_ = deleteServiceFunc(m, cfg)
+		return fmt.Errorf("failed to write Run value %q: %w", name, err)
+	}
+	if err := startServiceFunc(m, cfg); err != nil {
+		_ = deleteRunValueFunc(name)
+		_ = deleteServiceFunc(m, cfg)
+		return err
+	}
 	serviceVerbose(cfg, "install complete for service=%q", cfg.ServiceName)
 
+	return nil
+}
+
+func serviceExists(m *mgr.Mgr, name string) (bool, error) {
+	s, err := m.OpenService(name)
+	if err == nil {
+		_ = s.Close()
+		return true, nil
+	}
+	if errors.Is(err, windows.ERROR_SERVICE_DOES_NOT_EXIST) {
+		return false, nil
+	}
+	return false, err
+}
+
+func createService(m *mgr.Mgr, name, exePath string, c mgr.Config, args ...string) error {
+	s, err := m.CreateService(name, exePath, c, args...)
+	if err != nil {
+		return err
+	}
+	return s.Close()
+}
+
+func setRunValue(name, data string) error {
+	k, err := registry.OpenKey(runRoot, runKey, registry.SET_VALUE|registry.WOW64_64KEY)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = k.Close() }()
+	return k.SetStringValue(name, data)
+}
+
+// deleteRunValue removes the value; one that is already gone is not an error.
+func deleteRunValue(name string) error {
+	k, err := registry.OpenKey(runRoot, runKey, registry.SET_VALUE|registry.WOW64_64KEY)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = k.Close() }()
+	if err := k.DeleteValue(name); err != nil && !errors.Is(err, registry.ErrNotExist) {
+		return err
+	}
 	return nil
 }
 
@@ -194,12 +264,14 @@ func startWindowsService(m *mgr.Mgr, cfg config.Configuration) error {
 	defer s.Close()
 
 	status, err := s.Query()
-	if err == nil && status.State == svc.Running {
+	if err == nil && (status.State == svc.Running || status.State == svc.StartPending) {
 		serviceVerbose(cfg, "service=%q already running", cfg.ServiceName)
 		return nil
 	}
 
-	if err := s.Start(); err != nil {
+	// -serviceinstall starts the service, so a -servicestart right after it
+	// may race its startup.
+	if err := s.Start(); err != nil && !errors.Is(err, windows.ERROR_SERVICE_ALREADY_RUNNING) {
 		return fmt.Errorf("failed to start service %q: %w", cfg.ServiceName, err)
 	}
 	serviceVerbose(cfg, "start command accepted for service=%q", cfg.ServiceName)
@@ -220,7 +292,13 @@ func stopWindowsService(m *mgr.Mgr, cfg config.Configuration) error {
 			serviceVerbose(cfg, "service=%q already stopped", cfg.ServiceName)
 			return nil
 		}
-		return fmt.Errorf("failed to stop service %q: %w", cfg.ServiceName, err)
+		if !errors.Is(err, windows.ERROR_SERVICE_CANNOT_ACCEPT_CTRL) {
+			return fmt.Errorf("failed to stop service %q: %w", cfg.ServiceName, err)
+		}
+		// The control is refused while a stop is already in flight, so the
+		// wait below finishes the job instead of failing the removal.
+		serviceVerbose(cfg, "service=%q already stopping", cfg.ServiceName)
+		status.State = svc.StopPending
 	}
 
 	deadline := time.Now().Add(15 * time.Second)
@@ -239,17 +317,37 @@ func stopWindowsService(m *mgr.Mgr, cfg config.Configuration) error {
 	return nil
 }
 
+// removeWindowsService stops the service and waits for it, so the uninstaller
+// that runs next can delete its executable, deletes it and removes the Run
+// value. A service that is already gone (a half-cleaned machine) only has
+// the Run value left to remove.
 func removeWindowsService(m *mgr.Mgr, cfg config.Configuration) error {
 	serviceVerbose(cfg, "remove requested for service=%q", cfg.ServiceName)
+	exists, err := serviceExistsFunc(m, cfg.ServiceName)
+	if err != nil {
+		return fmt.Errorf("failed to query existing service %q: %w", cfg.ServiceName, err)
+	}
+	if exists {
+		if err := stopServiceFunc(m, cfg); err != nil {
+			return err
+		}
+		if err := deleteServiceFunc(m, cfg); err != nil {
+			return err
+		}
+	} else {
+		serviceVerbose(cfg, "service=%q does not exist; removing the Run value only", cfg.ServiceName)
+	}
+	name, _ := userSyncRunValue("")
+	if err := deleteRunValueFunc(name); err != nil {
+		return fmt.Errorf("failed to remove Run value %q: %w", name, err)
+	}
+	return nil
+}
+
+func deleteWindowsService(m *mgr.Mgr, cfg config.Configuration) error {
 	s, err := m.OpenService(cfg.ServiceName)
 	if err != nil {
 		return fmt.Errorf("failed to open service %q: %w", cfg.ServiceName, err)
-	}
-
-	if status, err := s.Query(); err == nil && status.State != svc.Stopped {
-		serviceVerbose(cfg, "service=%q not stopped; issuing stop before delete", cfg.ServiceName)
-		_, _ = s.Control(svc.Stop)
-		time.Sleep(500 * time.Millisecond)
 	}
 
 	if err := s.Delete(); err != nil {

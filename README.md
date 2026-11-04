@@ -77,18 +77,21 @@ flowchart LR
 
 ## Quick start on Windows
 
-1. Download `sofcat-<version>-x86_64.msi` from the
+1. Download `sofcat-<version>-x86_64-setup.exe` from the
    [releases page](https://github.com/hurricanehrndz/sofcat/releases) and install it:
 
    ```powershell
-   msiexec /i sofcat-<version>-x86_64.msi /qn
+   .\sofcat-<version>-x86_64-setup.exe /S
    ```
 
-   The MSI puts both executables in `C:\Program Files\SofCat`, registers the
-   `sofcat` service and adds a Start-menu shortcut to the app. It ships no
-   config. SofCat never writes under `C:\Program Files`: its config, its
-   `Data` directory and any placement of its own live under
-   `C:\ProgramData\SofCat`.
+   The installer puts both executables in `C:\Program Files\SofCat`,
+   registers and starts the `sofcat` service, adds a Start-menu shortcut to
+   the app and an Add or remove programs entry, and registers the per-user
+   helper to run at logon. It ships no config. SofCat never writes under
+   `C:\Program Files`: its config, its `Data` directory and any placement of
+   its own live under `C:\ProgramData\SofCat`. `"C:\Program
+   Files\SofCat\uninstall.exe" /S` removes all of it and leaves
+   `C:\ProgramData\SofCat` alone.
 
 2. Write `C:\ProgramData\SofCat\config.yaml` and point it at your repo:
 
@@ -143,9 +146,9 @@ You need Go 1.27, Node 24 and [`just`](https://github.com/casey/just).
 
 ```sh
 mise install
-just setup   # frontend deps and the pre-commit hook
-just build   # build/sofcat.exe and build/sofcat-ui.exe
-just msi     # build/sofcat-<version>-x86_64.msi
+just dev-setup   # frontend deps and the pre-commit hook
+just build       # build/sofcat.exe and build/sofcat-ui.exe
+just setup       # build/sofcat-<version>-x86_64-setup.exe
 ```
 
 With mise activated in your shell, entering the repo loads the toolchain. On
@@ -158,8 +161,8 @@ On a Mac, `just build-macos` builds the CLI and `build/<Name>.app` (cgo, so
 the Xcode command line tools) and `just pkg` wraps them in an unsigned `.pkg`.
 
 Both Windows executables are pure Go with no cgo, so they cross-compile from
-Linux or macOS. `just msi` uses [embala](https://github.com/hurricanehrndz/embala), so
-WiX isn't needed either. More in [docs/dev.md](docs/dev.md) and
+Linux or macOS. `just setup` uses [embala](https://github.com/hurricanehrndz/embala), so
+the installer builds there too. More in [docs/dev.md](docs/dev.md) and
 [ui/README.md](ui/README.md).
 
 ## Contributing

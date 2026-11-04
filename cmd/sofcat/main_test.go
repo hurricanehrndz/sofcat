@@ -615,7 +615,8 @@ func captureStdout(t *testing.T, fn func()) string {
 
 // TestRouteServiceInstallProtectsAppData: -serviceinstall must protect the
 // data directory and the config file, and a failure to do so must not stop
-// the install.
+// the install. The installer runs it before any config.yaml exists, so the
+// paths are protected as paths: neither needs to be there.
 func TestRouteServiceInstallProtectsAppData(t *testing.T) {
 	resetMainHooks()
 	defer resetMainHooks()

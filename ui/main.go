@@ -41,8 +41,9 @@ func main() {
 
 	client := service.NewClient(*pipeName)
 	if *userSync {
-		// The logon helper (the MSI's HKLM Run value): no window, and exit 0
-		// even when an item fails; every result is logged and reported.
+		// The logon helper (the HKLM Run value -serviceinstall writes, which
+		// the setup.exe installer calls): no window, and exit 0 even when an
+		// item fails; every result is logged and reported.
 		runUserSync(context.Background(), client, logger)
 		return
 	}
