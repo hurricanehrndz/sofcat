@@ -35,9 +35,9 @@ machine gets, catalogs say what exists, and both are plain YAML.
 
 | | Today | Planned |
 | --- | --- | --- |
-| Agent | Windows service | macOS and Linux |
-| Item types | `.msi`, `.exe`, `.ps1`, `.nupkg` via [Chocolatey](https://github.com/chocolatey/choco) | Files and scripts on any platform, AI skills, native packages |
-| Self-service app | Windows | macOS and Linux |
+| Agent | Windows service, macOS launchd daemon | Linux |
+| Item types | `.msi`, `.exe`, `.ps1`, `.nupkg` via [Chocolatey](https://github.com/chocolatey/choco), zip items (directory trees such as AI skills and plugins) | Files and scripts on any platform, native packages |
+| Self-service app | Windows, macOS | Linux |
 | `makecatalogs` | Linux, macOS, Windows | |
 
 What already works:
@@ -56,7 +56,13 @@ What already works:
   build, model or a fact your own scripts provide, as with Munki's
   `installable_condition`. See [docs/conditions.md](docs/conditions.md).
 - **Zip items.** Package directory trees, such as AI skills, as deterministic
-  zips with `makecatalogs`. See [docs/zip-items.md](docs/zip-items.md).
+  zips with `makecatalogs`. On Windows a per-user helper
+  (`<slug>-ui.exe --user-sync`, started at logon) places them in each user's
+  profile. See [docs/zip-items.md](docs/zip-items.md).
+- **macOS.** A launchd daemon and a self-service app bundle, installed by the
+  `.pkg` from `just pkg`, with the same features.
+- **Zip-only brands.** `INSTALLERS=zip` in a brand compiles out the command
+  installers and scripts. See [examples/brand/README.md](examples/brand/README.md).
 - **`makecatalogs` anywhere.** Build catalogs on any OS, so your repo's CI
   never needs a Windows runner.
 
@@ -147,8 +153,11 @@ adds the GTK 4/WebKitGTK 6.0 libraries the UI package
 links against for native Linux builds and tests; on other distros install
 those from the package manager.
 
-Both executables are pure Go with no cgo, so they cross-compile from Linux or
-macOS. `just msi` uses [embala](https://github.com/hurricanehrndz/embala), so
+On a Mac, `just build-macos` builds the CLI and `build/<Name>.app` (cgo, so
+the Xcode command line tools) and `just pkg` wraps them in an unsigned `.pkg`.
+
+Both Windows executables are pure Go with no cgo, so they cross-compile from
+Linux or macOS. `just msi` uses [embala](https://github.com/hurricanehrndz/embala), so
 WiX isn't needed either. More in [docs/dev.md](docs/dev.md) and
 [ui/README.md](ui/README.md).
 

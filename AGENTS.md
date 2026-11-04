@@ -10,7 +10,7 @@ Guidance for coding agents working in this repository.
 
 - Project: `sofcat` (Windows-focused application/package management tool in Go).
 - Main entrypoint: `./cmd/sofcat`.
-- SofCat's deployed/runtime target is Windows, so Windows behavior is first-class.
+- SofCat deploys to Windows and macOS. Windows is first-class (SYSTEM service plus named pipe); macOS is a launchd daemon plus an app bundle.
 - CI runs in GitHub Actions and primarily targets Windows (`windows-latest`) to match deployment expectations.
 - Development often happens on macOS: keep macOS build/test/dev workflows working where practical, but do not add major complexity solely to preserve parity.
 - Where appropriate, macOS/non-Windows stub or no-op behavior is acceptable if it keeps development workflows usable.
@@ -35,7 +35,13 @@ Guidance for coding agents working in this repository.
   - `just clean`
   - `just bootstrap`
   - `just bootstrap-run`
-  - `just build-macos`, `just pkg` and `just bootstrap-tapas-macos` (macOS only)
+  - `just test-zip-only`: Go tests under the `zip_only` tag
+  - `just bootstrap-tapas`: build the Tapas Test zip-item fixture brand and repository for a Windows VM
+  - `just bootstrap-tapas-macos`: the same for a Mac, with a `.pkg` and config
+  - `just build-macos`: build the CLI and `.app` for the host Mac
+  - `just pkg`: wrap those into an unsigned `.pkg`
+
+`just build-macos`, `just pkg` and `just bootstrap-tapas-macos` run only on macOS.
 
 Prefer `just test` as the default local validation step, even for small changes.
 When changes include SofCat UI code, run `just ui-lint` and `just ui-test`.
@@ -45,7 +51,9 @@ When changes span Go service/CLI and UI protocol layers, run `just test`, `just 
 pure-Go, windows-GUI `build/sofcat-ui.exe`
 (`GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -tags production -ldflags "-H windowsgui"`).
 `just msi` wraps them in an MSI with embala (`installer/embala.toml`); the
-installer puts them in `C:\Program Files\SofCat` and registers the service.
+installer puts them in `C:\Program Files\SofCat` and registers the service. It
+also writes the HKLM `Run` value that starts the per-user helper,
+`<slug>-ui.exe --user-sync`, at logon (embala 0.9.0 `[msi].registry`).
 A brand with `INSTALLERS=zip` in its `brand.env` adds the `zip_only` tag to both
 binaries, which compiles out the command installers and catalog scripts
 (`*_command.go`/`*_script.go` versus their `*_zip_only.go` twins); test that
