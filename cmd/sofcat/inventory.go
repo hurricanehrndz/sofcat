@@ -51,8 +51,9 @@ func newPlanBuilder() *planBuilder {
 // catalog item are skipped by the run without a record, so, as Munki does,
 // they are left out with a warning rather than reported pending forever.
 // Install-side items stay: the install walk records their failure. An item
-// this machine may not install (installable_condition) is skipped by the run
-// and left out with a warning.
+// this machine may not install (installable_condition), or that a zip-only
+// build rejects (process.ZipOnlyReason), is skipped by the run and left out
+// with a warning.
 func (b *planBuilder) add(kind string, selfService bool, names ...string) {
 	for _, name := range names {
 		if name == "" || b.seen[name] {
@@ -70,6 +71,11 @@ func (b *planBuilder) add(kind string, selfService bool, names ...string) {
 			if kind != report.KindOptionalInstall || selfService {
 				b.warnings = append(b.warnings, fmt.Sprintf("%s %s skipped: %v", kind, name, err))
 			}
+			continue
+		}
+		if errors.Is(err, process.ErrZipOnly) {
+			// The run neither installs nor removes it, and the service does not offer it.
+			b.warnings = append(b.warnings, fmt.Sprintf("%s %s skipped: %v", kind, name, err))
 			continue
 		}
 		if err != nil && (kind == report.KindManagedUninstall || kind == report.KindManagedUpdate) {

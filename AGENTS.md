@@ -45,6 +45,11 @@ pure-Go, windows-GUI `build/sofcat-ui.exe`
 (`GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -tags production -ldflags "-H windowsgui"`).
 `just msi` wraps them in an MSI with embala (`installer/embala.toml`); the
 installer puts them in `C:\Program Files\SofCat` and registers the service.
+A brand with `INSTALLERS=zip` in its `brand.env` adds the `zip_only` tag to both
+binaries, which compiles out the command installers and catalog scripts
+(`*_command.go`/`*_script.go` versus their `*_zip_only.go` twins); test that
+set with `just test-zip-only` and
+`golangci-lint run --build-tags zip_only ./...`.
 
 ## Code Style
 

@@ -5,12 +5,14 @@ managed_installs:
   - tapas-managed-skill
   - tapas-exclusive-skill
   - tapas-managed-plugin
+  - tapas-exe-item
 optional_installs:
   - tapas-optional-skill
   - tapas-adopt-skill
   - tapas-foreign-skill
   - tapas-outside-skill
   - tapas-optional-plugin
+  - tapas-scripted-skill
 conditional_items:
   # run-tapas-smoke.ps1 sets these facts with an admin condition script. Until
   # it does, both facts are missing, so both blocks are held.

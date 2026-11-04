@@ -1,0 +1,12 @@
+# Written by hand, not by makecatalogs zip-item: an exe item the zip-only
+# Tapas Test build must reject (and log) without trying to download it. The
+# installer file does not exist on the server.
+item_name: tapas-exe-item
+display_name: Tapas Exe Item
+description: A command-installer item, rejected by a zip-only build
+catalog: tapas
+version: 1.0.0
+installer:
+  type: exe
+  location: packages/tapas/not-here.exe
+  hash: "0000000000000000000000000000000000000000000000000000000000000000"
