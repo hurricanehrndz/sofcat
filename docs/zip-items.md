@@ -193,6 +193,38 @@ item and reason for the life of the process, the run neither installs nor
 removes the item, `ListOptionalInstalls` leaves it out and `InstallItem` refuses it with `item_not_available`. Admin
 fact scripts (`<data dir>/conditions`) still run.
 
+## Required software
+
+Any catalog item, a zip item or not, can list software it needs and sofcat
+never installs:
+
+```yaml
+requires_software:
+  - display_name: Demo Tool
+    chocolatey: demo-tool
+    munki: DemoTool
+```
+
+- `display_name` is required. It names the software in the deferral message.
+- `chocolatey` is a package id, checked on Windows: present when
+  `%ProgramData%\chocolatey\lib\<id>` is a directory.
+- `munki` is a Munki item name, checked on macOS: present when it is listed
+  under `InstalledItems` in `/Library/Managed Installs/ManagedInstallReport.plist`.
+  A missing, unreadable or binary report counts as missing.
+- An entry with no key for the OS sofcat runs on is skipped.
+
+Before an install or update does anything (download, placement, scripts),
+sofcat checks the entries. If any is missing, it defers the item with code
+`missing_software` and the message
+`Needs Demo Tool. Install it first, then try again.` (several names are
+joined with `, `). Check-only runs report the same deferral. Items that
+depend on it are deferred with the same code and message. Nothing is
+recorded as failed, and the next run checks again. Removals are never
+checked.
+
+`makecatalogs -check` reports an entry without `display_name` or with neither
+`chocolatey` nor `munki`.
+
 ## The archive
 
 `makecatalogs pack` writes the same bytes for the same tree on every OS:

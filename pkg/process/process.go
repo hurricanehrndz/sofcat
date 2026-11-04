@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -223,9 +224,9 @@ var installerInstall = (*installer.Runner).Install
 // failure in the report.
 func installOne(r *installer.Runner, item catalog.Item, installerType string) {
 	if _, err := installerInstall(r, item, installerType); err != nil {
-		if errors.Is(err, installer.ErrBlockingApps) {
+		if errors.Is(err, installer.ErrDeferred) {
 			// The installer already recorded the deferral; not a failure (R6).
-			slog.Info("item deferred: blocking application(s) running", "item", item.DisplayName)
+			slog.Info("item deferred", "item", item.DisplayName, "reason", err)
 			return
 		}
 		slog.Warn("item action failed", "item", item.DisplayName, "err", err)
@@ -261,15 +262,24 @@ func recordFailedItem(r *installer.Runner, name, version string, err error) {
 }
 
 // recordDeferredItem records a cascade deferral: a dependent skipped because
-// one of its dependencies was deferred (R6/R12). The installer records its own
-// direct deferrals; this covers only the walk's cascade.
-func recordDeferredItem(r *installer.Runner, name, version, reason string) {
-	r.Report.DeferredItems = append(r.Report.DeferredItems, report.DeferredItem{
+// its dependency was deferred (R6/R12). The installer records its own direct
+// deferrals; this covers only the walk's cascade. The dependent carries the
+// dependency's code; for missing software also its message, since the
+// dependent needs the same software installed first.
+func recordDeferredItem(r *installer.Runner, name, version, dependency string) {
+	d := report.DeferredItem{
 		Name:    name,
 		Version: version,
 		Action:  "install",
-		Reason:  reason,
-	})
+		Reason:  fmt.Sprintf("dependency %s deferred", dependency),
+	}
+	if i := slices.IndexFunc(r.Report.DeferredItems, func(dd report.DeferredItem) bool { return dd.Name == dependency }); i >= 0 {
+		d.Code = r.Report.DeferredItems[i].Code
+		if d.Code == report.CodeMissingSoftware {
+			d.Reason = r.Report.DeferredItems[i].Reason
+		}
+	}
+	r.Report.DeferredItems = append(r.Report.DeferredItems, d)
 }
 
 // pullIn runs walk with name pushed on r.PulledBy, so the progress of every
@@ -327,7 +337,7 @@ func installWithDeps(itemName string, catalogsMap map[int]map[string]catalog.Ite
 			// failed, and retried next run (R6).
 			if visited[dependency] == depDeferred {
 				slog.Info("deferring item: dependency deferred", "item", item.DisplayName, "dependency", dependency)
-				recordDeferredItem(r, item.Name, item.Version, fmt.Sprintf("dependency %s deferred", dependency))
+				recordDeferredItem(r, item.Name, item.Version, dependency)
 				visited[itemName] = depDeferred
 				return false
 			}
@@ -352,7 +362,7 @@ func installWithDeps(itemName string, catalogsMap map[int]map[string]catalog.Ite
 
 	// Install the item; the installer records its own failures in the report
 	if _, err := installerInstall(r, item, "install"); err != nil {
-		if errors.Is(err, installer.ErrBlockingApps) {
+		if errors.Is(err, installer.ErrDeferred) {
 			// The installer already recorded the deferral (R6); mark deferred
 			// so dependents cascade rather than fail.
 			visited[itemName] = depDeferred

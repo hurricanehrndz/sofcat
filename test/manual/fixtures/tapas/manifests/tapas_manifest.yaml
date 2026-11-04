@@ -13,6 +13,7 @@ optional_installs:
   - tapas-outside-skill
   - tapas-optional-plugin
   - tapas-scripted-skill
+  - tapas-choco-skill
 conditional_items:
   # run-tapas-smoke.ps1 sets these facts with an admin condition script. Until
   # it does, both facts are missing, so both blocks are held.

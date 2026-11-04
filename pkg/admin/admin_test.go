@@ -118,3 +118,42 @@ func TestCollectCatalogsInvalidCondition(t *testing.T) {
 		t.Error("bad item dropped from the catalog")
 	}
 }
+
+// A requires_software entry the agent cannot use is caught by -check: without
+// display_name the deferral message has no name, and without munki or
+// chocolatey no OS checks it.
+func TestCollectCatalogsRequiresSoftware(t *testing.T) {
+	repoPath := t.TempDir()
+	dir := filepath.Join(repoPath, "packages-info")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	info := `item_name: tool
+catalog: base
+installer: {type: msi, location: x.msi}
+requires_software:
+  - {display_name: Demo Tool, chocolatey: demo-tool}
+  - {display_name: Mac Tool, munki: MacTool}
+  - {chocolatey: nameless}
+  - {display_name: Nowhere}
+`
+	if err := os.WriteFile(filepath.Join(dir, "tool.yaml"), []byte(info), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	set, err := CollectCatalogs(repoPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"requires_software[2] has no display_name", "requires_software[3] needs munki or chocolatey"}
+	if len(set.Problems) != len(want) {
+		t.Fatalf("problems = %v, want %v", set.Problems, want)
+	}
+	for i, w := range want {
+		if !strings.Contains(set.Problems[i], w) {
+			t.Errorf("problem %d = %q, want it to mention %q", i, set.Problems[i], w)
+		}
+	}
+	if got := set.Catalogs["base"]["tool"].RequiresSoftware; len(got) != 4 || got[0].Chocolatey != "demo-tool" {
+		t.Errorf("requires_software = %+v, want it carried into the catalog", got)
+	}
+}

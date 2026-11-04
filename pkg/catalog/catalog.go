@@ -25,10 +25,23 @@ type Item struct {
 	// InstallableCondition is an expression over this machine's facts that
 	// must be true for the item to be installed here (see docs/conditions.md).
 	InstallableCondition string `yaml:"installable_condition,omitempty"`
+	// RequiresSoftware lists software the item needs and sofcat never
+	// installs. While any is missing, installs and updates are deferred.
+	RequiresSoftware []RequiredSoftware `yaml:"requires_software,omitempty"`
 	// NotInstallable says why InstallableCondition rejected this machine. It is
 	// set on the agent by conditions.Apply and is empty when the item may be
 	// installed.
 	NotInstallable string `yaml:"-"`
+}
+
+// RequiredSoftware is one requires_software entry. Each OS checks its own key:
+// Munki on macOS, Chocolatey on Windows; an OS with no key skips the entry.
+type RequiredSoftware struct {
+	DisplayName string `yaml:"display_name,omitempty"`
+	// Munki is a Munki item name, present when Munki's report lists it as installed.
+	Munki string `yaml:"munki,omitempty"`
+	// Chocolatey is a package id, present when %ProgramData%\chocolatey\lib\<id> exists.
+	Chocolatey string `yaml:"chocolatey,omitempty"`
 }
 
 // InstallerItem holds information about how to install a catalog item

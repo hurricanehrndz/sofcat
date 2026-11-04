@@ -150,10 +150,12 @@ application errors. `data.code` is the stable string clients branch on, and
 The service does not support batches, and it does not act on a request without
 an `id` (a notification): it closes the connection without a reply. The
 `errorCode` inside a status record (`managed_run_failed`, `item_failed`,
-`placement_conflict`, `placement_refused`, `blocked_by_running_app`) describes
-the operation's outcome, not the call. The two placement codes are zip-item
-failures: a placed tree edited outside sofcat, and a placement sofcat may not
-write ([docs/zip-items.md](../docs/zip-items.md)).
+`placement_conflict`, `placement_refused`, `blocked_by_running_app`,
+`missing_software`) describes the operation's outcome, not the call. The two
+placement codes are zip-item failures: a placed tree edited outside sofcat, and
+a placement sofcat may not write ([docs/zip-items.md](../docs/zip-items.md)).
+`missing_software` is a deferral because software the item requires is not
+installed; the message is the deferral reason, which names that software.
 
 The service bounds what one client can hold. It handles 32 connections at a
 time, at most 16 of them streams; a client beyond either limit gets

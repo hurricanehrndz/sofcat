@@ -14,6 +14,13 @@ ColorPrinter:
   dependencies:
     - Canon-Drivers
   display_name: Color Printer
+  # requires_software: software the item needs and sofcat never installs.
+  # While any entry is missing on this OS, installs and updates are deferred
+  # (missing_software). macOS checks munki, Windows checks chocolatey.
+  requires_software:
+    - display_name: Print Spooler Tools
+      chocolatey: print-spooler-tools
+      munki: PrintSpoolerTools
   installer:
     hash: a8b4ff8bc7d77036644c1ed04713c550550f180e08da786fbca784818b918dac
     location: packages/colorprinter.1.0.nupkg

@@ -11,7 +11,8 @@ hand-placed tree, conflict reporting for a user edit, the exclusive-root
 marker and refusal, a placement outside the write roots, the skipped
 user-scope placement and its staged archive in the user-sync plan, the
 marketplace plugins with the generated marketplace.json and settings
-drop-in, a held conditional item, scope exit, and the zip-only build's
+drop-in, a skill deferred until its required Chocolatey package exists, a
+held conditional item, scope exit, and the zip-only build's
 rejection of an exe item and a skill with a postinstall_script.
 run-tapas-user-sync.ps1 then places the user-scope skill as the logged-on
 user.
@@ -440,6 +441,40 @@ if (@(Get-PluginEntry "tapas-optional-plugin").Count -ne 0) { Fail "tapas-option
 if (@(Get-PluginEntry "tapas-managed-plugin").Count -ne 1) { Fail "tapas-managed-plugin no longer listed" }
 if ((Get-EnabledPlugins) -notcontains "tapas-managed-plugin@tapas-test") { Fail "the managed plugin left enabledPlugins" }
 Pass "tree, receipt and entry gone; the managed plugin stays enabled"
+
+# --- Required software -------------------------------------------------------------
+
+# tapas-choco-skill requires_software Demo Tool, Chocolatey package demo-tool.
+$demoToolLib = Join-Path $env:ProgramData "chocolatey\lib\demo-tool"
+
+Write-Step "A skill whose required Chocolatey package is missing is deferred and nothing is written"
+if (Test-Path -LiteralPath $demoToolLib) { Fail "$demoToolLib exists before the smoke created it (not a clean VM?)" }
+$terminal = Invoke-Operation "InstallItem:tapas-choco-skill"
+if ($terminal.state -ne "Deferred" -or $terminal.errorCode -ne "missing_software") {
+    Fail "InstallItem:tapas-choco-skill expected Deferred/missing_software, got $($terminal | ConvertTo-Json -Compress)"
+}
+$wantMessage = "Needs Demo Tool. Install it first, then try again."
+if ($terminal.errorMessage -notmatch [regex]::Escape($wantMessage)) {
+    Fail "the deferral message is not '$wantMessage': $($terminal.errorMessage)"
+}
+Assert-NotPlaced $claudeRoot "claude-skills" "tapas-choco-skill"
+if (@(Get-YamlList $SelfServe "managed_installs") -notcontains "tapas-choco-skill") {
+    Fail "the deferred tapas-choco-skill left the self-serve managed_installs, so no later run retries it"
+}
+Pass "Deferred/missing_software: $($terminal.errorMessage); nothing placed; still selected"
+
+Write-Step "Once the Chocolatey package directory exists, the next run places the skill"
+New-Item -ItemType Directory -Path $demoToolLib -Force | Out-Null
+Assert-Succeeded "InstallItem:tapas-choco-skill"
+Assert-Placed $claudeRoot "claude-skills" "tapas-choco-skill" | Out-Null
+Pass "tapas-choco-skill placed with a receipt"
+
+Write-Step "RemoveItem removes the skill that needed Demo Tool"
+Assert-Succeeded "RemoveItem:tapas-choco-skill"
+Wait-Removed $claudeRoot "claude-skills" "tapas-choco-skill"
+Wait-Pruned
+Remove-Item -LiteralPath $demoToolLib -Recurse -Force
+Pass "tree and receipt gone; $demoToolLib removed"
 
 # --- Adoption --------------------------------------------------------------------
 

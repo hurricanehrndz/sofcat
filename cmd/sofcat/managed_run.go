@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -222,12 +223,19 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 	// The service never writes into a user profile: it stages the archives
 	// of user-scope placements for the per-user helper (--user-sync), then
 	// stores the plan listUserPlacements serves. The plan comes from the
-	// run's own desired and held sets, the ones scope exit used.
+	// run's own desired and held sets, the ones scope exit used, with each
+	// item deferred this run held too: the helper neither places nor removes
+	// it, and its archive is not staged.
 	if !cfg.CheckOnly {
 		if dir, err := service.UserArtifactsDir(); err != nil {
 			slog.Warn("unable to stage user-placement archives", "err", err)
 		} else {
-			userPlan := service.UserPlan(desired, heldSet, catalogs, harnesses, zip.Guard.GOOS, dir)
+			planDesired, planHeld := maps.Clone(desired), maps.Clone(heldSet)
+			for _, d := range run.DeferredItems {
+				delete(planDesired, d.Name)
+				planHeld[d.Name] = true
+			}
+			userPlan := service.UserPlan(planDesired, planHeld, catalogs, harnesses, zip.Guard.GOOS, dir)
 			service.StageUserArtifacts(context.Background(), zip, userPlan, dir)
 			if err := service.SaveUserPlan(cfg.AppDataPath, userPlan); err != nil {
 				slog.Warn("unable to store the user-placement plan", "err", err)

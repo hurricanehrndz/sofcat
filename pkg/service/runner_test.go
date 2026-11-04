@@ -943,3 +943,23 @@ func TestClientThatNeverReadsReleasesItsHandlerSlot(t *testing.T) {
 		}
 	}
 }
+
+// TestResolveTerminalEventMissingSoftware: a missing_software deferral reaches
+// the UI with its code and the deferral reason as the message, so the user
+// learns what to install; a blocking-app deferral keeps its default code.
+func TestResolveTerminalEventMissingSoftware(t *testing.T) {
+	const reason = "Needs Demo Tool. Install it first, then try again."
+	rep := report.New()
+	rep.DeferredItems = append(rep.DeferredItems,
+		report.DeferredItem{Name: "NeedsTool", Action: "install", Reason: reason, Code: report.CodeMissingSoftware},
+		report.DeferredItem{Name: "Blocked", Action: "install", Reason: "blocking application(s) running: notepad"},
+	)
+
+	ev := resolveTerminalEvent("NeedsTool", rep)
+	if ev.State != "Deferred" || ev.ErrorCode != "missing_software" || ev.ErrorMessage != reason || ev.Message != reason {
+		t.Errorf("missing_software deferral = %#v", ev)
+	}
+	if ev := resolveTerminalEvent("Blocked", rep); ev.State != "Deferred" || ev.ErrorCode != "blocked_by_running_app" {
+		t.Errorf("blocking-app deferral = %#v", ev)
+	}
+}

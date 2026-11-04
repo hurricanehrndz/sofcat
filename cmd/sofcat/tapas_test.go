@@ -28,6 +28,7 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/report"
 	"github.com/hurricanehrndz/sofcat/pkg/service"
 	"github.com/hurricanehrndz/sofcat/pkg/sofcatlog"
+	"github.com/hurricanehrndz/sofcat/pkg/software"
 	"github.com/hurricanehrndz/sofcat/pkg/usersync"
 	"go.yaml.in/yaml/v4"
 )
@@ -870,4 +871,140 @@ conditional_items:
 		t.Errorf("last removal failed: %+v", rep.FailedItems)
 	}
 	check("last plugin removed", map[string]entry{}, nil)
+}
+
+// TestTapasRequiresSoftware: a zip item whose required Chocolatey package is
+// absent is deferred with missing_software and nothing is written, not even
+// the skills root; its dependent waits with it. Once the package directory
+// exists, the next run places both.
+func TestTapasRequiresSoftware(t *testing.T) {
+	e := newTapasEnv(t)
+	lib := filepath.Join(t.TempDir(), "chocolatey", "lib")
+	origOS, origLib := software.GOOS, software.ChocolateyLib
+	software.GOOS = tapasOS
+	software.ChocolateyLib = func() string { return lib }
+	t.Cleanup(func() { software.GOOS, software.ChocolateyLib = origOS, origLib })
+
+	skills := filepath.Join(e.roots, "skills")
+	e.harnesses(map[string]string{"skills": skills}, nil, nil)
+	e.zipItem("needs-tool", "1.0", map[string]map[string]string{"skills": {"SKILL.md": "needs tool"}})
+	e.zipItem("rider", "1.0", map[string]map[string]string{"skills": {"SKILL.md": "rider"}})
+	needs := e.items["needs-tool"]
+	needs.RequiresSoftware = []catalog.RequiredSoftware{
+		{DisplayName: "Demo Tool", Chocolatey: "demo-tool"},
+		{DisplayName: "Mac Tool", Munki: "MacTool"}, // no Windows key: skipped
+	}
+	e.items["needs-tool"] = needs
+	rider := e.items["rider"]
+	rider.Dependencies = []string{"needs-tool"}
+	e.items["rider"] = rider
+	e.publishCatalog()
+	e.put("manifests/tapas.yaml", []byte("name: tapas\ncatalogs: [tapas]\nmanaged_installs: [rider]\n"))
+
+	const msg = "Needs Demo Tool. Install it first, then try again."
+	rep := e.run()
+	for _, name := range []string{"needs-tool", "rider"} {
+		i := slices.IndexFunc(rep.DeferredItems, func(d report.DeferredItem) bool { return d.Name == name })
+		if i < 0 || rep.DeferredItems[i].Code != report.CodeMissingSoftware || rep.DeferredItems[i].Reason != msg {
+			t.Errorf("%s not deferred for missing software: %+v", name, rep.DeferredItems)
+		}
+	}
+	if len(rep.FailedItems) != 0 || len(rep.InstalledItems) != 0 {
+		t.Errorf("failed %+v, installed %+v", rep.FailedItems, rep.InstalledItems)
+	}
+	if exists(skills) {
+		t.Error("the skills root was written while Demo Tool is missing")
+	}
+	if rcs, err := receipt.List(e.receiptDir()); err != nil || len(rcs) != 0 {
+		t.Errorf("receipts = %+v, %v", rcs, err)
+	}
+
+	if err := os.MkdirAll(filepath.Join(lib, "demo-tool"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	rep = e.run()
+	if len(rep.DeferredItems) != 0 || len(rep.FailedItems) != 0 {
+		t.Errorf("after installing Demo Tool: deferred %+v, failed %+v", rep.DeferredItems, rep.FailedItems)
+	}
+	for _, name := range []string{"needs-tool", "rider"} {
+		if !exists(filepath.Join(skills, name, "SKILL.md")) || !listed(rep.InstalledItems, name) {
+			t.Errorf("%s not placed once Demo Tool is installed", name)
+		}
+	}
+}
+
+// TestTapasUserScopeRequiresSoftware: a user-scope-only zip item whose
+// required software is absent is deferred by the machine run, and the user
+// plan holds it, so its archive is not staged and the helper places nothing.
+// Once the software is installed the next run plans, stages and places it.
+func TestTapasUserScopeRequiresSoftware(t *testing.T) {
+	e := newTapasEnv(t)
+	lib := filepath.Join(t.TempDir(), "chocolatey", "lib")
+	origOS, origLib := software.GOOS, software.ChocolateyLib
+	software.GOOS = tapasOS
+	software.ChocolateyLib = func() string { return lib }
+	t.Cleanup(func() { software.GOOS, software.ChocolateyLib = origOS, origLib })
+
+	e.harnesses(map[string]string{"codex": "${USERPROFILE}/.agents/skills"}, nil, []string{"codex"})
+	e.zipItem("needs-tool", "1.0", map[string]map[string]string{"codex": {"SKILL.md": "needs tool"}})
+	needs := e.items["needs-tool"]
+	needs.RequiresSoftware = []catalog.RequiredSoftware{{DisplayName: "Demo Tool", Chocolatey: "demo-tool"}}
+	e.items["needs-tool"] = needs
+	e.publishCatalog()
+	e.put("manifests/tapas.yaml", []byte("name: tapas\ncatalogs: [tapas]\nmanaged_installs: [needs-tool]\n"))
+
+	profile, userReceipts := t.TempDir(), filepath.Join(t.TempDir(), "receipts")
+	guard := placement.Guard{
+		GOOS:       tapasOS,
+		Roots:      placement.Roots{WindowsUser: []string{"${USERPROFILE}/.agents"}},
+		DataDir:    e.cfg.AppDataPath,
+		BinaryDirs: []string{e.bin},
+		Vars:       map[string]string{"USERPROFILE": profile},
+	}
+	client := &tapasUserClient{cfg: e.cfg}
+	tree := filepath.Join(profile, ".agents", "skills", "needs-tool", "SKILL.md")
+	planEntry := func() service.UserPlacement {
+		t.Helper()
+		plan, err := service.LoadUserPlan(e.cfg.AppDataPath)
+		if err != nil || len(plan) != 1 || plan[0].Item != "needs-tool" {
+			t.Fatalf("plan = %+v, %v; want needs-tool/codex only", plan, err)
+		}
+		return plan[0]
+	}
+	sync := func() []service.UserPlacementResult {
+		t.Helper()
+		results, err := usersync.Sync(context.Background(), client, guard, userReceipts, slog.Default())
+		if err != nil {
+			t.Fatalf("Sync: %v", err)
+		}
+		return results
+	}
+
+	rep := e.run()
+	i := slices.IndexFunc(rep.DeferredItems, func(d report.DeferredItem) bool { return d.Name == "needs-tool" })
+	if i < 0 || rep.DeferredItems[i].Code != report.CodeMissingSoftware {
+		t.Errorf("needs-tool not deferred for missing software: %+v", rep.DeferredItems)
+	}
+	entry := planEntry()
+	if !entry.Held || exists(entry.Archive) {
+		t.Errorf("deferred entry = %+v, want held and its archive not staged", entry)
+	}
+	if results := sync(); outcomeOf(results, "needs-tool", "codex") != "" || exists(tree) {
+		t.Errorf("helper acted on a deferred item: %+v", results)
+	}
+
+	if err := os.MkdirAll(filepath.Join(lib, "demo-tool"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	rep = e.run()
+	if len(rep.DeferredItems) != 0 || len(rep.FailedItems) != 0 {
+		t.Errorf("after installing Demo Tool: deferred %+v, failed %+v", rep.DeferredItems, rep.FailedItems)
+	}
+	entry = planEntry()
+	if entry.Held || !download.Verify(entry.Archive, entry.Hash) {
+		t.Errorf("entry = %+v, want planned and staged", entry)
+	}
+	if results := sync(); outcomeOf(results, "needs-tool", "codex") != string(installer.OutcomeInstalled) || readFile(t, tree) != "needs tool" {
+		t.Errorf("helper did not place needs-tool: %+v", results)
+	}
 }

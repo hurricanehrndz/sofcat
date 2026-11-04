@@ -14,9 +14,11 @@ import (
 
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
 	"github.com/hurricanehrndz/sofcat/pkg/config"
+	"github.com/hurricanehrndz/sofcat/pkg/installer"
 	"github.com/hurricanehrndz/sofcat/pkg/manifest"
 	"github.com/hurricanehrndz/sofcat/pkg/report"
 	"github.com/hurricanehrndz/sofcat/pkg/sofcatlog"
+	"github.com/hurricanehrndz/sofcat/pkg/software"
 )
 
 // TestManagedRunReconcilesSelfServe verifies the run loads, reconciles, and
@@ -229,4 +231,81 @@ func contains(s []string, v string) bool {
 		}
 	}
 	return false
+}
+
+// TestRouteCheckOnlyPrintsInventoryOnly: -C prints the inventory JSON to
+// stdout and tools pipe it to jq, so a deferral must not add the run summary.
+func TestRouteCheckOnlyPrintsInventoryOnly(t *testing.T) {
+	resetMainHooks()
+	defer resetMainHooks()
+	// Deferred so the log closes before t.TempDir cleanup (see above).
+	defer sofcatlog.Close()
+	origOS, origLib := software.GOOS, software.ChocolateyLib
+	lib := t.TempDir()
+	software.GOOS = "windows"
+	software.ChocolateyLib = func() string { return lib }
+	t.Cleanup(func() { software.GOOS, software.ChocolateyLib = origOS, origLib })
+
+	const manifestYAML = `name: wiretest_manifest
+catalogs:
+  - wiretest_catalog
+managed_installs:
+  - NeedsTool
+`
+	const catalogYAML = `NeedsTool:
+  display_name: Needs Tool
+  check:
+    file:
+      - path: C:\does-not-exist\needstool.txt
+  requires_software:
+    - display_name: Demo Tool
+      chocolatey: demo-tool
+  installer:
+    type: ps1
+    location: packages/needstool.ps1
+    hash: deadbeef
+`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/manifests/wiretest_manifest.yaml"):
+			_, _ = w.Write([]byte(manifestYAML))
+		case strings.HasSuffix(r.URL.Path, "/catalogs/wiretest_catalog.yaml"):
+			_, _ = w.Write([]byte(catalogYAML))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := config.Configuration{
+		CheckOnly:   true,
+		CachePath:   t.TempDir(),
+		AppDataPath: t.TempDir(),
+		URL:         srv.URL + "/",
+		URLPackages: srv.URL + "/",
+		Manifest:    "wiretest_manifest",
+		Catalogs:    []string{"wiretest_catalog"},
+	}
+	adminCheckFunc = func() (bool, error) { return true, nil }
+	mkdirAllFunc = func(string, os.FileMode) error { return nil }
+	var run *report.Report
+	managedRunFunc = func(cfg config.Configuration, p installer.ProgressFn, c *installer.Cancels) (*report.Report, error) {
+		var err error
+		run, err = managedRun(cfg, p, c)
+		return run, err
+	}
+
+	stdout := captureStdout(t, func() {
+		if err := route(cfg); err != nil {
+			t.Fatalf("route: %v", err)
+		}
+	})
+	if len(run.DeferredItems) != 1 || run.DeferredItems[0].Code != report.CodeMissingSoftware {
+		t.Fatalf("DeferredItems = %+v, want NeedsTool deferred for missing software", run.DeferredItems)
+	}
+	// The whole output is one JSON document: no summary line before or after.
+	var inv report.Inventory
+	if err := json.Unmarshal([]byte(stdout), &inv); err != nil {
+		t.Fatalf("check-only stdout is not JSON only: %v\n%s", err, stdout)
+	}
 }

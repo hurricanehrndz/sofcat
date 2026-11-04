@@ -639,3 +639,31 @@ func TestRouteServiceInstallProtectsAppData(t *testing.T) {
 		t.Error("install did not run after the protect failure")
 	}
 }
+
+// TestRouteManagedRunPrintsWaitingItems: after a run from the command line,
+// an admin sees which items wait and why, without reading the log.
+func TestRouteManagedRunPrintsWaitingItems(t *testing.T) {
+	resetMainHooks()
+	defer resetMainHooks()
+	managedRunFunc = func(config.Configuration, installer.ProgressFn, *installer.Cancels) (*report.Report, error) {
+		return &report.Report{
+			DeferredItems: []report.DeferredItem{{
+				Name: "tool", Action: "install", Code: report.CodeMissingSoftware,
+				Reason: "Needs Demo Tool. Install it first, then try again.",
+			}},
+			HeldConditions: []report.HeldCondition{{
+				Condition: `lab == "yes"`, Missing: []string{"lab"}, Items: []string{"a", "b"}, Reason: "facts unavailable",
+			}},
+		}, nil
+	}
+	stdout := captureStdout(t, func() {
+		if err := route(config.Configuration{}); err != nil {
+			t.Fatalf("route: %v", err)
+		}
+	})
+	want := "deferred: tool (install): Needs Demo Tool. Install it first, then try again.\n" +
+		"held: conditional_items \"lab == \\\"yes\\\"\": facts unavailable (lab); items: a, b\n"
+	if stdout != want {
+		t.Errorf("stdout =\n%s\nwant\n%s", stdout, want)
+	}
+}
