@@ -623,6 +623,9 @@ func (sr *serviceRunner) dispatch(ctx context.Context, conn clientConn, req rpcR
 		}
 		return nil, nil
 
+	case methodListUserPlacements, methodReportUserPlacements:
+		return sr.dispatchUserPlacements(conn, req, logger)
+
 	default:
 		return nil, newError(codeMethodNotFound, fmt.Sprintf("method %q not found", req.Method), "")
 	}

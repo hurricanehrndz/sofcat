@@ -11,6 +11,7 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/hurricanehrndz/sofcat/pkg/artifact"
@@ -312,8 +313,14 @@ func (z *ZipInstaller) managedChanged(rc receipt.Receipt) bool {
 // Fetch downloads t's archive into the cache unless a verified copy is there,
 // and returns its path. Cancelling ctx aborts the download.
 func (z *ZipInstaller) Fetch(ctx context.Context, t Target) (string, error) {
-	// Rooting the location keeps a ".." in a catalog inside the cache.
-	rel := path.Clean("/" + t.Variant.Location)
+	// The location names the cached copy, so a crafted one must not leave
+	// the cache: every segment of the cleaned path must be a plain name.
+	rel := path.Clean(t.Variant.Location)
+	for _, seg := range strings.Split(rel, "/") {
+		if err := checkSegment(seg); err != nil {
+			return "", fmt.Errorf("placement %q: archive location %q refused: %w", t.Placement, t.Variant.Location, err)
+		}
+	}
 	archive := filepath.Join(z.CachePath, filepath.FromSlash(rel))
 	if !download.IfNeeded(ctx, archive, z.URLPackages+t.Variant.Location, t.Variant.Hash) {
 		return "", fmt.Errorf("unable to download a valid archive for placement %q", t.Placement)

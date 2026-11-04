@@ -137,6 +137,19 @@ Copy `build/manual-test/tapas/vm/bootstrap-vm.ps1` and
 `test/manual/run-tapas-smoke.ps1` to the VM. As an administrator, run
 `bootstrap-vm.ps1 -BaseUrl <url> -Slug tapas-test -ProductName "Tapas Test" -Manifest tapas_manifest -Catalogs tapas -InstallService -StartService -NoPause`,
 then `run-tapas-smoke.ps1`. The gate is exit 0 and `TAPAS SMOKE PASSED`.
+Then copy `test/manual/run-tapas-user-sync.ps1` and run it as the logged-on
+standard user (`rig run-it --wait test/manual/run-tapas-user-sync.ps1`; create
+`C:\sofcat-test\` first): it runs `tapas-test-ui.exe --user-sync` and must
+print `TAPAS USER SYNC PASSED` (its log is `C:\sofcat-test\tapas-user-sync.log`).
+For the logon path, install the branded MSI
+(`just brand=test/manual/fixtures/tapas/brand msi`) on a clean VM and write its
+config, confirm the HKLM `...\CurrentVersion\Run` value `tapas-test-user-sync`,
+wait for the startup run to stage the archive and store the plan, then
+reboot (the VM autologs on at boot; a plain sign-out does not log back in)
+and check the skill appears without opening the storefront. `msiexec /x`
+must remove the value and the service. It leaves
+`C:\Program Files\<Name>\user-artifacts` behind, because the staged archives
+are not MSI-owned files; remove that directory by hand.
 
 To validate the installer instead of the raw executables: `just msi`, copy
 `build/sofcat-<version>-x86_64.msi` to the VM and run `msiexec /i <msi> /qn`.

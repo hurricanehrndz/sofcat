@@ -55,6 +55,9 @@ type CommandResponse struct {
 	RequestedBy   string                `json:"requestedBy,omitempty"`
 	Branding      *branding.Branding    `json:"branding,omitempty"`
 
+	// UserPlacements is ListUserPlacements' plan.
+	UserPlacements []UserPlacement `json:"userPlacements,omitempty"`
+
 	// displayName is the catalog display name InstallItem resolved while
 	// authorizing, for the operation's first record. Unexported like report.
 	displayName string
@@ -78,6 +81,8 @@ const (
 	actionRemoveItem            = "RemoveItem"
 	actionStreamOperationStatus = "StreamOperationStatus"
 	actionCancelOperation       = "CancelOperation"
+	actionListUserPlacements    = "ListUserPlacements"
+	actionReportUserPlacements  = "ReportUserPlacements"
 )
 
 func canonicalizeAction(action string) (string, bool) {
@@ -96,6 +101,10 @@ func canonicalizeAction(action string) (string, bool) {
 		return actionRemoveItem, true
 	case strings.ToLower(actionStreamOperationStatus):
 		return actionStreamOperationStatus, true
+	case strings.ToLower(actionListUserPlacements):
+		return actionListUserPlacements, true
+	case strings.ToLower(actionReportUserPlacements):
+		return actionReportUserPlacements, true
 	case strings.ToLower(actionCancelOperation):
 		return actionCancelOperation, true
 	default:
@@ -140,9 +149,14 @@ func validateCommand(cmd Command) error {
 		if len(cmd.Items) != 0 {
 			return errors.New("run action does not support items")
 		}
-	case actionGetServiceInfo, actionListOptionalInstalls, actionGetBranding:
+	case actionGetServiceInfo, actionListOptionalInstalls, actionGetBranding, actionListUserPlacements:
 		if len(cmd.Items) != 0 {
 			return fmt.Errorf("%s action does not support items", cmd.Action)
+		}
+	case actionReportUserPlacements:
+		// item,placement,outcome[,error]: one result, for testing the method.
+		if len(cmd.Items) != 3 && len(cmd.Items) != 4 {
+			return fmt.Errorf("%s action requires item,placement,outcome[,error]", cmd.Action)
 		}
 	case actionInstallItem, actionRemoveItem, actionStreamOperationStatus, actionCancelOperation:
 		if len(cmd.Items) != 1 {
@@ -226,6 +240,8 @@ func SendCommand(cfg config.Configuration, spec string) (CommandResponse, error)
 			return CommandResponse{}, err
 		}
 		return CommandResponse{Status: "ok", OperationID: cmd.Items[0], Message: "operation canceled"}, nil
+	case actionListUserPlacements, actionReportUserPlacements:
+		return sendUserPlacementCommand(ctx, client, cmd)
 	default:
 		return CommandResponse{}, fmt.Errorf("unsupported service action %q", cmd.Action)
 	}
@@ -291,6 +307,12 @@ func executeCommand(cfg config.Configuration, cmd Command, managedRun func(confi
 	case actionGetBranding:
 		b := branding.Resolve(cfg.Branding)
 		return CommandResponse{Status: "ok", Branding: &b}, nil
+	case actionListUserPlacements:
+		entries, err := LoadUserPlan(cfg.AppDataPath)
+		if err != nil {
+			return CommandResponse{}, err
+		}
+		return CommandResponse{Status: "ok", UserPlacements: entries}, nil
 	default:
 		return CommandResponse{}, fmt.Errorf("unsupported service action %q", cmd.Action)
 	}

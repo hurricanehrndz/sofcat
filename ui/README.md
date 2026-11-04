@@ -9,10 +9,14 @@ objects.
 ## Layout
 
 - `main.go`: Wails application, `--pipe-name` flag (default `sofcat-service`),
+  `--user-sync` (place this user's user-scope zip items without a window and
+  exit; see ARCHITECTURE.md "Protocol"; a no-op off Windows),
   bundled WebView window titled with the branding title, or `SofCat UI`
 - `service.go`: the bound service — `ListOptionalInstalls`, `InstallItem`,
   `RemoveItem`, `WatchOperation`, `GetBranding`, `CancelOperation`
 - `log.go`: opt-in diagnostics
+- `usersync_windows.go` / `usersync_other.go`: the `--user-sync` entry point
+  around `pkg/usersync`
 - `assets_production.go` / `assets_development.go`: embedded `frontend/dist` under
   the `production` tag, compile-safe source filesystem otherwise
 - `frontend/`: vanilla TypeScript, CSS, and Vite assets (no framework, router, or

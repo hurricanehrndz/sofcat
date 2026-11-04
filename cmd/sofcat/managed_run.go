@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -17,6 +18,7 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/manifest"
 	"github.com/hurricanehrndz/sofcat/pkg/process"
 	"github.com/hurricanehrndz/sofcat/pkg/report"
+	"github.com/hurricanehrndz/sofcat/pkg/service"
 	"github.com/hurricanehrndz/sofcat/pkg/sofcatlog"
 	"github.com/hurricanehrndz/sofcat/pkg/status"
 )
@@ -210,6 +212,22 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 	slog.Info("Processing managed updates...")
 	process.Updates(updates, catalogs, runner)
 	plan.checkUpdates(run, runner.Checker, cfg.CachePath)
+
+	// The service never writes into a user profile: it stages the archives
+	// of user-scope placements for the per-user helper (--user-sync), then
+	// stores the plan listUserPlacements serves. The plan comes from the
+	// run's own desired and held sets, the ones scope exit used.
+	if !cfg.CheckOnly {
+		if dir, err := service.UserArtifactsDir(); err != nil {
+			slog.Warn("unable to stage user-placement archives", "err", err)
+		} else {
+			userPlan := service.UserPlan(desired, heldSet, catalogs, harnesses, zip.Guard.GOOS, dir)
+			service.StageUserArtifacts(context.Background(), zip, userPlan, dir)
+			if err := service.SaveUserPlan(cfg.AppDataPath, userPlan); err != nil {
+				slog.Warn("unable to store the user-placement plan", "err", err)
+			}
+		}
+	}
 
 	// Offered optional installs the user has not selected still belong in the
 	// inventory; the deferred finishInventory saves or prints it.

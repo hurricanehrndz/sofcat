@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 	"maps"
 	"net/http"
 	"net/http/httptest"
@@ -16,13 +18,16 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/artifact"
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
 	"github.com/hurricanehrndz/sofcat/pkg/config"
+	"github.com/hurricanehrndz/sofcat/pkg/download"
 	"github.com/hurricanehrndz/sofcat/pkg/harness"
 	"github.com/hurricanehrndz/sofcat/pkg/installer"
 	"github.com/hurricanehrndz/sofcat/pkg/manifest"
 	"github.com/hurricanehrndz/sofcat/pkg/placement"
 	"github.com/hurricanehrndz/sofcat/pkg/receipt"
 	"github.com/hurricanehrndz/sofcat/pkg/report"
+	"github.com/hurricanehrndz/sofcat/pkg/service"
 	"github.com/hurricanehrndz/sofcat/pkg/sofcatlog"
+	"github.com/hurricanehrndz/sofcat/pkg/usersync"
 	"go.yaml.in/yaml/v4"
 )
 
@@ -151,6 +156,8 @@ type tapasEnv struct {
 	cfg   config.Configuration
 	roots string // the single write root
 	bin   string // stands in for the directory holding sofcat's binaries
+	// userArtifacts is the service's user-artifacts staging directory.
+	userArtifacts string
 }
 
 func newTapasEnv(t *testing.T) *tapasEnv {
@@ -159,10 +166,11 @@ func newTapasEnv(t *testing.T) *tapasEnv {
 	t.Cleanup(resetMainHooks)
 	base := t.TempDir()
 	e := &tapasEnv{
-		tapasRepo: newTapasRepo(t),
-		t:         t,
-		roots:     filepath.Join(base, "roots"),
-		bin:       filepath.Join(base, "roots", "apps", "bin"),
+		tapasRepo:     newTapasRepo(t),
+		t:             t,
+		roots:         filepath.Join(base, "roots"),
+		bin:           filepath.Join(base, "roots", "apps", "bin"),
+		userArtifacts: filepath.Join(base, "user-artifacts"),
 	}
 	for _, dir := range []string{e.roots, e.bin} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -178,6 +186,9 @@ func newTapasEnv(t *testing.T) *tapasEnv {
 		Catalogs:    []string{"tapas"},
 	}
 	adminCheckFunc = func() (bool, error) { return true, nil }
+	origUserArtifacts := service.UserArtifactsDir
+	service.UserArtifactsDir = func() (string, error) { return e.userArtifacts, nil }
+	t.Cleanup(func() { service.UserArtifactsDir = origUserArtifacts })
 	newZipInstaller = func(cfg config.Configuration, table harness.Table) *installer.ZipInstaller {
 		z := installer.NewMachineZip(cfg, table)
 		z.Guard = placement.Guard{
@@ -486,5 +497,179 @@ func TestTapasBadArchive(t *testing.T) {
 				t.Error("receipt written for an unverified archive")
 			}
 		})
+	}
+}
+
+// tapasUserClient stands in for the service client of the per-user helper:
+// its plan is the one the last run stored, which listUserPlacements serves,
+// and it keeps what the helper reports.
+type tapasUserClient struct {
+	cfg      config.Configuration
+	reported []service.UserPlacementResult
+}
+
+func (c *tapasUserClient) ListUserPlacements(context.Context) ([]service.UserPlacement, error) {
+	return service.LoadUserPlan(c.cfg.AppDataPath)
+}
+
+func (c *tapasUserClient) ReportUserPlacements(_ context.Context, results []service.UserPlacementResult) error {
+	c.reported = append(c.reported, results...)
+	return nil
+}
+
+func outcomeOf(results []service.UserPlacementResult, item, placementName string) string {
+	for _, r := range results {
+		if r.Item == item && r.Placement == placementName {
+			return r.Outcome
+		}
+	}
+	return ""
+}
+
+// TestTapasUserSync: the machine run skips user-scope placements, stages
+// their archives in user-artifacts by hash, and stores the plan from its own
+// desired set, so an item pulled in only as a dependency is in it;
+// the per-user helper places them in the user's own profile with its own
+// receipts, refuses a placement outside the user roots, leaves a held item
+// alone, and removes what left the plan.
+func TestTapasUserSync(t *testing.T) {
+	e := newTapasEnv(t)
+	skills := filepath.Join(e.roots, "skills")
+	// Slashes, not backslashes, so the paths split on this host too.
+	e.harnesses(map[string]string{
+		"skills": skills,
+		"codex":  "${USERPROFILE}/.agents/skills",
+		"stray":  "${USERPROFILE}/elsewhere/skills",
+	}, nil, []string{"codex", "stray"})
+	skill := func(body string) map[string]string { return map[string]string{"SKILL.md": body} }
+	e.zipItem("both", "1.0", map[string]map[string]string{"skills": skill("both"), "codex": skill("both for codex")})
+	e.zipItem("machine-only", "1.0", map[string]map[string]string{"skills": skill("machine only")})
+	// dep is user-scope only and desired only as machine-only's dependency.
+	e.zipItem("dep", "1.0", map[string]map[string]string{"codex": skill("dep")})
+	machineOnly := e.items["machine-only"]
+	machineOnly.Dependencies = []string{"dep"}
+	e.items["machine-only"] = machineOnly
+	e.zipItem("stray", "1.0", map[string]map[string]string{"stray": skill("stray")})
+	e.zipItem("held", "1.0", map[string]map[string]string{"codex": skill("held")})
+	e.publishCatalog()
+	setManifest := func(installs string) {
+		e.put("manifests/tapas.yaml", []byte(`name: tapas
+catalogs: [tapas]
+managed_installs: [`+installs+`]
+conditional_items:
+  - condition: '"lab" in machine_groups'
+    managed_installs: [held]
+`))
+	}
+	setManifest("both, machine-only, stray")
+	writeFiles(t, e.userArtifacts, map[string]string{"unreferenced.zip": "old"})
+
+	// The machine run: user placements skipped, their archives staged.
+	rep := e.run()
+	if !listed(rep.InstalledItems, "both") || failedCodes(rep, "both") != nil || failedCodes(rep, "stray") != nil {
+		t.Errorf("machine run: both installed %v, failures %v %v", listed(rep.InstalledItems, "both"), failedCodes(rep, "both"), failedCodes(rep, "stray"))
+	}
+	if rcs, _ := receipt.List(e.receiptDir()); slices.ContainsFunc(rcs, func(rc receipt.Receipt) bool { return rc.Placement != "skills" }) {
+		t.Errorf("machine run wrote user-scope receipts: %+v", rcs)
+	}
+
+	plan, err := service.LoadUserPlan(e.cfg.AppDataPath)
+	if err != nil {
+		t.Fatalf("LoadUserPlan: %v", err)
+	}
+	got := map[string]service.UserPlacement{}
+	for _, entry := range plan {
+		got[entry.Item+"/"+entry.Placement] = entry
+	}
+	if len(got) != 4 || got["both/codex"].Held || got["dep/codex"].Held || got["stray/stray"].Held || !got["held/codex"].Held {
+		t.Fatalf("plan = %+v, want both/codex, dep/codex and stray/stray, and held/codex held", plan)
+	}
+	// What the run stored is what it staged: every non-held entry's archive
+	// is at its hash-named path and verifies.
+	for _, entry := range plan {
+		if entry.Archive != filepath.Join(e.userArtifacts, entry.Hash+".zip") {
+			t.Errorf("%s/%s archive %s is not named by its hash", entry.Item, entry.Placement, entry.Archive)
+		}
+		if !entry.Held && !download.Verify(entry.Archive, entry.Hash) {
+			t.Errorf("%s/%s archive not staged at %s", entry.Item, entry.Placement, entry.Archive)
+		}
+	}
+	both := got["both/codex"]
+	if both.Path != "${USERPROFILE}/.agents/skills" || filepath.Dir(both.Archive) != e.userArtifacts || both.Version != "1.0" {
+		t.Errorf("both/codex entry = %+v", both)
+	}
+	if exists(got["held/codex"].Archive) || exists(filepath.Join(e.userArtifacts, "unreferenced.zip")) {
+		t.Error("user-artifacts holds a held or unreferenced archive")
+	}
+
+	// The helper, as one user. A held tree an earlier sync placed stays.
+	profile, userReceipts := t.TempDir(), filepath.Join(t.TempDir(), "receipts")
+	heldTree := writeFiles(t, filepath.Join(profile, ".agents", "skills", "held"), skill("held, older"))
+	heldHash, err := artifact.TreeHash(heldTree, tapasOS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	heldRc := receipt.Receipt{Item: "held", Version: "0.9", Placement: "codex", Path: heldTree, TreeHash: heldHash, InstalledAtUTC: time.Now().UTC().Truncate(time.Second)}
+	if err := receipt.Write(userReceipts, heldRc); err != nil {
+		t.Fatal(err)
+	}
+	guard := placement.Guard{
+		GOOS:       tapasOS,
+		Roots:      placement.Roots{WindowsUser: []string{"${USERPROFILE}/.agents"}},
+		DataDir:    e.cfg.AppDataPath,
+		BinaryDirs: []string{e.bin},
+		Vars:       map[string]string{"USERPROFILE": profile},
+	}
+	client := &tapasUserClient{cfg: e.cfg}
+	sync := func() []service.UserPlacementResult {
+		t.Helper()
+		client.reported = nil
+		results, err := usersync.Sync(context.Background(), client, guard, userReceipts, slog.Default())
+		if err != nil {
+			t.Fatalf("Sync: %v", err)
+		}
+		if !slices.Equal(client.reported, results) {
+			t.Errorf("reported %+v, want %+v", client.reported, results)
+		}
+		return results
+	}
+
+	results := sync()
+	bothTree := filepath.Join(profile, ".agents", "skills", "both")
+	if outcomeOf(results, "both", "codex") != string(installer.OutcomeInstalled) || readFile(t, filepath.Join(bothTree, "SKILL.md")) != "both for codex" {
+		t.Errorf("both not placed in the profile: %+v", results)
+	}
+	if rc, ok, err := receipt.Read(userReceipts, "codex", "both"); err != nil || !ok || rc.Path != bothTree || rc.Version != "1.0" || rc.TreeHash != both.TreeHash {
+		t.Errorf("both's user receipt = %+v, %v, %v", rc, ok, err)
+	}
+	if outcomeOf(results, "dep", "codex") != string(installer.OutcomeInstalled) || readFile(t, filepath.Join(profile, ".agents", "skills", "dep", "SKILL.md")) != "dep" {
+		t.Errorf("dependency dep not placed in the profile: %+v", results)
+	}
+	if outcomeOf(results, "stray", "stray") != string(installer.OutcomeRefused) || exists(filepath.Join(profile, "elsewhere")) {
+		t.Errorf("stray outside the user roots: %+v", results)
+	}
+	if rc, _, _ := receipt.Read(userReceipts, "codex", "held"); rc != heldRc || readFile(t, filepath.Join(heldTree, "SKILL.md")) != "held, older" {
+		t.Errorf("held item touched: receipt %+v", rc)
+	}
+	if outcomeOf(results, "held", "codex") != "" {
+		t.Errorf("held item acted on: %+v", results)
+	}
+
+	// both leaves the desired set: its staged archive goes, and the next sync
+	// removes its tree and receipt. The held item still stays.
+	setManifest("machine-only, stray")
+	e.run()
+	if exists(both.Archive) {
+		t.Error("the archive of an item that left the plan is still staged")
+	}
+	results = sync()
+	if outcomeOf(results, "both", "codex") != string(installer.OutcomeRemoved) || exists(bothTree) {
+		t.Errorf("both not removed by scope exit: %+v", results)
+	}
+	if _, ok, _ := receipt.Read(userReceipts, "codex", "both"); ok {
+		t.Error("both's user receipt kept")
+	}
+	if !exists(filepath.Join(heldTree, "SKILL.md")) {
+		t.Error("held item removed")
 	}
 }
