@@ -1,5 +1,5 @@
-# Where the Tapas Test build may place zip items (docs/zip-items.md). The
-# windows root covers every placement in ../harnesses.yaml except
+# Where the Tapas Test build may place zip items (docs/zip-items.md). Each
+# OS's machine root covers every placement in ../harnesses.yaml except
 # outside-skills, which lies outside it on purpose.
 darwin:
   - /Library/Application Support/Tapas Test

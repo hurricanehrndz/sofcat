@@ -34,7 +34,7 @@ _ui_tags := "production" + _ui_icon_tag + (if write_roots == "" { "" } else { ",
 # sed arguments filling the @PLACEHOLDERS@ in installer/embala.toml and
 # */winres/winres.json. brand-check keeps the values free of ' | & \ and ".
 _subst := "-e 's|@APP@|" + app + "|g' -e 's|@PRODUCT@|" + product + "|g' -e 's|@PUBLISHER@|" + publisher + "|g' -e 's|@IDENTIFIER@|" + identifier + "|g' -e 's|@DESCRIPTION@|" + description + "|g' -e 's|@HOMEPAGE@|" + homepage + "|g'"
-_identity := "-X github.com/hurricanehrndz/sofcat/pkg/identity.Slug=" + app + " -X 'github.com/hurricanehrndz/sofcat/pkg/identity.Name=" + product + "'"
+_identity := "-X github.com/hurricanehrndz/sofcat/pkg/identity.Slug=" + app + " -X 'github.com/hurricanehrndz/sofcat/pkg/identity.Name=" + product + "' -X github.com/hurricanehrndz/sofcat/pkg/identity.Identifier=" + identifier
 version := `git describe --tags --always --dirty 2>/dev/null || echo dev`
 msi_version := replace_regex(replace_regex(version, "^v", ""), "[-+].*$", "")
 manual_test_dir := "build/manual-test"
@@ -131,6 +131,106 @@ msi: build
     sed -e "s/@VERSION@/{{msi_version}}/" {{_subst}} installer/embala.toml > build/msi/embala.toml
     embala build --config build/msi/embala.toml --formats msi --out-dir build
 
+# The oldest macOS the app and the cgo objects in it are built for.
+macos_min := "13.0"
+_app_bundle := "build/" + product + ".app"
+# A brand icon.png, or the stock 1024px icon, becomes the app's icon.icns.
+_icns_src := if icon_png == "" { "assets/sofcat-icon-1024.png" } else { icon_png }
+
+_require-macos:
+    @[ "$(uname)" = Darwin ] || { echo "this recipe runs only on macOS (Xcode command line tools: cgo, sips, iconutil, pkgbuild)" >&2; exit 1; }
+
+# macOS binaries for the host architecture -> build/<app> (the CLI, pure Go)
+# and build/<product>.app (the UI: Wails needs cgo and the Xcode command line
+# tools). Same tags and identity as `build`; no -H windowsgui. The icon.icns
+# is made with sips and iconutil, which ship with macOS.
+build-macos: _require-macos ui-assets
+    mkdir -p build
+    {{ if write_roots == "" { "true" } else { "cp '" + write_roots + "' pkg/placement/brand-write-roots.yaml" } }}
+    CGO_ENABLED=0 go build -tags "{{_svc_tags}}" -ldflags "-X github.com/hurricanehrndz/sofcat/pkg/version.appName={{app}} -X github.com/hurricanehrndz/sofcat/pkg/version.version={{version}} {{_identity}}" \
+        -o build/{{app}} ./cmd/sofcat
+    {{ if icon_png == "" { "true" } else { "cp '" + icon_png + "' ui/brand-icon.png" } }}
+    rm -rf "{{_app_bundle}}" build/icon.iconset
+    mkdir -p "{{_app_bundle}}/Contents/MacOS" "{{_app_bundle}}/Contents/Resources" build/icon.iconset
+    MACOSX_DEPLOYMENT_TARGET={{macos_min}} CGO_ENABLED=1 CGO_CFLAGS="-O2 -g -mmacosx-version-min={{macos_min}}" CGO_LDFLAGS="-mmacosx-version-min={{macos_min}}" \
+        go build -tags {{_ui_tags}} -ldflags "{{_identity}}" \
+        -o "{{_app_bundle}}/Contents/MacOS/{{app}}-ui" ./ui
+    for size in 16 32 128 256 512; do \
+      sips -z $size $size "{{_icns_src}}" --out build/icon.iconset/icon_${size}x${size}.png >/dev/null && \
+      sips -z $((size * 2)) $((size * 2)) "{{_icns_src}}" --out build/icon.iconset/icon_${size}x${size}@2x.png >/dev/null || exit 1; \
+    done
+    iconutil -c icns build/icon.iconset -o "{{_app_bundle}}/Contents/Resources/icon.icns"
+    printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>' \
+      '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
+      '<plist version="1.0">' '<dict>' \
+      '	<key>CFBundleIdentifier</key>' '	<string>{{identifier}}</string>' \
+      '	<key>CFBundleName</key>' '	<string>{{product}}</string>' \
+      '	<key>CFBundleDisplayName</key>' '	<string>{{product}}</string>' \
+      '	<key>CFBundleExecutable</key>' '	<string>{{app}}-ui</string>' \
+      '	<key>CFBundleIconFile</key>' '	<string>icon</string>' \
+      '	<key>CFBundlePackageType</key>' '	<string>APPL</string>' \
+      '	<key>CFBundleShortVersionString</key>' '	<string>{{version}}</string>' \
+      '	<key>CFBundleVersion</key>' '	<string>{{version}}</string>' \
+      '	<key>LSMinimumSystemVersion</key>' '	<string>{{macos_min}}</string>' \
+      '	<key>NSHighResolutionCapable</key>' '	<true/>' \
+      '</dict>' '</plist>' > "{{_app_bundle}}/Contents/Info.plist"
+    plutil -lint "{{_app_bundle}}/Contents/Info.plist"
+
+# Unsigned macOS installer -> build/<app>-<version>.pkg: the app in
+# /Applications, the CLI in /Library/Application Support/<product>/bin and the
+# launchd plist in /Library/LaunchDaemons, all root:wheel. Each goes in its own
+# component rooted at its install location, so the payload never lists
+# /Library/Application Support, whose root:admin owner and mode Installer
+# would otherwise reset. The plist is what
+# `<app> -serviceinstall` writes for that layout (`-print-launchd-plist`), and
+# the postinstall script bootstraps it, so the daemon starts with no config
+# until config.yaml is written and the daemon kickstarted, as the MSI does.
+pkg: _require-macos build-macos
+    #!/usr/bin/env bash
+    set -euo pipefail
+    work=build/pkg
+    rm -rf "$work" && mkdir -p "$work/support/bin" "$work/daemon" "$work/scripts"
+    cp build/{{app}} "$work/support/bin/{{app}}"
+    plist="$work/daemon/{{identifier}}.plist"
+    build/{{app}} -print-launchd-plist > "$plist"
+    plutil -lint "$plist"
+    chmod 0644 "$plist" && chmod 0755 "$work/support" "$work/support/bin" "$work/support/bin/{{app}}" "$work/daemon"
+    # The daemon logs into Data, root-only like the Windows data directory;
+    # the service fixes its owner and mode again at every start. On an upgrade
+    # the bootout returns before launchd has let go of the old daemon, and a
+    # bootstrap that comes too soon fails with "Input/output error", so it is
+    # retried for up to 10 s, as run-tapas-smoke.sh does.
+    printf '%s\n' '#!/bin/sh' 'set -e' \
+      'data="/Library/Application Support/{{product}}/Data"' \
+      'plist="/Library/LaunchDaemons/{{identifier}}.plist"' \
+      'mkdir -p "$data" && chown root:wheel "$data" && chmod 0700 "$data"' \
+      '/bin/launchctl bootout system/{{identifier}} 2>/dev/null || true' \
+      'tries=0' \
+      'until /bin/launchctl bootstrap system "$plist"; do' \
+      '  tries=$((tries + 1))' \
+      '  [ "$tries" -lt 10 ] || exit 1' \
+      '  sleep 1' \
+      'done' > "$work/scripts/postinstall"
+    chmod 0755 "$work/scripts/postinstall"
+    # The app's component plist sets BundleIsRelocatable false, so Installer
+    # always writes /Applications and never updates a copy of the bundle it
+    # finds elsewhere, such as build/. The staging root stands for
+    # /Applications, so it gets that directory's 0775.
+    mkdir -m 0775 "$work/apps"
+    ditto "{{_app_bundle}}" "$work/apps/{{product}}.app"
+    pkgbuild --analyze --root "$work/apps" "$work/app-component.plist"
+    /usr/libexec/PlistBuddy -c "Set :0:BundleIsRelocatable false" "$work/app-component.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :0:BundleIsRelocatable bool false" "$work/app-component.plist"
+    pkgbuild --root "$work/apps" --component-plist "$work/app-component.plist" --install-location /Applications \
+      --identifier {{identifier}}.app --version {{version}} "$work/app.pkg"
+    pkgbuild --root "$work/support" --install-location "/Library/Application Support/{{product}}" \
+      --identifier {{identifier}}.cli --version {{version}} "$work/cli.pkg"
+    # Last, so its postinstall runs after the app and the CLI are in place.
+    pkgbuild --root "$work/daemon" --scripts "$work/scripts" --install-location /Library/LaunchDaemons \
+      --identifier {{identifier}}.daemon --version {{version}} "$work/daemon.pkg"
+    productbuild --package "$work/app.pkg" --package "$work/cli.pkg" --package "$work/daemon.pkg" \
+      build/{{app}}-{{version}}.pkg
+    echo "Built build/{{app}}-{{version}}.pkg"
+
 # Reject brand values that would break a template or collide with a stock
 # install. SLUG, NAME and IDENTIFIER must all keep or all change the stock
 # values: the service, pipe, ProgramData folder, policy key and MSI upgrade
@@ -218,6 +318,7 @@ tapas_fixtures := "test/manual/fixtures/tapas"
 tapas_brand := tapas_fixtures / "brand"
 tapas_app := shell(_read, tapas_brand / "brand.env", "SLUG", "")
 tapas_product := shell(_read, tapas_brand / "brand.env", "NAME", "")
+tapas_identifier := shell(_read, tapas_brand / "brand.env", "IDENTIFIER", "")
 tapas_server_root := manual_test_dir / "tapas" / "server-root"
 tapas_vm_dir := manual_test_dir / "tapas" / "vm"
 
@@ -226,23 +327,11 @@ tapas_vm_dir := manual_test_dir / "tapas" / "vm"
 # makecatalogs zip-item packs from test/manual/fixtures/tapas/rendered, plus
 # the hand-written package-info files in packages-info/ (an exe item the
 # zip-only brand must reject). The VM gate is test/manual/run-tapas-smoke.ps1.
-bootstrap-tapas base_url="": manual-test-server
+bootstrap-tapas base_url="": manual-test-server _tapas-repo
     {{quote(just_executable())}} --justfile {{quote(justfile())}} brand={{tapas_brand}} build
-    go build -ldflags "-X github.com/hurricanehrndz/sofcat/pkg/version.version={{version}}" \
-        -o build/makecatalogs ./cmd/makecatalogs
-    rm -rf {{tapas_server_root}} {{tapas_vm_dir}}
-    mkdir -p {{tapas_server_root}}/manifests {{tapas_server_root}}/packages-info {{tapas_vm_dir}}
-    cp build/{{tapas_app}}.exe build/{{tapas_app}}-ui.exe {{tapas_fixtures}}/harnesses.yaml {{tapas_server_root}}/
-    cp {{tapas_fixtures}}/manifests/*.yaml {{tapas_server_root}}/manifests/
-    cp {{tapas_fixtures}}/packages-info/*.yaml {{tapas_server_root}}/packages-info/
-    for item in {{tapas_fixtures}}/items/*.yaml; do \
-      name=$(basename "$item" .yaml); \
-      build/makecatalogs zip-item --harnesses {{tapas_fixtures}}/harnesses.yaml --item "$item" \
-        --rendered {{tapas_fixtures}}/rendered/$name --location-prefix packages/tapas \
-        -o {{tapas_server_root}} > {{tapas_server_root}}/packages-info/$name.yaml || exit 1; \
-    done
-    build/makecatalogs {{tapas_server_root}}
-    build/makecatalogs -check {{tapas_server_root}}
+    rm -rf {{tapas_vm_dir}}
+    mkdir -p {{tapas_vm_dir}}
+    cp build/{{tapas_app}}.exe build/{{tapas_app}}-ui.exe {{tapas_server_root}}/
     cp test/manual/bootstrap-vm.ps1 {{tapas_vm_dir}}/
     @base_url="{{base_url}}"; \
     if [ -z "$base_url" ]; then \
@@ -261,6 +350,47 @@ bootstrap-tapas base_url="": manual-test-server
     echo "Prepared Tapas assets in {{tapas_server_root}}; VM scripts in {{tapas_vm_dir}}"; \
     echo "Run: ./build/manual-test-server -root {{tapas_server_root}} -addr :8080"; \
     echo "VM:  bootstrap-vm.ps1 -BaseUrl $base_url $args -NoPause; then run-tapas-smoke.ps1"
+
+tapas_mac_dir := manual_test_dir / "tapas" / "mac"
+
+# The macOS twin of bootstrap-tapas, run on a Mac: the fixture brand's
+# build-macos and pkg (build/<app>-<version>.pkg, installed by hand, not
+# served), the same repository with the darwin CLI and a zip of the app beside
+# it, and build/manual-test/tapas/mac/config.yaml pointing at base_url. The
+# gate is test/manual/run-tapas-smoke.sh; see "macOS validation loop" in
+# AGENTS.md.
+bootstrap-tapas-macos base_url="http://127.0.0.1:8080/": _require-macos manual-test-server _tapas-repo
+    {{quote(just_executable())}} --justfile {{quote(justfile())}} brand={{tapas_brand}} pkg
+    cp build/{{tapas_app}} {{tapas_server_root}}/
+    ditto -c -k --keepParent "build/{{tapas_product}}.app" "{{tapas_server_root}}/{{tapas_product}}.app.zip"
+    rm -rf {{tapas_mac_dir}} && mkdir -p {{tapas_mac_dir}}
+    printf '%s\n' 'url: {{base_url}}' 'url_packages: {{base_url}}' 'manifest: tapas_manifest' 'catalogs:' '  - tapas' \
+      > {{tapas_mac_dir}}/config.yaml
+    @echo "Prepared Tapas assets in {{tapas_server_root}}; config in {{tapas_mac_dir}}/config.yaml"
+    @echo "Run: ./build/manual-test-server -root {{tapas_server_root}} -addr 127.0.0.1:8080"
+    @echo "Then: sudo installer -pkg build/{{tapas_app}}-{{version}}.pkg -target / && sudo install -m 600 -o root -g wheel {{tapas_mac_dir}}/config.yaml '/Library/Application Support/{{tapas_product}}/config.yaml' && sudo launchctl kickstart -k system/{{tapas_identifier}} && sudo test/manual/run-tapas-smoke.sh"
+
+# The Tapas fixture repository under build/manual-test/tapas/server-root,
+# without binaries: harnesses.yaml, the manifests and the zip items
+# makecatalogs zip-item packs from test/manual/fixtures/tapas/rendered (a
+# windows and a darwin variant per placement), plus the hand-written
+# package-info files in packages-info/.
+_tapas-repo:
+    go build -ldflags "-X github.com/hurricanehrndz/sofcat/pkg/version.version={{version}}" \
+        -o build/makecatalogs ./cmd/makecatalogs
+    rm -rf {{tapas_server_root}}
+    mkdir -p {{tapas_server_root}}/manifests {{tapas_server_root}}/packages-info
+    cp {{tapas_fixtures}}/harnesses.yaml {{tapas_server_root}}/
+    cp {{tapas_fixtures}}/manifests/*.yaml {{tapas_server_root}}/manifests/
+    cp {{tapas_fixtures}}/packages-info/*.yaml {{tapas_server_root}}/packages-info/
+    for item in {{tapas_fixtures}}/items/*.yaml; do \
+      name=$(basename "$item" .yaml); \
+      build/makecatalogs zip-item --harnesses {{tapas_fixtures}}/harnesses.yaml --item "$item" \
+        --rendered {{tapas_fixtures}}/rendered/$name --location-prefix packages/tapas \
+        -o {{tapas_server_root}} > {{tapas_server_root}}/packages-info/$name.yaml || exit 1; \
+    done
+    build/makecatalogs {{tapas_server_root}}
+    build/makecatalogs -check {{tapas_server_root}}
 
 # Guard that the tree keeps cross-compiling on Linux (CI-without-Windows goal).
 check-xplat:

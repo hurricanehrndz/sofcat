@@ -132,3 +132,7 @@ func enablePrivilege(name string) func() {
 		_ = token.Close()
 	}
 }
+
+// protectConfig is a no-op on Windows: config.yaml sits in the protected data
+// directory and inherits its DACL.
+func protectConfig(string) error { return nil }

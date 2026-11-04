@@ -82,7 +82,7 @@ func packVersion(t *testing.T, version string, files map[string]string) (catalog
 // holding two placements: skills, and the exclusive one.
 func newTestZip(t *testing.T) (*ZipInstaller, string) {
 	t.Helper()
-	base := t.TempDir()
+	base := tempDir(t)
 	roots := filepath.Join(base, "roots")
 	paths := func(dir string) map[string]string {
 		p := filepath.Join(roots, dir)
@@ -384,4 +384,16 @@ func TestZipManagedFlagRefresh(t *testing.T) {
 		t.Errorf("refreshing the flag touched the tree: %v", err)
 	}
 	wantOutcome(t, "inspect refreshed", z.Inspect(item, tg), OutcomeCurrent)
+}
+
+// tempDir is t.TempDir with its symlinks resolved. On macOS it lives under
+// /var/folders, a symlink to /private/var/folders, and the guard compares
+// resolved paths.
+func tempDir(t *testing.T) string {
+	t.Helper()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dir
 }

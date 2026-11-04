@@ -4,6 +4,7 @@ package software
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/xml"
 	"errors"
 	"os"
@@ -19,8 +20,11 @@ var (
 	// on windows. Tests set it.
 	GOOS = runtime.GOOS
 	// MunkiReport is Munki's run report, which lists every installed managed
-	// item under InstalledItems. Tests point it at a fixture.
-	MunkiReport = "/Library/Managed Installs/ManagedInstallReport.plist"
+	// item under InstalledItems. Tests point it at a fixture. The
+	// SOFCAT_TEST_MUNKI_REPORT environment variable replaces it for the macOS
+	// smoke (test/manual/run-tapas-smoke.sh), which must not touch the rig's
+	// real Munki report; only root can set a daemon's environment.
+	MunkiReport = cmp.Or(os.Getenv("SOFCAT_TEST_MUNKI_REPORT"), "/Library/Managed Installs/ManagedInstallReport.plist")
 	// ChocolateyLib returns Chocolatey's package directory, which holds one
 	// directory per installed package id. Tests replace it.
 	ChocolateyLib = func() string {

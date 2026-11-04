@@ -210,13 +210,13 @@ func Example() {
 	// -d, -debug          enable debug output
 	// -a, -about          displays the version number and other build info
 	// -V, -version        display the version number
-	// -s, -service        run SofCat as a Windows service
+	// -s, -service        run SofCat as a service (Windows SCM or macOS launchd)
 	// -S, -servicecmd     send a command to a running SofCat service (GetServiceInfo|ListOptionalInstalls|GetBranding|InstallItem:itemName|RemoveItem:itemName|StreamOperationStatus:operationId|CancelOperation:operationId|ListUserPlacements|ReportUserPlacements:item,placement,outcome[,error])
-	// -serviceinstall     install SofCat as a Windows service and restrict its data directory to SYSTEM and Administrators
-	// -serviceremove      remove SofCat Windows service
-	// -servicestart       start SofCat Windows service
-	// -servicestop        stop SofCat Windows service
-	// -servicestatus      show SofCat Windows service status
+	// -serviceinstall     install the SofCat service and restrict its data directory to SYSTEM and Administrators (root on macOS)
+	// -serviceremove      remove the SofCat service
+	// -servicestart       start the SofCat service
+	// -servicestop        stop the SofCat service
+	// -servicestatus      show the SofCat service status
 	// -h, -help           display this help message
 }
 

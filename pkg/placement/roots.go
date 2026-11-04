@@ -43,7 +43,7 @@ func ParseRoots(data []byte) (Roots, error) {
 // own program directory for machine scope, and no user roots.
 func StockRoots() Roots {
 	return Roots{
-		Darwin:  []string{"/Library/Application Support/" + identity.Name},
+		Darwin:  []string{identity.SupportDir()},
 		Windows: []string{`${ProgramFiles}\` + identity.Name},
 	}
 }

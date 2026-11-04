@@ -29,6 +29,11 @@ rejects any other value.
 `just brand-check` validates the values on its own; every brand build runs it
 first.
 
+On a Mac, `just brand=<dir> build-macos pkg` builds the same brand as
+`build/<SLUG>` and `build/<NAME>.app` (bundle identifier `IDENTIFIER`, icon
+made from `icon.png`) and wraps them in an unsigned `build/<SLUG>-<version>.pkg`
+that installs a launchd daemon labelled `IDENTIFIER`; see `AGENTS.md`.
+
 A rebranded build is a separate product: its service, pipe, data folder and
 policy key derive from `SLUG` and `NAME` (`pkg/identity`), so it installs beside
 stock SofCat or another brand without sharing any of them, as long as each

@@ -27,7 +27,7 @@ type marketTest struct {
 
 func newMarketTest(t *testing.T, settings string) marketTest {
 	t.Helper()
-	base := t.TempDir()
+	base := tempDir(t)
 	roots := filepath.Join(base, "roots")
 	root := filepath.Join(roots, "market")
 	if settings == "" {
@@ -295,7 +295,7 @@ func TestMarketplaceHeldPluginKeepsFlag(t *testing.T) {
 // reports the refusal against the marketplace placement on every run until
 // the path is allowed, and then writes the drop-in.
 func TestMarketplaceRegenerateRefusalHeals(t *testing.T) {
-	outsideRoot := t.TempDir()
+	outsideRoot := tempDir(t)
 	outside := filepath.Join(outsideRoot, "settings.d", "50-acme.json")
 	m := newMarketTest(t, outside)
 	item, archive := plugin(t, "one", "market")
@@ -394,7 +394,7 @@ func TestSettingsPlacementRefusedAsTarget(t *testing.T) {
 // placement_refused naming the settings placement, and nothing is written
 // outside the roots.
 func TestSettingsPathOutsideRootsRefused(t *testing.T) {
-	outside := filepath.Join(t.TempDir(), "settings.d", "50-acme.json")
+	outside := filepath.Join(tempDir(t), "settings.d", "50-acme.json")
 	m := newMarketTest(t, outside)
 	item, archive := plugin(t, "one", "market")
 	res := m.z.Apply(item, target(t, m.z, item, "market"), archive)

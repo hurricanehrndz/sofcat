@@ -8,6 +8,7 @@ package facts
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"maps"
@@ -42,8 +43,11 @@ var (
 	// Test seams.
 	runScript    = runConditionScript
 	builtinFacts = collectBuiltinFacts
-	commandPs1   = filepath.Join(os.Getenv("WINDIR"), "system32", "WindowsPowershell", "v1.0", "powershell.exe")
 )
+
+// errSkipped marks a file in the conditions directory that is not a script
+// this OS runs; it is logged and skipped.
+var errSkipped = errors.New("not run")
 
 // Collect returns this machine's facts. Built-in facts are gathered every
 // call and override admin facts of the same name, so a script cannot spoof
@@ -94,6 +98,10 @@ func adminFacts(dir string) conditions.Facts {
 		}
 		path := filepath.Join(dir, name)
 		out, err := runScript(path)
+		if errors.Is(err, errSkipped) {
+			slog.Warn("skipping file in the conditions directory", "path", path, "err", err)
+			continue
+		}
 		if err != nil {
 			slog.Warn("condition script failed", "path", path, "err", err)
 			continue
@@ -109,21 +117,24 @@ func adminFacts(dir string) conditions.Facts {
 	return facts
 }
 
-// runConditionScript runs a .ps1 with Windows PowerShell or an .exe directly
-// and returns its stdout. Other files are skipped with an error.
+// runConditionScript runs one admin script the way this OS does (see
+// scriptCommand) and returns its stdout. Files the OS does not run are
+// skipped with an errSkipped error.
 func runConditionScript(path string) ([]byte, error) {
+	name, args, err := scriptCommand(path)
+	if err != nil {
+		return nil, err
+	}
+	return runCommand(name, args...)
+}
+
+// runCommand runs a program under scriptTimeout and returns its stdout. Admin
+// scripts and the commands behind the macOS built-in facts share it.
+func runCommand(name string, args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), scriptTimeout)
 	defer cancel()
 
-	var cmd *exec.Cmd
-	switch strings.ToLower(filepath.Ext(path)) {
-	case ".ps1":
-		cmd = exec.CommandContext(ctx, commandPs1, "-NoProfile", "-NoLogo", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", path)
-	case ".exe":
-		cmd = exec.CommandContext(ctx, path)
-	default:
-		return nil, fmt.Errorf("unsupported script type %q: use .ps1 or .exe", filepath.Ext(path))
-	}
+	cmd := exec.CommandContext(ctx, name, args...)
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()

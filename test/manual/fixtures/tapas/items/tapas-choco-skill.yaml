@@ -1,11 +1,13 @@
 # Input to makecatalogs zip-item; just bootstrap-tapas packs rendered/tapas-choco-skill.
 # run-tapas-smoke.ps1 installs it before and after creating
-# C:\ProgramData\chocolatey\lib\demo-tool.
+# C:\ProgramData\chocolatey\lib\demo-tool; run-tapas-smoke.sh before and
+# after writing a Munki report that lists DemoTool.
 item_name: tapas-choco-skill
 display_name: Tapas Choco Skill
-description: A self-service skill that needs a Chocolatey package
+description: A self-service skill that needs a Chocolatey package or Munki item
 catalog: tapas
 version: 1.0.0
 requires_software:
   - display_name: Demo Tool
     chocolatey: demo-tool
+    munki: DemoTool

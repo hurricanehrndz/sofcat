@@ -35,6 +35,7 @@ Guidance for coding agents working in this repository.
   - `just clean`
   - `just bootstrap`
   - `just bootstrap-run`
+  - `just build-macos`, `just pkg` and `just bootstrap-tapas-macos` (macOS only)
 
 Prefer `just test` as the default local validation step, even for small changes.
 When changes include SofCat UI code, run `just ui-lint` and `just ui-test`.
@@ -50,6 +51,24 @@ binaries, which compiles out the command installers and catalog scripts
 (`*_command.go`/`*_script.go` versus their `*_zip_only.go` twins); test that
 set with `just test-zip-only` and
 `golangci-lint run --build-tags zip_only ./...`.
+
+On a Mac, `just build-macos` builds the CLI for the host architecture
+(`build/<slug>`, pure Go) and the UI as `build/<Name>.app` (cgo, so the Xcode
+command line tools), and `just pkg` wraps both with the launchd plist into an
+unsigned `build/<slug>-<version>.pkg`. It installs the app in `/Applications`,
+the CLI in `/Library/Application Support/<Name>/bin/<slug>` and the plist,
+labelled with the brand's `IDENTIFIER`, in `/Library/LaunchDaemons`; its
+postinstall script bootstraps the daemon. The daemon reads
+`/Library/Application Support/<Name>/config.yaml`, keeps its state in the
+root-only `.../<Name>/Data` (0700) and serves
+`/var/run/<slug>/<slug>-service.sock`. The service and `-serviceinstall` make
+the config root-owned and 0600, since it can hold `auth_pass`.
+`<slug> -serviceinstall|-servicestart|-servicestop|-serviceremove` drive
+`launchctl` as the SCM actions do on Windows.
+
+The darwin lint from Linux is `GOOS=darwin golangci-lint run ./pkg/... ./cmd/...`:
+`GOOS=darwin golangci-lint run ./...` cannot typecheck `ui/` there, because
+Wails needs cgo on macOS. On the Mac itself, `just lint` covers the whole tree.
 
 ## Code Style
 
@@ -166,6 +185,39 @@ The service starts with no config. Write `C:\ProgramData\SofCat\config.yaml`
 (url, manifest, catalogs, app_data_path), `Restart-Service sofcat`, then run
 the two gates above. `msiexec /x <msi> /qn` must remove the service and
 `C:\Program Files\SofCat` and leave `C:\ProgramData\SofCat` alone.
+
+## macOS Validation Loop
+
+The macOS twin of the Tapas loop runs on the `mac1` rig (`macos-test-rig`
+skill; see `AGENTS.local.md`). The smoke needs root, and the rig has
+passwordless sudo.
+
+1. Sync the working tree to `~/src/sofcat` on the Mac (a tarball of the
+   checkout without `.git`, `build` and `node_modules`), and `mise install`
+   there once.
+2. `just bootstrap-tapas-macos` (default base URL `http://127.0.0.1:8080/`)
+   runs `just brand=test/manual/fixtures/tapas/brand build-macos pkg`, lays out
+   the fixture repository in `build/manual-test/tapas/server-root` and writes
+   `build/manual-test/tapas/mac/config.yaml`.
+3. Serve it on the Mac:
+   `./build/manual-test-server -root build/manual-test/tapas/server-root -addr 127.0.0.1:8080`.
+4. Install and configure:
+   `sudo installer -pkg build/tapas-test-<version>.pkg -target /`, then
+   `sudo install -m 600 -o root -g wheel build/manual-test/tapas/mac/config.yaml "/Library/Application Support/Tapas Test/config.yaml"`
+   and `sudo launchctl kickstart -k system/ca.hrndz.tapas-test`.
+5. Gate: `sudo test/manual/run-tapas-smoke.sh` must exit 0 and print
+   `TAPAS SMOKE PASSED`. It adds `SOFCAT_TEST_MUNKI_REPORT` to the daemon's
+   plist, so the real Munki report is never touched, and removes it again at
+   the end; a failed run leaves it there until the pkg is reinstalled. That
+   variable is a test hook read from the service's own environment, which
+   only root can set (launchd's root-owned plist); nothing else honours it.
+6. Visible gate: open `/Applications/Tapas Test.app` as the logged-on user and
+   screenshot it (`mac show`, or VNC if the capture shows only wallpaper).
+7. Clean up: stop the test server, then
+   `sudo "/Library/Application Support/Tapas Test/bin/tapas-test" -serviceremove`
+   and remove `/Applications/Tapas Test.app`,
+   `/Library/Application Support/Tapas Test` and
+   `/Library/Application Support/tapas-test-*`.
 
 ## Diagnostics
 

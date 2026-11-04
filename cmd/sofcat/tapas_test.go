@@ -88,8 +88,8 @@ func (r *tapasRepo) zipItem(name, version string, trees map[string]map[string]st
 	r.t.Helper()
 	variants := map[string]map[string]catalog.Variant{}
 	for _, placementName := range slices.Sorted(maps.Keys(trees)) {
-		zipPath := filepath.Join(r.t.TempDir(), "a.zip")
-		packed, err := artifact.PackFile(writeFiles(r.t, r.t.TempDir(), trees[placementName]), tapasOS, zipPath)
+		zipPath := filepath.Join(tempDir(r.t), "a.zip")
+		packed, err := artifact.PackFile(writeFiles(r.t, tempDir(r.t), trees[placementName]), tapasOS, zipPath)
 		if err != nil {
 			r.t.Fatal(err)
 		}
@@ -166,7 +166,7 @@ func newTapasEnv(t *testing.T) *tapasEnv {
 	t.Helper()
 	resetMainHooks()
 	t.Cleanup(resetMainHooks)
-	base := t.TempDir()
+	base := tempDir(t)
 	e := &tapasEnv{
 		tapasRepo:     newTapasRepo(t),
 		t:             t,
@@ -277,7 +277,7 @@ func TestTapasZipPlacements(t *testing.T) {
 	e := newTapasEnv(t)
 	skills := filepath.Join(e.roots, "skills")
 	market := filepath.Join(e.roots, "market")
-	outside := t.TempDir()
+	outside := tempDir(t)
 	escape := filepath.Join(e.roots, "link")
 	if err := os.Symlink(outside, escape); err != nil {
 		t.Skipf("cannot create a symlink here: %v", err)
@@ -432,7 +432,7 @@ conditional_items:
 func TestTapasMissingHarnesses(t *testing.T) {
 	e := newTapasEnv(t)
 	e.zipItem("hello", "1.0", map[string]map[string]string{"skills": {"SKILL.md": "x"}})
-	present := filepath.Join(t.TempDir(), "present.txt")
+	present := filepath.Join(tempDir(t), "present.txt")
 	writeFiles(t, filepath.Dir(present), map[string]string{"present.txt": "x"})
 	e.items["Tool"] = catalog.Item{
 		Name: "Tool", DisplayName: "Tool",
@@ -464,7 +464,7 @@ func TestTapasBadArchive(t *testing.T) {
 			e.put(v.Location, []byte("not the archive the catalog names"))
 		}},
 		{"tree_hash does not match the archive", func(e *tapasEnv, v catalog.Variant) {
-			other, err := artifact.TreeHash(writeFiles(t, t.TempDir(), map[string]string{"SKILL.md": "other"}), tapasOS)
+			other, err := artifact.TreeHash(writeFiles(t, tempDir(t), map[string]string{"SKILL.md": "other"}), tapasOS)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -605,7 +605,7 @@ conditional_items:
 	}
 
 	// The helper, as one user. A held tree an earlier sync placed stays.
-	profile, userReceipts := t.TempDir(), filepath.Join(t.TempDir(), "receipts")
+	profile, userReceipts := tempDir(t), filepath.Join(tempDir(t), "receipts")
 	heldTree := writeFiles(t, filepath.Join(profile, ".agents", "skills", "held"), skill("held, older"))
 	heldHash, err := artifact.TreeHash(heldTree, tapasOS)
 	if err != nil {
@@ -739,7 +739,7 @@ func TestTapasMarketplace(t *testing.T) {
 `))
 	}
 	// The first run's drop-in path is outside the write roots.
-	outside := filepath.Join(t.TempDir(), "managed-settings.d", "50-tapas-test.json")
+	outside := filepath.Join(tempDir(t), "managed-settings.d", "50-tapas-test.json")
 	setHarnesses(outside)
 	plugin := func(name string) map[string]map[string]string {
 		return map[string]map[string]string{"market": {
@@ -879,7 +879,7 @@ conditional_items:
 // exists, the next run places both.
 func TestTapasRequiresSoftware(t *testing.T) {
 	e := newTapasEnv(t)
-	lib := filepath.Join(t.TempDir(), "chocolatey", "lib")
+	lib := filepath.Join(tempDir(t), "chocolatey", "lib")
 	origOS, origLib := software.GOOS, software.ChocolateyLib
 	software.GOOS = tapasOS
 	software.ChocolateyLib = func() string { return lib }
@@ -939,7 +939,7 @@ func TestTapasRequiresSoftware(t *testing.T) {
 // Once the software is installed the next run plans, stages and places it.
 func TestTapasUserScopeRequiresSoftware(t *testing.T) {
 	e := newTapasEnv(t)
-	lib := filepath.Join(t.TempDir(), "chocolatey", "lib")
+	lib := filepath.Join(tempDir(t), "chocolatey", "lib")
 	origOS, origLib := software.GOOS, software.ChocolateyLib
 	software.GOOS = tapasOS
 	software.ChocolateyLib = func() string { return lib }
@@ -953,7 +953,7 @@ func TestTapasUserScopeRequiresSoftware(t *testing.T) {
 	e.publishCatalog()
 	e.put("manifests/tapas.yaml", []byte("name: tapas\ncatalogs: [tapas]\nmanaged_installs: [needs-tool]\n"))
 
-	profile, userReceipts := t.TempDir(), filepath.Join(t.TempDir(), "receipts")
+	profile, userReceipts := tempDir(t), filepath.Join(tempDir(t), "receipts")
 	guard := placement.Guard{
 		GOOS:       tapasOS,
 		Roots:      placement.Roots{WindowsUser: []string{"${USERPROFILE}/.agents"}},
@@ -1007,4 +1007,16 @@ func TestTapasUserScopeRequiresSoftware(t *testing.T) {
 	if results := sync(); outcomeOf(results, "needs-tool", "codex") != string(installer.OutcomeInstalled) || readFile(t, tree) != "needs tool" {
 		t.Errorf("helper did not place needs-tool: %+v", results)
 	}
+}
+
+// tempDir is t.TempDir with its symlinks resolved. On macOS it lives under
+// /var/folders, a symlink to /private/var/folders, and the guard compares
+// resolved paths.
+func tempDir(t *testing.T) string {
+	t.Helper()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dir
 }
