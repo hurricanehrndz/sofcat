@@ -46,7 +46,7 @@ func LoadSelfServe(path string) (Item, error) {
 
 // SaveSelfServe persists the self-serve manifest at path. It keeps the three
 // self-serve lists (managed_installs, managed_uninstalls, default_installs) and
-// drops includes/catalogs/updates, which the self-serve file never owns.
+// drops includes/catalogs/updates/conditional_items, which the self-serve file never owns.
 func SaveSelfServe(path string, entry Item) error {
 	if err := mkdirAll(filepath.Clean(filepath.Dir(path)), 0o755); err != nil {
 		return fmt.Errorf("unable to create local manifest directory: %w", err)
@@ -55,6 +55,7 @@ func SaveSelfServe(path string, entry Item) error {
 	entry.Includes = nil
 	entry.Catalogs = nil
 	entry.Updates = nil
+	entry.ConditionalItems = nil
 
 	data, err := yaml.Marshal(entry)
 	if err != nil {

@@ -88,6 +88,15 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 	conditions.Apply(catalogs, machineFacts)
 	plan.conditions = machineFacts
 
+	// Resolve the manifests' conditional_items against the same facts. A block
+	// whose condition names a missing fact holds its items: the run neither
+	// installs nor removes them.
+	manifests, held := manifest.Expand(manifests, machineFacts)
+	for _, h := range held {
+		slog.Warn("holding conditional items: facts unavailable", "condition", h.Condition, "missing", h.Missing, "items", h.Items)
+		run.HeldConditions = append(run.HeldConditions, report.HeldCondition{Condition: h.Condition, Missing: h.Missing, Items: h.Items, Reason: "facts unavailable"})
+	}
+
 	// Process the manifests into install type groups
 	slog.Info("Processing manifest...")
 	installs, uninstalls, updates := process.Manifests(manifests, catalogs)

@@ -28,10 +28,13 @@ manifests.
 | `managed_uninstalls` and self-service removal | Not affected. An item stays removable after its condition stops holding. |
 | Already installed | Left installed. A condition never removes anything. |
 
-A condition that names a fact the machine does not have, fails to evaluate,
-or does not return a boolean counts as false. A typo hides an item; it never
-installs it everywhere. `makecatalogs` reports a syntax error as a problem,
-and `makecatalogs -check` fails on it.
+A condition has three results: true, false or unknown. It is unknown when
+it names a fact the machine does not have, including a misspelled fact. A
+condition that fails to evaluate or does not return a boolean is false. For
+`installable_condition`, unknown counts as false, and the log names the
+missing facts. A typo hides an item; it never installs it everywhere.
+`makecatalogs` reports a syntax error as a problem, and
+`makecatalogs -check` fails on it.
 
 ### Variants
 
@@ -48,6 +51,39 @@ Chrome:
 Chrome:
   installer: {type: msi, location: packages/chrome/GoogleChrome.msi}
 ```
+
+## Conditional items in manifests
+
+A manifest can list items for some machines only with `conditional_items`, as
+in Munki. Each block has a `condition` and any of `managed_installs`,
+`optional_installs`, `default_installs`, `managed_uninstalls`,
+`managed_updates` and nested `conditional_items`:
+
+```yaml
+name: site
+managed_installs: [GoogleChrome]
+conditional_items:
+  - condition: os == "windows"
+    managed_installs: [7zip]
+    conditional_items:
+      - condition: arch == "arm64"
+        managed_installs: [ArmTools]
+  - condition: '"lab" in machine_groups'
+    optional_installs: [CUDA]
+```
+
+- A true block adds its lists to the manifest's. Its nested blocks are then
+  evaluated the same way.
+- A false block adds nothing, and neither do its nested blocks.
+- An unknown block holds its items, nested blocks included. SofCat neither
+  installs nor removes them, and does not offer them for self-service. The
+  run log warns about each held condition and the run report records it with
+  the reason "facts unavailable". An admin fact script that fails holds the
+  blocks that use its keys instead of removing their items.
+
+The self-service list and the managed run read the same expanded manifests.
+`makecatalogs -check` checks the syntax of every `conditional_items`
+condition in the repository's `manifests` folder.
 
 ## Expressions
 
@@ -80,6 +116,7 @@ In Munki's predicate syntax, `os_vers BEGINSWITH "10"` becomes
 |---|---|---|
 | `hostname` | string | `LAB-GPU-01` |
 | `domain` | string | `corp.example.com`; empty when not joined |
+| `os` | string | `windows`, `darwin` or `linux` |
 | `arch` | string | `amd64`, `arm64` or `x86`: the machine's, not SofCat's |
 | `os_version` | string | `10.0.22631.4460` (major.minor.build.UBR) |
 | `os_build` | int | `22631`; Windows 11 is `>= 22000` |
@@ -92,9 +129,9 @@ In Munki's predicate syntax, `os_vers BEGINSWITH "10"` becomes
 | `engine_version` | string | `v1.4.0`, SofCat's version. It is the same in a rebranded build. |
 
 The manufacturer, model, type and serial come from SMBIOS. If SMBIOS can't be
-read, those four are missing and conditions that use them are false. Off
-Windows, only `hostname`, `arch`, `ipv4_address` and `engine_version` are
-set.
+read, those four are missing and conditions that use them are unknown.
+Off Windows, only `hostname`, `os`, `arch`, `ipv4_address` and
+`engine_version` are set.
 
 ## Admin-provided facts
 
@@ -118,7 +155,7 @@ Then `"lab" in machine_groups` and `site == "east"` work in conditions.
   script can't spoof `hostname`.
 - A script that exits non-zero, runs longer than 60 seconds, or prints
   anything but a JSON object is logged and contributes nothing. Conditions
-  that use its keys are false.
+  that use its keys are unknown.
 - Files starting with `.`, subfolders, and other file types are skipped.
 
 The folder inherits the app data directory's ACL (SYSTEM and Administrators

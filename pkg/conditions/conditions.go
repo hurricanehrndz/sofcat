@@ -7,9 +7,11 @@ package conditions
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/expr-lang/expr"
+	"github.com/expr-lang/expr/ast"
 	goversion "github.com/hashicorp/go-version"
 
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
@@ -20,43 +22,115 @@ import (
 // facts.
 type Facts map[string]any
 
-// Eval reports whether condition holds for facts. An empty condition holds.
-// A condition that names an unknown fact, fails to evaluate, or is not a
-// boolean is an error; callers treat an error as "not installable", so a typo
-// hides an item rather than installing it everywhere.
-func Eval(condition string, facts Facts) (bool, error) {
+// Result is a condition's outcome. Unknown means the condition names a fact
+// this machine does not have, so it can be neither honoured nor refused.
+type Result int
+
+const (
+	False Result = iota
+	True
+	Unknown
+)
+
+func (r Result) String() string {
+	switch r {
+	case True:
+		return "true"
+	case Unknown:
+		return "unknown"
+	case False:
+		return "false"
+	}
+	return fmt.Sprintf("Result(%d)", int(r))
+}
+
+// Evaluate decides condition against facts. An empty condition is True. A
+// condition that names an identifier absent from facts is Unknown, and missing
+// lists those names. A syntax error, a runtime error, or a non-boolean result
+// is False with the error, so a typo hides an item rather than installing it
+// everywhere.
+func Evaluate(condition string, facts Facts) (_ Result, missing []string, _ error) {
 	if strings.TrimSpace(condition) == "" {
-		return true, nil
+		return True, nil, nil
+	}
+	parsed, err := expr.Compile(condition, append(versionOptions(), expr.AllowUndefinedVariables())...)
+	if err != nil {
+		return False, nil, err
+	}
+	if missing := missingFacts(parsed.Node(), facts); len(missing) > 0 {
+		return Unknown, missing, nil
 	}
 	program, err := expr.Compile(condition, append(versionOptions(), expr.Env(map[string]any(facts)), expr.AsBool())...)
 	if err != nil {
-		return false, err
+		return False, nil, err
 	}
 	out, err := expr.Run(program, map[string]any(facts))
 	if err != nil {
-		return false, err
+		return False, nil, err
 	}
 	ok, isBool := out.(bool)
 	if !isBool {
-		return false, fmt.Errorf("condition returned %T, not a boolean", out)
+		return False, nil, fmt.Errorf("condition returned %T, not a boolean", out)
 	}
-	return ok, nil
+	if !ok {
+		return False, nil, nil
+	}
+	return True, nil, nil
+}
+
+// missingFacts returns, sorted, the identifiers in node that facts lacks.
+// Called functions (version and the version operators) and let-bound names
+// are not facts; expr builtins such as now() and any() are not identifiers.
+func missingFacts(node ast.Node, facts Facts) []string {
+	v := identifiers{used: map[string]bool{}, local: map[string]bool{}}
+	ast.Walk(&node, v)
+	var missing []string
+	for name := range v.used {
+		if _, ok := facts[name]; !ok && !v.local[name] {
+			missing = append(missing, name)
+		}
+	}
+	slices.Sort(missing)
+	return missing
+}
+
+type identifiers struct {
+	used, local map[string]bool
+}
+
+func (v identifiers) Visit(node *ast.Node) {
+	switch n := (*node).(type) {
+	case *ast.IdentifierNode:
+		// $env is expr's built-in handle on the whole environment, not a fact.
+		if n.Value != "$env" {
+			v.used[n.Value] = true
+		}
+	case *ast.CallNode:
+		if callee, ok := n.Callee.(*ast.IdentifierNode); ok {
+			v.local[callee.Value] = true
+		}
+	case *ast.VariableDeclaratorNode:
+		v.local[n.Name] = true
+	}
 }
 
 // Apply evaluates every item's installable_condition against facts and sets
 // NotInstallable on the items it rejects, so the lookups that choose an item
-// to install skip them.
+// to install skip them. Unknown rejects an item like false: the item is not
+// installable here until the machine has the facts it names.
 func Apply(catalogs map[int]map[string]catalog.Item, facts Facts) {
 	for _, items := range catalogs {
 		for name, item := range items {
 			if item.InstallableCondition == "" {
 				continue
 			}
-			ok, err := Eval(item.InstallableCondition, facts)
+			result, missing, err := Evaluate(item.InstallableCondition, facts)
 			switch {
 			case err != nil:
 				item.NotInstallable = fmt.Sprintf("installable_condition %q cannot be evaluated: %v", item.InstallableCondition, err)
-			case !ok:
+			case result == Unknown:
+				item.NotInstallable = fmt.Sprintf("installable_condition %q needs facts this machine does not have: %s", item.InstallableCondition, strings.Join(missing, ", "))
+			case result == False:
 				item.NotInstallable = fmt.Sprintf("installable_condition %q is false", item.InstallableCondition)
 			default:
 				item.NotInstallable = ""

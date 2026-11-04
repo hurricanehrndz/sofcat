@@ -368,7 +368,7 @@ func addServiceManagedInstall(cfg config.Configuration, name string) (string, se
 // never removable, even when it is also offered.
 func removeServiceManagedInstall(cfg config.Configuration, name string) (selection, error) {
 	download.SetConfig(cfg)
-	manifests, _, err := manifestGet(cfg)
+	manifests, _, _, err := adminManifests(cfg)
 	if err != nil {
 		return selection{}, err
 	}
@@ -430,6 +430,20 @@ func withdrawItem(cfg config.Configuration, cancels *installer.Cancels, name str
 	return errNotCancelable
 }
 
+// adminManifests fetches the admin manifests and expands their
+// conditional_items with manifest.Expand, as the managed run does, so the
+// service offers and refuses exactly what a run would act on. It reuses the
+// last run's admin condition facts: a list call should not run the scripts.
+func adminManifests(cfg config.Configuration) (manifests []manifest.Item, newCatalogs []string, machineFacts conditions.Facts, err error) {
+	manifests, newCatalogs, err = manifestGet(cfg)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	machineFacts = facts.Collect(facts.Dir(cfg.AppDataPath), false)
+	manifests, _ = manifest.Expand(manifests, machineFacts)
+	return manifests, newCatalogs, machineFacts, nil
+}
+
 func loadServiceLocalManifest(cfg config.Configuration) (manifest.Item, error) {
 	return manifest.LoadSelfServe(serviceLocalManifestPath(cfg))
 }
@@ -442,7 +456,7 @@ func loadServiceLocalManifest(cfg config.Configuration) (manifest.Item, error) {
 func getOptionalItems(cfg config.Configuration) ([]OptionalInstallItem, error) {
 	download.SetConfig(cfg)
 
-	manifests, newCatalogs, err := manifestGet(cfg)
+	manifests, newCatalogs, machineFacts, err := adminManifests(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -454,9 +468,7 @@ func getOptionalItems(cfg config.Configuration) ([]OptionalInstallItem, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Reuse the last run's admin condition facts: a list call should not run
-	// the scripts.
-	conditions.Apply(catalogs, facts.Collect(facts.Dir(cfg.AppDataPath), false))
+	conditions.Apply(catalogs, machineFacts)
 
 	selfServe, err := manifest.LoadSelfServe(manifest.SelfServePath(cfg.AppDataPath))
 	if err != nil {
