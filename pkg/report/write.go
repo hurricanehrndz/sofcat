@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 // WriteInventory writes inv as indented JSON to path (see writeProtected).
@@ -41,8 +42,32 @@ func writeProtected(path string, data []byte) (err error) {
 	if err = tmp.Close(); err != nil {
 		return fmt.Errorf("close %s: %w", tmpName, err)
 	}
-	if err = os.Rename(tmpName, path); err != nil {
+	if err = renameRetrying(os.Rename, renameRetryable, tmpName, path); err != nil {
 		return fmt.Errorf("replace %s: %w", path, err)
 	}
 	return nil
+}
+
+// renameAttempts and renamePause bound the retry in renameRetrying to about
+// two seconds: long enough for a reader to close the file, short enough not
+// to stall a run on a handle that is never released.
+const (
+	renameAttempts = 20
+	renamePause    = 100 * time.Millisecond
+)
+
+// renameRetrying renames old to new, repeating while rename fails with an
+// error retryable reports as transient. On Windows that is another process
+// holding new open without delete sharing, which a reader such as a poller
+// running Get-Content does for a moment; a replacement that gave up on it
+// would leave the inventory stale for a whole run.
+func renameRetrying(rename func(old, new string) error, retryable func(error) bool, old, new string) error {
+	var err error
+	for attempt := 0; attempt < renameAttempts; attempt++ {
+		if err = rename(old, new); err == nil || !retryable(err) {
+			return err
+		}
+		time.Sleep(renamePause)
+	}
+	return err
 }

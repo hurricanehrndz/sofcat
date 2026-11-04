@@ -3,9 +3,11 @@
 package report
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -100,5 +102,51 @@ func assertInventoryDACL(t *testing.T, path string) {
 	}
 	for sidType := range want {
 		t.Errorf("missing ACE for well-known SID type %d", sidType)
+	}
+}
+
+// TestWriteInventoryWaitsForReader: a reader holding inventory.json open
+// without delete sharing, as Get-Content does while a poller reads it, makes
+// the replacing rename fail with ERROR_ACCESS_DENIED. The writer must wait
+// for the handle to close rather than leave the previous inventory in place.
+func TestWriteInventoryWaitsForReader(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "inventory.json")
+	if err := os.WriteFile(path, []byte("old"), 0o666); err != nil {
+		t.Fatal(err)
+	}
+	name, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := windows.CreateFile(name, windows.GENERIC_READ, windows.FILE_SHARE_READ, nil,
+		windows.OPEN_EXISTING, windows.FILE_ATTRIBUTE_NORMAL, 0)
+	if err != nil {
+		t.Fatalf("open reader handle: %v", err)
+	}
+	const hold = 400 * time.Millisecond
+	released := make(chan struct{})
+	go func() {
+		time.Sleep(hold)
+		_ = windows.CloseHandle(h)
+		close(released)
+	}()
+
+	start := time.Now()
+	err = WriteInventory(path, New().Inventory(Plan{ManifestName: "site_default"}))
+	<-released
+	if err != nil {
+		t.Fatalf("WriteInventory while a reader held the target: %v", err)
+	}
+	if time.Since(start) < hold {
+		t.Errorf("the rename succeeded in %v while the reader still held the file, so the retry was not exercised", time.Since(start))
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got Inventory
+	if err = json.Unmarshal(data, &got); err != nil || got.ManifestName != "site_default" {
+		t.Errorf("target not replaced: err=%v\n%s", err, data)
 	}
 }
