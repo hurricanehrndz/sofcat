@@ -42,6 +42,8 @@ func TestGet(t *testing.T) {
 			HelpURL:   "https://example.com/help",
 			HelpLabel: "Get help",
 			Accent:    "#0b6e4f",
+
+			ListHeading: "Software for your team",
 		},
 		ConfigPath: "testdata/test_config.yaml",
 	}
@@ -208,19 +210,20 @@ func Example() {
 	// -d, -debug          enable debug output
 	// -a, -about          displays the version number and other build info
 	// -V, -version        display the version number
-	// -s, -service        run SofCat as a Windows service
-	// -S, -servicecmd     send a command to a running SofCat service (GetServiceInfo|ListOptionalInstalls|GetBranding|InstallItem:itemName|RemoveItem:itemName|StreamOperationStatus:operationId|CancelOperation:operationId)
-	// -serviceinstall     install SofCat as a Windows service and restrict its data directory to SYSTEM and Administrators
-	// -serviceremove      remove SofCat Windows service
-	// -servicestart       start SofCat Windows service
-	// -servicestop        stop SofCat Windows service
-	// -servicestatus      show SofCat Windows service status
+	// -s, -service        run SofCat as a service (Windows SCM or macOS launchd)
+	// -S, -servicecmd     send a command to a running SofCat service (GetServiceInfo|ListOptionalInstalls|GetBranding|InstallItem:itemName|RemoveItem:itemName|StreamOperationStatus:operationId|CancelOperation:operationId|ListUserPlacements|ReportUserPlacements:item,placement,outcome[,error])
+	// -serviceinstall     install and start the SofCat service, restrict its data directory to SYSTEM and Administrators (root on macOS) and register the per-user helper at logon (Windows)
+	// -serviceremove      stop and remove the SofCat service and the helper's logon entry
+	// -servicestart       start the SofCat service
+	// -servicestop        stop the SofCat service
+	// -servicestatus      show the SofCat service status
 	// -h, -help           display this help message
 }
 
-// TestGetServiceModeToleratesMissingConfig: the MSI starts the service before
-// management tooling has written config.yaml, so -service must come up with
-// defaults instead of exiting, and a service restart then picks the file up.
+// TestGetServiceModeToleratesMissingConfig: the installer runs -serviceinstall
+// and starts the service before management tooling has written config.yaml,
+// so -service and the service-control flags must come up with defaults
+// instead of exiting, and a service restart then picks the file up.
 func TestGetServiceModeToleratesMissingConfig(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "config.yaml")
 
@@ -230,14 +233,29 @@ func TestGetServiceModeToleratesMissingConfig(t *testing.T) {
 	defer func() { osExit = origExit }()
 	osExit = func(code int) { t.Fatalf("unexpected exit %d", code) }
 
-	os.Args = []string{"sofcat.exe", "--config", configPath, "-service"}
-	cfg := Get()
-	if !cfg.ServiceMode || cfg.ServiceName != "sofcat" || cfg.ServicePipeName != "sofcat-service" {
-		t.Fatalf("service defaults not applied: %+v", cfg)
+	for _, flagName := range []string{"-service", "-serviceinstall", "-serviceremove"} {
+		resetServiceFlags()
+		os.Args = []string{"sofcat.exe", "--config", configPath, flagName}
+		cfg := Get()
+		if cfg.ServiceName != "sofcat" || cfg.ServicePipeName != "sofcat-service" || cfg.ConfigPath != configPath {
+			t.Fatalf("%s: service defaults not applied: %+v", flagName, cfg)
+		}
+		if cfg.URL != "" || cfg.Manifest != "" {
+			t.Fatalf("%s: expected an empty configuration, got %+v", flagName, cfg)
+		}
+		if flagName == "-service" && !cfg.ServiceMode {
+			t.Fatalf("-service without a config file did not enter service mode: %+v", cfg)
+		}
 	}
-	if cfg.URL != "" || cfg.Manifest != "" {
-		t.Fatalf("expected an empty configuration, got %+v", cfg)
+	if !serviceRemoveArg {
+		t.Fatal("-serviceremove not parsed")
 	}
+}
+
+// resetServiceFlags clears the bool flags Get leaves set, so one test can
+// parse several command lines; flag.Parse never resets a value.
+func resetServiceFlags() {
+	serviceArg, serviceInstallArg, serviceRemoveArg = false, false, false
 }
 
 // A rebranded build must default to its own service, pipe and data directory,

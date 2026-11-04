@@ -6,7 +6,7 @@ Tools come from [mise](https://mise.jdx.dev): `mise install` reads `mise.toml` a
 provides Go 1.27, Node 24, `just`, `prek`, `golangci-lint`, `actionlint`, and
 `treefmt` with `gofumpt` and `yamlfmt`. Activate mise in your shell (or prefix
 commands with `mise exec --`).
-`just setup` installs the frontend dependencies and the [prek](https://prek.j178.dev)
+`just dev-setup` installs the frontend dependencies and the [prek](https://prek.j178.dev)
 pre-commit hook from `prek.toml`: repository hygiene checks, `treefmt`,
 `golangci-lint` for Linux and Windows, and `actionlint`. `just pre-commit` runs
 them on every file.
@@ -38,8 +38,10 @@ the generic icon, which antivirus ML heuristics trust less
 A normal `just build` produces **both** raw Windows executables:
 `build/sofcat.exe` and `build/sofcat-ui.exe`. The UI build runs the Vite
 production build first, then embeds `ui/frontend/dist`. No installer is
-produced by `just build`; `just msi` builds the installer with embala (see
-`installer/embala.toml`). Nothing is signed.
+produced by `just build`; `just setup` builds the installer,
+`build/sofcat-<version>-x86_64-setup.exe`, with embala's `setup` format (see
+`installer/embala.toml` and the `install.lua` and `uninstall.lua` beside it).
+Nothing is signed.
 
 ## Releases
 
@@ -51,7 +53,7 @@ git fetch origin && git tag v1.11.0 origin/main && git push origin v1.11.0
 ```
 
 Build Release (`.github/workflows/build_release.yml`) builds the executables,
-MSI and makecatalogs at that tag, attaches them with a signed provenance bundle
+`setup.exe` and makecatalogs at that tag, attaches them with a signed provenance bundle
 (`sofcat-<tag>.sigstore.json`) to a prerelease, then runs the released-binary
 integration tests on Windows. It refuses a tag whose commit is not on `main`.
 

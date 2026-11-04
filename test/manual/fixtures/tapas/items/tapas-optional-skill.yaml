@@ -1,0 +1,6 @@
+# Input to makecatalogs zip-item; just bootstrap-tapas packs rendered/tapas-optional-skill.
+item_name: tapas-optional-skill
+display_name: Tapas Optional Skill
+description: A self-service skill
+catalog: tapas
+version: 1.0.0

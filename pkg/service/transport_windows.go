@@ -141,7 +141,8 @@ func (c *pipeConn) Close() error {
 }
 
 // Peer is the user of the connecting process: the service, as SYSTEM, opens
-// the client process named by the pipe and reads its token.
+// the client process named by the pipe and reads its token. A failed
+// Administrators check leaves the user resolved but not an administrator.
 func (c *pipeConn) Peer() (peer, error) {
 	var pid uint32
 	if err := windows.GetNamedPipeClientProcessId(c.handle, &pid); err != nil {
@@ -152,9 +153,18 @@ func (c *pipeConn) Peer() (peer, error) {
 		return peer{}, fmt.Errorf("open client process %d: %w", pid, err)
 	}
 	defer func() { _ = windows.CloseHandle(proc) }()
+	// The Administrators check needs TOKEN_DUPLICATE. When that is denied the
+	// token is opened for TOKEN_QUERY alone, so the user still resolves, and
+	// is not an administrator. Exercising the denial needs a client token
+	// whose DACL refuses SYSTEM duplication, which a unit test cannot set up.
 	var token windows.Token
-	if err = windows.OpenProcessToken(proc, windows.TOKEN_QUERY, &token); err != nil {
-		return peer{}, fmt.Errorf("open client token: %w", err)
+	canDuplicate := true
+	if err = windows.OpenProcessToken(proc, windows.TOKEN_QUERY|windows.TOKEN_DUPLICATE, &token); err != nil {
+		slog.Debug("could not open the client token for duplication", "pid", pid, "err", err)
+		canDuplicate = false
+		if err = windows.OpenProcessToken(proc, windows.TOKEN_QUERY, &token); err != nil {
+			return peer{}, fmt.Errorf("open client token: %w", err)
+		}
 	}
 	defer func() { _ = token.Close() }()
 	tokenUser, err := token.GetTokenUser()
@@ -162,11 +172,36 @@ func (c *pipeConn) Peer() (peer, error) {
 		return peer{}, fmt.Errorf("read client token user: %w", err)
 	}
 	sid := tokenUser.User.Sid
+	admin := false
+	if canDuplicate {
+		if admin, err = tokenIsAdmin(token); err != nil {
+			slog.Debug("could not check the client token for Administrators", "sid", sid.String(), "err", err)
+		}
+	}
 	account, domain, _, err := sid.LookupAccount("")
 	if err != nil {
-		return peer{ID: sid.String()}, fmt.Errorf("look up %s: %w", sid, err)
+		return peer{ID: sid.String(), Admin: admin}, fmt.Errorf("look up %s: %w", sid, err)
 	}
-	return peer{Name: domain + `\` + account, ID: sid.String()}, nil
+	return peer{Name: domain + `\` + account, ID: sid.String(), Admin: admin}, nil
+}
+
+// tokenIsAdmin reports whether token has BUILTIN\Administrators enabled.
+// CheckTokenMembership counts only enabled groups, so a UAC-filtered token,
+// where the group is deny-only, is not an administrator's. It takes an
+// impersonation token, so token is duplicated as one first; token needs
+// TOKEN_DUPLICATE.
+func tokenIsAdmin(token windows.Token) (bool, error) {
+	admins, err := windows.CreateWellKnownSid(windows.WinBuiltinAdministratorsSid)
+	if err != nil {
+		return false, fmt.Errorf("administrators SID: %w", err)
+	}
+	var identity windows.Token
+	err = windows.DuplicateTokenEx(token, windows.TOKEN_QUERY, nil, windows.SecurityIdentification, windows.TokenImpersonation, &identity)
+	if err != nil {
+		return false, fmt.Errorf("duplicate token: %w", err)
+	}
+	defer func() { _ = identity.Close() }()
+	return identity.IsMember(admins)
 }
 
 func flushAndDisconnectNamedPipe(handle windows.Handle) {

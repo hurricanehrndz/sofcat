@@ -25,6 +25,10 @@ const (
 	methodRemoveItem            = "removeItem"
 	methodCancelOperation       = "cancelOperation"
 	methodStreamOperationStatus = "streamOperationStatus"
+	// The per-user helper's methods (`<slug>-ui.exe --user-sync`), not
+	// bound into the UI's Wails surface.
+	methodListUserPlacements   = "listUserPlacements"
+	methodReportUserPlacements = "reportUserPlacements"
 
 	// notificationOperationStatus carries one status record on a stream.
 	notificationOperationStatus = "operationStatus"
@@ -39,6 +43,8 @@ var capabilities = []string{
 	methodRemoveItem,
 	methodCancelOperation,
 	methodStreamOperationStatus,
+	methodListUserPlacements,
+	methodReportUserPlacements,
 }
 
 // JSON-RPC error codes. The standard ones come from the specification; the
@@ -58,6 +64,7 @@ const (
 	codeUnknownOperation       = -32003
 	codeItemNotAvailable       = -32004
 	codeItemNotRemovable       = -32005
+	codeNotAuthorized          = -32006
 )
 
 // appCodes maps each JSON-RPC error code to its data.code string.
@@ -73,6 +80,7 @@ var appCodes = map[int]string{
 	codeUnknownOperation:       "unknown_operation",
 	codeItemNotAvailable:       "item_not_available",
 	codeItemNotRemovable:       "item_not_removable",
+	codeNotAuthorized:          "not_authorized",
 }
 
 type rpcRequest struct {
@@ -162,6 +170,11 @@ type OptionalInstallItem struct {
 	Status             string `json:"status"`
 	StatusUpdatedAtUTC string `json:"statusUpdatedAtUtc"`
 	LastOperationID    string `json:"lastOperationId,omitempty"`
+	// ActionLabels holds the labels the item or its placements set, keyed
+	// by catalog.ActionLabelKeys; the UI supplies the rest.
+	ActionLabels map[string]string `json:"actionLabels,omitempty"`
+	// WorksIn names the harnesses the item's placements reach.
+	WorksIn []string `json:"worksIn,omitempty"`
 }
 
 type listOptionalInstallsResponse struct {

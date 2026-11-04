@@ -32,6 +32,7 @@ func TestReadPolicyFromRegistry(t *testing.T) {
 	for name, value := range map[string]string{
 		"Title": "Policy Title", "Tagline": "T", "LogoPath": `C:\logo.png`,
 		"HelpUrl": "https://example.invalid/help", "HelpLabel": "Help", "Accent": "#0b6e4f",
+		"ListHeading": "Skills and plugins",
 	} {
 		if err := key.SetStringValue(name, value); err != nil {
 			t.Fatal(err)
@@ -42,6 +43,7 @@ func TestReadPolicyFromRegistry(t *testing.T) {
 	want := config.Branding{
 		Title: "Policy Title", Tagline: "T", Logo: `C:\logo.png`,
 		HelpURL: "https://example.invalid/help", HelpLabel: "Help", Accent: "#0b6e4f",
+		ListHeading: "Skills and plugins",
 	}
 	if got := readPolicy(); got != want {
 		t.Fatalf("readPolicy = %#v, want %#v", got, want)

@@ -57,13 +57,13 @@ Options:
 -d, -debug          enable debug output
 -a, -about          displays the version number and other build info
 -V, -version        display the version number
--s, -service        run SofCat as a Windows service
--S, -servicecmd     send a command to a running SofCat service (GetServiceInfo|ListOptionalInstalls|GetBranding|InstallItem:itemName|RemoveItem:itemName|StreamOperationStatus:operationId|CancelOperation:operationId)
--serviceinstall     install SofCat as a Windows service and restrict its data directory to SYSTEM and Administrators
--serviceremove      remove SofCat Windows service
--servicestart       start SofCat Windows service
--servicestop        stop SofCat Windows service
--servicestatus      show SofCat Windows service status
+-s, -service        run SofCat as a service (Windows SCM or macOS launchd)
+-S, -servicecmd     send a command to a running SofCat service (GetServiceInfo|ListOptionalInstalls|GetBranding|InstallItem:itemName|RemoveItem:itemName|StreamOperationStatus:operationId|CancelOperation:operationId|ListUserPlacements|ReportUserPlacements:item,placement,outcome[,error])
+-serviceinstall     install and start the SofCat service, restrict its data directory to SYSTEM and Administrators (root on macOS) and register the per-user helper at logon (Windows)
+-serviceremove      stop and remove the SofCat service and the helper's logon entry
+-servicestart       start the SofCat service
+-servicestop        stop the SofCat service
+-servicestatus      show the SofCat service status
 -h, -help           display this help message
 
 `
@@ -114,6 +114,8 @@ type Branding struct {
 	HelpURL   string `yaml:"help_url,omitempty"`
 	HelpLabel string `yaml:"help_label,omitempty"`
 	Accent    string `yaml:"accent,omitempty"`
+	// ListHeading replaces the UI's "Available software" heading.
+	ListHeading string `yaml:"list_heading,omitempty"`
 }
 
 func init() {
@@ -181,12 +183,16 @@ func Get() Configuration {
 	// Parse any arguments that may have been passed
 	configPath, verbose, debug, checkonly := parseArguments()
 
-	// Read the config file. The MSI starts the service before management
-	// tooling has written config.yaml, so service mode runs with defaults
-	// until the file exists; every managed run fails until then, and a
-	// service restart picks the file up.
+	serviceControlMode := serviceInstallArg || serviceRemoveArg || serviceStartArg || serviceStopArg || serviceStatusArg
+	serviceClientMode := serviceCmdArg != ""
+
+	// Read the config file. The installer runs -serviceinstall, and the
+	// service starts, before management tooling has written config.yaml, so
+	// the service-control flags and service mode run with defaults until
+	// the file exists; every managed run fails until then, and a service
+	// restart picks the file up.
 	configFile, err := os.ReadFile(configPath)
-	if err != nil && (!serviceArg || !errors.Is(err, fs.ErrNotExist)) {
+	if err != nil && (!serviceArg && !serviceControlMode || !errors.Is(err, fs.ErrNotExist)) {
 		fmt.Println("Unable to read configuration file: ", err)
 		osExit(1)
 	}
@@ -197,9 +203,6 @@ func Get() Configuration {
 		fmt.Println("Unable to parse yaml configuration: ", err)
 		osExit(1)
 	}
-
-	serviceControlMode := serviceInstallArg || serviceRemoveArg || serviceStartArg || serviceStopArg || serviceStatusArg
-	serviceClientMode := serviceCmdArg != ""
 
 	// Normal run mode requires both manifest and URL. Service mode starts
 	// without them and waits for config.yaml (see above).

@@ -2,6 +2,7 @@ package report
 
 import (
 	"encoding/json"
+	"slices"
 	"testing"
 	"time"
 
@@ -233,5 +234,27 @@ func TestInventoryNoActionUpdateAndPostUninstallFailure(t *testing.T) {
 	}
 	if len(inv.RemovedItems) != 1 || inv.RemovedItems[0] != "Gone" {
 		t.Errorf("RemovedItems = %v", inv.RemovedItems)
+	}
+}
+
+// TestInventoryWarnsHeldConditions: a held conditional_items block must show
+// in the inventory, or its items vanish from fleet reports without a reason.
+func TestInventoryWarnsHeldConditions(t *testing.T) {
+	r := New()
+	r.HeldConditions = append(r.HeldConditions, HeldCondition{
+		Condition: `"lab" in machine_groups && zone == "a"`,
+		Missing:   []string{"machine_groups", "zone"},
+		Items:     []string{"LabTool", "GPUDriver"},
+		Reason:    "facts unavailable",
+	})
+
+	inv := r.Inventory(Plan{Warnings: []string{"earlier"}})
+
+	want := []string{
+		"earlier",
+		`conditional_items "\"lab\" in machine_groups && zone == \"a\"" held: facts unavailable (machine_groups, zone); items: LabTool, GPUDriver`,
+	}
+	if !slices.Equal(inv.Warnings, want) {
+		t.Errorf("Warnings = %q, want %q", inv.Warnings, want)
 	}
 }

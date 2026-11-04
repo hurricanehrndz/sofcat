@@ -7,6 +7,7 @@ import {
   REQUESTED_STATE,
   ERROR_STATE,
   STREAM_ENDED_STATE,
+  NOT_AUTHORIZED_TEXT,
   activityLine,
   addActivity,
   bannerMessage,
@@ -36,6 +37,7 @@ import {
   progressText,
   refusalText,
   releaseOperation,
+  requestErrorText,
   restartBadge,
   shouldAcceptRecord,
   showRetry,
@@ -126,10 +128,12 @@ test("action derivation covers every status and managed combination", () => {
     ["", true, "Remove", "RemoveItem"],
     ["", false, "Install", "InstallItem"],
   ];
+  const kinds = { Cancel: "cancel", Remove: "undo", Install: "do" };
   for (const [status, isManaged, label, method] of cases) {
+    const kind = kinds[label];
     assert.deepEqual(
       deriveAction(item({ status, isManaged })),
-      { label, method },
+      { kind, label, method },
       `${status || "(blank)"} isManaged=${isManaged}`,
     );
   }
@@ -147,6 +151,7 @@ test("a required item has no action and says the organisation manages it", () =>
   }
   assert.equal(REQUIRED_LABEL, "Managed by your organisation");
   assert.deepEqual(deriveAction(item({ status: "Installed", isManaged: true, isRequired: false })), {
+    kind: "undo",
     label: "Remove",
     method: "RemoveItem",
   });
@@ -556,7 +561,7 @@ test("the strip shows the running operation the service is working on, as n of N
   const operation = (operationId, itemName, outcome, records) => ({
     operationId,
     item: item({ itemName, displayName: itemName }),
-    action: { label: "Install", method: "InstallItem" },
+    action: { kind: "do", label: "Install", method: "InstallItem" },
     records,
     outcome,
   });
@@ -697,6 +702,15 @@ test("a refused cancel shows the service's reason without its error code", () =>
   );
   assert.equal(refusalText("pipe unavailable"), "Pipe unavailable");
   assert.equal(refusalText(""), "The operation can no longer be canceled");
+});
+
+// A refusal for another user's item reads as a sentence, not as the
+// service's code and quoted item name.
+test("a not_authorized refusal reads plainly", () => {
+  const refused = 'not_authorized: only the user who asked for this, or an administrator, can change it: "Slack"';
+  assert.equal(requestErrorText(refused), NOT_AUTHORIZED_TEXT);
+  assert.equal(refusalText(refused), NOT_AUTHORIZED_TEXT);
+  assert.equal(requestErrorText("pipe unavailable"), "pipe unavailable");
 });
 
 test("a user cancel reads plainly on the card and says who in Activity", () => {

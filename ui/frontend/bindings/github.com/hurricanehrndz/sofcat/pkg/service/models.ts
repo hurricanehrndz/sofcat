@@ -62,6 +62,17 @@ export class OptionalInstallItem {
     "statusUpdatedAtUtc": string;
     "lastOperationId"?: string;
 
+    /**
+     * ActionLabels holds the labels the item or its placements set, keyed
+     * by catalog.ActionLabelKeys; the UI supplies the rest.
+     */
+    "actionLabels"?: { [_ in string]?: string };
+
+    /**
+     * WorksIn names the harnesses the item's placements reach.
+     */
+    "worksIn"?: string[];
+
     /** Creates a new OptionalInstallItem instance. */
     constructor($$source: Partial<OptionalInstallItem> = {}) {
         if (!("itemName" in $$source)) {
@@ -99,7 +110,19 @@ export class OptionalInstallItem {
      * Creates a new OptionalInstallItem instance from a string or object.
      */
     static createFrom($$source: any = {}): OptionalInstallItem {
+        const $$createField15_0 = $$createType0;
+        const $$createField16_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("actionLabels" in $$parsedSource) {
+            $$parsedSource["actionLabels"] = $$createField15_0($$parsedSource["actionLabels"]);
+        }
+        if ("worksIn" in $$parsedSource) {
+            $$parsedSource["worksIn"] = $$createField16_0($$parsedSource["worksIn"]);
+        }
         return new OptionalInstallItem($$parsedSource as Partial<OptionalInstallItem>);
     }
 }
+
+// Private type creation functions
+const $$createType0 = $Create.Map($Create.Any, $Create.Any);
+const $$createType1 = $Create.Array($Create.Any);

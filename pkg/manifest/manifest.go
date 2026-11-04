@@ -20,6 +20,12 @@ type Item struct {
 	Uninstalls       []string `yaml:"managed_uninstalls"`
 	Updates          []string `yaml:"managed_updates"`
 	Catalogs         []string `yaml:"catalogs"`
+	// ConditionalItems is resolved by Expand; read the lists of its output.
+	ConditionalItems []ConditionalItem `yaml:"conditional_items,omitempty"`
+	// SelectedBy is the self-serve file's record of who selected each item:
+	// item name to the caller's ID (a SID, or a uid in decimal). Only the
+	// self-serve file has it.
+	SelectedBy map[string]string `yaml:"selected_by,omitempty"`
 }
 
 // This abstraction allows us to override when testing

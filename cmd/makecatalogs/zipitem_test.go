@@ -1,0 +1,384 @@
+package main
+
+import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+
+	"github.com/hurricanehrndz/sofcat/pkg/admin"
+	"github.com/hurricanehrndz/sofcat/pkg/catalog"
+	"go.yaml.in/yaml/v4"
+)
+
+const testHarnesses = `
+placements:
+  claude-code-skills:
+    kind: directory
+    paths:
+      darwin: /Library/Application Support/ClaudeCode/.claude/skills
+      windows: ${ProgramFiles}\ClaudeCode\.claude\skills
+  codex-skills:
+    kind: directory
+    paths:
+      windows: ${USERPROFILE}\.agents\skills
+    scope: {windows: user}
+`
+
+const testItem = "item_name: hello\ncatalog: skills\nversion: 1.0.0\ndisplay_name: Hello\n"
+
+// writeFiles writes files (slash paths relative to root) and returns root.
+func writeFiles(t *testing.T, root string, files map[string]string) string {
+	t.Helper()
+	for name, body := range files {
+		path := filepath.Join(root, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return root
+}
+
+// zipItemFixture lays out a valid zip-item input in a temp dir and returns
+// it. Paths under it: harnesses.yaml, item.yaml, rendered/.
+func zipItemFixture(t *testing.T) string {
+	t.Helper()
+	return writeFiles(t, t.TempDir(), map[string]string{
+		"harnesses.yaml": testHarnesses,
+		"item.yaml":      testItem,
+		"rendered/claude-code-skills/darwin/SKILL.md":  "claude\n",
+		"rendered/claude-code-skills/windows/SKILL.md": "claude\n",
+		"rendered/codex-skills/windows/SKILL.md":       "codex\n",
+	})
+}
+
+func runZipItemIn(dir, out string) (code int, stdout, stderr string) {
+	var o, e bytes.Buffer
+	code = run([]string{
+		"zip-item",
+		"--harnesses", filepath.Join(dir, "harnesses.yaml"),
+		"--item", filepath.Join(dir, "item.yaml"),
+		"--rendered", filepath.Join(dir, "rendered"),
+		"--location-prefix", "packages/skills",
+		"-o", out,
+	}, &o, &e)
+	return code, o.String(), e.String()
+}
+
+func sha256File(t *testing.T, path string) string {
+	t.Helper()
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(body)
+	return hex.EncodeToString(sum[:])
+}
+
+func TestPackAndTreeHash(t *testing.T) {
+	tree := writeFiles(t, t.TempDir(), map[string]string{"SKILL.md": "hi\n", "a/b.txt": "b\n"})
+	for _, goos := range []string{"darwin", "windows"} {
+		out := filepath.Join(t.TempDir(), "x.zip")
+		var stdout, stderr bytes.Buffer
+		if code := run([]string{"pack", "--os", goos, tree, "-o", out}, &stdout, &stderr); code != 0 {
+			t.Fatalf("pack exit %d: %s", code, stderr.String())
+		}
+		var packed struct {
+			Hash     string `json:"hash"`
+			TreeHash string `json:"tree_hash"`
+		}
+		if err := json.Unmarshal(stdout.Bytes(), &packed); err != nil {
+			t.Fatalf("pack output %q: %v", stdout.String(), err)
+		}
+		if packed.Hash != sha256File(t, out) {
+			t.Errorf("hash %s is not the zip's sha256", packed.Hash)
+		}
+
+		stdout.Reset()
+		if code := run([]string{"tree-hash", "--os", goos, tree}, &stdout, &stderr); code != 0 {
+			t.Fatalf("tree-hash exit %d: %s", code, stderr.String())
+		}
+		if got := strings.TrimSpace(stdout.String()); got != packed.TreeHash {
+			t.Errorf("tree-hash %s, pack tree_hash %s", got, packed.TreeHash)
+		}
+	}
+
+	var stdout, stderr bytes.Buffer
+	if code := run([]string{"pack", "--os", "linux", tree, "-o", filepath.Join(t.TempDir(), "x.zip")}, &stdout, &stderr); code == 0 {
+		t.Error("pack accepted --os linux")
+	}
+	if code := run([]string{"tree-hash", t.TempDir()}, &stdout, &stderr); code == 0 {
+		t.Error("tree-hash accepted an empty tree")
+	}
+}
+
+// zip-item checks everything before it writes: any refusal leaves <out>
+// untouched, so a failed CI run never publishes half an item.
+func TestZipItemRefusals(t *testing.T) {
+	tests := map[string]struct {
+		change func(t *testing.T, dir string)
+		want   string
+	}{
+		"item already has an installer": {func(t *testing.T, dir string) {
+			t.Helper()
+			writeFiles(t, dir, map[string]string{"item.yaml": testItem + "installer: {type: msi, location: x.msi}\n"})
+		}, "already has an installer"},
+		"placement not in harnesses.yaml": {func(t *testing.T, dir string) {
+			t.Helper()
+			writeFiles(t, dir, map[string]string{"rendered/cursor-skills/darwin/SKILL.md": "x"})
+		}, `placement "cursor-skills" is not in`},
+		"OS directory not darwin or windows": {func(t *testing.T, dir string) {
+			t.Helper()
+			writeFiles(t, dir, map[string]string{"rendered/claude-code-skills/linux/SKILL.md": "x"})
+		}, "must be darwin or windows"},
+		"placement has no path for the OS": {func(t *testing.T, dir string) {
+			t.Helper()
+			writeFiles(t, dir, map[string]string{"rendered/codex-skills/darwin/SKILL.md": "x"})
+		}, "has no darwin path"},
+		"empty tree": {func(t *testing.T, dir string) {
+			t.Helper()
+			if err := os.MkdirAll(filepath.Join(dir, "rendered", "codex-skills", "windows", "empty"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Remove(filepath.Join(dir, "rendered", "codex-skills", "windows", "SKILL.md")); err != nil {
+				t.Fatal(err)
+			}
+		}, "no files"},
+		"tree wrapped in a directory named after the item": {func(t *testing.T, dir string) {
+			t.Helper()
+			if err := os.RemoveAll(filepath.Join(dir, "rendered", "codex-skills", "windows")); err != nil {
+				t.Fatal(err)
+			}
+			writeFiles(t, dir, map[string]string{"rendered/codex-skills/windows/hello/SKILL.md": "x"})
+		}, "wrapped in a hello/ directory"},
+		"no placement directories": {func(t *testing.T, dir string) {
+			t.Helper()
+			if err := os.RemoveAll(filepath.Join(dir, "rendered")); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Mkdir(filepath.Join(dir, "rendered"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}, "no placement directories"},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			dir := zipItemFixture(t)
+			tc.change(t, dir)
+			out := filepath.Join(t.TempDir(), "repo")
+			code, stdout, stderr := runZipItemIn(dir, out)
+			if code == 0 {
+				t.Fatalf("exit 0, stdout:\n%s", stdout)
+			}
+			if !strings.Contains(stderr, tc.want) {
+				t.Errorf("stderr %q does not say %q", stderr, tc.want)
+			}
+			if _, err := os.Stat(out); !os.IsNotExist(err) {
+				t.Errorf("zip-item wrote %s on failure", out)
+			}
+		})
+	}
+}
+
+// Trees that hash the same pack to the same bytes, so they share one zip.
+func TestZipItemSharesIdenticalTrees(t *testing.T) {
+	dir := zipItemFixture(t)
+	writeFiles(t, dir, map[string]string{"rendered/codex-skills/windows/SKILL.md": "claude\n"})
+	out := t.TempDir()
+	code, stdout, stderr := runZipItemIn(dir, out)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, stderr)
+	}
+	var info admin.PackageInfo
+	if err := yaml.Unmarshal([]byte(stdout), &info); err != nil {
+		t.Fatal(err)
+	}
+	variants := info.Item.Installer.Variants
+	claude, codex := variants["claude-code-skills"]["windows"], variants["codex-skills"]["windows"]
+	if claude.Location == "" || claude != codex {
+		t.Errorf("claude %+v and codex %+v differ", claude, codex)
+	}
+	// Without executable bits the darwin tree hashes the same too.
+	if variants["claude-code-skills"]["darwin"] != claude {
+		t.Errorf("darwin %+v, windows %+v", variants["claude-code-skills"]["darwin"], claude)
+	}
+	zips, _ := filepath.Glob(filepath.Join(out, "packages", "skills", "*.zip"))
+	if len(zips) != 1 {
+		t.Fatalf("wrote %d zips, want 1: %v", len(zips), zips)
+	}
+	if want := "packages/skills/" + filepath.Base(zips[0]); claude.Location != want {
+		t.Errorf("location %s, want %s", claude.Location, want)
+	}
+	if claude.Hash != sha256File(t, zips[0]) {
+		t.Errorf("hash %s is not the zip's sha256", claude.Hash)
+	}
+}
+
+// Keys catalog.Item does not know, such as ones a later sofcat reads, must
+// reach the published pkginfo rather than vanish in a struct round trip.
+func TestZipItemKeepsAuthorKeys(t *testing.T) {
+	dir := zipItemFixture(t)
+	writeFiles(t, dir, map[string]string{
+		"item.yaml": testItem + "custom_action_labels: {install: Add}\nx_author_note: keep me\n",
+	})
+	code, stdout, stderr := runZipItemIn(dir, t.TempDir())
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, stderr)
+	}
+	var got struct {
+		Labels map[string]string `yaml:"custom_action_labels"`
+		Note   string            `yaml:"x_author_note"`
+	}
+	if err := yaml.Unmarshal([]byte(stdout), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Labels["install"] != "Add" || got.Note != "keep me" {
+		t.Errorf("author keys lost: %+v in\n%s", got, stdout)
+	}
+}
+
+// zip-item output is a package-info file the repo's -check gate accepts.
+func TestZipItemRoundTripPassesCheck(t *testing.T) {
+	dir := zipItemFixture(t)
+	repo := writeFiles(t, t.TempDir(), map[string]string{"harnesses.yaml": testHarnesses})
+	code, stdout, stderr := runZipItemIn(dir, repo)
+	if code != 0 {
+		t.Fatalf("zip-item exit %d: %s", code, stderr)
+	}
+	writeFiles(t, repo, map[string]string{"packages-info/hello.yaml": stdout})
+
+	var out, errOut bytes.Buffer
+	if code := run([]string{"-check", repo}, &out, &errOut); code != 0 {
+		t.Fatalf("-check exit %d: %s", code, errOut.String())
+	}
+}
+
+// The examples are generated by zip-item from the checked-in rendered tree;
+// regenerating them must reproduce them byte for byte.
+func TestExampleZipItemsMatchGenerator(t *testing.T) {
+	examples := filepath.Join("..", "..", "examples")
+	itemDir := filepath.Join(examples, "zip-items")
+	generated := filepath.Join(itemDir, "generated")
+	out := t.TempDir()
+	var stdout, stderr bytes.Buffer
+	code := run([]string{
+		"zip-item",
+		"--harnesses", filepath.Join(examples, "harnesses.yaml"),
+		"--item", filepath.Join(itemDir, "hello-world.yaml"),
+		"--rendered", filepath.Join(itemDir, "rendered", "hello-world"),
+		"--location-prefix", "packages/skills",
+		"-o", out,
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, stderr.String())
+	}
+	want, err := os.ReadFile(filepath.Join(generated, "hello-world.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stdout.String() != string(want) {
+		t.Errorf("examples/zip-items/generated/hello-world.yaml is stale; regenerate it (see docs/zip-items.md). Got:\n%s", stdout.String())
+	}
+	// example_catalog.yaml shows the same item as a compiled catalog entry.
+	var info admin.PackageInfo
+	if err = yaml.Unmarshal(stdout.Bytes(), &info); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(filepath.Join(examples, "example_catalog.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var exampleCatalog map[string]catalog.Item
+	if err := yaml.Unmarshal(body, &exampleCatalog); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(exampleCatalog["hello-world"].Installer, info.Item.Installer) {
+		t.Errorf("examples/example_catalog.yaml hello-world installer is stale")
+	}
+
+	got, _ := filepath.Glob(filepath.Join(out, "packages", "skills", "*.zip"))
+	checkedIn, _ := filepath.Glob(filepath.Join(generated, "packages", "skills", "*.zip"))
+	if len(got) != len(checkedIn) {
+		t.Fatalf("generated %d zips, %d checked in", len(got), len(checkedIn))
+	}
+	for i := range got {
+		if filepath.Base(got[i]) != filepath.Base(checkedIn[i]) || sha256File(t, got[i]) != sha256File(t, checkedIn[i]) {
+			t.Errorf("zip %s differs from checked-in %s", got[i], checkedIn[i])
+		}
+	}
+}
+
+func TestCheckZipItems(t *testing.T) {
+	const variant = "{location: packages/a.zip, hash: abc, tree_hash: 'sha256:def'}"
+	item := func(installer string) string {
+		return "item_name: hello\ncatalog: skills\nversion: 1.0.0\ninstaller:\n" + installer
+	}
+	tests := map[string]struct {
+		harnesses string // "" means no harnesses.yaml
+		info      string
+		want      string // "" means -check passes
+	}{
+		"valid":       {testHarnesses, item("  type: zip\n  variants: {claude-code-skills: {darwin: " + variant + "}}\n"), ""},
+		"no variants": {testHarnesses, item("  type: zip\n"), "has no variants"},
+		"variant missing tree_hash": {
+			testHarnesses, item("  type: zip\n  variants: {claude-code-skills: {darwin: {location: a.zip, hash: abc}}}\n"),
+			"needs location, hash and tree_hash",
+		},
+		"unknown OS": {
+			testHarnesses, item("  type: zip\n  variants: {claude-code-skills: {linux: " + variant + "}}\n"),
+			"OS must be darwin or windows",
+		},
+		"placement not in harnesses.yaml": {
+			testHarnesses, item("  type: zip\n  variants: {cursor-skills: {darwin: " + variant + "}}\n"),
+			`placement "cursor-skills" is not in harnesses.yaml`,
+		},
+		"zip item without harnesses.yaml": {
+			"", item("  type: zip\n  variants: {claude-code-skills: {darwin: " + variant + "}}\n"),
+			"no harnesses.yaml",
+		},
+		"invalid harnesses.yaml without zip items": {
+			"placements:\n  p: {kind: folder, paths: {darwin: /p}}\n", chromeInfo, "unknown kind",
+		},
+	}
+	t.Run("normal run warns", func(t *testing.T) {
+		repo := writeRepo(t, map[string]string{
+			"hello.yaml": item("  type: zip\n  variants: {cursor-skills: {darwin: " + variant + "}}\n"),
+		})
+		writeFiles(t, repo, map[string]string{"harnesses.yaml": testHarnesses})
+		var stdout, stderr bytes.Buffer
+		if code := run([]string{repo}, &stdout, &stderr); code != 0 {
+			t.Fatalf("exit %d, stderr: %s", code, stderr.String())
+		}
+		want := `placement "cursor-skills" is not in harnesses.yaml`
+		if !strings.Contains(stderr.String(), "warning:") || !strings.Contains(stderr.String(), want) {
+			t.Fatalf("stderr %q, want a warning: %q", stderr.String(), want)
+		}
+	})
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			repo := writeRepo(t, map[string]string{"hello.yaml": tc.info})
+			if tc.harnesses != "" {
+				writeFiles(t, repo, map[string]string{"harnesses.yaml": tc.harnesses})
+			}
+			var stdout, stderr bytes.Buffer
+			code := run([]string{"-check", repo}, &stdout, &stderr)
+			if tc.want == "" {
+				if code != 0 {
+					t.Fatalf("exit %d: %s", code, stderr.String())
+				}
+				return
+			}
+			if code != 1 || !strings.Contains(stderr.String(), tc.want) {
+				t.Fatalf("exit %d, stderr %q; want 1 and %q", code, stderr.String(), tc.want)
+			}
+		})
+	}
+}

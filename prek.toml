@@ -1,4 +1,4 @@
-# Git hooks, installed by `just setup` (prek install). Built-in and local hooks
+# Git hooks, installed by `just dev-setup` (prek install). Built-in and local hooks
 # only: nothing is fetched from a hook repository, and the tools come from
 # mise.toml. `just pre-commit` runs the same checks on every file.
 #:schema https://www.schemastore.org/prek.json

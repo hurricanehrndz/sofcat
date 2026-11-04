@@ -2,11 +2,13 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"strings"
 
 	"github.com/hurricanehrndz/sofcat/pkg/config"
+	"github.com/hurricanehrndz/sofcat/pkg/report"
 	"github.com/hurricanehrndz/sofcat/pkg/service"
 	"github.com/hurricanehrndz/sofcat/pkg/sofcatlog"
 )
@@ -18,14 +20,30 @@ var (
 	runServiceActionFunc   = service.RunAction
 	serviceStatusFunc      = service.ServiceStatus
 	protectAppDataFunc     = protectAppData
+	protectConfigFunc      = protectConfig
 )
 
 func main() {
+	if printLaunchdPlist(os.Args, os.Stdout) {
+		return
+	}
 	cfg := config.Get()
 	if err := route(cfg); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+// printLaunchdPlist handles the hidden -print-launchd-plist, for `just pkg`:
+// it writes the launchd plist the package installs, the same bytes
+// -serviceinstall writes for the installed layout. It needs no config, so
+// main runs it before config.Get.
+func printLaunchdPlist(args []string, w io.Writer) bool {
+	if len(args) != 2 || args[1] != "-print-launchd-plist" {
+		return false
+	}
+	_, _ = w.Write(service.InstalledLaunchdPlist())
+	return true
 }
 
 func route(cfg config.Configuration) error { //nolint:gocognit // CEILING: known-complex, split in Workstream B (kernel-repair)
@@ -34,6 +52,9 @@ func route(cfg config.Configuration) error { //nolint:gocognit // CEILING: known
 		// fixes the tree. The service applies it again at every start.
 		if err := protectAppDataFunc(cfg.AppDataPath); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: unable to protect %s: %v\n", cfg.AppDataPath, err)
+		}
+		if err := protectConfigFunc(cfg.ConfigPath); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: unable to protect %s: %v\n", cfg.ConfigPath, err)
 		}
 		if err := runServiceActionFunc(cfg, "install"); err != nil {
 			return err
@@ -107,7 +128,7 @@ func route(cfg config.Configuration) error { //nolint:gocognit // CEILING: known
 			return nil
 		}
 		switch action {
-		case "listoptionalinstalls":
+		case "listoptionalinstalls", "listuserplacements":
 			fmt.Println("none")
 		case "installitem":
 			fmt.Println("InstallItem command completed successfully")
@@ -125,20 +146,43 @@ func route(cfg config.Configuration) error { //nolint:gocognit // CEILING: known
 		return runServiceFunc(cfg)
 	}
 
-	_, err := managedRunFunc(cfg, nil, nil)
+	rep, err := managedRunFunc(cfg, nil, nil)
+	// A check-only run prints the inventory JSON to stdout; keep it parseable.
+	if !cfg.CheckOnly {
+		printRunSummary(rep)
+	}
 	return err
 }
 
-// runService protects the data directory, then hands over to the service
-// manager. Protecting it at every start fixes a tree deployed by hand or by an
-// older version. A failure is only logged: the run-time guard on admin-managed
-// items still holds.
+// printRunSummary prints what the run left waiting: deferred items with their
+// reason, and conditional_items blocks held because facts are missing. The
+// run log and inventory.json record the same.
+func printRunSummary(rep *report.Report) {
+	if rep == nil {
+		return
+	}
+	for _, d := range rep.DeferredItems {
+		fmt.Printf("deferred: %s (%s): %s\n", d.Name, d.Action, d.Reason)
+	}
+	for _, h := range rep.HeldConditions {
+		fmt.Printf("held: conditional_items %q: %s (%s); items: %s\n",
+			h.Condition, h.Reason, strings.Join(h.Missing, ", "), strings.Join(h.Items, ", "))
+	}
+}
+
+// runService protects the data directory and the config file, then hands
+// over to the service manager. Protecting them at every start fixes a tree
+// deployed by hand or by an older version. A failure is only logged: the
+// run-time guard on admin-managed items still holds.
 func runService(cfg config.Configuration) error {
 	if err := sofcatlog.NewLog(cfg); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 	}
 	if err := protectAppDataFunc(cfg.AppDataPath); err != nil {
 		slog.Warn("unable to protect the data directory", "path", cfg.AppDataPath, "err", err)
+	}
+	if err := protectConfigFunc(cfg.ConfigPath); err != nil {
+		slog.Warn("unable to protect the config file", "path", cfg.ConfigPath, "err", err)
 	}
 	return service.Run(cfg, managedRunFunc)
 }

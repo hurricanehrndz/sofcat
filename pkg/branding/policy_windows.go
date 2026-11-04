@@ -44,5 +44,7 @@ func readPolicy() config.Branding {
 		HelpURL:   value("HelpUrl"),
 		HelpLabel: value("HelpLabel"),
 		Accent:    value("Accent"),
+
+		ListHeading: value("ListHeading"),
 	}
 }

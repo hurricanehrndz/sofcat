@@ -4,19 +4,26 @@
 package admin
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
 	"github.com/hurricanehrndz/sofcat/pkg/conditions"
+	"github.com/hurricanehrndz/sofcat/pkg/harness"
 	"go.yaml.in/yaml/v4"
 )
 
-type packageInfo struct {
+// PackageInfo is a packages-info file: one catalog item and the catalog it
+// belongs to.
+type PackageInfo struct {
 	ItemName string       `yaml:"item_name"`
 	Catalog  string       `yaml:"catalog"`
 	Item     catalog.Item `yaml:",inline"`
@@ -26,7 +33,9 @@ type packageInfo struct {
 type CatalogSet struct {
 	// Catalogs maps catalog name to item name to item.
 	Catalogs map[string]map[string]catalog.Item
-	// Problems lists package-info files that were skipped or overridden.
+	// Problems lists package-info files that were skipped or overridden, zip
+	// items with unusable variants, an invalid harnesses.yaml, and manifests
+	// whose conditional_items conditions do not compile.
 	// A normal makecatalogs run warns about them and carries on; --check fails on them.
 	Problems []string
 }
@@ -43,7 +52,8 @@ func (s CatalogSet) Names() []string {
 
 // CollectCatalogs reads <repo>/packages-info and compiles the catalogs it
 // describes without writing anything. Unreadable or unparsable files are
-// errors; skipped or duplicated items are reported in Problems.
+// errors; skipped or duplicated items, and invalid conditions in package-info
+// files and in <repo>/manifests, are reported in Problems.
 func CollectCatalogs(repoPath string) (CatalogSet, error) { //nolint:gocognit // CEILING: known-complex, split in Workstream B (kernel-repair)
 	packagesInfoPath := filepath.Join(repoPath, "packages-info")
 
@@ -78,6 +88,10 @@ func CollectCatalogs(repoPath string) (CatalogSet, error) { //nolint:gocognit //
 	}
 
 	set := CatalogSet{Catalogs: make(map[string]map[string]catalog.Item)}
+	harnesses := readHarnesses(repoPath)
+	if harnesses.problem != "" {
+		set.Problems = append(set.Problems, harnesses.problem)
+	}
 	// source records which package-info file each catalog item came from.
 	source := make(map[string]map[string]string)
 	// folded maps a lowercased catalog name to the first spelling seen, since
@@ -89,7 +103,7 @@ func CollectCatalogs(repoPath string) (CatalogSet, error) { //nolint:gocognit //
 			return CatalogSet{}, fmt.Errorf("read package-info %s: %w", packageInfoPath, err)
 		}
 
-		var parsed packageInfo
+		var parsed PackageInfo
 		if err = yaml.Unmarshal(yamlFile, &parsed); err != nil {
 			return CatalogSet{}, fmt.Errorf("parse package-info %s: %w", packageInfoPath, err)
 		}
@@ -132,6 +146,11 @@ func CollectCatalogs(repoPath string) (CatalogSet, error) { //nolint:gocognit //
 		if err := conditions.Check(parsed.Item.InstallableCondition); err != nil {
 			set.Problems = append(set.Problems, fmt.Sprintf("%s: invalid installable_condition: %v", packageInfoPath, err))
 		}
+		set.Problems = append(set.Problems, checkRequiresSoftware(packageInfoPath, parsed.Item.RequiresSoftware)...)
+		set.Problems = append(set.Problems, checkActionLabels(packageInfoPath, parsed.Item.CustomActionLabels)...)
+		if parsed.Item.Installer.Type == "zip" {
+			set.Problems = append(set.Problems, checkZipItem(packageInfoPath, parsed.Item.Installer, harnesses)...)
+		}
 		set.Catalogs[parsed.Catalog][itemName] = parsed.Item
 		source[parsed.Catalog][itemName] = packageInfoPath
 	}
@@ -142,6 +161,7 @@ func CollectCatalogs(repoPath string) (CatalogSet, error) { //nolint:gocognit //
 		return CatalogSet{}, fmt.Errorf("no catalogs to write: no package-info file under %s names a valid catalog", packagesInfoPath)
 	}
 
+	set.Problems = append(set.Problems, checkManifests(repoPath)...)
 	return set, nil
 }
 
@@ -176,4 +196,153 @@ func WriteCatalogs(repoPath string, set CatalogSet) error {
 	}
 
 	return nil
+}
+
+// repoHarnesses is what CollectCatalogs read from <repo>/harnesses.yaml.
+type repoHarnesses struct {
+	table   harness.Table
+	present bool   // the file exists
+	problem string // why it cannot be used; empty when it is valid or absent
+}
+
+// readHarnesses reads and validates <repo>/harnesses.yaml. A repo without one
+// is fine until it has a zip item.
+func readHarnesses(repoPath string) repoHarnesses {
+	path := filepath.Join(repoPath, "harnesses.yaml")
+	body, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return repoHarnesses{}
+	}
+	if err != nil {
+		return repoHarnesses{present: true, problem: fmt.Sprintf("%s: %v", path, err)}
+	}
+	table, err := harness.Parse(body)
+	if err != nil {
+		return repoHarnesses{present: true, problem: fmt.Sprintf("%s: %v", path, err)}
+	}
+	return repoHarnesses{table: table, present: true}
+}
+
+// checkRequiresSoftware reports requires_software entries without a
+// display_name, which the deferral message needs, or with neither munki nor
+// chocolatey, which no OS would check.
+func checkRequiresSoftware(path string, reqs []catalog.RequiredSoftware) []string {
+	var problems []string
+	for i, req := range reqs {
+		if strings.TrimSpace(req.DisplayName) == "" {
+			problems = append(problems, fmt.Sprintf("%s: requires_software[%d] has no display_name", path, i))
+		}
+		if req.Munki == "" && req.Chocolatey == "" {
+			problems = append(problems, fmt.Sprintf("%s: requires_software[%d] needs munki or chocolatey", path, i))
+		}
+	}
+	return problems
+}
+
+// checkActionLabels reports custom_action_labels keys the storefront does
+// not know, which it would silently ignore.
+func checkActionLabels(path string, labels map[string]string) []string {
+	var problems []string
+	for _, key := range slices.Sorted(maps.Keys(labels)) {
+		if !slices.Contains(catalog.ActionLabelKeys, key) {
+			problems = append(problems, fmt.Sprintf("%s: custom_action_labels: unknown key %q", path, key))
+		}
+	}
+	return problems
+}
+
+// checkZipItem reports what makes a zip installer unusable: no variants, a
+// variant without location, hash or tree_hash, an OS other than darwin or
+// windows, or a placement harnesses.yaml does not define.
+func checkZipItem(path string, inst catalog.InstallerItem, harnesses repoHarnesses) []string {
+	var problems []string
+	if len(inst.Variants) == 0 {
+		problems = append(problems, fmt.Sprintf("%s: zip installer has no variants", path))
+	}
+	if !harnesses.present {
+		problems = append(problems, fmt.Sprintf("%s: zip item, but the repo has no harnesses.yaml", path))
+	}
+	placements := make([]string, 0, len(inst.Variants))
+	for placement := range inst.Variants {
+		placements = append(placements, placement)
+	}
+	sort.Strings(placements)
+	for _, placement := range placements {
+		// An invalid table is reported once on its own; checking names
+		// against it would only add noise.
+		if _, ok := harnesses.table.Placements[placement]; harnesses.present && harnesses.problem == "" && !ok {
+			problems = append(problems, fmt.Sprintf("%s: variant placement %q is not in harnesses.yaml", path, placement))
+		}
+		for goos, v := range inst.Variants[placement] {
+			if goos != harness.Darwin && goos != harness.Windows {
+				problems = append(problems, fmt.Sprintf("%s: variant %s.%s: OS must be darwin or windows", path, placement, goos))
+			}
+			if v.Location == "" || v.Hash == "" || v.TreeHash == "" {
+				problems = append(problems, fmt.Sprintf("%s: variant %s.%s needs location, hash and tree_hash", path, placement, goos))
+			}
+		}
+	}
+	return problems
+}
+
+// conditionalBlock is the part of a manifest's conditional_items that
+// checkManifests reads. pkg/manifest owns the full shape, but it pulls in the
+// agent's config and download, which this package must not.
+type conditionalBlock struct {
+	Condition        string             `yaml:"condition"`
+	ConditionalItems []conditionalBlock `yaml:"conditional_items"`
+}
+
+// checkManifests reports every conditional_items condition, nested ones
+// included, in <repo>/manifests that has a syntax error, and every manifest it
+// cannot read. A repo without manifests has nothing to check.
+func checkManifests(repoPath string) []string {
+	var problems []string
+	var check func(path string, blocks []conditionalBlock)
+	check = func(path string, blocks []conditionalBlock) {
+		for _, b := range blocks {
+			if err := conditions.Check(b.Condition); err != nil {
+				problems = append(problems, fmt.Sprintf("%s: invalid conditional_items condition %q: %v", path, b.Condition, err))
+			}
+			check(path, b.ConditionalItems)
+		}
+	}
+
+	manifestsPath := filepath.Join(repoPath, "manifests")
+	var manifestQueue []string
+	err := filepath.WalkDir(manifestsPath, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if strings.HasPrefix(d.Name(), ".") && path != manifestsPath {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if ext := strings.ToLower(filepath.Ext(path)); !d.IsDir() && (ext == ".yaml" || ext == ".yml") {
+			manifestQueue = append(manifestQueue, path)
+		}
+		return nil
+	})
+	if err != nil && !os.IsNotExist(err) {
+		problems = append(problems, fmt.Sprintf("%s: %v", manifestsPath, err))
+	}
+
+	for _, path := range manifestQueue {
+		body, err := os.ReadFile(path)
+		if err != nil {
+			problems = append(problems, fmt.Sprintf("%s: %v", path, err))
+			continue
+		}
+		var m struct {
+			ConditionalItems []conditionalBlock `yaml:"conditional_items"`
+		}
+		if err := yaml.Unmarshal(body, &m); err != nil {
+			problems = append(problems, fmt.Sprintf("%s: parse manifest: %v", path, err))
+			continue
+		}
+		check(path, m.ConditionalItems)
+	}
+	return problems
 }

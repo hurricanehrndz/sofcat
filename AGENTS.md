@@ -10,7 +10,7 @@ Guidance for coding agents working in this repository.
 
 - Project: `sofcat` (Windows-focused application/package management tool in Go).
 - Main entrypoint: `./cmd/sofcat`.
-- SofCat's deployed/runtime target is Windows, so Windows behavior is first-class.
+- SofCat deploys to Windows and macOS. Windows is first-class (SYSTEM service plus named pipe); macOS is a launchd daemon plus an app bundle.
 - CI runs in GitHub Actions and primarily targets Windows (`windows-latest`) to match deployment expectations.
 - Development often happens on macOS: keep macOS build/test/dev workflows working where practical, but do not add major complexity solely to preserve parity.
 - Where appropriate, macOS/non-Windows stub or no-op behavior is acceptable if it keeps development workflows usable.
@@ -35,6 +35,13 @@ Guidance for coding agents working in this repository.
   - `just clean`
   - `just bootstrap`
   - `just bootstrap-run`
+  - `just test-zip-only`: Go tests under the `zip_only` tag
+  - `just bootstrap-tapas`: build the Tapas Test zip-item fixture brand and repository for a Windows VM
+  - `just bootstrap-tapas-macos`: the same for a Mac, with a `.pkg` and config
+  - `just build-macos`: build the CLI and `.app` for the host Mac
+  - `just pkg`: wrap those into an unsigned `.pkg`
+
+`just build-macos`, `just pkg` and `just bootstrap-tapas-macos` run only on macOS.
 
 Prefer `just test` as the default local validation step, even for small changes.
 When changes include SofCat UI code, run `just ui-lint` and `just ui-test`.
@@ -43,8 +50,45 @@ When changes span Go service/CLI and UI protocol layers, run `just test`, `just 
 `just build` produces both raw Windows executables — `build/sofcat.exe` and the
 pure-Go, windows-GUI `build/sofcat-ui.exe`
 (`GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -tags production -ldflags "-H windowsgui"`).
-`just msi` wraps them in an MSI with embala (`installer/embala.toml`); the
-installer puts them in `C:\Program Files\SofCat` and registers the service.
+`just setup` wraps them in embala's `setup.exe` (`installer/embala.toml`,
+`install.lua` and `uninstall.lua`, embala 0.9.0); it builds on Linux. The
+installer copies them into `C:\Program Files\SofCat`, adds the Start-menu
+shortcut and the Add or remove programs entry, then runs
+`sofcat.exe -serviceinstall`, which registers and starts the service and
+writes the HKLM `Run` value `<slug>-user-sync` that starts the per-user
+helper, `<slug>-ui.exe --user-sync`, at logon. Its `uninstall.exe` runs
+`sofcat.exe -serviceremove`, which stops and deletes the service and removes
+the value, then reverses the copies. sofcat owns both on every platform, so
+the installer scripts only call it. `setup.exe /S` and `uninstall.exe /S` are
+the unattended forms; `setup.exe` refuses to install over an existing service.
+Everything the service writes lives under `C:\ProgramData\SofCat`, as under
+`/Library/Application Support/<Name>` on a Mac: `config.yaml`, the `Data`
+directory (the default `app_data_path`, SYSTEM and Administrators only
+except `Data\user-artifacts`, which Users read) and any placement of its own
+(`docs/data-directory.md`).
+A brand with `INSTALLERS=zip` in its `brand.env` adds the `zip_only` tag to both
+binaries, which compiles out the command installers and catalog scripts
+(`*_command.go`/`*_script.go` versus their `*_zip_only.go` twins); test that
+set with `just test-zip-only` and
+`golangci-lint run --build-tags zip_only ./...`.
+
+On a Mac, `just build-macos` builds the CLI for the host architecture
+(`build/<slug>`, pure Go) and the UI as `build/<Name>.app` (cgo, so the Xcode
+command line tools), and `just pkg` wraps both with the launchd plist into an
+unsigned `build/<slug>-<version>.pkg`. It installs the app in `/Applications`,
+the CLI in `/Library/Application Support/<Name>/bin/<slug>` and the plist,
+labelled with the brand's `IDENTIFIER`, in `/Library/LaunchDaemons`; its
+postinstall script bootstraps the daemon. The daemon reads
+`/Library/Application Support/<Name>/config.yaml`, keeps its state in the
+root-only `.../<Name>/Data` (0700) and serves
+`/var/run/<slug>/<slug>-service.sock`. The service and `-serviceinstall` make
+the config root-owned and 0600, since it can hold `auth_pass`.
+`<slug> -serviceinstall|-servicestart|-servicestop|-serviceremove` drive
+`launchctl` as the SCM actions do on Windows.
+
+The darwin lint from Linux is `GOOS=darwin golangci-lint run ./pkg/... ./cmd/...`:
+`GOOS=darwin golangci-lint run ./...` cannot typecheck `ui/` there, because
+Wails needs cgo on macOS. On the Mac itself, `just lint` covers the whole tree.
 
 ## Code Style
 
@@ -130,12 +174,84 @@ to use and the exact commands for each step below.
 5. Clean up afterwards: stop the local test server and anything that exposes it
    to the VM, and remove temporary scheduled tasks.
 
-To validate the installer instead of the raw executables: `just msi`, copy
-`build/sofcat-<version>-x86_64.msi` to the VM and run `msiexec /i <msi> /qn`.
-The service starts with no config. Write `C:\ProgramData\SofCat\config.yaml`
-(url, manifest, catalogs, app_data_path), `Restart-Service sofcat`, then run
-the two gates above. `msiexec /x <msi> /qn` must remove the service and
-`C:\Program Files\SofCat` and leave `C:\ProgramData\SofCat` alone.
+Zip items (placements, receipts, scope exit) have their own loop on the Tapas
+Test fixture brand (`test/manual/fixtures/tapas/`). Start from a clean VM, run
+`just bootstrap-tapas <url>`, and serve `build/manual-test/tapas/server-root`.
+Copy `build/manual-test/tapas/vm/bootstrap-vm.ps1` and
+`test/manual/run-tapas-smoke.ps1` to the VM. As an administrator, run
+`bootstrap-vm.ps1 -BaseUrl <url> -Slug tapas-test -ProductName "Tapas Test" -Manifest tapas_manifest -Catalogs tapas -InstallService -StartService -NoPause`,
+then `run-tapas-smoke.ps1`. The gate is exit 0 and `TAPAS SMOKE PASSED`.
+Then run the authorization check from the host:
+`test/manual/run-tapas-authz.sh -v <VM>` drives `test/manual/run-tapas-authz.ps1`
+step by step through `rig ps`, as the administrator's SSH session and as a
+second SSH session signed in as the rig's standard user (`rig ps --as std`),
+and must exit 0 and print `TAPAS AUTHZ PASSED` (the guest log is
+`C:\sofcat-test\tapas-authz.log`).
+Then copy `test/manual/run-tapas-user-sync.ps1` and run it as the logged-on
+standard user (`rig run-it --wait test/manual/run-tapas-user-sync.ps1`; create
+`C:\sofcat-test\` first): it runs `tapas-test-ui.exe --user-sync` and must
+print `TAPAS USER SYNC PASSED` (its log is `C:\sofcat-test\tapas-user-sync.log`).
+For the logon path, install the branded installer
+(`just brand=test/manual/fixtures/tapas/brand setup`) on a clean VM and write
+its config, confirm the HKLM `...\CurrentVersion\Run` value
+`tapas-test-user-sync`, wait for the startup run to stage the archive and
+store the plan, then reboot (the VM autologs on at boot; a plain sign-out does
+not log back in) and check the skill appears without opening the storefront.
+`uninstall.exe /S` must remove the value and the service. It leaves
+`C:\ProgramData\<Name>` alone, the staged archives in `Data\user-artifacts`
+included, as it leaves the config; remove the whole directory by hand for a
+clean slate.
+
+To validate the installer instead of the raw executables: `just setup`, `rig
+put` `build/sofcat-<version>-x86_64-setup.exe` and
+`test/manual/install-setup.ps1` on the VM, then run
+`install-setup.ps1 -Setup <path to setup.exe>` under `rig ps` (it runs
+`setup.exe /S`, waits for it, since the stub is a GUI executable, and exits
+with its code). The service starts with no config. Write
+`C:\ProgramData\SofCat\config.yaml` (url, manifest, catalogs),
+`Restart-Service sofcat`, then run the two gates above; the service keeps its
+state in `C:\ProgramData\SofCat\Data`. `install-setup.ps1 -Uninstall` runs
+`"C:\Program Files\SofCat\uninstall.exe" /S` the same way; it must remove
+the service, the `Run` value, the shortcut, the Add or remove programs entry
+and `C:\Program Files\SofCat`, and leave `C:\ProgramData\SofCat` alone.
+Running `setup.exe /S` over an existing install must exit non-zero before
+copying anything.
+
+## macOS Validation Loop
+
+The macOS twin of the Tapas loop runs on the `mac1` rig (`macos-test-rig`
+skill; see `AGENTS.local.md`). The smoke needs root, and the rig has
+passwordless sudo.
+
+1. Sync the working tree to `~/src/sofcat` on the Mac (a tarball of the
+   checkout without `.git`, `build` and `node_modules`), and `mise install`
+   there once.
+2. `just bootstrap-tapas-macos` (default base URL `http://127.0.0.1:8080/`)
+   runs `just brand=test/manual/fixtures/tapas/brand build-macos pkg`, lays out
+   the fixture repository in `build/manual-test/tapas/server-root` and writes
+   `build/manual-test/tapas/mac/config.yaml`.
+3. Serve it on the Mac:
+   `./build/manual-test-server -root build/manual-test/tapas/server-root -addr 127.0.0.1:8080`.
+4. Install and configure:
+   `sudo installer -pkg build/tapas-test-<version>.pkg -target /`, then
+   `sudo install -m 600 -o root -g wheel build/manual-test/tapas/mac/config.yaml "/Library/Application Support/Tapas Test/config.yaml"`
+   and `sudo launchctl kickstart -k system/ca.hrndz.tapas-test`.
+5. Gate: `sudo test/manual/run-tapas-smoke.sh` must exit 0 and print
+   `TAPAS SMOKE PASSED`. It adds `SOFCAT_TEST_MUNKI_REPORT` to the daemon's
+   plist, so the real Munki report is never touched, and removes it again at
+   the end; a failed run leaves it there until the pkg is reinstalled. That
+   variable is a test hook read from the service's own environment, which
+   only root can set (launchd's root-owned plist); nothing else honours it.
+6. Visible gate: open `/Applications/Tapas Test.app` as the logged-on user and
+   screenshot it (`mac show`, or VNC if the capture shows only wallpaper).
+7. Clean up: stop the test server, then
+   `sudo "/Library/Application Support/Tapas Test/bin/tapas-test" -serviceremove`
+   and remove `/Applications/Tapas Test.app`,
+   `/Library/Application Support/Tapas Test` and
+   `/Library/Application Support/tapas-test-*`. Run that removal through
+   `sudo sh -c '...'`: the login shell over SSH is zsh, which aborts the
+   whole command when a glob such as `tapas-test-*` matches nothing, and a
+   smoke on the leftovers fails at step 8 with "not a clean Mac?".
 
 ## Diagnostics
 

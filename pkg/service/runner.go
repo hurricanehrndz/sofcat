@@ -48,8 +48,13 @@ type clientConn interface {
 
 // peer is a connected client's user: Name is DOMAIN\user on Windows and the
 // user name elsewhere, ID the SID or the uid. Either is "" when unresolved.
+// Admin is the transport's verdict that the user is a local administrator:
+// BUILTIN\Administrators enabled in the client's token on Windows (a
+// UAC-filtered token is not), uid 0 or a member of group admin on macOS, uid 0
+// elsewhere.
 type peer struct {
 	Name, ID string
+	Admin    bool
 }
 
 type queuedCommand struct {
@@ -117,9 +122,12 @@ type trackedOperation struct {
 	// requestedBy is the user who made the request, "" when unresolved; every
 	// record of the operation carries it.
 	requestedBy string
-	done        bool
-	lastUpdated time.Time
-	completedAt time.Time
+	// requestedByID is that user's ID as authorization saw it, "" when
+	// unresolved: only they or an administrator may cancel (R32).
+	requestedByID string
+	done          bool
+	lastUpdated   time.Time
+	completedAt   time.Time
 
 	// prior and requested are the self-serve selections before and after the
 	// request, for cancelOperation to revert.
@@ -560,36 +568,7 @@ func (sr *serviceRunner) dispatch(ctx context.Context, conn clientConn, req rpcR
 		return resp.Branding, nil
 
 	case methodInstallItem, methodRemoveItem:
-		params, err := decodeParams[itemParams](req.Params)
-		itemName := strings.TrimSpace(params.ItemName)
-		if err != nil || itemName == "" {
-			return nil, newError(codeInvalidParams, req.Method+" requires params.itemName", "")
-		}
-		action := actionInstallItem
-		if req.Method == methodRemoveItem {
-			action = actionRemoveItem
-		}
-		// A mutation only writes the self-serve selection, under
-		// manifest.UpdateSelfServe's lock, so it answers at once instead of
-		// waiting behind a busy run; only the run it schedules below goes
-		// through the queue. A mutation that lands mid-run does not change that
-		// run: it keeps the plan it loaded, and the queued run reconciles the
-		// newer selection afterwards. The run's own self-serve writes reload
-		// under the same lock, so neither side loses the other's change.
-		resp, err := sr.executeCommandSafe(Command{Action: action, Items: []string{itemName}})
-		if err != nil {
-			return nil, commandError(err, "")
-		}
-		requestedBy := requester(conn, logger)
-		logger.Info("self-service request accepted", "operationId", resp.OperationID, "item", itemName,
-			"requestedBy", requestedBy.Name, "requestedByID", requestedBy.ID)
-		sr.registerTrackedOperation(itemName, requestedBy.Name, resp)
-		accepted := AcceptedOperation{OperationID: resp.OperationID, Accepted: true, QueuedAtUTC: nowRFC3339UTC(), RequestedBy: requestedBy.Name}
-		if err := writeResult(conn, req.ID, accepted); err != nil {
-			logger.Warn("failed to write response", "err", err)
-		}
-		sr.scheduleRunAfterMutation(ctx, action, itemName, requestedBy.Name, resp.OperationID)
-		return nil, nil
+		return sr.dispatchMutation(ctx, conn, req, logger)
 
 	case methodCancelOperation:
 		params, err := decodeParams[operationParams](req.Params)
@@ -598,7 +577,8 @@ func (sr *serviceRunner) dispatch(ctx context.Context, conn clientConn, req rpcR
 			return nil, newError(codeInvalidParams, req.Method+" requires params.operationId", "")
 		}
 		// A cancel must not wait in the queue behind the run it is meant to stop.
-		if err := sr.cancelOperation(operationID); err != nil {
+		_, caller := requester(conn, logger)
+		if err := sr.cancelOperation(operationID, caller); err != nil {
 			return nil, commandError(err, operationID)
 		}
 		return cancelOperationResponse{Canceled: true}, nil
@@ -623,21 +603,72 @@ func (sr *serviceRunner) dispatch(ctx context.Context, conn clientConn, req rpcR
 		}
 		return nil, nil
 
+	case methodListUserPlacements, methodReportUserPlacements:
+		return sr.dispatchUserPlacements(conn, req, logger)
+
 	default:
 		return nil, newError(codeMethodNotFound, fmt.Sprintf("method %q not found", req.Method), "")
 	}
 }
 
-// requester is the user on the other end of conn, for the record of who asked
-// for a mutation. It is never a reason to refuse one: an unresolved user is
-// logged at debug and recorded as "" (with whatever ID was resolved).
-func requester(conn clientConn, logger *slog.Logger) peer {
+// dispatchMutation runs an installItem or removeItem request and writes its
+// AcceptedOperation itself, before scheduling the run that carries it out.
+func (sr *serviceRunner) dispatchMutation(ctx context.Context, conn clientConn, req rpcRequest, logger *slog.Logger) (any, *Error) {
+	params, err := decodeParams[itemParams](req.Params)
+	itemName := strings.TrimSpace(params.ItemName)
+	if err != nil || itemName == "" {
+		return nil, newError(codeInvalidParams, req.Method+" requires params.itemName", "")
+	}
+	action := actionInstallItem
+	if req.Method == methodRemoveItem {
+		action = actionRemoveItem
+	}
+	// A mutation only writes the self-serve selection, under
+	// manifest.UpdateSelfServe's lock, so it answers at once instead of
+	// waiting behind a busy run; only the run it schedules below goes
+	// through the queue. A mutation that lands mid-run does not change that
+	// run: it keeps the plan it loaded, and the queued run reconciles the
+	// newer selection afterwards. The run's own self-serve writes reload
+	// under the same lock, so neither side loses the other's change.
+	//
+	// The caller is resolved first: the command checks it before it changes
+	// anything (R32).
+	requestedBy, caller := requester(conn, logger)
+	resp, err := sr.executeCommandSafe(Command{Action: action, Items: []string{itemName}, caller: caller})
+	if err != nil {
+		if errors.Is(err, errNotAuthorized) {
+			logger.Info("self-service request refused: not authorized", "item", itemName,
+				"requestedBy", requestedBy.Name, "requestedByID", requestedBy.ID)
+		}
+		return nil, commandError(err, "")
+	}
+	logger.Info("self-service request accepted", "operationId", resp.OperationID, "item", itemName,
+		"requestedBy", requestedBy.Name, "requestedByID", requestedBy.ID, "requestedByAdmin", caller.Admin)
+	sr.registerTrackedOperation(itemName, requestedBy.Name, caller.ID, resp)
+	accepted := AcceptedOperation{OperationID: resp.OperationID, Accepted: true, QueuedAtUTC: nowRFC3339UTC(), RequestedBy: requestedBy.Name}
+	if err := writeResult(conn, req.ID, accepted); err != nil {
+		logger.Warn("failed to write response", "err", err)
+	}
+	sr.scheduleRunAfterMutation(ctx, action, itemName, requestedBy.Name, resp.OperationID)
+	return nil, nil
+}
+
+// requester is the user on the other end of conn. who is the record of who
+// asked for a mutation: a user whose name did not resolve is logged at debug
+// and recorded as "" (with whatever ID was resolved). caller is the user
+// authorization sees: resolved whenever the transport read an ID, even if the
+// name lookup failed, and otherwise the zero peer, which is never an
+// administrator and matches no recorded selector or requester (R32).
+func requester(conn clientConn, logger *slog.Logger) (who, caller peer) {
 	who, err := conn.Peer()
 	if err != nil {
 		logger.Debug("could not resolve the caller's identity", "id", who.ID, "err", err)
-		return peer{ID: who.ID}
+		if who.ID == "" {
+			return peer{}, peer{}
+		}
+		return peer{ID: who.ID}, peer{ID: who.ID, Admin: who.Admin}
 	}
-	return who
+	return who, who
 }
 
 // commandError maps a command's failure to its JSON-RPC error.
@@ -649,6 +680,8 @@ func commandError(err error, operationID string) *Error {
 		return newError(codeItemNotAvailable, err.Error(), operationID)
 	case errors.Is(err, errItemNotRemovable):
 		return newError(codeItemNotRemovable, err.Error(), operationID)
+	case errors.Is(err, errNotAuthorized):
+		return newError(codeNotAuthorized, err.Error(), operationID)
 	default:
 		// Any local user reads this message, and a fetch or file error can
 		// name repository URLs and local paths, so it stays in the log.
@@ -758,7 +791,7 @@ func resolveTerminalEvent(itemName string, rep *report.Report) OperationStatus {
 					State:           "Failed",
 					ProgressPercent: 100,
 					Message:         "Operation failed",
-					ErrorCode:       "item_failed",
+					ErrorCode:       orDefault(failed.Code, "item_failed"),
 					ErrorMessage:    failed.Error,
 				}
 			}
@@ -769,7 +802,7 @@ func resolveTerminalEvent(itemName string, rep *report.Report) OperationStatus {
 					State:           "Deferred",
 					ProgressPercent: 100,
 					Message:         deferred.Reason,
-					ErrorCode:       "blocked_by_running_app",
+					ErrorCode:       orDefault(deferred.Code, "blocked_by_running_app"),
 					ErrorMessage:    deferred.Reason,
 				}
 			}
@@ -819,7 +852,7 @@ func (sr *serviceRunner) streamOperationStatus(w io.Writer, id json.RawMessage, 
 // operation resp accepted for itemName. resp.displayName is the catalog display
 // name when the mutation knew it; otherwise the item name stands in until a
 // progress event for the item carries the catalog name.
-func (sr *serviceRunner) registerTrackedOperation(itemName, requestedBy string, resp CommandResponse) {
+func (sr *serviceRunner) registerTrackedOperation(itemName, requestedBy, requestedByID string, resp CommandResponse) {
 	operationID := resp.OperationID
 	if strings.TrimSpace(operationID) == "" || strings.TrimSpace(itemName) == "" {
 		return
@@ -831,6 +864,7 @@ func (sr *serviceRunner) registerTrackedOperation(itemName, requestedBy string, 
 	sr.operations[operationID] = &trackedOperation{
 		requestedItemName:    itemName,
 		requestedBy:          requestedBy,
+		requestedByID:        requestedByID,
 		requestedDisplayName: displayName,
 		prior:                resp.prior,
 		requested:            resp.requested,
@@ -898,8 +932,10 @@ func (sr *serviceRunner) appendOperationEventLocked(operationID string, event Op
 // open and no run has started its item's install or uninstall command; it then
 // reverts the request's self-serve selection, withdraws the item from the run
 // under way (aborting its download), and ends the operation with a Canceled
-// record from the user. Every refusal wraps errNotCancelable.
-func (sr *serviceRunner) cancelOperation(operationID string) error {
+// record from the user. Every refusal wraps errNotCancelable, except that a
+// caller other than the operation's requester or an administrator gets
+// errNotAuthorized (R32).
+func (sr *serviceRunner) cancelOperation(operationID string, caller peer) error {
 	sr.operationsMu.Lock()
 	defer sr.operationsMu.Unlock()
 	op, ok := sr.operations[operationID]
@@ -908,6 +944,8 @@ func (sr *serviceRunner) cancelOperation(operationID string) error {
 		return fmt.Errorf("%w: unknown operationId", errNotCancelable)
 	case op.done:
 		return fmt.Errorf("%w: it has already finished", errNotCancelable)
+	case !authorized(op.requestedByID, caller):
+		return fmt.Errorf("%w: %s", errNotAuthorized, op.requestedDisplayName)
 	}
 	err := withdrawItem(sr.cfg, sr.cancels, op.requestedItemName, op.prior, op.requested)
 	if errors.Is(err, errNotCancelable) {

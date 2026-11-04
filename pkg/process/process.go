@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -23,6 +24,10 @@ var ErrNotInstallable = errors.New("not installable on this machine")
 
 // errNotResolved means no catalog has a valid occurrence of an item.
 var errNotResolved = errors.New("not found or invalid in any catalog")
+
+// ErrZipOnly means every occurrence of an item was rejected by a zip-only
+// build (ZipOnlyReason).
+var ErrZipOnly = errors.New("rejected by this zip-only build")
 
 // firstItem returns the first valid occurrence of an item that may be
 // installed on this machine. It logs why there is none and returns false.
@@ -48,6 +53,8 @@ func resolveLogged(itemName string, catalogsMap map[int]map[string]catalog.Item,
 		return item, nil
 	case errors.Is(err, ErrNotInstallable):
 		slog.Warn("skipping item: not installable on this machine", "item", itemName, "reason", err)
+	case errors.Is(err, ErrZipOnly):
+		WarnZipOnly(itemName, strings.Join(invalidReasons, "; "))
 	case len(invalidReasons) > 0:
 		slog.Warn(
 			"skipping catalog item: missing required installer/uninstaller type/location fields",
@@ -91,11 +98,17 @@ func resolveItem(itemName string, catalogsMap map[int]map[string]catalog.Item, r
 
 	var invalidReasons []string
 	var notInstallable *catalog.Item
+	zipOnlyRejected := 0
 
 	// loop through each catalog and return if we find a match
 	for _, k := range keys {
 		// If
 		if item, exists := catalogsMap[k][itemName]; exists {
+			if reason := ZipOnlyReason(item); reason != "" {
+				zipOnlyRejected++
+				invalidReasons = append(invalidReasons, fmt.Sprintf("catalog index %d: %s", k, reason))
+				continue
+			}
 			missing := missingFields(item)
 			if missing == nil {
 				// A later catalog may hold a variant this machine can install.
@@ -117,13 +130,24 @@ func resolveItem(itemName string, catalogsMap map[int]map[string]catalog.Item, r
 		}
 		return catalog.Item{}, nil, fmt.Errorf("%w: %s", ErrNotInstallable, notInstallable.NotInstallable)
 	}
+	if zipOnlyRejected > 0 && zipOnlyRejected == len(invalidReasons) {
+		return catalog.Item{}, invalidReasons, fmt.Errorf("%w: %s", ErrZipOnly, strings.Join(invalidReasons, "; "))
+	}
 	return catalog.Item{}, invalidReasons, errNotResolved
 }
 
 // missingFields lists the installer and uninstaller fields item lacks, or nil
 // when it can be installed or uninstalled. An msix item needs no location: it
-// is removed by package name.
+// is removed by package name. A zip item needs only variants: it is removed
+// from its receipts.
 func missingFields(item catalog.Item) []string {
+	if item.Installer.Type == "zip" {
+		if len(item.Installer.Variants) == 0 {
+			return []string{"installer.variants"}
+		}
+		return nil
+	}
+
 	validInstallItem := (item.Installer.Type != "" && item.Installer.Location != "")
 	validUninstallItem := (item.Uninstaller.Type != "" && item.Uninstaller.Location != "") ||
 		item.Uninstaller.Type == "msix" ||
@@ -200,9 +224,9 @@ var installerInstall = (*installer.Runner).Install
 // failure in the report.
 func installOne(r *installer.Runner, item catalog.Item, installerType string) {
 	if _, err := installerInstall(r, item, installerType); err != nil {
-		if errors.Is(err, installer.ErrBlockingApps) {
+		if errors.Is(err, installer.ErrDeferred) {
 			// The installer already recorded the deferral; not a failure (R6).
-			slog.Info("item deferred: blocking application(s) running", "item", item.DisplayName)
+			slog.Info("item deferred", "item", item.DisplayName, "reason", err)
 			return
 		}
 		slog.Warn("item action failed", "item", item.DisplayName, "err", err)
@@ -220,6 +244,9 @@ const (
 	// depNotInstallable: the item's installable_condition rejects this
 	// machine. It is skipped, not failed; an item that depends on it fails.
 	depNotInstallable
+	// depRejected: a zip-only build rejected the item (ZipOnlyReason). It is
+	// skipped, not failed; an item that depends on it fails.
+	depRejected
 )
 
 // recordFailedItem records a gating failure (cycle, missing dep, or skipped
@@ -235,15 +262,24 @@ func recordFailedItem(r *installer.Runner, name, version string, err error) {
 }
 
 // recordDeferredItem records a cascade deferral: a dependent skipped because
-// one of its dependencies was deferred (R6/R12). The installer records its own
-// direct deferrals; this covers only the walk's cascade.
-func recordDeferredItem(r *installer.Runner, name, version, reason string) {
-	r.Report.DeferredItems = append(r.Report.DeferredItems, report.DeferredItem{
+// its dependency was deferred (R6/R12). The installer records its own direct
+// deferrals; this covers only the walk's cascade. The dependent carries the
+// dependency's code; for missing software also its message, since the
+// dependent needs the same software installed first.
+func recordDeferredItem(r *installer.Runner, name, version, dependency string) {
+	d := report.DeferredItem{
 		Name:    name,
 		Version: version,
 		Action:  "install",
-		Reason:  reason,
-	})
+		Reason:  fmt.Sprintf("dependency %s deferred", dependency),
+	}
+	if i := slices.IndexFunc(r.Report.DeferredItems, func(dd report.DeferredItem) bool { return dd.Name == dependency }); i >= 0 {
+		d.Code = r.Report.DeferredItems[i].Code
+		if d.Code == report.CodeMissingSoftware {
+			d.Reason = r.Report.DeferredItems[i].Reason
+		}
+	}
+	r.Report.DeferredItems = append(r.Report.DeferredItems, d)
 }
 
 // pullIn runs walk with name pushed on r.PulledBy, so the progress of every
@@ -262,7 +298,7 @@ func installWithDeps(itemName string, catalogsMap map[int]map[string]catalog.Ite
 	switch visited[itemName] {
 	case depSucceeded:
 		return true
-	case depFailed, depDeferred, depNotInstallable:
+	case depFailed, depDeferred, depNotInstallable, depRejected:
 		return false
 	case depInProgress:
 		// Cycle: the item's own frame is still on the stack, so this lookup
@@ -278,6 +314,10 @@ func installWithDeps(itemName string, catalogsMap map[int]map[string]catalog.Ite
 	item, err := resolveLogged(itemName, catalogsMap, false)
 	if errors.Is(err, ErrNotInstallable) {
 		visited[itemName] = depNotInstallable
+		return false
+	}
+	if errors.Is(err, ErrZipOnly) {
+		visited[itemName] = depRejected
 		return false
 	}
 	if err != nil {
@@ -297,13 +337,19 @@ func installWithDeps(itemName string, catalogsMap map[int]map[string]catalog.Ite
 			// failed, and retried next run (R6).
 			if visited[dependency] == depDeferred {
 				slog.Info("deferring item: dependency deferred", "item", item.DisplayName, "dependency", dependency)
-				recordDeferredItem(r, item.Name, item.Version, fmt.Sprintf("dependency %s deferred", dependency))
+				recordDeferredItem(r, item.Name, item.Version, dependency)
 				visited[itemName] = depDeferred
 				return false
 			}
 			if visited[dependency] == depNotInstallable {
 				slog.Warn("skipping item: dependency not installable on this machine", "item", item.DisplayName, "dependency", dependency)
 				recordFailedItem(r, item.Name, item.Version, fmt.Errorf("dependency %s is not installable on this machine", dependency))
+				visited[itemName] = depFailed
+				return false
+			}
+			if visited[dependency] == depRejected {
+				slog.Warn("skipping item: dependency rejected by this zip-only build", "item", item.DisplayName, "dependency", dependency)
+				recordFailedItem(r, item.Name, item.Version, fmt.Errorf("dependency %s is rejected by this zip-only build", dependency))
 				visited[itemName] = depFailed
 				return false
 			}
@@ -316,7 +362,7 @@ func installWithDeps(itemName string, catalogsMap map[int]map[string]catalog.Ite
 
 	// Install the item; the installer records its own failures in the report
 	if _, err := installerInstall(r, item, "install"); err != nil {
-		if errors.Is(err, installer.ErrBlockingApps) {
+		if errors.Is(err, installer.ErrDeferred) {
 			// The installer already recorded the deferral (R6); mark deferred
 			// so dependents cascade rather than fail.
 			visited[itemName] = depDeferred

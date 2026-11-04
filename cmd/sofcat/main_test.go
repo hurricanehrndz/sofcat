@@ -12,6 +12,7 @@ import (
 
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
 	"github.com/hurricanehrndz/sofcat/pkg/config"
+	"github.com/hurricanehrndz/sofcat/pkg/identity"
 	"github.com/hurricanehrndz/sofcat/pkg/installer"
 	"github.com/hurricanehrndz/sofcat/pkg/report"
 	"github.com/hurricanehrndz/sofcat/pkg/service"
@@ -28,6 +29,8 @@ func resetMainHooks() {
 	runServiceActionFunc = service.RunAction
 	serviceStatusFunc = service.ServiceStatus
 	protectAppDataFunc = func(string) error { return nil }
+	protectConfigFunc = func(string) error { return nil }
+	newZipInstaller = installer.NewMachineZip
 }
 
 func TestRunAdminCheckError(t *testing.T) {
@@ -611,7 +614,9 @@ func captureStdout(t *testing.T, fn func()) string {
 }
 
 // TestRouteServiceInstallProtectsAppData: -serviceinstall must protect the
-// data directory, and a failure to do so must not stop the install.
+// data directory and the config file, and a failure to do so must not stop
+// the install. The installer runs it before any config.yaml exists, so the
+// paths are protected as paths: neither needs to be there.
 func TestRouteServiceInstallProtectsAppData(t *testing.T) {
 	resetMainHooks()
 	defer resetMainHooks()
@@ -622,19 +627,76 @@ func TestRouteServiceInstallProtectsAppData(t *testing.T) {
 		protected = path
 		return errors.New("access denied")
 	}
+	protectedConfig := ""
+	protectConfigFunc = func(path string) error {
+		protectedConfig = path
+		return errors.New("access denied")
+	}
 	runServiceActionFunc = func(cfg config.Configuration, action string) error {
 		installed = action == "install"
 		return nil
 	}
 
-	cfg := config.Configuration{ServiceInstall: true, AppDataPath: `C:\ProgramData\SofCat`}
+	cfg := config.Configuration{ServiceInstall: true, AppDataPath: `C:\ProgramData\SofCat\Data`, ConfigPath: `C:\ProgramData\SofCat\config.yaml`}
 	if err := route(cfg); err != nil {
 		t.Fatalf("route: %v", err)
 	}
 	if protected != cfg.AppDataPath {
 		t.Errorf("protected %q, want %q", protected, cfg.AppDataPath)
 	}
+	if protectedConfig != cfg.ConfigPath {
+		t.Errorf("protected config %q, want %q", protectedConfig, cfg.ConfigPath)
+	}
 	if !installed {
 		t.Error("install did not run after the protect failure")
+	}
+}
+
+// TestRouteManagedRunPrintsWaitingItems: after a run from the command line,
+// an admin sees which items wait and why, without reading the log.
+func TestRouteManagedRunPrintsWaitingItems(t *testing.T) {
+	resetMainHooks()
+	defer resetMainHooks()
+	managedRunFunc = func(config.Configuration, installer.ProgressFn, *installer.Cancels) (*report.Report, error) {
+		return &report.Report{
+			DeferredItems: []report.DeferredItem{{
+				Name: "tool", Action: "install", Code: report.CodeMissingSoftware,
+				Reason: "Needs Demo Tool. Install it first, then try again.",
+			}},
+			HeldConditions: []report.HeldCondition{{
+				Condition: `lab == "yes"`, Missing: []string{"lab"}, Items: []string{"a", "b"}, Reason: "facts unavailable",
+			}},
+		}, nil
+	}
+	stdout := captureStdout(t, func() {
+		if err := route(config.Configuration{}); err != nil {
+			t.Fatalf("route: %v", err)
+		}
+	})
+	want := "deferred: tool (install): Needs Demo Tool. Install it first, then try again.\n" +
+		"held: conditional_items \"lab == \\\"yes\\\"\": facts unavailable (lab); items: a, b\n"
+	if stdout != want {
+		t.Errorf("stdout =\n%s\nwant\n%s", stdout, want)
+	}
+}
+
+// TestPrintLaunchdPlist: `just pkg` ships whatever -print-launchd-plist
+// prints, so it must be exactly the installed-layout plist, and no other
+// argument list may trigger it.
+func TestPrintLaunchdPlist(t *testing.T) {
+	var buf bytes.Buffer
+	if !printLaunchdPlist([]string{"sofcat", "-print-launchd-plist"}, &buf) {
+		t.Fatal("-print-launchd-plist not handled")
+	}
+	want := service.LaunchdPlist(identity.CLIPath(), identity.ConfigPathFor("darwin"), identity.DataDirFor("darwin"))
+	if !bytes.Equal(buf.Bytes(), want) {
+		t.Fatalf("printed:\n%s\nwant:\n%s", buf.Bytes(), want)
+	}
+
+	buf.Reset()
+	for _, args := range [][]string{{"sofcat"}, {"sofcat", "-c", "x"}, {"sofcat", "-print-launchd-plist", "-c", "x"}} {
+		if printLaunchdPlist(args, &buf) || buf.Len() != 0 {
+			t.Fatalf("%q handled as -print-launchd-plist", args)
+		}
 	}
 }

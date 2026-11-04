@@ -13,23 +13,20 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"time"
+
+	"github.com/hurricanehrndz/sofcat/pkg/identity"
 )
 
-// The Unix transport is a Unix domain socket, <socketDir>/<name>.sock. It
-// exists so the portable service core runs and is tested off Windows; the
-// service itself is still only installed on Windows.
+// The Unix transport is a Unix domain socket, <socketDir>/<name>.sock: the
+// macOS launchd daemon's, and on Linux the one the portable service core is
+// tested over.
 
-// socketDir is where sockets live; tests point it at a temporary directory.
-var socketDir = defaultSocketDir()
-
-func defaultSocketDir() string {
-	if runtime.GOOS == "linux" {
-		return "/run/sofcat"
-	}
-	return "/var/run/sofcat"
-}
+// socketDir is where sockets live, /var/run/<slug> on macOS and /run/<slug> on
+// Linux; tests point it at a temporary directory.
+var socketDir = identity.SocketDir()
 
 func socketPath(name string) string {
 	return filepath.Join(socketDir, name+".sock")
@@ -99,9 +96,27 @@ func (c unixConn) Peer() (peer, error) {
 	id := strconv.FormatUint(uint64(uid), 10)
 	u, err := user.LookupId(id)
 	if err != nil {
-		return peer{ID: id}, fmt.Errorf("look up uid %s: %w", id, err)
+		return peer{ID: id, Admin: uid == 0}, fmt.Errorf("look up uid %s: %w", id, err)
 	}
-	return peer{Name: u.Username, ID: id}, nil
+	return peer{Name: u.Username, ID: id, Admin: unixAdmin(uid, u)}, nil
+}
+
+// unixAdmin reports whether the user is an administrator: root, or on macOS a
+// member of group admin. Elsewhere only root is; the Unix transport there only
+// runs the tests. A failed group lookup is not an administrator.
+func unixAdmin(uid uint32, u *user.User) bool {
+	if uid == 0 {
+		return true
+	}
+	if runtime.GOOS != "darwin" {
+		return false
+	}
+	admin, err := user.LookupGroup("admin")
+	if err != nil {
+		return false
+	}
+	gids, err := u.GroupIds()
+	return err == nil && slices.Contains(gids, admin.Gid)
 }
 
 // trustedServerUID is the user the service runs as: root. Tests, which serve

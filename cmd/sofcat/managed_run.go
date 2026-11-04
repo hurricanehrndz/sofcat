@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/hurricanehrndz/sofcat/pkg/conditions"
@@ -16,6 +19,7 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/manifest"
 	"github.com/hurricanehrndz/sofcat/pkg/process"
 	"github.com/hurricanehrndz/sofcat/pkg/report"
+	"github.com/hurricanehrndz/sofcat/pkg/service"
 	"github.com/hurricanehrndz/sofcat/pkg/sofcatlog"
 	"github.com/hurricanehrndz/sofcat/pkg/status"
 )
@@ -24,6 +28,9 @@ var (
 	adminCheckFunc = adminCheck
 	mkdirAllFunc   = os.MkdirAll
 	newReportFunc  = report.New
+	// newZipInstaller builds the run's zip installer; tests swap in one with
+	// temporary write roots.
+	newZipInstaller = installer.NewMachineZip
 )
 
 // managedRun runs one full pass. progress receives per-item events and cancels
@@ -82,11 +89,26 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 		return nil, fmt.Errorf("unable to retrieve catalog: %w", err)
 	}
 
+	// The placement table for zip items; a repository without one has none.
+	harnesses, err := manifest.GetHarnesses(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("unable to retrieve harness table: %w", err)
+	}
+
 	// Decide which catalog items this machine may install (installable_condition).
 	// The run refreshes the admin condition scripts' facts.
 	machineFacts := facts.Collect(facts.Dir(cfg.AppDataPath), true)
 	conditions.Apply(catalogs, machineFacts)
 	plan.conditions = machineFacts
+
+	// Resolve the manifests' conditional_items against the same facts. A block
+	// whose condition names a missing fact holds its items: the run neither
+	// installs nor removes them.
+	manifests, held := manifest.Expand(manifests, machineFacts)
+	for _, h := range held {
+		slog.Warn("holding conditional items: facts unavailable", "condition", h.Condition, "missing", h.Missing, "items", h.Items)
+		run.HeldConditions = append(run.HeldConditions, report.HeldCondition{Condition: h.Condition, Missing: h.Missing, Items: h.Items, Reason: "facts unavailable"})
+	}
 
 	// Process the manifests into install type groups
 	slog.Info("Processing manifest...")
@@ -118,15 +140,24 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 	plan.add(report.KindManagedUninstall, true, ssUninstalls...)
 	plan.addSelfServe(ssInstalls, selfServe)
 
-	// Build the run-scoped installer context (K7)
+	// Build the run-scoped installer context (K7). Zip items' status comes
+	// from their receipts, for every status reader in the run.
+	// A held item is never removed (not by managed_uninstalls, a pending
+	// self-service removal, or scope exit), nor its managed flag rewritten.
+	heldSet := heldItems(held)
+	zip := newZipInstaller(cfg, harnesses)
+	managed := managedInstalls(manifests)
+	zip.Managed = func(item string) bool { return managed[item] }
+	zip.Held = func(item string) bool { return heldSet[item] }
 	runner := &installer.Runner{
 		Report:      run,
-		Checker:     &status.Checker{},
+		Checker:     &status.Checker{Zip: zip.Installed},
 		Emit:        progress,
 		Cancels:     cancels,
 		URLPackages: cfg.URLPackages,
 		CachePath:   cfg.CachePath,
 		CheckOnly:   cfg.CheckOnly,
+		Zip:         zip,
 	}
 
 	// Expand update_for (R7): build the updater index once, ride updaters of
@@ -145,6 +176,8 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 	plan.add(report.KindManagedUninstall, false, uninstalls...)
 	plan.addUpdaters(index)
 
+	uninstalls = dropHeld(uninstalls, heldSet)
+
 	// Prepare and install
 	slog.Info("Processing managed installs...")
 	process.Installs(installs, catalogs, runner, index)
@@ -152,6 +185,22 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 	// Prepare and uninstall
 	slog.Info("Processing managed uninstalls...")
 	process.Uninstalls(uninstalls, catalogs, runner)
+
+	// Scope exit: remove receipt-tracked items that left the desired set.
+	// The uninstall pass already handled (and reported) the items it could
+	// resolve; one no catalog lists any more falls to scope exit.
+	desired := desiredItems(slices.Concat(installs, updates), catalogs, index)
+	removed := uninstallable(uninstalls, catalogs)
+	slog.Info("Processing scope exit...")
+	keep := func(item string) bool { return desired[item] || heldSet[item] || removed[item] }
+	if err := runner.ScopeExit(keep); err != nil {
+		slog.Warn("scope exit skipped", "err", err)
+	}
+	// Rewrite every marketplace's generated files from the receipts, so one
+	// deleted or refused on an earlier run is restored.
+	if !cfg.CheckOnly {
+		runner.Regenerate()
+	}
 
 	// Prune self-serve uninstalls that are confirmed gone so the user can
 	// reinstall later (R5). Only after a real run, never in check-only.
@@ -170,6 +219,26 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 	slog.Info("Processing managed updates...")
 	process.Updates(updates, catalogs, runner)
 	plan.checkUpdates(run, runner.Checker, cfg.CachePath)
+
+	// The service never writes into a user profile: it stages the archives
+	// of user-scope placements for the per-user helper (--user-sync), then
+	// stores the plan listUserPlacements serves. The plan comes from the
+	// run's own desired and held sets, the ones scope exit used, with each
+	// item deferred this run held too: the helper neither places nor removes
+	// it, and its archive is not staged.
+	if !cfg.CheckOnly {
+		dir := service.UserArtifactsDir(cfg.AppDataPath)
+		planDesired, planHeld := maps.Clone(desired), maps.Clone(heldSet)
+		for _, d := range run.DeferredItems {
+			delete(planDesired, d.Name)
+			planHeld[d.Name] = true
+		}
+		userPlan := service.UserPlan(planDesired, planHeld, catalogs, harnesses, zip.Guard.GOOS, dir)
+		service.StageUserArtifacts(context.Background(), zip, userPlan, dir)
+		if err := service.SaveUserPlan(cfg.AppDataPath, userPlan); err != nil {
+			slog.Warn("unable to store the user-placement plan", "err", err)
+		}
+	}
 
 	// Offered optional installs the user has not selected still belong in the
 	// inventory; the deferred finishInventory saves or prints it.

@@ -1,0 +1,9 @@
+# Where the Tapas Test build may place zip items (docs/zip-items.md). Each
+# OS's machine root covers every placement in ../harnesses.yaml except
+# outside-skills, which lies outside it on purpose.
+darwin:
+  - /Library/Application Support/Tapas Test
+windows:
+  - ${ProgramData}\tapas-test-smoke
+windows_user:
+  - ${USERPROFILE}\.agents

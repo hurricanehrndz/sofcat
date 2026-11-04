@@ -8,7 +8,7 @@ golangci-lint = "2.15.0"
 gofumpt = "0.12"
 yamlfmt = "0.21"
 "ubi:numtide/treefmt" = "2.6.0"
-"github:hurricanehrndz/embala" = "0.8.0"
+"github:hurricanehrndz/embala" = "0.9.0"
 prek = "0.5.7"
 actionlint = "1.7.12"
 

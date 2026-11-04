@@ -20,6 +20,7 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/facts"
 	"github.com/hurricanehrndz/sofcat/pkg/installer"
 	"github.com/hurricanehrndz/sofcat/pkg/manifest"
+	"github.com/hurricanehrndz/sofcat/pkg/process"
 	"github.com/hurricanehrndz/sofcat/pkg/report"
 	"github.com/hurricanehrndz/sofcat/pkg/status"
 )
@@ -27,6 +28,10 @@ import (
 var (
 	manifestGet = manifest.Get
 	catalogGet  = manifest.GetCatalogs
+	harnessGet  = manifest.GetHarnesses
+	// newZipInstaller builds the installer whose receipts give zip items'
+	// status; tests swap in one with temporary write roots.
+	newZipInstaller = installer.NewMachineZip
 )
 
 type Command struct {
@@ -40,6 +45,9 @@ type Command struct {
 	// requestedBy maps the item of the mutation a run carries out to the user
 	// who asked for it, for the inventory. Only on an actionRun.
 	requestedBy map[string]string
+	// caller is who sent an InstallItem or RemoveItem, as authorization sees
+	// them: the zero peer when unresolved.
+	caller peer
 }
 
 type CommandResponse struct {
@@ -50,6 +58,9 @@ type CommandResponse struct {
 	OperationID   string                `json:"operationId,omitempty"`
 	RequestedBy   string                `json:"requestedBy,omitempty"`
 	Branding      *branding.Branding    `json:"branding,omitempty"`
+
+	// UserPlacements is ListUserPlacements' plan.
+	UserPlacements []UserPlacement `json:"userPlacements,omitempty"`
 
 	// displayName is the catalog display name InstallItem resolved while
 	// authorizing, for the operation's first record. Unexported like report.
@@ -74,6 +85,8 @@ const (
 	actionRemoveItem            = "RemoveItem"
 	actionStreamOperationStatus = "StreamOperationStatus"
 	actionCancelOperation       = "CancelOperation"
+	actionListUserPlacements    = "ListUserPlacements"
+	actionReportUserPlacements  = "ReportUserPlacements"
 )
 
 func canonicalizeAction(action string) (string, bool) {
@@ -92,6 +105,10 @@ func canonicalizeAction(action string) (string, bool) {
 		return actionRemoveItem, true
 	case strings.ToLower(actionStreamOperationStatus):
 		return actionStreamOperationStatus, true
+	case strings.ToLower(actionListUserPlacements):
+		return actionListUserPlacements, true
+	case strings.ToLower(actionReportUserPlacements):
+		return actionReportUserPlacements, true
 	case strings.ToLower(actionCancelOperation):
 		return actionCancelOperation, true
 	default:
@@ -136,9 +153,14 @@ func validateCommand(cmd Command) error {
 		if len(cmd.Items) != 0 {
 			return errors.New("run action does not support items")
 		}
-	case actionGetServiceInfo, actionListOptionalInstalls, actionGetBranding:
+	case actionGetServiceInfo, actionListOptionalInstalls, actionGetBranding, actionListUserPlacements:
 		if len(cmd.Items) != 0 {
 			return fmt.Errorf("%s action does not support items", cmd.Action)
+		}
+	case actionReportUserPlacements:
+		// item,placement,outcome[,error]: one result, for testing the method.
+		if len(cmd.Items) != 3 && len(cmd.Items) != 4 {
+			return fmt.Errorf("%s action requires item,placement,outcome[,error]", cmd.Action)
 		}
 	case actionInstallItem, actionRemoveItem, actionStreamOperationStatus, actionCancelOperation:
 		if len(cmd.Items) != 1 {
@@ -222,6 +244,8 @@ func SendCommand(cfg config.Configuration, spec string) (CommandResponse, error)
 			return CommandResponse{}, err
 		}
 		return CommandResponse{Status: "ok", OperationID: cmd.Items[0], Message: "operation canceled"}, nil
+	case actionListUserPlacements, actionReportUserPlacements:
+		return sendUserPlacementCommand(ctx, client, cmd)
 	default:
 		return CommandResponse{}, fmt.Errorf("unsupported service action %q", cmd.Action)
 	}
@@ -235,14 +259,15 @@ func brandingSummary(b branding.Branding) (string, error) {
 		return "", fmt.Errorf("failed to decode branding logo: %w", err)
 	}
 	line, err := json.Marshal(struct {
-		Title     string `json:"title"`
-		Tagline   string `json:"tagline"`
-		HelpURL   string `json:"helpUrl"`
-		HelpLabel string `json:"helpLabel"`
-		Accent    string `json:"accent"`
-		LogoMime  string `json:"logoMime"`
-		LogoBytes int    `json:"logoBytes"`
-	}{b.Title, b.Tagline, b.HelpURL, b.HelpLabel, b.Accent, b.LogoMime, len(logo)})
+		Title       string `json:"title"`
+		Tagline     string `json:"tagline"`
+		HelpURL     string `json:"helpUrl"`
+		HelpLabel   string `json:"helpLabel"`
+		Accent      string `json:"accent"`
+		LogoMime    string `json:"logoMime"`
+		LogoBytes   int    `json:"logoBytes"`
+		ListHeading string `json:"listHeading"`
+	}{b.Title, b.Tagline, b.HelpURL, b.HelpLabel, b.Accent, b.LogoMime, len(logo), b.ListHeading})
 	return string(line), err
 }
 
@@ -258,22 +283,22 @@ func executeCommand(cfg config.Configuration, cmd Command, managedRun func(confi
 		rep, err := managedRun(cfg, cmd.progress, cmd.cancels)
 		return CommandResponse{Status: "ok", report: rep}, err
 	case actionInstallItem:
-		displayName, prior, err := addServiceManagedInstall(cfg, cmd.Items[0])
+		displayName, prior, err := addServiceManagedInstall(cfg, cmd.caller, cmd.Items[0])
 		if err != nil {
 			return CommandResponse{}, err
 		}
 		// A new request starts the item's cancel bookkeeping afresh.
 		cmd.cancels.Reset(cmd.Items[0])
 		operationID := newOperationID()
-		return CommandResponse{Status: "ok", OperationID: operationID, displayName: displayName, prior: prior, requested: selectedForInstall}, nil
+		return CommandResponse{Status: "ok", OperationID: operationID, displayName: displayName, prior: prior, requested: prior.next(selectedForInstall, cmd.caller)}, nil
 	case actionRemoveItem:
-		prior, err := removeServiceManagedInstall(cfg, cmd.Items[0])
+		prior, err := removeServiceManagedInstall(cfg, cmd.caller, cmd.Items[0])
 		if err != nil {
 			return CommandResponse{}, err
 		}
 		cmd.cancels.Reset(cmd.Items[0])
 		operationID := newOperationID()
-		return CommandResponse{Status: "ok", OperationID: operationID, prior: prior, requested: selectedForRemoval}, nil
+		return CommandResponse{Status: "ok", OperationID: operationID, prior: prior, requested: prior.next(selectedForRemoval, cmd.caller)}, nil
 	case actionListOptionalInstalls:
 		items, err := getOptionalItems(cfg)
 		if err != nil {
@@ -287,6 +312,12 @@ func executeCommand(cfg config.Configuration, cmd Command, managedRun func(confi
 	case actionGetBranding:
 		b := branding.Resolve(cfg.Branding)
 		return CommandResponse{Status: "ok", Branding: &b}, nil
+	case actionListUserPlacements:
+		entries, err := LoadUserPlan(cfg.AppDataPath)
+		if err != nil {
+			return CommandResponse{}, err
+		}
+		return CommandResponse{Status: "ok", UserPlacements: entries}, nil
 	default:
 		return CommandResponse{}, fmt.Errorf("unsupported service action %q", cmd.Action)
 	}
@@ -302,6 +333,8 @@ func serviceLocalManifestPath(cfg config.Configuration) string {
 type selection struct {
 	install   bool // listed in managed_installs
 	uninstall bool // listed in managed_uninstalls
+	// selectedBy is the item's selected_by entry, "" when none is recorded.
+	selectedBy string
 }
 
 var (
@@ -313,19 +346,69 @@ var (
 	selectedForRemoval = selection{uninstall: true}
 )
 
+// next is the selection caller's request for want sets on an item whose
+// selection is s. Selecting keeps the recorded selector, or records caller
+// when there is none. A removal records its remover, who then owns the
+// pending removal (R32a); an unresolved remover, who can only remove an
+// unowned item, records nobody.
+func (s selection) next(want selection, caller peer) selection {
+	want.selectedBy = s.selectedBy
+	switch {
+	case want.uninstall && caller.ID != "":
+		want.selectedBy = caller.ID
+	case want.install && want.selectedBy == "":
+		want.selectedBy = caller.ID
+	}
+	return want
+}
+
+// authorized reports whether caller may undo what owner asked for: owner
+// itself or an administrator, or anyone when no owner is recorded. An
+// unresolved caller has no ID, so it matches no owner (R32).
+func authorized(owner string, caller peer) bool {
+	return owner == "" || caller.Admin || caller.ID != "" && caller.ID == owner
+}
+
 // setSelection sets name's selection in the self-serve manifest and returns
 // the selection it replaced. Both lists stay deduplicated and sorted.
-func setSelection(cfg config.Configuration, name string, want selection) (selection, error) {
+//
+// With a caller it is that caller's request, checked and recorded under the
+// file's lock: a removal, or an install that would undo a pending removal, is
+// refused with errNotAuthorized unless the caller is the item's selector or an
+// administrator (R32, R32a), and the selector is kept or recorded as next
+// says: a removal's selector is its remover. Without one it sets want as given, selector included: a cancel putting
+// back a selection the service already authorized.
+func setSelection(cfg config.Configuration, name string, want selection, caller *peer) (selection, error) {
 	var prior selection
+	var refused error
 	err := manifest.UpdateSelfServe(serviceLocalManifestPath(cfg), func(entry *manifest.Item) bool {
 		prior = selection{
-			install:   slices.Contains(entry.Installs, name),
-			uninstall: slices.Contains(entry.Uninstalls, name),
+			install:    slices.Contains(entry.Installs, name),
+			uninstall:  slices.Contains(entry.Uninstalls, name),
+			selectedBy: entry.SelectedBy[name],
+		}
+		if caller != nil {
+			if (want.uninstall || prior.uninstall) && !authorized(prior.selectedBy, *caller) {
+				refused = fmt.Errorf("%w: %q", errNotAuthorized, name)
+				return false
+			}
+			want = prior.next(want, *caller)
 		}
 		entry.Installs = setMember(entry.Installs, name, want.install)
 		entry.Uninstalls = setMember(entry.Uninstalls, name, want.uninstall)
+		if want.selectedBy == "" {
+			delete(entry.SelectedBy, name)
+		} else {
+			if entry.SelectedBy == nil {
+				entry.SelectedBy = make(map[string]string)
+			}
+			entry.SelectedBy[name] = want.selectedBy
+		}
 		return prior != want
 	})
+	if err == nil {
+		err = refused
+	}
 	return prior, err
 }
 
@@ -343,8 +426,8 @@ func setMember(list []string, name string, member bool) []string {
 
 // addServiceManagedInstall selects name for install. It returns name's catalog
 // display name, which the authorization lookup has already resolved, and the
-// selection it replaced.
-func addServiceManagedInstall(cfg config.Configuration, name string) (string, selection, error) {
+// selection it replaced. caller is who asked, for setSelection.
+func addServiceManagedInstall(cfg config.Configuration, caller peer, name string) (string, selection, error) {
 	// Authorize the requested name against the currently available optional
 	// installs before writing anything (R3). An unknown name is rejected and the
 	// file is left untouched; the service answers item_not_available.
@@ -356,7 +439,7 @@ func addServiceManagedInstall(cfg config.Configuration, name string) (string, se
 	if i < 0 {
 		return "", selection{}, fmt.Errorf("%w: %q", errItemNotAvailable, name)
 	}
-	prior, err := setSelection(cfg, name, selectedForInstall)
+	prior, err := setSelection(cfg, name, selectedForInstall, &caller)
 	return available[i].DisplayName, prior, err
 }
 
@@ -365,10 +448,11 @@ func addServiceManagedInstall(cfg config.Configuration, name string) (string, se
 // admin manifests offer (optional_installs or default_installs) or one already
 // in the self-serve lists, so a deselected item stays removable after it
 // leaves the offer. An item an admin manifest requires (managed_installs) is
-// never removable, even when it is also offered.
-func removeServiceManagedInstall(cfg config.Configuration, name string) (selection, error) {
+// never removable, even when it is also offered. Only its selector or an
+// administrator may remove an item with a recorded selector (setSelection).
+func removeServiceManagedInstall(cfg config.Configuration, caller peer, name string) (selection, error) {
 	download.SetConfig(cfg)
-	manifests, _, err := manifestGet(cfg)
+	manifests, _, _, err := adminManifests(cfg)
 	if err != nil {
 		return selection{}, err
 	}
@@ -385,7 +469,7 @@ func removeServiceManagedInstall(cfg config.Configuration, name string) (selecti
 	if !offered && !slices.Contains(selfServe.Installs, name) && !slices.Contains(selfServe.Uninstalls, name) {
 		return selection{}, fmt.Errorf("%w: %q is not a self-service item", errItemNotRemovable, name)
 	}
-	return setSelection(cfg, name, selectedForRemoval)
+	return setSelection(cfg, name, selectedForRemoval, &caller)
 }
 
 // requiredItems is the set of names the admin manifests list in
@@ -410,6 +494,9 @@ var (
 	// self-service item or that an admin manifest requires, sent as
 	// item_not_removable.
 	errItemNotRemovable = errors.New("item cannot be removed through self-service")
+	// errNotAuthorized refuses a caller who may not undo another user's
+	// request (R32), sent as not_authorized.
+	errNotAuthorized = errors.New("only the user who asked for this, or an administrator, can change it")
 )
 
 // withdrawItem is the item side of CancelOperation. It puts back the selection
@@ -418,16 +505,30 @@ var (
 // item first, it restores the request's own selection and returns
 // errNotCancelable.
 func withdrawItem(cfg config.Configuration, cancels *installer.Cancels, name string, prior, requested selection) error {
-	if _, err := setSelection(cfg, name, prior); err != nil {
+	if _, err := setSelection(cfg, name, prior, nil); err != nil {
 		return err
 	}
 	if cancels.Cancel(name) {
 		return nil
 	}
-	if _, err := setSelection(cfg, name, requested); err != nil {
+	if _, err := setSelection(cfg, name, requested, nil); err != nil {
 		slog.Warn("unable to restore the self-service selection after a refused cancel", "item", name, "err", err)
 	}
 	return errNotCancelable
+}
+
+// adminManifests fetches the admin manifests and expands their
+// conditional_items with manifest.Expand, as the managed run does, so the
+// service offers and refuses exactly what a run would act on. It reuses the
+// last run's admin condition facts: a list call should not run the scripts.
+func adminManifests(cfg config.Configuration) (manifests []manifest.Item, newCatalogs []string, machineFacts conditions.Facts, err error) {
+	manifests, newCatalogs, err = manifestGet(cfg)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	machineFacts = facts.Collect(facts.Dir(cfg.AppDataPath), false)
+	manifests, _ = manifest.Expand(manifests, machineFacts)
+	return manifests, newCatalogs, machineFacts, nil
 }
 
 func loadServiceLocalManifest(cfg config.Configuration) (manifest.Item, error) {
@@ -442,7 +543,7 @@ func loadServiceLocalManifest(cfg config.Configuration) (manifest.Item, error) {
 func getOptionalItems(cfg config.Configuration) ([]OptionalInstallItem, error) {
 	download.SetConfig(cfg)
 
-	manifests, newCatalogs, err := manifestGet(cfg)
+	manifests, newCatalogs, machineFacts, err := adminManifests(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -454,9 +555,15 @@ func getOptionalItems(cfg config.Configuration) ([]OptionalInstallItem, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Reuse the last run's admin condition facts: a list call should not run
-	// the scripts.
-	conditions.Apply(catalogs, facts.Collect(facts.Dir(cfg.AppDataPath), false))
+	conditions.Apply(catalogs, machineFacts)
+
+	// Zip items' status comes from receipts and placed trees, located through
+	// the harness table, never from a check block. Every list call fetches it
+	// (R6); a repository without one has an empty table.
+	table, err := harnessGet(cfg)
+	if err != nil {
+		return nil, err
+	}
 
 	selfServe, err := manifest.LoadSelfServe(manifest.SelfServePath(cfg.AppDataPath))
 	if err != nil {
@@ -481,7 +588,8 @@ func getOptionalItems(cfg config.Configuration) ([]OptionalInstallItem, error) {
 	slices.Sort(names)
 
 	// One shared checker so the registry snapshot amortizes across items.
-	checker := &status.Checker{}
+	zip := newZipInstaller(cfg, table)
+	checker := &status.Checker{Zip: zip.Installed}
 	now := nowRFC3339UTC()
 
 	items := make([]OptionalInstallItem, 0, len(names))
@@ -516,6 +624,7 @@ func getOptionalItems(cfg config.Configuration) ([]OptionalInstallItem, error) {
 		item.Developer = catItem.Developer
 		item.IconName = catItem.IconName
 		item.RestartAction = catItem.RestartAction
+		item.ActionLabels, item.WorksIn = table.Storefront(catItem, zip.Guard.GOOS)
 
 		// Script-only checks are not run on a list call (R9/OQ-C4): report Unknown.
 		if catItem.Check.Script != "" &&
@@ -551,10 +660,12 @@ func getOptionalItems(cfg config.Configuration) ([]OptionalInstallItem, error) {
 
 // firstCatalogItem returns the first-catalog-wins catalog item for name and the
 // name of the catalog it came from. Unlike process.firstItem it applies no
-// installer-validity rules — the list is a display surface. catalogNames maps a
-// catalog index (1-based, as manifest.GetCatalogs keys them) to its configured name.
-// Occurrences this machine may not install (installable_condition) are passed
-// over; notInstallable reports that name had only those.
+// installer-validity rules — the list is a display surface — except a zip-only
+// build's (process.ZipOnlyReason), since that binary cannot install the item.
+// catalogNames maps a catalog index (1-based, as manifest.GetCatalogs keys
+// them) to its configured name. Occurrences this machine may not install
+// (installable_condition) or a zip-only build rejects are passed over;
+// notInstallable reports that name had only those.
 func firstCatalogItem(name string, catalogs map[int]map[string]catalog.Item, catalogNames []string) (_ catalog.Item, _ string, ok, notInstallable bool) {
 	indexes := make([]int, 0, len(catalogs))
 	for k := range catalogs {
@@ -563,6 +674,11 @@ func firstCatalogItem(name string, catalogs map[int]map[string]catalog.Item, cat
 	slices.Sort(indexes)
 	for _, k := range indexes {
 		if item, ok := catalogs[k][name]; ok {
+			if reason := process.ZipOnlyReason(item); reason != "" {
+				process.WarnZipOnly(name, reason)
+				notInstallable = true
+				continue
+			}
 			if item.NotInstallable != "" {
 				notInstallable = true
 				continue

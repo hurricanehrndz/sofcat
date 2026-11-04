@@ -35,9 +35,9 @@ machine gets, catalogs say what exists, and both are plain YAML.
 
 | | Today | Planned |
 | --- | --- | --- |
-| Agent | Windows service | macOS and Linux |
-| Item types | `.msi`, `.exe`, `.ps1`, `.nupkg` via [Chocolatey](https://github.com/chocolatey/choco) | Files and scripts on any platform, AI skills, native packages |
-| Self-service app | Windows | macOS and Linux |
+| Agent | Windows service, macOS launchd daemon | Linux |
+| Item types | `.msi`, `.exe`, `.ps1`, `.nupkg` via [Chocolatey](https://github.com/chocolatey/choco), zip items (directory trees such as AI skills and plugins) | Files and scripts on any platform, native packages |
+| Self-service app | Windows, macOS | Linux |
 | `makecatalogs` | Linux, macOS, Windows | |
 
 What already works:
@@ -55,6 +55,14 @@ What already works:
 - **Installable conditions.** An item can require an architecture, Windows
   build, model or a fact your own scripts provide, as with Munki's
   `installable_condition`. See [docs/conditions.md](docs/conditions.md).
+- **Zip items.** Package directory trees, such as AI skills, as deterministic
+  zips with `makecatalogs`. On Windows a per-user helper
+  (`<slug>-ui.exe --user-sync`, started at logon) places them in each user's
+  profile. See [docs/zip-items.md](docs/zip-items.md).
+- **macOS.** A launchd daemon and a self-service app bundle, installed by the
+  `.pkg` from `just pkg`, with the same features.
+- **Zip-only brands.** `INSTALLERS=zip` in a brand compiles out the command
+  installers and scripts. See [examples/brand/README.md](examples/brand/README.md).
 - **`makecatalogs` anywhere.** Build catalogs on any OS, so your repo's CI
   never needs a Windows runner.
 
@@ -69,16 +77,21 @@ flowchart LR
 
 ## Quick start on Windows
 
-1. Download `sofcat-<version>-x86_64.msi` from the
+1. Download `sofcat-<version>-x86_64-setup.exe` from the
    [releases page](https://github.com/hurricanehrndz/sofcat/releases) and install it:
 
    ```powershell
-   msiexec /i sofcat-<version>-x86_64.msi /qn
+   .\sofcat-<version>-x86_64-setup.exe /S
    ```
 
-   The MSI puts both executables in `C:\Program Files\SofCat`, registers the
-   `sofcat` service and adds a Start-menu shortcut to the app. It ships no
-   config.
+   The installer puts both executables in `C:\Program Files\SofCat`,
+   registers and starts the `sofcat` service, adds a Start-menu shortcut to
+   the app and an Add or remove programs entry, and registers the per-user
+   helper to run at logon. It ships no config. SofCat never writes under
+   `C:\Program Files`: its config, its `Data` directory and any placement of
+   its own live under `C:\ProgramData\SofCat`. `"C:\Program
+   Files\SofCat\uninstall.exe" /S` removes all of it and leaves
+   `C:\ProgramData\SofCat` alone.
 
 2. Write `C:\ProgramData\SofCat\config.yaml` and point it at your repo:
 
@@ -87,7 +100,6 @@ flowchart LR
    manifest: example_manifest
    catalogs:
      - example_catalog
-   app_data_path: C:/ProgramData/SofCat
    ```
 
 3. `Restart-Service sofcat`.
@@ -134,9 +146,9 @@ You need Go 1.27, Node 24 and [`just`](https://github.com/casey/just).
 
 ```sh
 mise install
-just setup   # frontend deps and the pre-commit hook
-just build   # build/sofcat.exe and build/sofcat-ui.exe
-just msi     # build/sofcat-<version>-x86_64.msi
+just dev-setup   # frontend deps and the pre-commit hook
+just build       # build/sofcat.exe and build/sofcat-ui.exe
+just setup       # build/sofcat-<version>-x86_64-setup.exe
 ```
 
 With mise activated in your shell, entering the repo loads the toolchain. On
@@ -145,9 +157,12 @@ adds the GTK 4/WebKitGTK 6.0 libraries the UI package
 links against for native Linux builds and tests; on other distros install
 those from the package manager.
 
-Both executables are pure Go with no cgo, so they cross-compile from Linux or
-macOS. `just msi` uses [embala](https://github.com/hurricanehrndz/embala), so
-WiX isn't needed either. More in [docs/dev.md](docs/dev.md) and
+On a Mac, `just build-macos` builds the CLI and `build/<Name>.app` (cgo, so
+the Xcode command line tools) and `just pkg` wraps them in an unsigned `.pkg`.
+
+Both Windows executables are pure Go with no cgo, so they cross-compile from
+Linux or macOS. `just setup` uses [embala](https://github.com/hurricanehrndz/embala), so
+the installer builds there too. More in [docs/dev.md](docs/dev.md) and
 [ui/README.md](ui/README.md).
 
 ## Contributing

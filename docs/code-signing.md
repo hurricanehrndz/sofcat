@@ -47,7 +47,7 @@ Options (prices as of 2026; confirm before buying):
 
 ## How it would plug in
 
-Sign the executables first, then let embala sign the MSI.
+Sign the executables first, then let embala sign the installer.
 
 1. **Executables.** In the `build` recipe in the `justfile`, after each
    `go build`, run a signing command, kept optional so local builds still
@@ -58,16 +58,18 @@ Sign the executables first, then let embala sign the MSI.
    with `SOFCAT_SIGN_CMD` set to something like
    `jsign --storetype TRUSTEDSIGNING --keystore <region>.codesigning.azure.net --storepass "$AZURE_TOKEN" --alias <account>/<profile> --tsaurl http://timestamp.acs.microsoft.com`.
    Always timestamp, so signatures stay valid after the certificate expires.
-2. **MSI.** embala 0.7 runs your own tool on each built `.msi` through an
-   optional `[sign.windows]` section in `installer/embala.toml`, with `$f` as
-   the file (see the embala README, "Signing"):
+2. **setup.exe.** embala runs your own tool on the built `setup.exe`, and on
+   the uninstaller stub it embeds in it, through an optional `[sign.windows]`
+   section in `installer/embala.toml`, with `$f` as the file (see the embala
+   README, "Signing"):
 
        [sign.windows]
        command = "jsign ... $f"
 
-   `embala build --no-sign` skips it for local builds.
+   Add `signed-stub = "<path>"` there to embed a stub you signed beforehand
+   instead. `embala build --no-sign` skips it for local builds.
 3. **CI.** In `.github/workflows/build_release.yml`, before the
-   "Build executables, MSI and makecatalogs" step, install `jsign` (Java) and
+   "Build executables, setup.exe and makecatalogs" step, install `jsign` (Java) and
    log in to Azure with OIDC (`azure/login`, using the existing
    `id-token: write` permission) to get an access token, and pass it to the
    build step as a secret environment variable. Keep provenance attestation

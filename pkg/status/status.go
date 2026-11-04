@@ -42,6 +42,11 @@ type Checker struct {
 	// registryItems caches the applications found in the registry,
 	// lazily populated on first registry check
 	registryItems map[string]RegistryApplication
+
+	// Zip reports whether a zip item is installed, from its receipts and
+	// placed trees (installer.ZipInstaller.Installed). A zip item never has a
+	// check block; with Zip nil it reads as not installed.
+	Zip func(catalog.Item) bool
 }
 
 // Invalidate drops the cached registry snapshot so the next registry check
@@ -107,60 +112,6 @@ func (c *Checker) checkRegistry(catalogItem catalog.Item, installType string) (a
 		actionNeeded = false
 	} else {
 		actionNeeded = true
-	}
-
-	return actionNeeded, checkErr
-}
-
-func checkScript(catalogItem catalog.Item, cachePath string, installType string) (actionNeeded bool, checkErr error) {
-	if err := os.MkdirAll(cachePath, 0o755); err != nil {
-		return false, err
-	}
-
-	// Write InstallCheckScript to disk as a Powershell file
-	tmpFile, err := os.CreateTemp(cachePath, "sofcat-check-*.ps1")
-	if err != nil {
-		return false, err
-	}
-	tmpScript := tmpFile.Name()
-	defer func() {
-		if removeErr := os.Remove(tmpScript); removeErr != nil && !os.IsNotExist(removeErr) {
-			slog.Warn("Unable to remove temporary check script", "path", tmpScript, "err", removeErr)
-		}
-	}()
-	_, writeErr := tmpFile.WriteString(catalogItem.Check.Script)
-	closeErr := tmpFile.Close()
-	if writeErr != nil {
-		return false, writeErr
-	}
-	if closeErr != nil {
-		return false, closeErr
-	}
-
-	// Build the command to execute the script
-	psCmd := filepath.Join(os.Getenv("WINDIR"), "system32/", "WindowsPowershell", "v1.0", "powershell.exe")
-	psArgs := []string{"-NoProfile", "-NoLogo", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", tmpScript}
-
-	// Execute the script
-	cmd := execCommand(psCmd, psArgs...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err = cmd.Run()
-	cmdSuccess := cmd.ProcessState.Success()
-	outStr, errStr := stdout.String(), stderr.String()
-
-	// Log results
-	slog.Debug("Command error", "err", err)
-	slog.Debug("Command stdout", "stdout", outStr)
-	slog.Debug("Command stderr", "stderr", errStr)
-
-	actionNeeded = false
-	// Application not installed if exit 0
-	if installType == "uninstall" {
-		actionNeeded = !cmdSuccess
-	} else if installType == "install" || installType == "update" {
-		actionNeeded = cmdSuccess
 	}
 
 	return actionNeeded, checkErr
@@ -315,9 +266,20 @@ func checkAppx(catalogItem catalog.Item, installType string) (actionNeeded bool,
 
 // CheckStatus determines the method for checking status
 func (c *Checker) CheckStatus(catalogItem catalog.Item, installType, cachePath string) (actionNeeded bool, checkErr error) {
+	if catalogItem.Installer.Type == "zip" {
+		installed := c.Zip != nil && c.Zip(catalogItem)
+		switch installType {
+		case "uninstall":
+			return installed, nil
+		case "update":
+			return false, nil // the zip installer decides updates itself
+		default:
+			return !installed, nil
+		}
+	}
 	if catalogItem.Check.Script != "" {
 		slog.Info("Checking status via script", "item", catalogItem.DisplayName)
-		return checkScript(catalogItem, cachePath, installType)
+		return scriptCheckFunc(catalogItem, cachePath, installType)
 
 	} else if len(catalogItem.Check.File) > 0 {
 		slog.Info("Checking status via file", "item", catalogItem.DisplayName)

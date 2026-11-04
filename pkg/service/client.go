@@ -143,6 +143,32 @@ func (c *Client) CancelOperation(ctx context.Context, operationID string) error 
 	return nil
 }
 
+// ListUserPlacements returns the user-placement plan the per-user helper
+// applies: the same for every caller in v1.
+func (c *Client) ListUserPlacements(ctx context.Context) ([]UserPlacement, error) {
+	var result listUserPlacementsResponse
+	if err := c.call(ctx, methodListUserPlacements, nil, &result, nil); err != nil {
+		return nil, err
+	}
+	if result.Entries == nil {
+		return nil, errors.New("malformed listUserPlacements result")
+	}
+	return result.Entries, nil
+}
+
+// ReportUserPlacements sends the helper's results, which the service logs.
+func (c *Client) ReportUserPlacements(ctx context.Context, results []UserPlacementResult) error {
+	if results == nil {
+		results = []UserPlacementResult{}
+	}
+	var ack reportUserPlacementsResponse
+	return c.call(ctx, methodReportUserPlacements, reportUserPlacementsParams{Results: results}, &ack, nil)
+}
+
+// ErrConnect wraps a failure to reach the service at all, as while it is
+// still starting; a request it received and refused is never one.
+var ErrConnect = errors.New("failed to connect to service")
+
 // call sends one request on a new connection and decodes its result into
 // result. The response must arrive within the response timeout; stream, when
 // set, then reads the rest of the connection bounded only by ctx.
@@ -153,7 +179,7 @@ func (c *Client) call(ctx context.Context, method string, params, result any, st
 	}
 	conn, err := dial(ctx, c.pipeName(), c.connectTimeout())
 	if err != nil {
-		return fmt.Errorf("failed to connect to service %s: %w", c.pipeName(), err)
+		return fmt.Errorf("%w %s: %w", ErrConnect, c.pipeName(), err)
 	}
 	defer func() { _ = conn.Close() }()
 

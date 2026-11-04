@@ -90,7 +90,9 @@ func ReconcileSelfServe(selfServe *manifest.Item, manifests []manifest.Item) (in
 // PruneSelfServeUninstalls drops managed_uninstalls entries whose software is
 // confirmed gone so the user can reinstall later (R5). An entry that no longer
 // resolves to a catalog item is kept (the catalog may return); a still-installed
-// item is kept and retried next run. Returns whether the file needs saving.
+// item is kept and retried next run. A dropped entry's removal is complete, so
+// its selected_by entry goes too: the next user to select it becomes its selector
+// (R32a). Returns whether the file needs saving.
 func PruneSelfServeUninstalls(selfServe *manifest.Item, catalogsMap map[int]map[string]catalog.Item, checker *status.Checker, cachePath string) (changed bool) {
 	kept := make([]string, 0, len(selfServe.Uninstalls))
 	for _, name := range selfServe.Uninstalls {
@@ -111,6 +113,7 @@ func PruneSelfServeUninstalls(selfServe *manifest.Item, catalogsMap map[int]map[
 			kept = append(kept, name)
 			continue
 		}
+		delete(selfServe.SelectedBy, name)
 		changed = true
 	}
 	if changed {

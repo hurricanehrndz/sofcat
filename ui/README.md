@@ -9,10 +9,14 @@ objects.
 ## Layout
 
 - `main.go`: Wails application, `--pipe-name` flag (default `sofcat-service`),
+  `--user-sync` (place this user's user-scope zip items without a window and
+  exit; see ARCHITECTURE.md "Protocol"; a no-op off Windows),
   bundled WebView window titled with the branding title, or `SofCat UI`
 - `service.go`: the bound service — `ListOptionalInstalls`, `InstallItem`,
   `RemoveItem`, `WatchOperation`, `GetBranding`, `CancelOperation`
 - `log.go`: opt-in diagnostics
+- `usersync_windows.go` / `usersync_other.go`: the `--user-sync` entry point
+  around `pkg/usersync`
 - `assets_production.go` / `assets_development.go`: embedded `frontend/dist` under
   the `production` tag, compile-safe source filesystem otherwise
 - `frontend/`: vanilla TypeScript, CSS, and Vite assets (no framework, router, or
@@ -34,11 +38,15 @@ the named pipe; the "Protocol" section of `ARCHITECTURE.md` is the contract.
 Service errors reach the frontend as `<data.code>: <message>`, for example
 `operation_not_cancelable: ...` or `server_busy: ...`.
 
-SofCat assumes one interactive user per machine. Self-service selections
-belong to the machine, not to a user: on a shared machine (fast user
-switching, Remote Desktop Services) every user sees, and can change, the one
-self-service selection. Operation IDs are 128 random bits, so a user cannot
-guess another user's operation to watch or cancel it.
+Self-service selections belong to the machine: on a shared machine (fast
+user switching, Remote Desktop Services) every user sees the one self-service
+selection. Only the user who selected an item, or a local administrator, can
+remove it, take back its pending removal, or cancel that user's operation;
+anyone else gets `not_authorized`, which the card shows as "Only the person
+who added this, or an administrator, can change it." An item nobody is
+recorded as selecting (a default, or an older selection) stays removable by
+anyone. Operation IDs are 128 random bits, so a user cannot guess another
+user's operation to watch it.
 
 ## Progress semantics
 
@@ -89,6 +97,7 @@ comes from the first source that sets it:
 | `HelpUrl` | `help_url` | Absolute `http` or `https` URL, opened in the system browser. |
 | `HelpLabel` | `help_label` | Plain text, up to 60 characters. Defaults to "Get help". |
 | `Accent` | `accent` | `#rrggbb`. Recolours buttons, links and the banner, and on Windows 11 the native title bar (Windows 10 keeps its default caption). |
+| `ListHeading` | `list_heading` | Plain text, up to 120 characters. Replaces the "Available software" heading; "My items" is unchanged. |
 
 Set the policy values with Intune (a custom OMA-URI or a registry script), Group
 Policy Preferences, or `reg add`:

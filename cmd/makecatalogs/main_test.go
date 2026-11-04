@@ -227,3 +227,35 @@ func TestBuildWithNoCatalogsKeepsExisting(t *testing.T) {
 		t.Fatalf("existing catalog removed: %v", err)
 	}
 }
+
+// A manifest's conditional_items condition is evaluated on every agent, so a
+// syntax error in one, nested or not, fails -check like a bad catalog condition.
+func TestCheckFlagsBadConditionalItems(t *testing.T) {
+	for name, tc := range map[string]struct {
+		manifest string
+		wantCode int
+	}{
+		"valid": {"name: site\nconditional_items:\n  - condition: os == \"windows\"\n    managed_installs: [Chrome]\n", 0},
+		"bad":   {"name: site\nconditional_items:\n  - condition: os ==\n    managed_installs: [Chrome]\n", 1},
+		"bad nested": {"name: site\nconditional_items:\n  - condition: os == \"windows\"\n    conditional_items:\n" +
+			"      - condition: arch = \"arm64\"\n        managed_installs: [Chrome]\n", 1},
+	} {
+		t.Run(name, func(t *testing.T) {
+			repo := writeRepo(t, map[string]string{"chrome.yaml": chromeInfo})
+			path := filepath.Join(repo, "manifests", "groups", "site.yaml")
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, []byte(tc.manifest), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			var stdout, stderr bytes.Buffer
+			if code := run([]string{"-check", repo}, &stdout, &stderr); code != tc.wantCode {
+				t.Fatalf("exit %d, want %d; stderr: %s", code, tc.wantCode, stderr.String())
+			}
+			if tc.wantCode != 0 && !strings.Contains(stderr.String(), "site.yaml: invalid conditional_items condition") {
+				t.Errorf("stderr does not name the manifest: %s", stderr.String())
+			}
+		})
+	}
+}

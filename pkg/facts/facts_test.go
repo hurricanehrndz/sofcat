@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -108,4 +109,11 @@ func stub(t *testing.T, run func(string) ([]byte, error), builtins func() condit
 	adminCache, haveAdmin = nil, false
 	mu.Unlock()
 	return func() { runScript, builtinFacts = oldRun, oldBuiltins }
+}
+
+// Manifests target an OS with the os fact, so it must exist everywhere.
+func TestBuiltinOSFact(t *testing.T) {
+	if got := collectBuiltinFacts()["os"]; got != runtime.GOOS {
+		t.Fatalf("os fact = %v, want %s", got, runtime.GOOS)
+	}
 }

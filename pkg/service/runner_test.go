@@ -229,7 +229,7 @@ func TestStreamOperationStatusFailedLifecycle(t *testing.T) {
 func TestScheduleRunAfterMutationEmitsCanceledTerminalEvent(t *testing.T) {
 	sr := newServiceRunner(config.Configuration{}, noopRun)
 	operationID := "op-canceled"
-	sr.registerTrackedOperation("Slack", "", CommandResponse{OperationID: operationID})
+	sr.registerTrackedOperation("Slack", "", "", CommandResponse{OperationID: operationID})
 
 	canceledCtx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -269,6 +269,17 @@ func TestResolveTerminalEvent(t *testing.T) {
 	}
 	if ev := resolveTerminalEvent("DemoOptional", rep); ev.State != "Succeeded" {
 		t.Errorf("neither should be Succeeded, got %#v", ev)
+	}
+
+	// A specific code reaches the client, so the UI can tell a user's edited
+	// tree from a generic failure.
+	rep.FailedItems = append(rep.FailedItems, report.FailedItem{Name: "Skill", Error: "edited", Code: report.CodePlacementConflict})
+	rep.DeferredItems = append(rep.DeferredItems, report.DeferredItem{Name: "Later", Reason: "r", Code: "some_code"})
+	if ev := resolveTerminalEvent("Skill", rep); ev.State != "Failed" || ev.ErrorCode != "placement_conflict" {
+		t.Errorf("failed code not passed through: %#v", ev)
+	}
+	if ev := resolveTerminalEvent("Later", rep); ev.State != "Deferred" || ev.ErrorCode != "some_code" {
+		t.Errorf("deferred code not passed through: %#v", ev)
 	}
 	if ev := resolveTerminalEvent("DemoOptional", nil); ev.State != "Succeeded" {
 		t.Errorf("nil report should be Succeeded, got %#v", ev)
@@ -350,7 +361,7 @@ func mustStreamTerminal(t *testing.T, cfg config.Configuration, operationID stri
 func TestOperationProgressUsesActualItemsAndItemScopedPercent(t *testing.T) {
 	sr := newServiceRunner(config.Configuration{}, noopRun)
 	const operationID = "op-progress"
-	sr.registerTrackedOperation("DemoOptional", "", CommandResponse{OperationID: operationID})
+	sr.registerTrackedOperation("DemoOptional", "", "", CommandResponse{OperationID: operationID})
 
 	emit := sr.operationProgressCallback()
 	dep := []string{"DemoOptional"}
@@ -409,7 +420,7 @@ func TestOperationProgressUsesActualItemsAndItemScopedPercent(t *testing.T) {
 func TestOperationProgressSkipsOtherPendingItems(t *testing.T) {
 	sr := newServiceRunner(config.Configuration{}, noopRun)
 	const operationID = "op-unrelated"
-	sr.registerTrackedOperation("DemoOptional", "", CommandResponse{OperationID: operationID})
+	sr.registerTrackedOperation("DemoOptional", "", "", CommandResponse{OperationID: operationID})
 
 	emit := sr.operationProgressCallback()
 	failing := catalog.Item{Name: "DemoFailing", DisplayName: "Demo Failing"}
@@ -435,9 +446,9 @@ func TestOperationProgressSkipsOtherPendingItems(t *testing.T) {
 // card moves along instead of reading "Waiting…" until its own run.
 func TestOperationProgressReachesOtherOpenOperation(t *testing.T) {
 	sr := newServiceRunner(config.Configuration{}, noopRun)
-	sr.registerTrackedOperation("DemoOptional", "", CommandResponse{OperationID: "op-x"})
-	sr.registerTrackedOperation("DemoOther", "", CommandResponse{OperationID: "op-z"})
-	sr.registerTrackedOperation("DemoFailing", "", CommandResponse{OperationID: "op-done"})
+	sr.registerTrackedOperation("DemoOptional", "", "", CommandResponse{OperationID: "op-x"})
+	sr.registerTrackedOperation("DemoOther", "", "", CommandResponse{OperationID: "op-z"})
+	sr.registerTrackedOperation("DemoFailing", "", "", CommandResponse{OperationID: "op-done"})
 	sr.appendOperationEvent("op-done", OperationStatus{State: "Failed"})
 
 	emit := sr.operationProgressCallback()
@@ -521,7 +532,7 @@ func TestGetBrandingAnswersWhileRunIsBusy(t *testing.T) {
 // a run that never emits progress for the item names it properly at the end.
 func TestTrackedOperationUsesRegisteredDisplayName(t *testing.T) {
 	sr := newServiceRunner(config.Configuration{}, noopRun)
-	sr.registerTrackedOperation("GoogleChrome", "", CommandResponse{OperationID: "op-named", displayName: "Google Chrome"})
+	sr.registerTrackedOperation("GoogleChrome", "", "", CommandResponse{OperationID: "op-named", displayName: "Google Chrome"})
 	sr.appendOperationEvent("op-named", resolveTerminalEvent("GoogleChrome", nil))
 
 	events, done, _ := sr.snapshotTrackedOperation("op-named")
@@ -930,5 +941,25 @@ func TestClientThatNeverReadsReleasesItsHandlerSlot(t *testing.T) {
 		if time.Now().After(deadline) {
 			t.Fatalf("%d handler slots still held by a client that never reads", len(sr.handlerSem))
 		}
+	}
+}
+
+// TestResolveTerminalEventMissingSoftware: a missing_software deferral reaches
+// the UI with its code and the deferral reason as the message, so the user
+// learns what to install; a blocking-app deferral keeps its default code.
+func TestResolveTerminalEventMissingSoftware(t *testing.T) {
+	const reason = "Needs Demo Tool. Install it first, then try again."
+	rep := report.New()
+	rep.DeferredItems = append(rep.DeferredItems,
+		report.DeferredItem{Name: "NeedsTool", Action: "install", Reason: reason, Code: report.CodeMissingSoftware},
+		report.DeferredItem{Name: "Blocked", Action: "install", Reason: "blocking application(s) running: notepad"},
+	)
+
+	ev := resolveTerminalEvent("NeedsTool", rep)
+	if ev.State != "Deferred" || ev.ErrorCode != "missing_software" || ev.ErrorMessage != reason || ev.Message != reason {
+		t.Errorf("missing_software deferral = %#v", ev)
+	}
+	if ev := resolveTerminalEvent("Blocked", rep); ev.State != "Deferred" || ev.ErrorCode != "blocked_by_running_app" {
+		t.Errorf("blocking-app deferral = %#v", ev)
 	}
 }
