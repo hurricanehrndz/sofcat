@@ -27,6 +27,15 @@ type NoActionItem struct {
 	Action  string
 }
 
+// HeldCondition records a manifest conditional_items block whose condition
+// names facts this machine lacks: its items were neither added nor removed
+type HeldCondition struct {
+	Condition string
+	Missing   []string
+	Items     []string
+	Reason    string
+}
+
 // Report holds the state of a single managed run (K7: no package globals)
 type Report struct {
 	// InstalledItems contains a list of items we successfully installed
@@ -43,6 +52,9 @@ type Report struct {
 
 	// NoActionItems contains a list of items whose status check found nothing to do
 	NoActionItems []NoActionItem
+
+	// HeldConditions contains the manifest conditions this run could not decide
+	HeldConditions []HeldCondition
 }
 
 // New returns a fresh Report for one run

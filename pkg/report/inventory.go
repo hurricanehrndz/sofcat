@@ -3,6 +3,7 @@ package report
 import (
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
@@ -129,6 +130,10 @@ func (r *Report) Inventory(p Plan) Inventory {
 	}
 	for _, f := range r.FailedItems {
 		inv.Errors = append(inv.Errors, fmt.Sprintf("%s of %s failed: %s", f.Action, f.Name, f.Error))
+	}
+	for _, h := range r.HeldConditions {
+		inv.Warnings = append(inv.Warnings, fmt.Sprintf("conditional_items %q held: %s (%s); items: %s",
+			h.Condition, h.Reason, strings.Join(h.Missing, ", "), strings.Join(h.Items, ", ")))
 	}
 
 	seen := make(map[string]bool)

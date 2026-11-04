@@ -10,3 +10,16 @@ default_installs:
 managed_updates:
   - ChefClient
   - CanonDrivers
+conditional_items:
+  - condition: os == "windows"
+    managed_installs:
+      - 7zip
+    conditional_items:
+      - condition: arch == "arm64"
+        managed_installs:
+          - ArmTools
+  - condition: '"lab" in machine_groups'
+    optional_installs:
+      - CUDA
+    managed_uninstalls:
+      - OldLabTool

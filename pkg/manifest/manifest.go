@@ -20,6 +20,8 @@ type Item struct {
 	Uninstalls       []string `yaml:"managed_uninstalls"`
 	Updates          []string `yaml:"managed_updates"`
 	Catalogs         []string `yaml:"catalogs"`
+	// ConditionalItems is resolved by Expand; read the lists of its output.
+	ConditionalItems []ConditionalItem `yaml:"conditional_items,omitempty"`
 }
 
 // This abstraction allows us to override when testing

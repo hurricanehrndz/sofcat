@@ -143,6 +143,7 @@ func collectBuiltinFacts() conditions.Facts {
 		"arch":           goArch(runtime.GOARCH),
 		"engine_version": version.Version().Version,
 		"ipv4_address":   ipv4Addresses(),
+		"os":             runtime.GOOS,
 	}
 	if hostname, err := os.Hostname(); err == nil {
 		facts["hostname"] = hostname

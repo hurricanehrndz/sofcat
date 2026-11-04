@@ -26,7 +26,8 @@ type packageInfo struct {
 type CatalogSet struct {
 	// Catalogs maps catalog name to item name to item.
 	Catalogs map[string]map[string]catalog.Item
-	// Problems lists package-info files that were skipped or overridden.
+	// Problems lists package-info files that were skipped or overridden, and
+	// manifests whose conditional_items conditions do not compile.
 	// A normal makecatalogs run warns about them and carries on; --check fails on them.
 	Problems []string
 }
@@ -43,7 +44,8 @@ func (s CatalogSet) Names() []string {
 
 // CollectCatalogs reads <repo>/packages-info and compiles the catalogs it
 // describes without writing anything. Unreadable or unparsable files are
-// errors; skipped or duplicated items are reported in Problems.
+// errors; skipped or duplicated items, and invalid conditions in package-info
+// files and in <repo>/manifests, are reported in Problems.
 func CollectCatalogs(repoPath string) (CatalogSet, error) { //nolint:gocognit // CEILING: known-complex, split in Workstream B (kernel-repair)
 	packagesInfoPath := filepath.Join(repoPath, "packages-info")
 
@@ -142,6 +144,7 @@ func CollectCatalogs(repoPath string) (CatalogSet, error) { //nolint:gocognit //
 		return CatalogSet{}, fmt.Errorf("no catalogs to write: no package-info file under %s names a valid catalog", packagesInfoPath)
 	}
 
+	set.Problems = append(set.Problems, checkManifests(repoPath)...)
 	return set, nil
 }
 
@@ -176,4 +179,66 @@ func WriteCatalogs(repoPath string, set CatalogSet) error {
 	}
 
 	return nil
+}
+
+// conditionalBlock is the part of a manifest's conditional_items that
+// checkManifests reads. pkg/manifest owns the full shape, but it pulls in the
+// agent's config and download, which this package must not.
+type conditionalBlock struct {
+	Condition        string             `yaml:"condition"`
+	ConditionalItems []conditionalBlock `yaml:"conditional_items"`
+}
+
+// checkManifests reports every conditional_items condition, nested ones
+// included, in <repo>/manifests that has a syntax error, and every manifest it
+// cannot read. A repo without manifests has nothing to check.
+func checkManifests(repoPath string) []string {
+	var problems []string
+	var check func(path string, blocks []conditionalBlock)
+	check = func(path string, blocks []conditionalBlock) {
+		for _, b := range blocks {
+			if err := conditions.Check(b.Condition); err != nil {
+				problems = append(problems, fmt.Sprintf("%s: invalid conditional_items condition %q: %v", path, b.Condition, err))
+			}
+			check(path, b.ConditionalItems)
+		}
+	}
+
+	manifestsPath := filepath.Join(repoPath, "manifests")
+	var manifestQueue []string
+	err := filepath.WalkDir(manifestsPath, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if strings.HasPrefix(d.Name(), ".") && path != manifestsPath {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if ext := strings.ToLower(filepath.Ext(path)); !d.IsDir() && (ext == ".yaml" || ext == ".yml") {
+			manifestQueue = append(manifestQueue, path)
+		}
+		return nil
+	})
+	if err != nil && !os.IsNotExist(err) {
+		problems = append(problems, fmt.Sprintf("%s: %v", manifestsPath, err))
+	}
+
+	for _, path := range manifestQueue {
+		body, err := os.ReadFile(path)
+		if err != nil {
+			problems = append(problems, fmt.Sprintf("%s: %v", path, err))
+			continue
+		}
+		var m struct {
+			ConditionalItems []conditionalBlock `yaml:"conditional_items"`
+		}
+		if err := yaml.Unmarshal(body, &m); err != nil {
+			problems = append(problems, fmt.Sprintf("%s: parse manifest: %v", path, err))
+			continue
+		}
+		check(path, m.ConditionalItems)
+	}
+	return problems
 }

@@ -1,9 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -120,6 +123,100 @@ DemoOptional:
 	}
 	if it := byName["DemoOptional"]; it.Kind != report.KindOptionalInstall || it.Status != report.StatusAvailable || it.SelfService {
 		t.Errorf("DemoOptional = %#v", it)
+	}
+}
+
+// TestManagedRunHoldsUnknownConditionalItems verifies a conditional_items
+// block whose condition names a fact this machine lacks is held, neither
+// planned nor dropped silently: it reaches the report and the inventory's
+// warnings, while a true block's items join the plan as usual.
+func TestManagedRunHoldsUnknownConditionalItems(t *testing.T) {
+	resetMainHooks()
+	defer resetMainHooks()
+	// Deferred so the log closes before t.TempDir cleanup (see above).
+	defer sofcatlog.Close()
+
+	manifestYAML := `name: wiretest_manifest
+catalogs:
+  - wiretest_catalog
+conditional_items:
+  - condition: '"lab" in machine_groups'
+    managed_installs:
+      - LabTool
+  - condition: 'os == "` + runtime.GOOS + `"'
+    managed_installs:
+      - OSTool
+`
+	const catalogYAML = `LabTool:
+  display_name: Lab Tool
+  installer:
+    type: ps1
+    location: packages/labtool.ps1
+    hash: deadbeef
+OSTool:
+  display_name: OS Tool
+  installer:
+    type: ps1
+    location: packages/ostool.ps1
+    hash: deadbeef
+`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/manifests/wiretest_manifest.yaml"):
+			_, _ = w.Write([]byte(manifestYAML))
+		case strings.HasSuffix(r.URL.Path, "/catalogs/wiretest_catalog.yaml"):
+			_, _ = w.Write([]byte(catalogYAML))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := config.Configuration{
+		CheckOnly:   true,
+		CachePath:   t.TempDir(),
+		AppDataPath: t.TempDir(),
+		URL:         srv.URL + "/",
+		URLPackages: srv.URL + "/",
+		Manifest:    "wiretest_manifest",
+		Catalogs:    []string{"wiretest_catalog"},
+	}
+
+	adminCheckFunc = func() (bool, error) { return true, nil }
+	mkdirAllFunc = func(string, os.FileMode) error { return nil }
+
+	// A check-only run prints its inventory rather than saving it.
+	var run *report.Report
+	stdout := captureStdout(t, func() {
+		var err error
+		if run, err = managedRun(cfg, nil, nil); err != nil {
+			t.Fatalf("managedRun failed: %v", err)
+		}
+	})
+	var inv report.Inventory
+	if err := json.Unmarshal([]byte(stdout), &inv); err != nil {
+		t.Fatalf("decode inventory: %v\n%s", err, stdout)
+	}
+
+	if len(run.HeldConditions) != 1 {
+		t.Fatalf("HeldConditions = %#v, want the lab block only", run.HeldConditions)
+	}
+	h := run.HeldConditions[0]
+	if h.Condition != `"lab" in machine_groups` || h.Reason != "facts unavailable" ||
+		!slices.Equal(h.Missing, []string{"machine_groups"}) || !slices.Equal(h.Items, []string{"LabTool"}) {
+		t.Errorf("held = %#v", h)
+	}
+
+	var names []string
+	for _, it := range inv.ManagedInstalls {
+		names = append(names, it.Name)
+	}
+	if contains(names, "LabTool") || !contains(names, "OSTool") {
+		t.Errorf("ManagedInstalls = %v, want OSTool without LabTool", names)
+	}
+	want := `conditional_items "\"lab\" in machine_groups" held: facts unavailable (machine_groups); items: LabTool`
+	if !contains(inv.Warnings, want) {
+		t.Errorf("Warnings = %q, want %q", inv.Warnings, want)
 	}
 }
 
