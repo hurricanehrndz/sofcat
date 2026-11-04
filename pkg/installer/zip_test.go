@@ -1,11 +1,13 @@
 package installer
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/hurricanehrndz/sofcat/pkg/artifact"
@@ -288,6 +290,23 @@ func TestZipRefusesHostileItemName(t *testing.T) {
 		if res := z.Apply(item, tg, archive); res.Outcome != OutcomeRefused {
 			t.Errorf("item %q: outcome %s", name, res.Outcome)
 		}
+	}
+}
+
+// TestZipFetchRefusesHostileLocation: the location names the cached copy, so
+// one that would leave the cache, or name a file Windows cannot hold, is
+// refused before anything is downloaded or written.
+func TestZipFetchRefusesHostileLocation(t *testing.T) {
+	cache := t.TempDir()
+	z := &ZipInstaller{CachePath: filepath.Join(cache, "cache"), URLPackages: "http://127.0.0.1:1/"}
+	for _, location := range []string{`..\..\x.zip`, "a/../../x.zip", "CON.zip", "packages/CON.zip", ""} {
+		got, err := z.Fetch(context.Background(), Target{Placement: "skills", Variant: catalog.Variant{Location: location, Hash: "00"}})
+		if err == nil || !strings.Contains(err.Error(), "refused") {
+			t.Errorf("location %q: Fetch = %q, %v; want refused", location, got, err)
+		}
+	}
+	if entries, _ := os.ReadDir(cache); len(entries) != 0 {
+		t.Errorf("Fetch wrote %v", entries)
 	}
 }
 

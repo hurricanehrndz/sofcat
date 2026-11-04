@@ -23,6 +23,7 @@ var defaultWindowTitle = identity.Name + " UI"
 
 func main() {
 	pipeName := flag.String("pipe-name", identity.PipeName(), "SofCat service pipe name")
+	userSync := flag.Bool("user-sync", false, "place this user's user-scope items without a window, then exit")
 	flag.Parse()
 
 	// ponytail: startup diagnostics go to stderr, which is invisible in the
@@ -35,8 +36,19 @@ func main() {
 	if logWriter != nil {
 		defer func() { _ = logWriter.Close() }()
 	}
+	// The zip installer the user sync runs logs through slog's default.
+	slog.SetDefault(logger)
 
 	client := service.NewClient(*pipeName)
+	if *userSync {
+		// The logon helper (the MSI's HKLM Run value): no window, and exit 0
+		// even when an item fails; every result is logged and reported.
+		runUserSync(context.Background(), client, logger)
+		return
+	}
+	// The storefront also syncs once at start, in the background.
+	go runUserSync(context.Background(), client, logger)
+
 	uiService := &UIService{
 		client: client,
 		logger: logger,

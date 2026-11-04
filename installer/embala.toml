@@ -9,7 +9,9 @@
 # sofcat.exe as the SofCat service. It ships no config.yaml: management
 # tooling writes C:\ProgramData\SofCat\config.yaml, and the service runs with
 # defaults (every managed run failing) until that file exists and the service
-# restarts.
+# restarts. It also writes the HKLM Run value @APP@-user-sync, which starts
+# `@APP@-ui.exe --user-sync` at every logon to place the user's user-scope
+# zip items (docs/zip-items.md); `[msi].registry` needs embala 0.9.0.
 
 [package]
 name = "@APP@"
@@ -30,3 +32,6 @@ files = [
   { src = "@APP@-ui.exe", dest = "@APP@-ui.exe" },
 ]
 service = { name = "@APP@", executable = "@APP@.exe", display-name = "@PRODUCT@", description = "@PRODUCT@ application management service", start = "auto", arguments = "-service" }
+# The per-user helper runs at every logon. The MSI writes this value on
+# install and removes it on uninstall; sofcat code never writes it.
+registry = [{ root = "HKLM", key = 'Software\Microsoft\Windows\CurrentVersion\Run', name = "@APP@-user-sync", value = '"[INSTALLDIR]@APP@-ui.exe" --user-sync' }]

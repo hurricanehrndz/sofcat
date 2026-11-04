@@ -25,6 +25,10 @@ const (
 	methodRemoveItem            = "removeItem"
 	methodCancelOperation       = "cancelOperation"
 	methodStreamOperationStatus = "streamOperationStatus"
+	// The per-user helper's methods (`<slug>-ui.exe --user-sync`), not
+	// bound into the UI's Wails surface.
+	methodListUserPlacements   = "listUserPlacements"
+	methodReportUserPlacements = "reportUserPlacements"
 
 	// notificationOperationStatus carries one status record on a stream.
 	notificationOperationStatus = "operationStatus"
@@ -39,6 +43,8 @@ var capabilities = []string{
 	methodRemoveItem,
 	methodCancelOperation,
 	methodStreamOperationStatus,
+	methodListUserPlacements,
+	methodReportUserPlacements,
 }
 
 // JSON-RPC error codes. The standard ones come from the specification; the

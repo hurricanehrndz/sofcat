@@ -31,10 +31,19 @@ Do not write the `installer` block by hand. `makecatalogs zip-item` writes it.
 
 sofcat installs a zip item by placing one tree per placement for the OS it
 runs on, in `harnesses.yaml` order. The service skips placements whose scope
-on this OS is `user`; they neither fail nor succeed the item. Only `directory`
-placements are written so far. The item succeeds when every machine-scope
-placement does; a failed placement leaves the others alone and is reported on
-its own.
+on this OS is `user`; they neither fail nor succeed the item. Instead, after
+each run that is not check-only, it stages their verified archives in
+`user-artifacts` beside its executable, each named `<hash>.zip` after its
+sha256 (never after its catalog `location`), removes archives no entry
+references, and then stores the plan, built from that run's desired set
+(dependencies and `update_for` riders included), as `user-plan.json` in its
+data directory. The per-user helper `<slug>-ui.exe --user-sync`, which runs
+at every logon and storefront start, fetches that stored plan, so it needs no
+repository access, and places the trees in each user's profile under the
+`windows_user` roots, with receipts in `%LOCALAPPDATA%\<NAME>\receipts`
+([Protocol](../ui/ARCHITECTURE.md#protocol)). Only `directory` placements are
+written so far. The item succeeds when every machine-scope placement does; a
+failed placement leaves the others alone and is reported on its own.
 
 For each placement, sofcat checks the tree at `<placement path>/<item_name>`
 in this order:

@@ -9,7 +9,9 @@ out from test/manual/fixtures/tapas, and asserts on the placed trees and
 receipts: managed and self-service placement, removal, adoption of a
 hand-placed tree, conflict reporting for a user edit, the exclusive-root
 marker and refusal, a placement outside the write roots, the skipped
-user-scope placement, a held conditional item, and scope exit.
+user-scope placement and its staged archive in the user-sync plan, a held
+conditional item, and scope exit. run-tapas-user-sync.ps1 then places the
+user-scope skill as the logged-on user.
 
 Run once on a clean VM, AFTER bootstrap-vm.ps1 has installed and started the
 branded service:
@@ -281,6 +283,23 @@ foreach ($fact in @('tapas_smoke_scope', 'tapas_smoke_held')) {
     }
 }
 Pass "tapas-scoped-skill and tapas-held-skill held, not placed"
+
+Write-Step "The service staged the Codex archive and lists it for the user helper"
+$userArtifacts = Join-Path (Split-Path $SofCat) "user-artifacts"
+$codex = $null
+foreach ($l in (Invoke-SofCat "ListUserPlacements").Out) {
+    $t = "$l".Trim()
+    if (-not $t.StartsWith('{')) { continue }
+    try { $obj = $t | ConvertFrom-Json } catch { continue }
+    if ($obj.item -eq "tapas-managed-skill" -and $obj.placement -eq "codex-skills") { $codex = $obj }
+}
+if (-not $codex) { Fail "ListUserPlacements does not list tapas-managed-skill for codex-skills" }
+if ($codex.held) { Fail "tapas-managed-skill is listed held: $($codex | ConvertTo-Json -Compress)" }
+if ((Split-Path $codex.archive) -ne $userArtifacts) { Fail "archive '$($codex.archive)' is not under $userArtifacts" }
+if (-not (Test-Path -LiteralPath $codex.archive)) { Fail "staged archive $($codex.archive) is missing" }
+$stagedHash = (Get-FileHash -LiteralPath $codex.archive -Algorithm SHA256).Hash.ToLower()
+if ($stagedHash -ne $codex.hash) { Fail "staged archive hash $stagedHash is not $($codex.hash)" }
+Pass "$($codex.archive) staged; plan lists tapas-managed-skill/codex-skills, held=false"
 
 # --- Self-service ---------------------------------------------------------------
 

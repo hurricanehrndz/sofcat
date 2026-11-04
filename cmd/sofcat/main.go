@@ -107,7 +107,7 @@ func route(cfg config.Configuration) error { //nolint:gocognit // CEILING: known
 			return nil
 		}
 		switch action {
-		case "listoptionalinstalls":
+		case "listoptionalinstalls", "listuserplacements":
 			fmt.Println("none")
 		case "installitem":
 			fmt.Println("InstallItem command completed successfully")
