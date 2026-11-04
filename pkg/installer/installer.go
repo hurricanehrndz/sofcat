@@ -43,6 +43,8 @@ type Runner struct {
 	URLPackages string
 	CachePath   string
 	CheckOnly   bool
+	// Zip places zip items; nil fails every zip item as placement_refused.
+	Zip *ZipInstaller
 
 	// PulledBy names the items, outermost first, whose install is pulling in
 	// the current one as a dependency or updater; empty for a top-level item.
@@ -544,6 +546,11 @@ var (
 // Install determines if action needs to be taken on a item and then
 // calls the appropriate function to install or uninstall
 func (r *Runner) Install(item catalog.Item, installerType string) (string, error) { //nolint:gocognit // CEILING: known-complex, split in Workstream B (kernel-repair)
+	// A zip item's receipts and trees decide its status, not a check block.
+	if item.Installer.Type == "zip" {
+		return r.installZip(item, installerType)
+	}
+
 	// Check the status and determine if any action is needed for this item
 	actionNeeded, err := statusCheckStatus(r.Checker, item, installerType, r.CachePath)
 	if err != nil {

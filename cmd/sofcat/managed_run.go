@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/hurricanehrndz/sofcat/pkg/conditions"
@@ -24,6 +25,9 @@ var (
 	adminCheckFunc = adminCheck
 	mkdirAllFunc   = os.MkdirAll
 	newReportFunc  = report.New
+	// newZipInstaller builds the run's zip installer; tests swap in one with
+	// temporary write roots.
+	newZipInstaller = installer.NewMachineZip
 )
 
 // managedRun runs one full pass. progress receives per-item events and cancels
@@ -82,6 +86,12 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 		return nil, fmt.Errorf("unable to retrieve catalog: %w", err)
 	}
 
+	// The placement table for zip items; a repository without one has none.
+	harnesses, err := manifest.GetHarnesses(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("unable to retrieve harness table: %w", err)
+	}
+
 	// Decide which catalog items this machine may install (installable_condition).
 	// The run refreshes the admin condition scripts' facts.
 	machineFacts := facts.Collect(facts.Dir(cfg.AppDataPath), true)
@@ -127,15 +137,20 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 	plan.add(report.KindManagedUninstall, true, ssUninstalls...)
 	plan.addSelfServe(ssInstalls, selfServe)
 
-	// Build the run-scoped installer context (K7)
+	// Build the run-scoped installer context (K7). Zip items' status comes
+	// from their receipts, for every status reader in the run.
+	zip := newZipInstaller(cfg, harnesses)
+	managed := managedInstalls(manifests)
+	zip.Managed = func(item string) bool { return managed[item] }
 	runner := &installer.Runner{
 		Report:      run,
-		Checker:     &status.Checker{},
+		Checker:     &status.Checker{Zip: zip.Installed},
 		Emit:        progress,
 		Cancels:     cancels,
 		URLPackages: cfg.URLPackages,
 		CachePath:   cfg.CachePath,
 		CheckOnly:   cfg.CheckOnly,
+		Zip:         zip,
 	}
 
 	// Expand update_for (R7): build the updater index once, ride updaters of
@@ -154,6 +169,11 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 	plan.add(report.KindManagedUninstall, false, uninstalls...)
 	plan.addUpdaters(index)
 
+	// A held item is never removed: not by managed_uninstalls, a pending
+	// self-service removal, or scope exit.
+	heldSet := heldItems(held)
+	uninstalls = dropHeld(uninstalls, heldSet)
+
 	// Prepare and install
 	slog.Info("Processing managed installs...")
 	process.Installs(installs, catalogs, runner, index)
@@ -161,6 +181,17 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 	// Prepare and uninstall
 	slog.Info("Processing managed uninstalls...")
 	process.Uninstalls(uninstalls, catalogs, runner)
+
+	// Scope exit: remove receipt-tracked items that left the desired set.
+	// The uninstall pass already handled (and reported) the items it could
+	// resolve; one no catalog lists any more falls to scope exit.
+	desired := desiredItems(slices.Concat(installs, updates), catalogs, index)
+	removed := uninstallable(uninstalls, catalogs)
+	slog.Info("Processing scope exit...")
+	keep := func(item string) bool { return desired[item] || heldSet[item] || removed[item] }
+	if err := runner.ScopeExit(keep); err != nil {
+		slog.Warn("scope exit skipped", "err", err)
+	}
 
 	// Prune self-serve uninstalls that are confirmed gone so the user can
 	// reinstall later (R5). Only after a real run, never in check-only.

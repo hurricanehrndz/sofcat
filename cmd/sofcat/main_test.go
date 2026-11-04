@@ -28,6 +28,7 @@ func resetMainHooks() {
 	runServiceActionFunc = service.RunAction
 	serviceStatusFunc = service.ServiceStatus
 	protectAppDataFunc = func(string) error { return nil }
+	newZipInstaller = installer.NewMachineZip
 }
 
 func TestRunAdminCheckError(t *testing.T) {

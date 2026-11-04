@@ -61,6 +61,17 @@ func fileContext(ctx context.Context, file string, url string) error {
 	return nil
 }
 
+// StatusError is a download the server answered with a status other than 200.
+// errors.As it to tell a missing file (404) from other failures.
+type StatusError struct {
+	URL  string
+	Code int
+}
+
+func (e *StatusError) Error() string {
+	return fmt.Sprintf("%s : Download status code: %d", e.URL, e.Code)
+}
+
 // Get downloads a url and returns the body
 // Timeout is 10 seconds
 // Will only write to disk if http status code is 2XX
@@ -150,7 +161,7 @@ func getContext(ctx context.Context, url string) ([]byte, error) {
 
 	// Check that the request was successful
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("%s : Download status code: %d", url, resp.StatusCode)
+		return nil, &StatusError{URL: url, Code: resp.StatusCode}
 	}
 
 	// Copy the download to a a buffer

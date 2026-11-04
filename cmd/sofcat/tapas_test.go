@@ -1,0 +1,490 @@
+package main
+
+import (
+	"fmt"
+	"maps"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/hurricanehrndz/sofcat/pkg/artifact"
+	"github.com/hurricanehrndz/sofcat/pkg/catalog"
+	"github.com/hurricanehrndz/sofcat/pkg/config"
+	"github.com/hurricanehrndz/sofcat/pkg/harness"
+	"github.com/hurricanehrndz/sofcat/pkg/installer"
+	"github.com/hurricanehrndz/sofcat/pkg/manifest"
+	"github.com/hurricanehrndz/sofcat/pkg/placement"
+	"github.com/hurricanehrndz/sofcat/pkg/receipt"
+	"github.com/hurricanehrndz/sofcat/pkg/report"
+	"github.com/hurricanehrndz/sofcat/pkg/sofcatlog"
+	"go.yaml.in/yaml/v4"
+)
+
+// tapasOS is the harness OS the end-to-end tests place for. Windows keys work
+// on every host (paths are absolute either way, every file hashes as 644,
+// comparisons fold case) and, unlike darwin, allow user-scope placements.
+const tapasOS = harness.Windows
+
+// tapasRepo is a sofcat repository served over HTTP: harnesses.yaml,
+// catalogs, manifests and zip archives built from in-test trees. Files can be
+// replaced or withdrawn between runs.
+type tapasRepo struct {
+	t     *testing.T
+	srv   *httptest.Server
+	mu    sync.Mutex
+	files map[string][]byte // URL path without the leading slash
+	items map[string]catalog.Item
+	// paths holds each placement's path from the last harnesses call.
+	paths map[string]string
+}
+
+func newTapasRepo(t *testing.T) *tapasRepo {
+	t.Helper()
+	r := &tapasRepo{t: t, files: map[string][]byte{}, items: map[string]catalog.Item{}}
+	r.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		r.mu.Lock()
+		body, ok := r.files[strings.TrimPrefix(req.URL.Path, "/")]
+		r.mu.Unlock()
+		if !ok {
+			http.NotFound(w, req)
+			return
+		}
+		_, _ = w.Write(body)
+	}))
+	t.Cleanup(r.srv.Close)
+	return r
+}
+
+// URL is the repository root, with the trailing slash sofcat expects.
+func (r *tapasRepo) URL() string { return r.srv.URL + "/" }
+
+// put serves body at path; a nil body withdraws it (404).
+func (r *tapasRepo) put(path string, body []byte) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if body == nil {
+		delete(r.files, path)
+		return
+	}
+	r.files[path] = body
+}
+
+// zipItem packs one tree per placement for tapasOS, serves the archives, and
+// adds the item to the catalog published by publishCatalog.
+func (r *tapasRepo) zipItem(name, version string, trees map[string]map[string]string) {
+	r.t.Helper()
+	variants := map[string]map[string]catalog.Variant{}
+	for _, placementName := range slices.Sorted(maps.Keys(trees)) {
+		zipPath := filepath.Join(r.t.TempDir(), "a.zip")
+		packed, err := artifact.PackFile(writeFiles(r.t, r.t.TempDir(), trees[placementName]), tapasOS, zipPath)
+		if err != nil {
+			r.t.Fatal(err)
+		}
+		data, err := os.ReadFile(zipPath)
+		if err != nil {
+			r.t.Fatal(err)
+		}
+		location := fmt.Sprintf("packages/%s-%s-%s.zip", name, version, packed.TreeHash[7:19])
+		r.put(location, data)
+		variants[placementName] = map[string]catalog.Variant{tapasOS: {Location: location, Hash: packed.Hash, TreeHash: packed.TreeHash}}
+	}
+	r.items[name] = catalog.Item{Name: name, DisplayName: name, Version: version, Installer: catalog.InstallerItem{Type: "zip", Variants: variants}}
+}
+
+// publishCatalog serves every item added so far as catalogs/tapas.yaml, the
+// one catalog tapasEnv configures.
+func (r *tapasRepo) publishCatalog() {
+	r.t.Helper()
+	data, err := yaml.Marshal(r.items)
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	r.put("catalogs/tapas.yaml", data)
+}
+
+// harnesses serves harnesses.yaml with one directory placement per entry of
+// paths; exclusive and user name placements that get those settings.
+func (r *tapasRepo) harnesses(paths map[string]string, exclusive, user []string) {
+	var b strings.Builder
+	b.WriteString("placements:\n")
+	for _, name := range slices.Sorted(maps.Keys(paths)) {
+		fmt.Fprintf(&b, "  %s:\n    kind: directory\n    paths: {%s: '%s'}\n", name, tapasOS, paths[name])
+		if slices.Contains(exclusive, name) {
+			b.WriteString("    exclusive: true\n")
+		}
+		if slices.Contains(user, name) {
+			fmt.Fprintf(&b, "    scope: {%s: user}\n", tapasOS)
+		}
+	}
+	if _, err := harness.Parse([]byte(b.String())); err != nil {
+		r.t.Fatalf("fixture harnesses.yaml invalid: %v\n%s", err, b.String())
+	}
+	r.put("harnesses.yaml", []byte(b.String()))
+	r.paths = paths
+}
+
+func writeFiles(t *testing.T, dir string, files map[string]string) string {
+	t.Helper()
+	for name, body := range files {
+		path := filepath.Join(dir, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
+}
+
+// tapasEnv is one machine: write roots, a data directory and a binary
+// directory under a temp dir, and managedRun pointed at a tapasRepo.
+type tapasEnv struct {
+	*tapasRepo
+	t     *testing.T
+	cfg   config.Configuration
+	roots string // the single write root
+	bin   string // stands in for the directory holding sofcat's binaries
+}
+
+func newTapasEnv(t *testing.T) *tapasEnv {
+	t.Helper()
+	resetMainHooks()
+	t.Cleanup(resetMainHooks)
+	base := t.TempDir()
+	e := &tapasEnv{
+		tapasRepo: newTapasRepo(t),
+		t:         t,
+		roots:     filepath.Join(base, "roots"),
+		bin:       filepath.Join(base, "roots", "apps", "bin"),
+	}
+	for _, dir := range []string{e.roots, e.bin} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	e.cfg = config.Configuration{
+		AppDataPath: filepath.Join(base, "data"),
+		CachePath:   filepath.Join(base, "cache"),
+		URL:         e.URL(),
+		URLPackages: e.URL(),
+		Manifest:    "tapas",
+		Catalogs:    []string{"tapas"},
+	}
+	adminCheckFunc = func() (bool, error) { return true, nil }
+	newZipInstaller = func(cfg config.Configuration, table harness.Table) *installer.ZipInstaller {
+		z := installer.NewMachineZip(cfg, table)
+		z.Guard = placement.Guard{
+			GOOS:       tapasOS,
+			Roots:      placement.Roots{Windows: []string{e.roots}},
+			DataDir:    cfg.AppDataPath,
+			BinaryDirs: []string{e.bin},
+		}
+		z.Slug = "tapas-test"
+		return z
+	}
+	return e
+}
+
+func (e *tapasEnv) receiptDir() string { return receipt.MachineDir(e.cfg.AppDataPath) }
+
+// run does one managed run and returns its report.
+func (e *tapasEnv) run() *report.Report {
+	e.t.Helper()
+	// Close the log before t.TempDir cleanup (see managed_run_test.go).
+	defer sofcatlog.Close()
+	rep, err := managedRun(e.cfg, nil, nil)
+	if err != nil {
+		e.t.Fatalf("managedRun: %v", err)
+	}
+	return rep
+}
+
+// seed places files as item's tree in placement (as harnesses set it), as an earlier run or
+// a user would have, and returns its tree hash. With a version it also writes
+// the receipt sofcat would have written.
+func (e *tapasEnv) seed(placementName, item, version string, files map[string]string) string {
+	e.t.Helper()
+	tree := writeFiles(e.t, filepath.Join(e.paths[placementName], item), files)
+	hash, err := artifact.TreeHash(tree, tapasOS)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	if version != "" {
+		err := receipt.Write(e.receiptDir(), receipt.Receipt{
+			Item: item, Version: version, Placement: placementName, Path: tree,
+			TreeHash: hash, InstalledAtUTC: time.Now().UTC(),
+		})
+		if err != nil {
+			e.t.Fatal(err)
+		}
+	}
+	return hash
+}
+
+func failedCodes(rep *report.Report, item string) []string {
+	var codes []string
+	for _, f := range rep.FailedItems {
+		if f.Name == item {
+			codes = append(codes, f.Code)
+		}
+	}
+	return codes
+}
+
+func listed(items []catalog.Item, name string) bool {
+	return slices.ContainsFunc(items, func(i catalog.Item) bool { return i.Name == name })
+}
+
+func readFile(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+func exists(path string) bool {
+	_, err := os.Lstat(path)
+	return err == nil
+}
+
+// TestTapasZipPlacements runs managed runs against a served repository of zip
+// items and checks what lands on disk, the receipts, and the report codes the
+// UI shows: installs, adoption, user edits left alone, scope exit, held items,
+// refusals, and user-scope placements skipped by the machine run.
+func TestTapasZipPlacements(t *testing.T) {
+	e := newTapasEnv(t)
+	skills := filepath.Join(e.roots, "skills")
+	market := filepath.Join(e.roots, "market")
+	outside := t.TempDir()
+	escape := filepath.Join(e.roots, "link")
+	if err := os.Symlink(outside, escape); err != nil {
+		t.Skipf("cannot create a symlink here: %v", err)
+	}
+	e.harnesses(map[string]string{
+		"skills":  skills,
+		"market":  market,
+		"escape":  filepath.Join(escape, "skills"),
+		"binary":  filepath.Join(e.roots, "apps"),
+		"profile": `${USERPROFILE}\.agents\skills`,
+	}, []string{"market"}, []string{"profile"})
+
+	skill := func(body string) map[string]string {
+		return map[string]string{"SKILL.md": body, "ref/notes.md": "notes"}
+	}
+	e.zipItem("hello", "1.0", map[string]map[string]string{"skills": skill("hello")})
+	e.zipItem("adopt", "1.0", map[string]map[string]string{"skills": skill("adopt")})
+	e.zipItem("edit", "1.0", map[string]map[string]string{"skills": skill("edit v1")})
+	e.zipItem("both", "1.0", map[string]map[string]string{"skills": skill("both"), "profile": skill("both")})
+	e.zipItem("exclusive", "1.0", map[string]map[string]string{"market": skill("x")})
+	e.zipItem("escape", "1.0", map[string]map[string]string{"escape": skill("x")})
+	e.zipItem("binary", "1.0", map[string]map[string]string{"binary": skill("x")})
+	e.zipItem("held", "1.0", map[string]map[string]string{"skills": skill("held")})
+	e.zipItem("dropme", "1.0", map[string]map[string]string{"skills": skill("dropme")})
+	e.publishCatalog()
+	e.put("manifests/tapas.yaml", []byte(`name: tapas
+catalogs: [tapas]
+managed_installs: [hello, adopt, edit, both, exclusive, escape, binary]
+managed_uninstalls: [dropme, orphan]
+conditional_items:
+  - condition: '"lab" in machine_groups'
+    managed_installs: [held]
+`))
+
+	// Before the run: a catalog-equal tree sofcat never recorded, trees an
+	// earlier run placed for a held item, a removed item, items to remove
+	// that no catalog lists any more, items that left the manifest (one since
+	// edited), and someone else's files in the exclusive root.
+	e.seed("skills", "adopt", "", skill("adopt"))
+	e.seed("skills", "held", "1.0", skill("held"))
+	e.seed("skills", "dropme", "1.0", skill("dropme"))
+	e.seed("skills", "orphan", "1.0", skill("orphan"))
+	e.seed("skills", "ss-orphan", "1.0", skill("ss-orphan"))
+	if err := manifest.SaveSelfServe(manifest.SelfServePath(e.cfg.AppDataPath), manifest.Item{Uninstalls: []string{"ss-orphan"}}); err != nil {
+		t.Fatal(err)
+	}
+	e.seed("skills", "gone", "0.9", skill("gone"))
+	e.seed("skills", "gone-edited", "0.9", skill("gone-edited"))
+	if err := os.WriteFile(filepath.Join(skills, "gone-edited", "SKILL.md"), []byte("my notes"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	e.seed("market", "theirs", "", map[string]string{"plugin.json": "{}"})
+
+	rep := e.run()
+
+	// Installed into an empty root, with a receipt flagged managed.
+	if readFile(t, filepath.Join(skills, "hello", "SKILL.md")) != "hello" || !listed(rep.InstalledItems, "hello") {
+		t.Errorf("hello not installed: %+v", rep)
+	}
+	rc, ok, err := receipt.Read(e.receiptDir(), "skills", "hello")
+	if err != nil || !ok || !rc.Managed || rc.Version != "1.0" || rc.Path != filepath.Join(skills, "hello") {
+		t.Errorf("hello receipt = %+v, %v, %v", rc, ok, err)
+	}
+
+	// Adopted: a receipt, and no failure.
+	if _, ok, _ := receipt.Read(e.receiptDir(), "skills", "adopt"); !ok || failedCodes(rep, "adopt") != nil {
+		t.Errorf("adopt not adopted: receipt %v, failures %v", ok, failedCodes(rep, "adopt"))
+	}
+
+	// A user-scope placement is skipped: the item succeeds on its machine one.
+	if !listed(rep.InstalledItems, "both") || failedCodes(rep, "both") != nil {
+		t.Errorf("both: installed %v, failures %v", listed(rep.InstalledItems, "both"), failedCodes(rep, "both"))
+	}
+	if _, ok, _ := receipt.Read(e.receiptDir(), "profile", "both"); ok {
+		t.Error("machine run wrote a user-scope receipt")
+	}
+
+	// Refusals: someone else's exclusive root, a symlink out of the roots,
+	// a placement around the binary directory.
+	for _, name := range []string{"exclusive", "escape", "binary"} {
+		if codes := failedCodes(rep, name); !slices.Equal(codes, []string{report.CodePlacementRefused}) {
+			t.Errorf("%s codes = %v, want placement_refused", name, codes)
+		}
+	}
+	if exists(filepath.Join(outside, "skills")) || exists(filepath.Join(market, "exclusive")) || exists(filepath.Join(e.roots, "apps", "binary")) {
+		t.Error("a refused placement wrote files")
+	}
+
+	// managed_uninstalls removes a zip item through its receipt.
+	if exists(filepath.Join(skills, "dropme")) || !listed(rep.UninstalledItems, "dropme") {
+		t.Error("dropme not removed")
+	}
+	// An item to remove (managed_uninstalls or a pending self-service
+	// removal) that no catalog lists any more: the uninstall pass cannot
+	// resolve it, so scope exit removes it by its receipt.
+	for _, name := range []string{"orphan", "ss-orphan"} {
+		if exists(filepath.Join(skills, name)) || !listed(rep.UninstalledItems, name) {
+			t.Errorf("%s not removed by scope exit", name)
+		}
+		if _, ok, _ := receipt.Read(e.receiptDir(), "skills", name); ok {
+			t.Errorf("%s's receipt kept", name)
+		}
+	}
+
+	// Scope exit: an item that left the desired set is removed; an edited one
+	// stays with a conflict; a held item stays untouched.
+	if exists(filepath.Join(skills, "gone")) || !listed(rep.UninstalledItems, "gone") {
+		t.Error("gone not removed by scope exit")
+	}
+	if _, ok, _ := receipt.Read(e.receiptDir(), "skills", "gone"); ok {
+		t.Error("gone's receipt kept")
+	}
+	if readFile(t, filepath.Join(skills, "gone-edited", "SKILL.md")) != "my notes" ||
+		!slices.Equal(failedCodes(rep, "gone-edited"), []string{report.CodePlacementConflict}) {
+		t.Errorf("gone-edited: codes %v", failedCodes(rep, "gone-edited"))
+	}
+	if !exists(filepath.Join(skills, "held", "SKILL.md")) || listed(rep.UninstalledItems, "held") {
+		t.Error("held item removed")
+	}
+	if len(rep.HeldConditions) != 1 {
+		t.Errorf("held conditions = %+v", rep.HeldConditions)
+	}
+
+	// The next release of edit meets a user's edit: conflict, tree untouched.
+	editFile := filepath.Join(skills, "edit", "SKILL.md")
+	if readFile(t, editFile) != "edit v1" {
+		t.Fatal("edit v1 not installed")
+	}
+	if err := os.WriteFile(editFile, []byte("edited by me"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	e.zipItem("edit", "2.0", map[string]map[string]string{"skills": skill("edit v2")})
+	e.zipItem("hello", "2.0", map[string]map[string]string{"skills": skill("hello v2")})
+	e.publishCatalog()
+
+	rep = e.run()
+	if !slices.Equal(failedCodes(rep, "edit"), []string{report.CodePlacementConflict}) || readFile(t, editFile) != "edited by me" {
+		t.Errorf("edit before upgrade: codes %v, content %q", failedCodes(rep, "edit"), readFile(t, editFile))
+	}
+	// An untouched tree is upgraded in place.
+	if readFile(t, filepath.Join(skills, "hello", "SKILL.md")) != "hello v2" {
+		t.Error("hello not upgraded")
+	}
+	if rc, _, _ := receipt.Read(e.receiptDir(), "skills", "hello"); rc.Version != "2.0" {
+		t.Errorf("hello receipt version = %q", rc.Version)
+	}
+}
+
+// TestTapasMissingHarnesses: a repository without harnesses.yaml still runs.
+// Items that are not zip items are unaffected, and every zip item fails with
+// placement_refused because no placement is defined.
+func TestTapasMissingHarnesses(t *testing.T) {
+	e := newTapasEnv(t)
+	e.zipItem("hello", "1.0", map[string]map[string]string{"skills": {"SKILL.md": "x"}})
+	present := filepath.Join(t.TempDir(), "present.txt")
+	writeFiles(t, filepath.Dir(present), map[string]string{"present.txt": "x"})
+	e.items["Tool"] = catalog.Item{
+		Name: "Tool", DisplayName: "Tool",
+		Check:     catalog.InstallCheck{File: []catalog.FileCheck{{Path: present}}},
+		Installer: catalog.InstallerItem{Type: "ps1", Location: "packages/tool.ps1", Hash: "deadbeef"},
+	}
+	e.publishCatalog()
+	e.put("manifests/tapas.yaml", []byte("name: tapas\ncatalogs: [tapas]\nmanaged_installs: [hello, Tool]\n"))
+
+	rep := e.run()
+	if codes := failedCodes(rep, "hello"); !slices.Equal(codes, []string{report.CodePlacementRefused}) {
+		t.Errorf("hello codes = %v, want placement_refused", codes)
+	}
+	if codes := failedCodes(rep, "Tool"); codes != nil {
+		t.Errorf("Tool failed without harnesses.yaml: %v", rep.FailedItems)
+	}
+}
+
+// TestTapasBadArchive: an archive that fails verification is never placed.
+// Served bytes that do not match the variant hash, or a good archive whose
+// contents do not match the catalog tree_hash, fail the item and leave no
+// tree, no receipt and no staging directory behind.
+func TestTapasBadArchive(t *testing.T) {
+	cases := []struct {
+		name    string
+		corrupt func(e *tapasEnv, v catalog.Variant)
+	}{
+		{"served bytes do not match hash", func(e *tapasEnv, v catalog.Variant) {
+			e.put(v.Location, []byte("not the archive the catalog names"))
+		}},
+		{"tree_hash does not match the archive", func(e *tapasEnv, v catalog.Variant) {
+			other, err := artifact.TreeHash(writeFiles(t, t.TempDir(), map[string]string{"SKILL.md": "other"}), tapasOS)
+			if err != nil {
+				t.Fatal(err)
+			}
+			item := e.items["hello"]
+			v.TreeHash = other
+			item.Installer.Variants["skills"][tapasOS] = v
+			e.items["hello"] = item
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newTapasEnv(t)
+			skills := filepath.Join(e.roots, "skills")
+			e.harnesses(map[string]string{"skills": skills}, nil, nil)
+			e.zipItem("hello", "1.0", map[string]map[string]string{"skills": {"SKILL.md": "hello"}})
+			tc.corrupt(e, e.items["hello"].Installer.Variants["skills"][tapasOS])
+			e.publishCatalog()
+			e.put("manifests/tapas.yaml", []byte("name: tapas\ncatalogs: [tapas]\nmanaged_installs: [hello]\n"))
+
+			rep := e.run()
+			if codes := failedCodes(rep, "hello"); len(codes) != 1 || codes[0] != "" || listed(rep.InstalledItems, "hello") {
+				t.Errorf("hello: codes %q, installed %v; want one generic item failure", codes, listed(rep.InstalledItems, "hello"))
+			}
+			entries, err := os.ReadDir(skills)
+			if err != nil && !os.IsNotExist(err) {
+				t.Fatal(err)
+			}
+			if len(entries) != 0 {
+				t.Errorf("placement root holds %v after a failed verification", entries)
+			}
+			if _, ok, _ := receipt.Read(e.receiptDir(), "skills", "hello"); ok {
+				t.Error("receipt written for an unverified archive")
+			}
+		})
+	}
+}

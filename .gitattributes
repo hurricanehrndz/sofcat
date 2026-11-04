@@ -7,3 +7,7 @@ test/manual/fixtures/selfserve/packages/scripts/*.ps1 text eol=lf
 # Example zip items are hash-pinned by makecatalogs zip-item; keep the rendered
 # trees and generated output byte-for-byte on every platform.
 examples/zip-items/** -text
+
+# run-tapas-smoke.ps1 writes the adopted skill's SKILL.md byte for byte; keep the
+# rendered Tapas fixture trees unconverted on every platform.
+test/manual/fixtures/tapas/rendered/** -text

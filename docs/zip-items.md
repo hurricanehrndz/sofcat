@@ -27,7 +27,68 @@ hello-world:
 - A zip item needs no `check` block and no `uninstaller`.
 
 Do not write the `installer` block by hand. `makecatalogs zip-item` writes it.
-This release builds and checks zip items; a later one installs them.
+## Installing
+
+sofcat installs a zip item by placing one tree per placement for the OS it
+runs on, in `harnesses.yaml` order. The service skips placements whose scope
+on this OS is `user`; they neither fail nor succeed the item. Only `directory`
+placements are written so far. The item succeeds when every machine-scope
+placement does; a failed placement leaves the others alone and is reported on
+its own.
+
+For each placement, sofcat checks the tree at `<placement path>/<item_name>`
+in this order:
+
+1. No tree: install it.
+2. The tree equals the catalog's `tree_hash`: nothing to do. If it has no
+   receipt, or one for another version, sofcat writes one (adoption).
+3. The tree equals its receipt: replace it with the catalog version.
+4. Anything else, including a tree with no receipt: a user edit. sofcat writes
+   nothing and fails the item with `placement_conflict`.
+
+To install, sofcat downloads the zip to its cache, checks its sha256 against
+`hash`, and refuses an archive with an absolute path or `..`, a non-regular
+entry, a duplicate or case-only duplicate path, a Windows reserved name or
+forbidden character (on every OS), more than 10,000 entries, a file over
+256 MiB, more than 1 GiB in total, or a compression ratio over 100:1. It
+extracts into `.<slug>-staging-<item>` beside the tree, checks the tree hash,
+and only then renames the tree into place.
+
+A removal (`managed_uninstalls`, a self-service removal, or an item that left
+every manifest) deletes a tree only while it equals its receipt; otherwise it
+fails with `placement_conflict` and the tree stays. Items held by an unknown
+`conditional_items` condition are never removed.
+
+A zip item's installed status comes from its receipts and trees, never from a
+`check` block.
+
+### Receipts
+
+Each placed tree has a JSON receipt at
+`<data dir>/receipts/<placement>/<item_name>.json` with `item`, `version`,
+`placement`, `path`, `tree_hash`, `managed` (a manifest lists the item in
+`managed_installs`) and `installed_at_utc`.
+
+### Write roots
+
+A build writes only under its write roots. A brand sets them in
+`write-roots.yaml`, compiled into the binaries by `just brand=<dir> build`:
+
+```yaml
+darwin: [/Library/Application Support/Acme]
+windows: ['${ProgramFiles}\Acme']
+windows_user: ['${USERPROFILE}\.agents']
+```
+
+Without the file, a build uses `${ProgramFiles}\<NAME>` on Windows and
+`/Library/Application Support/<NAME>` on macOS, and has no user roots. Runtime
+config cannot change them. sofcat resolves symlinks in a placement path, then
+refuses it (`placement_refused`) when it is outside every root for its scope,
+inside sofcat's data directory, or inside, equal to or around a directory
+holding sofcat's binaries. An `exclusive` placement that exists, is not empty
+and lacks the marker file `.<slug>-owned` is refused too; a root sofcat
+creates gets the marker. A repository without `harnesses.yaml` fails every
+zip item with `placement_refused`.
 
 ## The archive
 

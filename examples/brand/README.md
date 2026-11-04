@@ -17,6 +17,7 @@ just brand=branding/acme msi   # -> build/acme-apps-<version>-x86_64.msi
 | `brand.env` | yes | Names, publisher and identifier; see the comments in [`brand.env`](brand.env). |
 | `icon.ico` | no | Exe icon (Explorer, Start menu, Add/Remove Programs). Defaults to `assets/sofcat.ico`. |
 | `icon.png` | no | Window and taskbar icon (256x256 is best) and the app-bar mark when no runtime logo is set. Defaults to the SofCat icon. |
+| `write-roots.yaml` | no | Where zip items may be placed, compiled in; see [docs/zip-items.md](../../docs/zip-items.md#write-roots). Defaults to `${ProgramFiles}\<NAME>` (Windows) and `/Library/Application Support/<NAME>` (macOS). |
 
 `just brand-check` validates the values on its own; every brand build runs it
 first.
