@@ -39,12 +39,14 @@ func ParseRoots(data []byte) (Roots, error) {
 	return r, nil
 }
 
-// StockRoots are the roots of a build without write-roots.yaml: the build's
-// own program directory for machine scope, and no user roots.
+// StockRoots are the roots of a build without write-roots.yaml: the directory
+// holding its config and Data for machine scope (${ProgramData}\<Name> on
+// Windows, /Library/Application Support/<Name> on macOS), and no user roots.
+// Data itself and the executables' directory stay refused (Guard.Check).
 func StockRoots() Roots {
 	return Roots{
 		Darwin:  []string{identity.SupportDir()},
-		Windows: []string{`${ProgramFiles}\` + identity.Name},
+		Windows: []string{`${ProgramData}\` + identity.Name},
 	}
 }
 

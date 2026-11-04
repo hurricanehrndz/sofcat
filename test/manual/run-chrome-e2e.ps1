@@ -40,8 +40,8 @@ PowerShell 5.1 compatible.
 param(
     [string]$SofCat   = "$env:ProgramFiles\SofCat\sofcat.exe",
     [string]$Config    = "$env:ProgramData\SofCat\config.yaml",
-    [string]$SelfServe = "$env:ProgramData\SofCat\service-manifest.yaml",
-    [string]$Inventory = "$env:ProgramData\SofCat\inventory.json",
+    [string]$SelfServe = "$env:ProgramData\SofCat\Data\service-manifest.yaml",
+    [string]$Inventory = "$env:ProgramData\SofCat\Data\inventory.json",
     [string]$ItemName  = "GoogleChrome",
     [string]$RegistryName = "Google Chrome",
     [string]$ChromeExe = "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
@@ -382,11 +382,13 @@ if ($item.status -ne "Installed") { Fail "$ItemName status '$($item.status)', ex
 Pass "managed_installs has $ItemName; status=Installed"
 
 # --- Step 5b: the data directory ACL (docs/data-directory.md)
-Write-Step "Data directory ACL: SYSTEM and Administrators only, plus Users read/execute on bin; nothing inherited from ProgramData"
+Write-Step "Data directory ACL: SYSTEM and Administrators only, plus Users read/execute on the parent and user-artifacts; nothing inherited from ProgramData"
 $dataDir = Split-Path $SelfServe
 $wantAcl = [ordered]@{
+    (Split-Path $dataDir)  = @('NT AUTHORITY\SYSTEM:(OI)(CI)(F)', 'BUILTIN\Administrators:(OI)(CI)(F)', 'BUILTIN\Users:(OI)(CI)(RX)')
+    $Config                = @('NT AUTHORITY\SYSTEM:(F)', 'BUILTIN\Administrators:(F)')
     $dataDir               = @('NT AUTHORITY\SYSTEM:(OI)(CI)(F)', 'BUILTIN\Administrators:(OI)(CI)(F)')
-    (Join-Path $dataDir 'bin') = @('BUILTIN\Users:(OI)(CI)(RX)', 'NT AUTHORITY\SYSTEM:(I)(OI)(CI)(F)', 'BUILTIN\Administrators:(I)(OI)(CI)(F)')
+    (Join-Path $dataDir 'user-artifacts') = @('BUILTIN\Users:(OI)(CI)(RX)', 'NT AUTHORITY\SYSTEM:(I)(OI)(CI)(F)', 'BUILTIN\Administrators:(I)(OI)(CI)(F)')
     $SelfServe             = @('NT AUTHORITY\SYSTEM:(I)(F)', 'BUILTIN\Administrators:(I)(F)')
 }
 foreach ($path in $wantAcl.Keys) {

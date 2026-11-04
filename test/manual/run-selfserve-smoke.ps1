@@ -20,7 +20,9 @@ PowerShell 5.1 compatible.
 param(
     [string]$SofCat   = "$env:ProgramFiles\SofCat\sofcat.exe",
     [string]$Config    = "$env:ProgramData\SofCat\config.yaml",
-    [string]$SelfServe = "$env:ProgramData\SofCat\service-manifest.yaml",
+    # The data directory (app_data_path), beside config.yaml.
+    [string]$DataDir   = "$env:ProgramData\SofCat\Data",
+    [string]$SelfServe = "$env:ProgramData\SofCat\Data\service-manifest.yaml",
     [string]$MarkerDir = "C:\ProgramData\sofcat-c-smoke",
     [int]$TimeoutSec   = 120
 )
@@ -186,8 +188,8 @@ if ((Get-YamlList $SelfServe "default_installs") -notcontains "DemoDefault") {
 Write-Host "    default stayed removed and is still recorded (once-only)" -ForegroundColor Green
 
 $blockedTxt = Join-Path $MarkerDir "blocked.txt"
-# inventory.json sits beside config.yaml, so -Config also targets a rebrand.
-$inventoryPath = Join-Path (Split-Path $Config) "inventory.json"
+# inventory.json sits in the data directory, so -DataDir also targets a rebrand.
+$inventoryPath = Join-Path $DataDir "inventory.json"
 
 # Inventory-Defers returns $true when inventory.json lists $Item in
 # ManagedInstalls with status "deferred". The inventory is rewritten at the end
@@ -435,8 +437,8 @@ Write-Host "    DemoBlocked defer-then-retry OK" -ForegroundColor Green
 # --- installable_condition -------------------------------------------------------
 
 $labTxt = Join-Path $MarkerDir "lab.txt"
-# The admin conditions folder sits beside config.yaml, like inventory.json.
-$conditionsDir = Join-Path (Split-Path $Config) "conditions"
+# The admin conditions folder sits in the data directory, like inventory.json.
+$conditionsDir = Join-Path $DataDir "conditions"
 $conditionScript = Join-Path $conditionsDir "10-smoke.ps1"
 
 # Invoke-Run triggers a full run with an idempotent request (DemoBlocked is

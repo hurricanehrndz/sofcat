@@ -12,7 +12,7 @@ param(
     [string]$BaseUrl = "http://localhost:8080/",
     [string]$InstallPath = "$env:ProgramFiles\SofCat",
     [string]$ConfigPath = "$env:ProgramData\SofCat\config.yaml",
-    [string]$AppDataPath = "$env:ProgramData\SofCat",
+    [string]$AppDataPath = "$env:ProgramData\SofCat\Data",
     [string]$Manifest = "example_manifest",
     [string[]]$Catalogs = @("example_catalog"),
     [switch]$InstallService,

@@ -29,12 +29,12 @@ func ServiceName() string { return Slug }
 // PipeName is the default service pipe name; off Windows it names the socket.
 func PipeName() string { return Slug + "-service" }
 
-// DataDir is the default app data directory: %ProgramData%\<Name> on Windows,
-// /Library/Application Support/<Name>/Data on macOS.
+// DataDir is the default app data directory: %ProgramData%\<Name>\Data on
+// Windows, /Library/Application Support/<Name>/Data on macOS.
 func DataDir() string { return DataDirFor(runtime.GOOS) }
 
-// ConfigPath is the default config.yaml path: inside DataDir on Windows,
-// beside it in SupportDir on macOS.
+// ConfigPath is the default config.yaml path, beside DataDir on both:
+// %ProgramData%\<Name>\config.yaml on Windows, in SupportDir on macOS.
 func ConfigPath() string { return ConfigPathFor(runtime.GOOS) }
 
 // SocketDir is the directory holding the service socket off Windows.
@@ -62,12 +62,17 @@ func LaunchdLabel() string { return Identifier }
 // LaunchdPlistPath is the macOS daemon's property list.
 func LaunchdPlistPath() string { return "/Library/LaunchDaemons/" + Identifier + ".plist" }
 
+// ProgramDataDir is the Windows twin of SupportDir, %ProgramData%\<Name>:
+// the config, Data and sofcat's own placements live in it. The executables
+// stay under Program Files, which sofcat never writes.
+func ProgramDataDir() string { return filepath.Join(os.Getenv("ProgramData"), Name) }
+
 // DataDirFor is DataDir on goos.
 func DataDirFor(goos string) string {
 	if goos == "darwin" {
 		return SupportDir() + "/Data"
 	}
-	return filepath.Join(os.Getenv("ProgramData"), Name)
+	return filepath.Join(ProgramDataDir(), "Data")
 }
 
 // ConfigPathFor is ConfigPath on goos.
@@ -75,7 +80,7 @@ func ConfigPathFor(goos string) string {
 	if goos == "darwin" {
 		return SupportDir() + "/config.yaml"
 	}
-	return filepath.Join(DataDirFor(goos), "config.yaml")
+	return filepath.Join(ProgramDataDir(), "config.yaml")
 }
 
 // SocketDirFor is SocketDir on goos.

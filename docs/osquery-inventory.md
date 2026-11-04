@@ -12,8 +12,8 @@ table construction) can't be used, because it reads SQLite databases only.
 
 ## File
 
-- **Path:** `%ProgramData%\sofcat\inventory.json` (`AppDataPath` in
-  `config.yaml`, default `C:\ProgramData\sofcat`).
+- **Path:** `%ProgramData%\SofCat\Data\inventory.json` (`AppDataPath` in
+  `config.yaml`, default `C:\ProgramData\SofCat\Data`).
 - **Writer:** the managed run (`sofcat.exe` as SYSTEM, from the service or a
   scheduled run). It is written at the end of every run, including a run that
   fails part way, so the failure is visible. Check-only (`-C`) prints the same
@@ -27,8 +27,8 @@ table construction) can't be used, because it reads SQLite databases only.
   nothing is inherited. `icacls` shows only these two entries:
 
   ```text
-  C:\ProgramData\SofCat\inventory.json NT AUTHORITY\SYSTEM:(F)
-                                        BUILTIN\Administrators:(R)
+  C:\ProgramData\SofCat\Data\inventory.json NT AUTHORITY\SYSTEM:(F)
+                                             BUILTIN\Administrators:(R)
   ```
 
   Standard users cannot read it. Elevated admins and SYSTEM (osquery) can.

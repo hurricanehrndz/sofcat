@@ -22,7 +22,7 @@ param(
     [string]$ProductName = "SofCat",
     [string]$InstallPath = "$env:ProgramFiles\$ProductName",
     [string]$ConfigPath = "$env:ProgramData\$ProductName\config.yaml",
-    [string]$AppDataPath = "$env:ProgramData\$ProductName",
+    [string]$AppDataPath = "$env:ProgramData\$ProductName\Data",
     [string]$Manifest = "example_manifest",
     [string[]]$Catalogs = @("example_catalog"),
     [string]$ListHeading = "",
@@ -120,10 +120,17 @@ function Ensure-PathEntry {
     }
 }
 
+# Get-Service -Name also matches display names, and a second brand on the
+# machine may carry the same display name, so match the service name exactly.
+function Get-ServiceByName {
+    param([string]$ServiceName)
+    Get-Service -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq $ServiceName }
+}
+
 function Remove-ExistingSofCatService {
     param([string]$ServiceName = $Slug)
 
-    $existingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+    $existingService = Get-ServiceByName $ServiceName
     if (-not $existingService) {
         return
     }
@@ -145,7 +152,7 @@ function Remove-ExistingSofCatService {
         $serviceStopped = $false
         for ($i = 0; $i -lt 30; $i++) {
             Start-Sleep -Seconds 1
-            $serviceState = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+            $serviceState = Get-ServiceByName $ServiceName
             if (-not $serviceState -or $serviceState.Status -eq [System.ServiceProcess.ServiceControllerStatus]::Stopped) {
                 $serviceStopped = $true
                 break
@@ -159,7 +166,7 @@ function Remove-ExistingSofCatService {
 
                 for ($i = 0; $i -lt 10; $i++) {
                     Start-Sleep -Seconds 1
-                    $serviceState = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+                    $serviceState = Get-ServiceByName $ServiceName
                     if (-not $serviceState -or $serviceState.Status -eq [System.ServiceProcess.ServiceControllerStatus]::Stopped) {
                         $serviceStopped = $true
                         break
@@ -177,7 +184,7 @@ function Remove-ExistingSofCatService {
 
     for ($i = 0; $i -lt 30; $i++) {
         Start-Sleep -Milliseconds 250
-        if (-not (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue)) {
+        if (-not (Get-ServiceByName $ServiceName)) {
             Write-Step "Removed existing '$ServiceName' service"
             return
         }

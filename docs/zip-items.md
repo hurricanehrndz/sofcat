@@ -34,8 +34,9 @@ sofcat installs a zip item by placing one tree per placement for the OS it
 runs on, in `harnesses.yaml` order. The service skips placements whose scope
 on this OS is `user`; they neither fail nor succeed the item. Instead, after
 each run that is not check-only, it stages their verified archives in
-`user-artifacts` beside its executable, each named `<hash>.zip` after its
-sha256 (never after its catalog `location`), removes archives no entry
+`user-artifacts` inside its data directory, the one entry there users may
+read ([data-directory.md](data-directory.md)), each named `<hash>.zip` after
+its sha256 (never after its catalog `location`), removes archives no entry
 references, and then stores the plan, built from that run's desired set
 (dependencies and `update_for` riders included), as `user-plan.json` in its
 data directory. The per-user helper `<slug>-ui.exe --user-sync`, which runs
@@ -132,7 +133,7 @@ temporary file in the same directory and creates the directory if needed:
     "acme": {
       "source": {
         "source": "directory",
-        "path": "C:\\Program Files\\Acme\\marketplace"
+        "path": "C:\\ProgramData\\Acme\\marketplace"
       }
     }
   },
@@ -166,16 +167,18 @@ A build writes only under its write roots. A brand sets them in
 
 ```yaml
 darwin: [/Library/Application Support/Acme]
-windows: ['${ProgramFiles}\Acme']
+windows: ['${ProgramData}\Acme']
 windows_user: ['${USERPROFILE}\.agents']
 ```
 
-Without the file, a build uses `${ProgramFiles}\<NAME>` on Windows and
-`/Library/Application Support/<NAME>` on macOS, and has no user roots. Runtime
-config cannot change them. sofcat resolves symlinks in a placement path, then
-refuses it (`placement_refused`) when it is outside every root for its scope,
-inside sofcat's data directory, or inside, equal to or around a directory
-holding sofcat's binaries. An `exclusive` placement that exists, is not empty
+Without the file, a build uses `${ProgramData}\<NAME>` on Windows and
+`/Library/Application Support/<NAME>` on macOS, the directory holding its
+config and `Data`, and has no user roots. Runtime config cannot change them.
+sofcat resolves symlinks in a placement path, then refuses it
+(`placement_refused`) when it is outside every root for its scope, inside
+sofcat's data directory, or inside, equal to or around a directory holding
+sofcat's binaries, so the stock root never overlaps `Data` or
+`${ProgramFiles}\<NAME>`. An `exclusive` placement that exists, is not empty
 and lacks the marker file `.<slug>-owned` is refused too; a root sofcat
 creates gets the marker. A repository without `harnesses.yaml` fails every
 zip item with `placement_refused`.

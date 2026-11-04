@@ -172,7 +172,7 @@ func newTapasEnv(t *testing.T) *tapasEnv {
 		t:             t,
 		roots:         filepath.Join(base, "roots"),
 		bin:           filepath.Join(base, "roots", "apps", "bin"),
-		userArtifacts: filepath.Join(base, "user-artifacts"),
+		userArtifacts: filepath.Join(base, "data", "user-artifacts"),
 	}
 	for _, dir := range []string{e.roots, e.bin} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -189,7 +189,7 @@ func newTapasEnv(t *testing.T) *tapasEnv {
 	}
 	adminCheckFunc = func() (bool, error) { return true, nil }
 	origUserArtifacts := service.UserArtifactsDir
-	service.UserArtifactsDir = func() (string, error) { return e.userArtifacts, nil }
+	service.UserArtifactsDir = func(string) string { return e.userArtifacts }
 	t.Cleanup(func() { service.UserArtifactsDir = origUserArtifacts })
 	newZipInstaller = func(cfg config.Configuration, table harness.Table) *installer.ZipInstaller {
 		z := installer.NewMachineZip(cfg, table)

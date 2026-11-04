@@ -67,17 +67,13 @@ type reportUserPlacementsParams struct {
 type reportUserPlacementsResponse struct{}
 
 // UserArtifactsDir is where the service stages user-placement archives:
-// user-artifacts beside the running executable, which is
-// ${ProgramFiles}\<Name>\user-artifacts for an MSI or bootstrap install.
-// Administrators write it and users read it. It is not a placement and is
-// not checked against the write roots, which refuse the binary directory.
+// user-artifacts inside the data directory (${ProgramData}\<Name>\Data by
+// default). Administrators write it and users read it: it is the one entry
+// of the data directory whose ACL lets Users in. It is not a placement and
+// is not checked against the write roots, which refuse the data directory.
 // Tests point it at a temporary directory.
-var UserArtifactsDir = func() (string, error) {
-	exe, err := os.Executable()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(filepath.Dir(exe), "user-artifacts"), nil
+var UserArtifactsDir = func(dataDir string) string {
+	return filepath.Join(dataDir, "user-artifacts")
 }
 
 // UserPlan builds the user-placement plan from a run's desired set (the

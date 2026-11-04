@@ -147,7 +147,7 @@ On Linux, where SofCat runs only for development, only `hostname`, `os`,
 ## Admin-provided facts
 
 Put scripts in the `conditions` folder of the app data directory
-(`C:\ProgramData\SofCat\conditions` or
+(`C:\ProgramData\SofCat\Data\conditions` or
 `/Library/Application Support/SofCat/Data/conditions` by default). Each run
 executes them in name order and reads one JSON object from each one's stdout:
 
@@ -159,7 +159,7 @@ executes them in name order and reads one JSON object from each one's stdout:
 For example:
 
 ```powershell
-# C:\ProgramData\SofCat\conditions\10-groups.ps1
+# C:\ProgramData\SofCat\Data\conditions\10-groups.ps1
 $groups = @()
 if ($env:COMPUTERNAME -like 'LAB-*') { $groups += 'lab' }
 @{ machine_groups = $groups; site = 'east' } | ConvertTo-Json -Compress

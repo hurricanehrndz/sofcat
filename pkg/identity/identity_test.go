@@ -19,7 +19,7 @@ func TestStockNamesUnchanged(t *testing.T) {
 	want := map[string]string{
 		"service":       "sofcat",
 		"pipe":          "sofcat-service",
-		"data":          filepath.Join("PD", "SofCat"),
+		"data":          filepath.Join("PD", "SofCat", "Data"),
 		"config":        filepath.Join("PD", "SofCat", "config.yaml"),
 		"policy":        `SOFTWARE\Policies\SofCat`,
 		"mac data":      "/Library/Application Support/SofCat/Data",
@@ -42,7 +42,7 @@ func TestRebrandMovesEveryName(t *testing.T) {
 	want := map[string]string{
 		"service":       "acme",
 		"pipe":          "acme-service",
-		"data":          filepath.Join("PD", "Acme Software Center"),
+		"data":          filepath.Join("PD", "Acme Software Center", "Data"),
 		"config":        filepath.Join("PD", "Acme Software Center", "config.yaml"),
 		"policy":        `SOFTWARE\Policies\Acme Software Center`,
 		"mac data":      "/Library/Application Support/Acme Software Center/Data",

@@ -227,19 +227,16 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 	// item deferred this run held too: the helper neither places nor removes
 	// it, and its archive is not staged.
 	if !cfg.CheckOnly {
-		if dir, err := service.UserArtifactsDir(); err != nil {
-			slog.Warn("unable to stage user-placement archives", "err", err)
-		} else {
-			planDesired, planHeld := maps.Clone(desired), maps.Clone(heldSet)
-			for _, d := range run.DeferredItems {
-				delete(planDesired, d.Name)
-				planHeld[d.Name] = true
-			}
-			userPlan := service.UserPlan(planDesired, planHeld, catalogs, harnesses, zip.Guard.GOOS, dir)
-			service.StageUserArtifacts(context.Background(), zip, userPlan, dir)
-			if err := service.SaveUserPlan(cfg.AppDataPath, userPlan); err != nil {
-				slog.Warn("unable to store the user-placement plan", "err", err)
-			}
+		dir := service.UserArtifactsDir(cfg.AppDataPath)
+		planDesired, planHeld := maps.Clone(desired), maps.Clone(heldSet)
+		for _, d := range run.DeferredItems {
+			delete(planDesired, d.Name)
+			planHeld[d.Name] = true
+		}
+		userPlan := service.UserPlan(planDesired, planHeld, catalogs, harnesses, zip.Guard.GOOS, dir)
+		service.StageUserArtifacts(context.Background(), zip, userPlan, dir)
+		if err := service.SaveUserPlan(cfg.AppDataPath, userPlan); err != nil {
+			slog.Warn("unable to store the user-placement plan", "err", err)
 		}
 	}
 

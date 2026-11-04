@@ -90,8 +90,8 @@ The two user-placement methods serve the per-user helper, `<slug>-ui.exe
 --user-sync`, and are not bound into Wails. SYSTEM never writes into a user
 profile: for zip variants whose placement scope on Windows is `user`, a run
 that is not check-only stages each verified archive as `<hash>.zip` in
-`user-artifacts` beside the service executable
-(`${ProgramFiles}\<Name>\user-artifacts`, which administrators write and
+`user-artifacts` inside the data directory
+(`${ProgramData}\<Name>\Data\user-artifacts`, which administrators write and
 users read), removes archives no plan entry references, and then stores the
 plan in the data directory as `user-plan.json` (`{entries: [...]}`, written
 atomically). The plan is that run's desired set (installs and updates with
