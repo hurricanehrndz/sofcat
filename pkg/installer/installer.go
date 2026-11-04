@@ -8,17 +8,29 @@ import (
 
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
 	"github.com/hurricanehrndz/sofcat/pkg/report"
+	"github.com/hurricanehrndz/sofcat/pkg/software"
 	"github.com/hurricanehrndz/sofcat/pkg/status"
 )
 
+// ErrDeferred is wrapped by every error Install returns when it skipped the
+// action and recorded it in the report's DeferredItems. The dependency walk
+// cascades it to dependents instead of treating it as a failure, and the next
+// run retries.
+var ErrDeferred = errors.New("deferred")
+
 // ErrBlockingApps is returned by Install when a listed blocking application is
-// running: the action was skipped and recorded in the report's DeferredItems
-// (spec R6). It is errors.Is-able so the dependency walk can cascade the
-// deferral instead of treating it as a failure.
-var ErrBlockingApps = errors.New("blocking applications running")
+// running (spec R6). It wraps ErrDeferred.
+var ErrBlockingApps = fmt.Errorf("%w: blocking applications running", ErrDeferred)
+
+// ErrMissingSoftware is returned by Install when software the item requires
+// is not installed. It wraps ErrDeferred.
+var ErrMissingSoftware = fmt.Errorf("%w: required software missing", ErrDeferred)
 
 // runningBlockingApps is a seam so tests can stub the process snapshot.
 var runningBlockingApps = status.RunningBlockingApps
+
+// missingSoftware is a seam so tests can stub the requires_software check.
+var missingSoftware = software.Missing
 
 // ProgressFn receives coarse per-item progress events. States emitted per
 // item: `downloading`, `installing`/`removing`, `done`/`failed`. pulledBy is
@@ -98,6 +110,27 @@ func (r *Runner) blockingGate(item catalog.Item, action string) error {
 	return ErrBlockingApps
 }
 
+// softwareGate defers an install or update while software the item requires
+// is missing: it records a DeferredItem with code missing_software and returns
+// ErrMissingSoftware. sofcat never installs that software; the next run
+// retries.
+func (r *Runner) softwareGate(item catalog.Item, action string) error {
+	missing := missingSoftware(item)
+	if len(missing) == 0 {
+		return nil
+	}
+	msg := "Needs " + strings.Join(missing, ", ") + ". Install it first, then try again."
+	r.Report.DeferredItems = append(r.Report.DeferredItems, report.DeferredItem{
+		Name:    item.Name,
+		Version: item.Version,
+		Action:  action,
+		Reason:  msg,
+		Code:    report.CodeMissingSoftware,
+	})
+	slog.Info("Deferring item: required software missing", "item", item.DisplayName, "software", strings.Join(missing, ", "))
+	return ErrMissingSoftware
+}
+
 // Install determines if action needs to be taken on a item and then
 // calls the appropriate function to install or uninstall
 func (r *Runner) Install(item catalog.Item, installerType string) (string, error) { //nolint:gocognit // CEILING: known-complex, split in Workstream B (kernel-repair)
@@ -133,6 +166,12 @@ func (r *Runner) Install(item catalog.Item, installerType string) (string, error
 	// Install or uninstall the item
 	switch installerType {
 	case "install", "update":
+		// Defer while required software is missing, check-only included, so
+		// the inventory says why the item waits.
+		if err := r.softwareGate(item, installerType); err != nil {
+			return "", err
+		}
+
 		// Check if checkonly mode is enabled
 		if r.CheckOnly {
 			r.Report.InstalledItems = append(r.Report.InstalledItems, item)

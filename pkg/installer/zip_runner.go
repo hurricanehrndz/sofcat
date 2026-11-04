@@ -29,8 +29,9 @@ func (r *Runner) recordPlacement(item catalog.Item, action string, res Result) {
 }
 
 // installZip is Install for a zip item. Its inspect step, not the status
-// checker, decides whether anything needs doing. The blocking-app gate and
-// check-only mode apply as for any other item; pre- and post-scripts do not.
+// checker, decides whether anything needs doing. The requires_software and
+// blocking-app gates and check-only mode apply as for any other item; pre- and
+// post-scripts do not.
 func (r *Runner) installZip(item catalog.Item, installerType string) (string, error) {
 	if r.Zip == nil {
 		err := fmt.Errorf("%w: no placement configuration for zip item %s", placement.ErrRefused, item.Name)
@@ -56,6 +57,35 @@ func (r *Runner) noAction(item catalog.Item, installerType string) (string, erro
 	return "Item not needed", nil
 }
 
+// pendingTargets returns the placements with work to do, and those among them
+// that need their archive (an adoption, a conflict or a refusal needs none).
+func (r *Runner) pendingTargets(item catalog.Item, machine []Target) ([]Target, map[string]bool) {
+	var pending []Target
+	needsArchive := map[string]bool{}
+	for _, t := range machine {
+		switch r.Zip.Inspect(item, t).Outcome { //nolint:exhaustive // the rest go to Apply, which reports them
+		case OutcomeCurrent:
+			continue
+		case OutcomeMissing, OutcomeUnchanged:
+			needsArchive[t.Placement] = true
+		}
+		pending = append(pending, t)
+	}
+	return pending, needsArchive
+}
+
+// noMachineWork ends an item with no machine placement to act on. The helper
+// places its user-scope trees, but their requirement holds too: a deferral
+// here keeps the item held in the user plan.
+func (r *Runner) noMachineWork(item catalog.Item, installerType string, userScope bool) (string, error) {
+	if userScope {
+		if err := r.softwareGate(item, installerType); err != nil {
+			return "", err
+		}
+	}
+	return r.noAction(item, installerType)
+}
+
 func (r *Runner) placeZip(item catalog.Item, installerType string) (string, error) {
 	machine, user := r.Zip.Targets(item)
 	if len(user) > 0 {
@@ -72,24 +102,16 @@ func (r *Runner) placeZip(item catalog.Item, installerType string) (string, erro
 		}
 	}
 
-	// The placements with work to do, and those among them that need their
-	// archive (an adoption, a conflict or a refusal needs none).
-	var pending []Target
-	needsArchive := map[string]bool{}
-	for _, t := range machine {
-		switch r.Zip.Inspect(item, t).Outcome { //nolint:exhaustive // the rest go to Apply, which reports them
-		case OutcomeCurrent:
-			continue
-		case OutcomeMissing, OutcomeUnchanged:
-			needsArchive[t.Placement] = true
-		}
-		pending = append(pending, t)
-	}
+	pending, needsArchive := r.pendingTargets(item, machine)
 	if len(pending) == 0 {
-		return r.noAction(item, installerType)
+		return r.noMachineWork(item, installerType, len(user) > 0)
 	}
 	if r.Cancels.withdrawn(item.Name) {
 		return "", r.canceled(item)
+	}
+	// Before any download or placement, check-only included.
+	if err := r.softwareGate(item, installerType); err != nil {
+		return "", err
 	}
 	if r.CheckOnly {
 		r.Report.InstalledItems = append(r.Report.InstalledItems, item)

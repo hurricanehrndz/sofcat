@@ -829,3 +829,39 @@ func TestUninstallsDeferredNotFailure(t *testing.T) {
 		"BlockUninstall": "blocking application(s) running: notepad.exe",
 	})
 }
+
+// TestInstallsMissingSoftwareCascades: an item deferred for missing software
+// defers its dependents, never fails them, and they carry the code and the
+// message, because they need the same software installed first.
+func TestInstallsMissingSoftwareCascades(t *testing.T) {
+	const msg = "Needs Demo Tool. Install it first, then try again."
+	installerInstall = func(r *installer.Runner, item catalog.Item, installerType string) (string, error) {
+		actualInstalledItems = append(actualInstalledItems, item.DisplayName)
+		if item.Name == "BlockLeaf" {
+			r.Report.DeferredItems = append(r.Report.DeferredItems, report.DeferredItem{
+				Name: item.Name, Action: installerType, Reason: msg, Code: report.CodeMissingSoftware,
+			})
+			return "", installer.ErrMissingSoftware
+		}
+		return "", nil
+	}
+	actualInstalledItems = nil
+	defer func() {
+		installerInstall = origInstall
+		actualInstalledItems = nil
+	}()
+
+	r := &installer.Runner{Report: report.New()}
+	Installs([]string{"BlockTop"}, blockingCascadeCatalog(), r, nil)
+
+	if !reflect.DeepEqual([]string{"BlockLeaf"}, actualInstalledItems) {
+		t.Errorf("attempted items = %#v, want only BlockLeaf", actualInstalledItems)
+	}
+	assertFailedItems(t, r, map[string]string{})
+	assertDeferredItems(t, r, map[string]string{"BlockLeaf": msg, "BlockMid": msg, "BlockTop": msg})
+	for _, d := range r.Report.DeferredItems {
+		if d.Code != report.CodeMissingSoftware {
+			t.Errorf("%s code = %q, want missing_software", d.Name, d.Code)
+		}
+	}
+}

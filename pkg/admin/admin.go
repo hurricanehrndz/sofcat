@@ -144,6 +144,7 @@ func CollectCatalogs(repoPath string) (CatalogSet, error) { //nolint:gocognit //
 		if err := conditions.Check(parsed.Item.InstallableCondition); err != nil {
 			set.Problems = append(set.Problems, fmt.Sprintf("%s: invalid installable_condition: %v", packageInfoPath, err))
 		}
+		set.Problems = append(set.Problems, checkRequiresSoftware(packageInfoPath, parsed.Item.RequiresSoftware)...)
 		if parsed.Item.Installer.Type == "zip" {
 			set.Problems = append(set.Problems, checkZipItem(packageInfoPath, parsed.Item.Installer, harnesses)...)
 		}
@@ -217,6 +218,22 @@ func readHarnesses(repoPath string) repoHarnesses {
 		return repoHarnesses{present: true, problem: fmt.Sprintf("%s: %v", path, err)}
 	}
 	return repoHarnesses{table: table, present: true}
+}
+
+// checkRequiresSoftware reports requires_software entries without a
+// display_name, which the deferral message needs, or with neither munki nor
+// chocolatey, which no OS would check.
+func checkRequiresSoftware(path string, reqs []catalog.RequiredSoftware) []string {
+	var problems []string
+	for i, req := range reqs {
+		if strings.TrimSpace(req.DisplayName) == "" {
+			problems = append(problems, fmt.Sprintf("%s: requires_software[%d] has no display_name", path, i))
+		}
+		if req.Munki == "" && req.Chocolatey == "" {
+			problems = append(problems, fmt.Sprintf("%s: requires_software[%d] needs munki or chocolatey", path, i))
+		}
+	}
+	return problems
 }
 
 // checkZipItem reports what makes a zip installer unusable: no variants, a

@@ -2,9 +2,12 @@ package report
 
 import "github.com/hurricanehrndz/sofcat/pkg/catalog"
 
-// Error codes a FailedItem may carry. An empty Code is the generic one:
-// item_failed for a failure, blocked_by_running_app for a deferral.
+// Error codes a FailedItem or DeferredItem may carry. An empty Code is the
+// generic one: item_failed for a failure, blocked_by_running_app for a deferral.
 const (
+	// CodeMissingSoftware: a deferral because software the item requires
+	// (requires_software) is not installed.
+	CodeMissingSoftware = "missing_software"
 	// CodePlacementConflict: a placed tree differs from both the catalog and
 	// its receipt, so sofcat left it alone.
 	CodePlacementConflict = "placement_conflict"

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/hurricanehrndz/sofcat/pkg/config"
+	"github.com/hurricanehrndz/sofcat/pkg/report"
 	"github.com/hurricanehrndz/sofcat/pkg/service"
 	"github.com/hurricanehrndz/sofcat/pkg/sofcatlog"
 )
@@ -125,8 +126,28 @@ func route(cfg config.Configuration) error { //nolint:gocognit // CEILING: known
 		return runServiceFunc(cfg)
 	}
 
-	_, err := managedRunFunc(cfg, nil, nil)
+	rep, err := managedRunFunc(cfg, nil, nil)
+	// A check-only run prints the inventory JSON to stdout; keep it parseable.
+	if !cfg.CheckOnly {
+		printRunSummary(rep)
+	}
 	return err
+}
+
+// printRunSummary prints what the run left waiting: deferred items with their
+// reason, and conditional_items blocks held because facts are missing. The
+// run log and inventory.json record the same.
+func printRunSummary(rep *report.Report) {
+	if rep == nil {
+		return
+	}
+	for _, d := range rep.DeferredItems {
+		fmt.Printf("deferred: %s (%s): %s\n", d.Name, d.Action, d.Reason)
+	}
+	for _, h := range rep.HeldConditions {
+		fmt.Printf("held: conditional_items %q: %s (%s); items: %s\n",
+			h.Condition, h.Reason, strings.Join(h.Missing, ", "), strings.Join(h.Items, ", "))
+	}
 }
 
 // runService protects the data directory, then hands over to the service
