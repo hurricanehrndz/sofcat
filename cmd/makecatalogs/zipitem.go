@@ -1,0 +1,269 @@
+package main
+
+import (
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path"
+	"path/filepath"
+	"strings"
+
+	"github.com/hurricanehrndz/sofcat/pkg/admin"
+	"github.com/hurricanehrndz/sofcat/pkg/artifact"
+	"github.com/hurricanehrndz/sofcat/pkg/catalog"
+	"github.com/hurricanehrndz/sofcat/pkg/harness"
+	"go.yaml.in/yaml/v4"
+)
+
+const zipItemUsage = `Usage: makecatalogs zip-item --harnesses <harnesses.yaml> --item <item.yaml>
+       --rendered <dir> --location-prefix <prefix> -o <out>
+
+Packs <dir>/<placement>/<darwin|windows>/ trees into zips under
+<out>/<prefix>/ and prints <item.yaml> with installer.type zip and its
+variants filled in. It checks everything first and writes nothing on failure.
+
+Options:
+`
+
+// zipVariant is one rendered tree, checked and hashed, waiting to be packed.
+type zipVariant struct {
+	placement, goos, dir, treeHash string
+}
+
+func runZipItem(args []string, stdout, stderr io.Writer) int {
+	flags := newFlagSet("zip-item", zipItemUsage, stderr)
+	harnessesPath := flags.String("harnesses", "", "harnesses.yaml (required)")
+	itemPath := flags.String("item", "", "package-info file without installer (required)")
+	rendered := flags.String("rendered", "", "rendered trees, laid out <placement>/<os>/ (required)")
+	prefix := flags.String("location-prefix", "", "repo-relative directory for the zips, such as packages/skills (required)")
+	out := flags.String("o", "", "repo root to write <prefix>/*.zip under (required)")
+	if _, code := parseArgs(flags, args, 0); code >= 0 {
+		return code
+	}
+	if *harnessesPath == "" || *itemPath == "" || *rendered == "" || *prefix == "" || *out == "" {
+		flags.Usage()
+		return 2
+	}
+
+	info, doc, variants, err := planZipItem(*harnessesPath, *itemPath, *rendered, *prefix)
+	if err != nil {
+		return fail(stderr, err)
+	}
+	installer, err := writeZips(info, variants, *prefix, *out)
+	if err != nil {
+		return fail(stderr, err)
+	}
+	// Append installer to the author's mapping, so keys catalog.Item does not
+	// know pass through in their order.
+	var key, value yaml.Node
+	key.SetString("installer")
+	if err = value.Encode(installer); err != nil {
+		return fail(stderr, err)
+	}
+	doc.Content = append(doc.Content, &key, &value)
+	// Two-space indent, as yamlfmt writes it, so the output is committed as is.
+	enc := yaml.NewEncoder(stdout)
+	enc.SetIndent(2)
+	if err = errors.Join(enc.Encode(doc), enc.Close()); err != nil {
+		return fail(stderr, err)
+	}
+	return 0
+}
+
+// planZipItem checks the inputs and hashes every rendered tree without
+// writing anything. It returns the item file's top-level mapping for
+// runZipItem to complete.
+func planZipItem(harnessesPath, itemPath, rendered, prefix string) (admin.PackageInfo, *yaml.Node, []zipVariant, error) {
+	body, err := os.ReadFile(harnessesPath)
+	if err != nil {
+		return admin.PackageInfo{}, nil, nil, err
+	}
+	table, err := harness.Parse(body)
+	if err != nil {
+		return admin.PackageInfo{}, nil, nil, fmt.Errorf("%s: %w", harnessesPath, err)
+	}
+	info, doc, err := readZipItem(itemPath)
+	if err != nil {
+		return info, nil, nil, err
+	}
+	if path.IsAbs(prefix) || filepath.IsAbs(prefix) || strings.Contains(prefix, `\`) ||
+		strings.HasPrefix(path.Clean(prefix), "..") {
+		return info, nil, nil, fmt.Errorf("--location-prefix %q must be a relative slash path inside the repo", prefix)
+	}
+
+	placements, err := subdirs(rendered)
+	if err != nil {
+		return info, nil, nil, err
+	}
+	if len(placements) == 0 {
+		return info, nil, nil, fmt.Errorf("%s: no placement directories", rendered)
+	}
+	var variants []zipVariant
+	for _, placement := range placements {
+		p, ok := table.Placements[placement]
+		if !ok {
+			return info, nil, nil, fmt.Errorf("%s: placement %q is not in %s", rendered, placement, harnessesPath)
+		}
+		found, err := planPlacement(filepath.Join(rendered, placement), placement, p, info.ItemName)
+		if err != nil {
+			return info, nil, nil, err
+		}
+		variants = append(variants, found...)
+	}
+	return info, doc, variants, nil
+}
+
+// readZipItem reads a package-info file that zip-item may complete: it has
+// no installer, and its item_name and version can be part of a file name.
+// It also returns the file's top-level mapping, comments stripped, so every
+// author key reaches the output, including keys catalog.Item does not know.
+func readZipItem(itemPath string) (admin.PackageInfo, *yaml.Node, error) {
+	var info admin.PackageInfo
+	body, err := os.ReadFile(itemPath)
+	if err != nil {
+		return info, nil, err
+	}
+	var doc yaml.Node
+	if err = yaml.Unmarshal(body, &doc); err != nil {
+		return info, nil, fmt.Errorf("%s: %w", itemPath, err)
+	}
+	if len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
+		return info, nil, fmt.Errorf("%s: not a mapping", itemPath)
+	}
+	top := doc.Content[0]
+	for i := 0; i < len(top.Content); i += 2 {
+		if top.Content[i].Value == "installer" {
+			return info, nil, fmt.Errorf("%s: already has an installer; zip-item writes it", itemPath)
+		}
+	}
+	if err = top.Decode(&info); err != nil {
+		return info, nil, fmt.Errorf("%s: %w", itemPath, err)
+	}
+	for field, value := range map[string]string{"item_name": info.ItemName, "version": info.Item.Version} {
+		if !safeName(value) {
+			return info, nil, fmt.Errorf("%s: %s %q must be set and must not be a path", itemPath, field, value)
+		}
+	}
+	// The output is generated: an input comment such as "Input to zip-item"
+	// would be wrong there, so comments do not carry over.
+	stripComments(top)
+	return info, top, nil
+}
+
+func stripComments(n *yaml.Node) {
+	n.HeadComment, n.LineComment, n.FootComment = "", "", ""
+	for _, c := range n.Content {
+		stripComments(c)
+	}
+}
+
+// planPlacement checks and hashes the <os>/ trees under dir, one placement's
+// rendered output.
+func planPlacement(dir, placement string, p harness.Placement, itemName string) ([]zipVariant, error) {
+	osDirs, err := subdirs(dir)
+	if err != nil {
+		return nil, err
+	}
+	if len(osDirs) == 0 {
+		return nil, fmt.Errorf("%s: no darwin or windows directory", dir)
+	}
+	var variants []zipVariant
+	for _, goos := range osDirs {
+		treeDir := filepath.Join(dir, goos)
+		if goos != harness.Darwin && goos != harness.Windows {
+			return nil, fmt.Errorf("%s: OS directory must be darwin or windows", treeDir)
+		}
+		if _, ok := p.Path(goos); !ok {
+			return nil, fmt.Errorf("%s: placement %q has no %s path", treeDir, placement, goos)
+		}
+		tree, err := artifact.Read(treeDir, goos)
+		if err != nil {
+			return nil, err
+		}
+		if wrappedInItemDir(tree.Paths(), itemName) {
+			return nil, fmt.Errorf("%s: the tree is wrapped in a %s/ directory; put the item's files at its root", treeDir, itemName)
+		}
+		sum, err := tree.Hash()
+		if err != nil {
+			return nil, err
+		}
+		variants = append(variants, zipVariant{placement, goos, treeDir, sum})
+	}
+	return variants, nil
+}
+
+// writeZips packs each distinct tree once into <out>/<prefix> and returns
+// the zip installer that names them. Trees with the same tree hash share a
+// zip: its bytes depend only on the paths, modes and contents the hash covers.
+func writeZips(info admin.PackageInfo, variants []zipVariant, prefix, out string) (catalog.InstallerItem, error) {
+	installer := catalog.InstallerItem{Type: "zip", Variants: map[string]map[string]catalog.Variant{}}
+	dest := filepath.Join(out, filepath.FromSlash(prefix))
+	if err := os.MkdirAll(dest, 0o755); err != nil {
+		return installer, err
+	}
+	packed := map[string]catalog.Variant{}
+	var written []string
+	for _, v := range variants {
+		zip, ok := packed[v.treeHash]
+		if !ok {
+			name := fmt.Sprintf("%s-%s-%s.zip", info.ItemName, info.Item.Version, strings.TrimPrefix(v.treeHash, "sha256:")[:12])
+			file := filepath.Join(dest, name)
+			result, err := artifact.PackFile(v.dir, v.goos, file)
+			if err == nil && result.TreeHash != v.treeHash {
+				err = fmt.Errorf("%s changed while packing", v.dir)
+			}
+			if err != nil {
+				for _, f := range append(written, file) {
+					_ = os.Remove(f)
+				}
+				return installer, err
+			}
+			written = append(written, file)
+			zip = catalog.Variant{Location: path.Join(prefix, name), Hash: result.Hash, TreeHash: result.TreeHash}
+			packed[v.treeHash] = zip
+		}
+		if installer.Variants[v.placement] == nil {
+			installer.Variants[v.placement] = map[string]catalog.Variant{}
+		}
+		installer.Variants[v.placement][v.goos] = zip
+	}
+	return installer, nil
+}
+
+// subdirs lists the directories in dir, sorted, skipping dotfiles such as
+// .DS_Store. Any other file is an error: the layout has no place for it.
+func subdirs(dir string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), ".") {
+			continue
+		}
+		if !e.IsDir() {
+			return nil, errors.New(filepath.Join(dir, e.Name()) + ": not a directory")
+		}
+		names = append(names, e.Name())
+	}
+	return names, nil
+}
+
+// wrappedInItemDir reports whether every path sits under one top directory
+// named after the item. sofcat places a tree at <placement path>/<item>, so
+// such a tree would land at <item>/<item>.
+func wrappedInItemDir(paths []string, item string) bool {
+	for _, p := range paths {
+		top, _, nested := strings.Cut(p, "/")
+		if !nested || !strings.EqualFold(top, item) {
+			return false
+		}
+	}
+	return true
+}
+
+func safeName(s string) bool {
+	return s != "" && s != "." && s != ".." && !strings.ContainsAny(s, `/\:`)
+}

@@ -1,0 +1,68 @@
+# harnesses.yaml sits at the repository root, next to catalogs/ and
+# manifests/. It names the placements zip items are written to. See
+# docs/zip-items.md. Unknown fields are rejected.
+#
+# The paths below are illustrative. Check each harness's documentation for
+# the directories it reads, and keep every path inside the build's write roots.
+placements:
+  # The key is the placement name. Catalog variants and rendered trees use it.
+  claude-code-skills:
+    # directory: one tree per item at <path>/<item_name>.
+    kind: directory
+    # The placement root per OS. Only darwin and windows. Windows paths may use
+    # ${ProgramFiles} and ${ProgramData}; ${USERPROFILE} only where the scope
+    # for that OS is user.
+    paths:
+      darwin: /Library/Application Support/ClaudeCode/.claude/skills
+      windows: ${ProgramFiles}\ClaudeCode\.claude\skills
+    # Harness display names, shown in the self-service app.
+    works_in: [Claude Code]
+    # Optional overrides for the app's labels. Keys: install, installing,
+    # installed, remove, removing, update, cancel.
+    action_labels:
+      install: Add
+      installed: Added
+  codex-skills:
+    kind: directory
+    paths:
+      darwin: /etc/codex/skills
+      windows: ${USERPROFILE}\.agents\skills
+    # machine or user per OS. An OS left out is machine. darwin: user is not
+    # supported. This one is machine scope on macOS and per user on Windows.
+    scope:
+      windows: user
+    works_in: [Codex]
+  acme-marketplace:
+    # marketplace: plugins at <path>/plugins/<item_name>, plus a manifest that
+    # sofcat regenerates.
+    kind: marketplace
+    paths:
+      darwin: /Library/Application Support/Acme/marketplace
+      windows: ${ProgramFiles}\Acme\marketplace
+    works_in: [Claude Code, Codex]
+    # Refuse to write into this directory if it already exists, is not empty
+    # and sofcat did not create it.
+    exclusive: true
+    # Only on kind marketplace; name and owner are required. owner, renames
+    # and allowCrossMarketplaceDependenciesOn are copied into the manifest
+    # unchanged.
+    marketplace:
+      name: acme
+      owner:
+        name: Acme IT
+      # renames: {old-plugin: new-plugin}
+      # allowCrossMarketplaceDependenciesOn: [other-marketplace]
+      # Manifests to write, relative to the placement root. This is the
+      # default when left out.
+      manifest_files:
+        - .claude-plugin/marketplace.json
+  claude-code-settings:
+    # settings: one JSON drop-in that registers a marketplace and enables its
+    # managed plugins.
+    kind: settings
+    paths:
+      darwin: /Library/Application Support/ClaudeCode/managed-settings.d/50-acme.json
+      windows: ${ProgramFiles}\ClaudeCode\managed-settings.d\50-acme.json
+    works_in: [Claude Code]
+    # Only on kind settings: the marketplace placement this file registers.
+    registers: acme-marketplace

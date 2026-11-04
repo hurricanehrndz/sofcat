@@ -42,6 +42,18 @@ type InstallerItem struct {
 	// Unset, the type's defaults apply (msi and nupkg accept 1641 and 3010,
 	// "success, restart required"); a list, even an empty one, replaces them.
 	SuccessCodes []int `yaml:"success_codes,omitempty"`
+	// Variants holds a zip item's archives: placement name, then OS (darwin
+	// or windows). Only type zip uses it, in place of Location and Hash.
+	Variants map[string]map[string]Variant `yaml:"variants,omitempty"`
+}
+
+// Variant is one zip archive of a zip item (see docs/zip-items.md).
+type Variant struct {
+	Location string `yaml:"location,omitempty"`
+	// Hash is the lowercase hex sha256 of the zip file.
+	Hash string `yaml:"hash,omitempty"`
+	// TreeHash is the tree hash of the zip's contents, "sha256:<hex>".
+	TreeHash string `yaml:"tree_hash,omitempty"`
 }
 
 // InstallCheck holds information about how to check the status of a catalog item

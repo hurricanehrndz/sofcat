@@ -9,6 +9,9 @@ restart_action: None
 # blocking_apps: process image names, case-insensitive, trailing `.exe` optional
 # installable_condition: install only where this expression is true; see docs/conditions.md
 # installable_condition: arch == "amd64" && os_build >= 19045
+# A zip item (installer.type zip, with variants per placement and OS) is not
+# written by hand: makecatalogs zip-item generates it from rendered trees. See
+# docs/zip-items.md and examples/zip-items/.
 blocking_apps:
   - chrome
 check:

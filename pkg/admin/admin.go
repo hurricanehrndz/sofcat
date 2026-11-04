@@ -4,7 +4,9 @@
 package admin
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -13,10 +15,13 @@ import (
 
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
 	"github.com/hurricanehrndz/sofcat/pkg/conditions"
+	"github.com/hurricanehrndz/sofcat/pkg/harness"
 	"go.yaml.in/yaml/v4"
 )
 
-type packageInfo struct {
+// PackageInfo is a packages-info file: one catalog item and the catalog it
+// belongs to.
+type PackageInfo struct {
 	ItemName string       `yaml:"item_name"`
 	Catalog  string       `yaml:"catalog"`
 	Item     catalog.Item `yaml:",inline"`
@@ -26,8 +31,9 @@ type packageInfo struct {
 type CatalogSet struct {
 	// Catalogs maps catalog name to item name to item.
 	Catalogs map[string]map[string]catalog.Item
-	// Problems lists package-info files that were skipped or overridden, and
-	// manifests whose conditional_items conditions do not compile.
+	// Problems lists package-info files that were skipped or overridden, zip
+	// items with unusable variants, an invalid harnesses.yaml, and manifests
+	// whose conditional_items conditions do not compile.
 	// A normal makecatalogs run warns about them and carries on; --check fails on them.
 	Problems []string
 }
@@ -80,6 +86,10 @@ func CollectCatalogs(repoPath string) (CatalogSet, error) { //nolint:gocognit //
 	}
 
 	set := CatalogSet{Catalogs: make(map[string]map[string]catalog.Item)}
+	harnesses := readHarnesses(repoPath)
+	if harnesses.problem != "" {
+		set.Problems = append(set.Problems, harnesses.problem)
+	}
 	// source records which package-info file each catalog item came from.
 	source := make(map[string]map[string]string)
 	// folded maps a lowercased catalog name to the first spelling seen, since
@@ -91,7 +101,7 @@ func CollectCatalogs(repoPath string) (CatalogSet, error) { //nolint:gocognit //
 			return CatalogSet{}, fmt.Errorf("read package-info %s: %w", packageInfoPath, err)
 		}
 
-		var parsed packageInfo
+		var parsed PackageInfo
 		if err = yaml.Unmarshal(yamlFile, &parsed); err != nil {
 			return CatalogSet{}, fmt.Errorf("parse package-info %s: %w", packageInfoPath, err)
 		}
@@ -133,6 +143,9 @@ func CollectCatalogs(repoPath string) (CatalogSet, error) { //nolint:gocognit //
 		// Kept in the catalog: agents treat an invalid condition as false.
 		if err := conditions.Check(parsed.Item.InstallableCondition); err != nil {
 			set.Problems = append(set.Problems, fmt.Sprintf("%s: invalid installable_condition: %v", packageInfoPath, err))
+		}
+		if parsed.Item.Installer.Type == "zip" {
+			set.Problems = append(set.Problems, checkZipItem(packageInfoPath, parsed.Item.Installer, harnesses)...)
 		}
 		set.Catalogs[parsed.Catalog][itemName] = parsed.Item
 		source[parsed.Catalog][itemName] = packageInfoPath
@@ -179,6 +192,65 @@ func WriteCatalogs(repoPath string, set CatalogSet) error {
 	}
 
 	return nil
+}
+
+// repoHarnesses is what CollectCatalogs read from <repo>/harnesses.yaml.
+type repoHarnesses struct {
+	table   harness.Table
+	present bool   // the file exists
+	problem string // why it cannot be used; empty when it is valid or absent
+}
+
+// readHarnesses reads and validates <repo>/harnesses.yaml. A repo without one
+// is fine until it has a zip item.
+func readHarnesses(repoPath string) repoHarnesses {
+	path := filepath.Join(repoPath, "harnesses.yaml")
+	body, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return repoHarnesses{}
+	}
+	if err != nil {
+		return repoHarnesses{present: true, problem: fmt.Sprintf("%s: %v", path, err)}
+	}
+	table, err := harness.Parse(body)
+	if err != nil {
+		return repoHarnesses{present: true, problem: fmt.Sprintf("%s: %v", path, err)}
+	}
+	return repoHarnesses{table: table, present: true}
+}
+
+// checkZipItem reports what makes a zip installer unusable: no variants, a
+// variant without location, hash or tree_hash, an OS other than darwin or
+// windows, or a placement harnesses.yaml does not define.
+func checkZipItem(path string, inst catalog.InstallerItem, harnesses repoHarnesses) []string {
+	var problems []string
+	if len(inst.Variants) == 0 {
+		problems = append(problems, fmt.Sprintf("%s: zip installer has no variants", path))
+	}
+	if !harnesses.present {
+		problems = append(problems, fmt.Sprintf("%s: zip item, but the repo has no harnesses.yaml", path))
+	}
+	placements := make([]string, 0, len(inst.Variants))
+	for placement := range inst.Variants {
+		placements = append(placements, placement)
+	}
+	sort.Strings(placements)
+	for _, placement := range placements {
+		// An invalid table is reported once on its own; checking names
+		// against it would only add noise.
+		if _, ok := harnesses.table.Placements[placement]; harnesses.present && harnesses.problem == "" && !ok {
+			problems = append(problems, fmt.Sprintf("%s: variant placement %q is not in harnesses.yaml", path, placement))
+		}
+		for goos, v := range inst.Variants[placement] {
+			if goos != harness.Darwin && goos != harness.Windows {
+				problems = append(problems, fmt.Sprintf("%s: variant %s.%s: OS must be darwin or windows", path, placement, goos))
+			}
+			if v.Location == "" || v.Hash == "" || v.TreeHash == "" {
+				problems = append(problems, fmt.Sprintf("%s: variant %s.%s needs location, hash and tree_hash", path, placement, goos))
+			}
+		}
+	}
+	return problems
 }
 
 // conditionalBlock is the part of a manifest's conditional_items that

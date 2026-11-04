@@ -122,8 +122,16 @@ func resolveItem(itemName string, catalogsMap map[int]map[string]catalog.Item, r
 
 // missingFields lists the installer and uninstaller fields item lacks, or nil
 // when it can be installed or uninstalled. An msix item needs no location: it
-// is removed by package name.
+// is removed by package name. A zip item needs only variants: it is removed
+// from its receipts.
 func missingFields(item catalog.Item) []string {
+	if item.Installer.Type == "zip" {
+		if len(item.Installer.Variants) == 0 {
+			return []string{"installer.variants"}
+		}
+		return nil
+	}
+
 	validInstallItem := (item.Installer.Type != "" && item.Installer.Location != "")
 	validUninstallItem := (item.Uninstaller.Type != "" && item.Uninstaller.Location != "") ||
 		item.Uninstaller.Type == "msix" ||
