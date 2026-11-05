@@ -39,6 +39,7 @@ import {
   progressText,
   refusalText,
   releaseOperation,
+  resolveTab,
   requestErrorText,
   restartBadge,
   shouldAcceptRecord,
@@ -48,6 +49,8 @@ import {
   statusRecord,
   stripLine,
   stripView,
+  tabItems,
+  tabs,
   trackOperation,
   visibleItems,
   withFailure,
@@ -113,6 +116,63 @@ test("filtering does not mutate the source list", () => {
 test("categories are unique, non-empty and sorted", () => {
   const withDuplicates = [...catalogItems, item({ itemName: "x", category: "development" }), item({ itemName: "y" })];
   assert.deepEqual(categories(withDuplicates), ["browsers", "Development", "Productivity"]);
+});
+
+const sectioned = [
+  item({ itemName: "s1", section: "skills", category: "Writing" }),
+  item({ itemName: "p1", section: "Plugins", category: "Git" }),
+  item({ itemName: "s2", section: " Skills ", category: "Review" }),
+  item({ itemName: "a1", section: "Agents" }),
+  item({ itemName: "u1", category: "Browsers" }),
+];
+
+test("tabs put the admin's sections first, in order, then the rest alphabetically", () => {
+  assert.deepEqual(
+    tabs(sectioned, ["Skills"]).map((tab) => tab.label),
+    ["Skills", "Agents", "Plugins", "Software"],
+  );
+  // A listed section no item uses has no tab: an empty tab would be a dead end.
+  assert.deepEqual(
+    tabs(sectioned, ["Tools", "plugins", "PLUGINS"]).map((tab) => tab.label),
+    ["plugins", "Agents", "skills", "Software"],
+  );
+});
+
+test("a tab is labelled as the admin wrote it, else as its first item wrote it", () => {
+  assert.deepEqual(tabs(sectioned, []), [
+    { key: "agents", label: "Agents" },
+    { key: "plugins", label: "Plugins" },
+    { key: "skills", label: "skills" },
+    { key: "", label: "Software" },
+  ]);
+  assert.equal(tabs(sectioned, ["SKILLS"])[0].label, "SKILLS");
+});
+
+test("the Software tab is there for unsectioned items, or when nothing has a section", () => {
+  const allSectioned = sectioned.filter((i) => i.section);
+  assert.deepEqual(tabs(allSectioned, []).map((tab) => tab.key), ["agents", "plugins", "skills"]);
+  // A catalog with no sections, or no list yet, looks as it always has.
+  assert.deepEqual(tabs([], ["Skills"]), [{ key: "", label: "Software" }]);
+  assert.deepEqual(tabs(catalogItems, []), [{ key: "", label: "Software" }]);
+  // A blank or malformed cached section counts as none.
+  assert.deepEqual(tabs([item({ section: "  " }), item({ section: 3 })], []), [{ key: "", label: "Software" }]);
+});
+
+test("a stale tab falls back to the first tab", () => {
+  const list = tabs(sectioned, []);
+  assert.equal(resolveTab(list, "plugins"), "plugins");
+  assert.equal(resolveTab(list, ""), "", "the Software tab is a real tab");
+  // A section that vanished after a refresh, or nothing chosen yet.
+  assert.equal(resolveTab(list, "removed"), "agents");
+  assert.equal(resolveTab(list, null), "agents");
+  assert.equal(resolveTab(tabs([], []), "skills"), "");
+});
+
+test("a tab lists only its own items, so search and categories stay within it", () => {
+  assert.deepEqual(tabItems(sectioned, "skills").map((i) => i.itemName), ["s1", "s2"]);
+  assert.deepEqual(tabItems(sectioned, "").map((i) => i.itemName), ["u1"]);
+  assert.deepEqual(categories(tabItems(sectioned, "skills")), ["Review", "Writing"]);
+  assert.deepEqual(visibleItems(tabItems(sectioned, "plugins"), "", "Writing"), []);
 });
 
 test("action derivation covers every status and managed combination", () => {
@@ -650,6 +710,15 @@ test("brandingView of an empty or missing payload is the default shell", () => {
     assert.equal(view.logoSrc, "");
     assert.equal(view.helpUrl, "");
   }
+});
+
+test("brandingView keeps only real section names, so a cached payload cannot break the tabs", () => {
+  assert.deepEqual(brandingView({ sections: [" Skills ", "", "  ", 3, null, "Plugins"] }).sections, ["Skills", "Plugins"]);
+  for (const payload of [null, {}, { sections: "Skills" }, { sections: { 0: "Skills" } }]) {
+    assert.deepEqual(brandingView(payload).sections, [], JSON.stringify(payload));
+  }
+  // Sections alone are not banner content.
+  assert.equal(brandingView({ sections: ["Skills"] }).showBanner, false);
 });
 
 test("brandingView shows the banner for any of title, tagline, logo or help", () => {
