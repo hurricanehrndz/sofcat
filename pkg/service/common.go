@@ -259,15 +259,16 @@ func brandingSummary(b branding.Branding) (string, error) {
 		return "", fmt.Errorf("failed to decode branding logo: %w", err)
 	}
 	line, err := json.Marshal(struct {
-		Title       string `json:"title"`
-		Tagline     string `json:"tagline"`
-		HelpURL     string `json:"helpUrl"`
-		HelpLabel   string `json:"helpLabel"`
-		Accent      string `json:"accent"`
-		LogoMime    string `json:"logoMime"`
-		LogoBytes   int    `json:"logoBytes"`
-		ListHeading string `json:"listHeading"`
-	}{b.Title, b.Tagline, b.HelpURL, b.HelpLabel, b.Accent, b.LogoMime, len(logo), b.ListHeading})
+		Title       string   `json:"title"`
+		Tagline     string   `json:"tagline"`
+		HelpURL     string   `json:"helpUrl"`
+		HelpLabel   string   `json:"helpLabel"`
+		Accent      string   `json:"accent"`
+		LogoMime    string   `json:"logoMime"`
+		LogoBytes   int      `json:"logoBytes"`
+		ListHeading string   `json:"listHeading"`
+		Sections    []string `json:"sections,omitempty"`
+	}{b.Title, b.Tagline, b.HelpURL, b.HelpLabel, b.Accent, b.LogoMime, len(logo), b.ListHeading, b.Sections})
 	return string(line), err
 }
 

@@ -154,11 +154,11 @@ func TestExecuteCommandGetBranding(t *testing.T) {
 }
 
 func TestBrandingSummaryReplacesLogoWithSize(t *testing.T) {
-	line, err := brandingSummary(branding.Branding{Title: "Acme", LogoMime: "image/png", LogoBase64: "AAECAw==", ListHeading: "Skills"})
+	line, err := brandingSummary(branding.Branding{Title: "Acme", LogoMime: "image/png", LogoBase64: "AAECAw==", ListHeading: "Skills", Sections: []string{"Skills", "Plugins"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(line, "logoBase64") || !strings.Contains(line, `"logoBytes":4`) || !strings.Contains(line, `"title":"Acme"`) || !strings.Contains(line, `"listHeading":"Skills"`) {
+	if strings.Contains(line, "logoBase64") || !strings.Contains(line, `"logoBytes":4`) || !strings.Contains(line, `"title":"Acme"`) || !strings.Contains(line, `"listHeading":"Skills"`) || !strings.Contains(line, `"sections":["Skills","Plugins"]`) {
 		t.Fatalf("summary %s", line)
 	}
 }
