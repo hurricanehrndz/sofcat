@@ -285,7 +285,7 @@ func TestExampleZipItemsMatchGenerator(t *testing.T) {
 		t.Fatal(err)
 	}
 	if stdout.String() != string(want) {
-		t.Errorf("examples/zip-items/generated/hello-world.yaml is stale; regenerate it (see docs/zip-items.md). Got:\n%s", stdout.String())
+		t.Errorf("examples/zip-items/generated/hello-world.yaml is stale; regenerate it (see site/src/content/docs/guides/zip-items.md). Got:\n%s", stdout.String())
 	}
 	// example_catalog.yaml shows the same item as a compiled catalog entry.
 	var info admin.PackageInfo

@@ -1,188 +1,19 @@
-// SOFCAT_VITE_MOCK_ONLY — this module exists so `npm run dev` can render the
-// UI in a plain browser. vite.config.ts resolves it only in development mode,
-// and the production-bundle gate greps for this marker.
-import type {
-  AcceptedOperation,
-  SofCatApi,
-  OperationStatus,
-  OptionalInstallItem,
-} from "./api.ts";
+// SOFCAT_VITE_MOCK_ONLY — this module exists so `npm run dev` and the public
+// demo build can render the UI in a plain browser. vite.config.ts resolves it
+// only in development and demo modes, and the production-bundle gate greps for
+// this marker.
+import type { AcceptedOperation, SofCatApi, OperationStatus } from "./api.ts";
+import { type MockItem, STORES, UNBRANDED, offline, storeName, unbranded } from "./mock-stores.ts";
 import { isTerminalState } from "./state.ts";
 
 const MOCK_MARKER = "SOFCAT_VITE_MOCK_ONLY";
-const MOCK_USER = "WORKSTATION\\demo";
+const MOCK_USER = "ACME\\demo";
 
-const items: OptionalInstallItem[] = [
-  {
-    itemName: "DemoOptional",
-    displayName: "Demo Optional",
-    version: "1.2.3",
-    catalog: "selfserve_catalog",
-    description: "A deterministic self-service package used for browser work.",
-    category: "Utilities",
-    developer: "SofCat",
-    restartAction: "RecommendRestart",
-    isManaged: false,
-    isRequired: false,
-    isInstalled: false,
-    status: "NotInstalled",
-    statusUpdatedAtUtc: "2026-07-21T12:00:00Z",
-  },
-  {
-    itemName: "DemoUpdater",
-    displayName: "Demo Updater",
-    version: "4.0.0",
-    catalog: "selfserve_catalog",
-    description: "A dependency of Demo Optional, installed as part of its run.",
-    category: "Utilities",
-    developer: "SofCat",
-    isManaged: true,
-    isRequired: false,
-    isInstalled: true,
-    status: "Installed",
-    statusUpdatedAtUtc: "2026-07-21T12:00:00Z",
-  },
-  {
-    itemName: "DemoFailing",
-    displayName: "Demo Failing",
-    version: "0.9.0",
-    catalog: "selfserve_catalog",
-    description: "Always fails during installation, proving honest terminal state.",
-    category: "Development",
-    section: "Plugins",
-    developer: "SofCat",
-    restartAction: "none",
-    isManaged: false,
-    isRequired: false,
-    isInstalled: false,
-    status: "NotInstalled",
-    statusUpdatedAtUtc: "2026-07-21T12:00:00Z",
-  },
-  {
-    itemName: "DemoBlocked",
-    displayName: "Demo Blocked",
-    version: "2.0.0",
-    catalog: "selfserve_catalog",
-    description: "Deferred while its blocking application is running.",
-    category: "Productivity",
-    developer: "SofCat",
-    restartAction: "RequireRestart",
-    isManaged: false,
-    isRequired: false,
-    isInstalled: false,
-    status: "NotInstalled",
-    statusUpdatedAtUtc: "2026-07-21T12:00:00Z",
-  },
-  {
-    itemName: "DemoPending",
-    displayName: "Demo Pending",
-    version: "3.1.0",
-    catalog: "selfserve_catalog",
-    description: "Already requested; its primary action is Cancel.",
-    category: "Security",
-    section: "Skills",
-    developer: "SofCat",
-    isManaged: true,
-    isRequired: false,
-    isInstalled: false,
-    status: "WillBeInstalled",
-    statusUpdatedAtUtc: "2026-07-21T12:00:00Z",
-  },
-  {
-    itemName: "DemoPendingRemoval",
-    displayName: "Demo Pending Removal",
-    version: "1.0.1",
-    catalog: "selfserve_catalog",
-    description: "Already requested for removal; its primary action is Cancel.",
-    category: "Utilities",
-    developer: "SofCat",
-    isManaged: true,
-    isRequired: false,
-    isInstalled: true,
-    status: "WillBeRemoved",
-    statusUpdatedAtUtc: "2026-07-21T12:00:00Z",
-  },
-  {
-    itemName: "DemoNoIcon",
-    displayName: "7",
-    version: "7.0.0",
-    catalog: "selfserve_catalog",
-    description:
-      "Exercises the monogram fallback and a stream that ends before any terminal record.",
-    isManaged: false,
-    isRequired: false,
-    isInstalled: false,
-    status: "Unknown",
-    statusUpdatedAtUtc: "2026-07-21T12:00:00Z",
-  },
-  {
-    itemName: "DemoRequired",
-    displayName: "Demo Required",
-    version: "5.0.0",
-    catalog: "selfserve_catalog",
-    description: "Required by the organisation: no Install or Remove, only Details.",
-    category: "Security",
-    developer: "SofCat",
-    isManaged: false,
-    isRequired: true,
-    isInstalled: true,
-    status: "Installed",
-    statusUpdatedAtUtc: "2026-07-21T12:00:00Z",
-  },
-  // Zip items: labels and works-in come resolved from the item and harness table.
-  {
-    itemName: "DemoSkill",
-    displayName: "Demo Skill",
-    version: "1.0.0",
-    catalog: "selfserve_catalog",
-    description: "A skill whose placements relabel its actions and name the harnesses it reaches.",
-    category: "Development",
-    section: "Skills",
-    developer: "SofCat",
-    isManaged: false,
-    isRequired: false,
-    isInstalled: false,
-    status: "NotInstalled",
-    statusUpdatedAtUtc: "2026-07-21T12:00:00Z",
-    actionLabels: { install: "Add", installing: "Adding…", installed: "Added" },
-    worksIn: ["Claude Code", "Codex"],
-  },
-  {
-    itemName: "DemoPlugin",
-    displayName: "Demo Plugin",
-    version: "0.4.0",
-    catalog: "selfserve_catalog",
-    description: "Deferred because software it requires is missing.",
-    category: "Development",
-    section: "Plugins",
-    developer: "SofCat",
-    isManaged: false,
-    isRequired: false,
-    isInstalled: false,
-    status: "NotInstalled",
-    statusUpdatedAtUtc: "2026-07-21T12:00:00Z",
-    actionLabels: {
-      install: "Make available",
-      installing: "Making available…",
-      installed: "Available",
-      remove: "Withdraw",
-      pending_install: "Will be available",
-      pending_remove: "Will be withdrawn",
-    },
-    worksIn: ["Claude Code"],
-  },
-];
+const store = STORES[storeName()];
+const items: MockItem[] = store.items;
 
 const handlers: ((status: OperationStatus) => void)[] = [];
 let operationCounter = 0;
-
-function branded(): boolean {
-  return globalThis.location?.search.includes("branded") ?? false;
-}
-
-function offline(): boolean {
-  return globalThis.location?.search.includes("offline") ?? false;
-}
 
 function accept(): AcceptedOperation {
   operationCounter += 1;
@@ -196,86 +27,74 @@ function accept(): AcceptedOperation {
 
 type MockEvent = [delayMs: number, status: Partial<OperationStatus>];
 
-function sequence(item: OptionalInstallItem, removing: boolean): MockEvent[] {
+function sequence(item: MockItem, removing: boolean): MockEvent[] {
   const phase = removing ? "Removing" : "Installing";
   const queued: MockEvent = [0, { state: "Queued", message: "Waiting for the service." }];
+  const { outcome, reason = "", dependency } = item.mock ?? {};
 
-  if (item.itemName === "DemoFailing") {
+  if (outcome === "fail") {
     return [
       queued,
       [400, { state: "Downloading", progressPercent: 40 }],
-      [900, { state: "ItemFailed", message: "installer exited with code 1" }],
+      [900, { state: "ItemFailed", message: reason }],
       [
         1200,
         {
           state: "Failed",
           message: "run reported a failure",
           errorCode: "install_failed",
-          errorMessage: "installer exited with code 1",
+          errorMessage: reason,
         },
       ],
     ];
   }
 
-  if (item.itemName === "DemoPlugin") {
-    const reason = "Needs Git for Windows. Install it first, then try again.";
+  if (outcome === "missing") {
     return [
       queued,
       [900, { state: "Deferred", message: reason, errorCode: "missing_software", errorMessage: reason }],
     ];
   }
 
-  if (item.itemName === "DemoBlocked") {
+  if (outcome === "blocked") {
     return [
       queued,
       [400, { state: "Downloading", progressPercent: 60 }],
-      [
-        900,
-        {
-          state: "Deferred",
-          message: "blocking application(s) running: demoblocked",
-          errorCode: "blocked_by_running_app",
-          errorMessage: "blocking application(s) running: demoblocked",
-        },
-      ],
+      [900, { state: "Deferred", message: reason, errorCode: "blocked_by_running_app", errorMessage: reason }],
     ];
   }
 
   // No terminal record: the watch call rejects, exercising the stream_ended UI.
-  if (item.itemName === "DemoNoIcon") {
+  if (outcome === "no-terminal") {
     return [queued, [400, { state: "Downloading", progressPercent: 30 }]];
   }
 
-  return [
+  // The download is slow enough to Cancel, which the service allows until
+  // the installer starts.
+  const events: MockEvent[] = [
     queued,
-    [300, { state: "Downloading", progressPercent: 25 }],
-    // A dependency item carries its own identity and resets the percentage.
-    [
-      600,
-      {
-        state: "Downloading",
-        progressPercent: 10,
-        itemName: "DemoUpdater",
-        displayName: "Demo Updater",
-      },
-    ],
-    [
-      900,
-      {
-        state: "ItemCompleted",
-        progressPercent: 100,
-        itemName: "DemoUpdater",
-        displayName: "Demo Updater",
-      },
-    ],
-    // The service measures only downloads; an install or removal has no percent.
-    [1200, { state: phase }],
-    [1600, { state: "ItemCompleted", progressPercent: 100 }],
-    [2000, { state: "Succeeded", message: "run completed" }],
+    [300, { state: "Downloading", progressPercent: 20 }],
+    [700, { state: "Downloading", progressPercent: 55 }],
+    [1100, { state: "Downloading", progressPercent: 90 }],
   ];
+  let at = 1100;
+  // A dependency item carries its own identity and resets the percentage.
+  if (dependency && !removing) {
+    events.push(
+      [(at += 400), { state: "Downloading", progressPercent: 10, ...dependency }],
+      [(at += 400), { state: "ItemCompleted", progressPercent: 100, ...dependency }],
+    );
+  }
+  // The service measures only downloads; an install or removal has no percent.
+  events.push(
+    [(at += 400), { state: phase }],
+    [(at += 600), { state: "ItemCompleted", progressPercent: 100 }],
+    [(at += 400), { state: "Succeeded", message: "run completed" }],
+  );
+  return events;
 }
 
-const acceptedOperations = new Map<string, { item: OptionalInstallItem; removing: boolean }>();
+const acceptedOperations = new Map<string, { item: MockItem; removing: boolean }>();
 
 function mutate(itemName: string, removing: boolean): Promise<AcceptedOperation> {
   const item = items.find((candidate) => candidate.itemName === itemName);
@@ -290,7 +109,7 @@ function mutate(itemName: string, removing: boolean): Promise<AcceptedOperation>
 // Watched operations, for cancelOperation: pending timers, the state last sent,
 // and how to settle the watch call.
 type Watched = {
-  item: OptionalInstallItem;
+  item: MockItem;
   state: string;
   // seq is the last record number sent, as the service numbers them.
   seq: number;
@@ -395,25 +214,16 @@ export const api: SofCatApi = {
   listOptionalInstalls: () =>
     offline()
       ? Promise.reject(new Error("mock service unavailable (remove ?offline to reconnect)"))
-      : new Promise((resolve) => setTimeout(() => resolve(items.map((item) => ({ ...item }))), 250)),
+      : new Promise((resolve) =>
+          setTimeout(() => resolve(items.map(({ mock: _mock, ...item }) => item)), 250),
+        ),
   installItem: (itemName) => mutate(itemName, false),
   removeItem: (itemName) => mutate(itemName, true),
   watchOperation: (operationId) => watch(operationId),
   cancelOperation: (operationId) => cancel(operationId),
-  // `?branded` shows the Branding board's organisation banner.
-  getBranding: () =>
-    Promise.resolve({
-      title: branded() ? "Acme Software Center" : "",
-      tagline: branded() ? "Need help? Call the service desk at ext. 1234." : "",
-      helpUrl: branded() ? "https://example.invalid/help" : "",
-      helpLabel: branded() ? "Get help" : "",
-      accent: branded() ? "#0b6e4f" : "",
-      logoMime: "",
-      logoBase64: "",
-      listHeading: branded() ? "Software for Acme" : "",
-      // Unbranded, the tabs are alphabetical; branded, Plugins comes first.
-      sections: branded() ? ["Plugins"] : [],
-    }),
+  // `?store=` picks the fixture store; `?unbranded` keeps its items and drops
+  // its branding, so tabs fall back to alphabetical order.
+  getBranding: () => Promise.resolve({ ...(unbranded() ? UNBRANDED : store.branding) }),
   openExternal(url) {
     window.open(url, "_blank", "noopener,noreferrer");
     return Promise.resolve();

@@ -24,7 +24,7 @@ type Item struct {
 	PreUninstallScript  string        `yaml:"preuninstall_script,omitempty"`
 	PostUninstallScript string        `yaml:"postuninstall_script,omitempty"`
 	// InstallableCondition is an expression over this machine's facts that
-	// must be true for the item to be installed here (see docs/conditions.md).
+	// must be true for the item to be installed here (see site/src/content/docs/guides/conditions.md).
 	InstallableCondition string `yaml:"installable_condition,omitempty"`
 	// RequiresSoftware lists software the item needs and sofcat never
 	// installs. While any is missing, installs and updates are deferred.
@@ -66,7 +66,7 @@ type InstallerItem struct {
 	Variants map[string]map[string]Variant `yaml:"variants,omitempty"`
 }
 
-// Variant is one zip archive of a zip item (see docs/zip-items.md).
+// Variant is one zip archive of a zip item (see site/src/content/docs/guides/zip-items.md).
 type Variant struct {
 	Location string `yaml:"location,omitempty"`
 	// Hash is the lowercase hex sha256 of the zip file.

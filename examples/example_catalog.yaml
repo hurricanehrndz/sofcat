@@ -18,7 +18,7 @@ ColorPrinter:
   # cancel and the pending statuses (install, installing, installed, remove,
   # removing, update, cancel, pending_install, pending_remove).
   # A key left out falls back to the item's placements (zip items, see
-  # docs/zip-items.md), then the built-in label. Shown as plain text.
+  # site/src/content/docs/guides/zip-items.md), then the built-in label. Shown as plain text.
   custom_action_labels:
     install: Add printer
     installing: Adding printer…
@@ -177,7 +177,7 @@ hello-world:
   # A zip item places a directory tree, such as an AI skill, instead of running
   # an installer. variants maps a placement in harnesses.yaml to an OS (darwin
   # or windows) to one zip. makecatalogs zip-item writes this block; see
-  # docs/zip-items.md. A zip item needs no check block or uninstaller.
+  # site/src/content/docs/guides/zip-items.md. A zip item needs no check block or uninstaller.
   installer:
     type: zip
     variants:

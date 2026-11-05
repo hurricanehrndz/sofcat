@@ -65,7 +65,7 @@ Everything the service writes lives under `C:\ProgramData\SofCat`, as under
 `/Library/Application Support/<Name>` on a Mac: `config.yaml`, the `Data`
 directory (the default `app_data_path`, SYSTEM and Administrators only
 except `Data\user-artifacts`, which Users read) and any placement of its own
-(`docs/data-directory.md`).
+(`site/src/content/docs/reference/data-directory.md`).
 A brand with `INSTALLERS=zip` in its `brand.env` adds the `zip_only` tag to both
 binaries, which compiles out the command installers and catalog scripts
 (`*_command.go`/`*_script.go` versus their `*_zip_only.go` twins); test that
