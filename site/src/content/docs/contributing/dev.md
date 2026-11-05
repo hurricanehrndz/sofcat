@@ -1,4 +1,7 @@
-# Developer notes
+---
+title: Developer notes
+description: Tooling, build, lint and test workflow for working on SofCat itself.
+---
 
 ## Environment
 
@@ -33,7 +36,7 @@ writes `cmd/sofcat/rsrc_windows_<arch>.syso` and `ui/rsrc_windows_<arch>.syso`
 VERSIONINFO resource stamped with `version`, and an `asInvoker` manifest into
 both executables. A plain `go build` without them gives an anonymous exe with
 the generic icon, which antivirus ML heuristics trust less
-([code-signing.md](code-signing.md)). Nothing is emitted at the repo root.
+([Code signing](/reference/code-signing/)). Nothing is emitted at the repo root.
 
 A normal `just build` produces **both** raw Windows executables:
 `build/sofcat.exe` and `build/sofcat-ui.exe`. The UI build runs the Vite

@@ -22,7 +22,7 @@ import (
 // sofcat's own placements, such as a marketplace. ProgramData grants Users
 // read and create rights, so each gets a protected DACL of its own. The
 // executables live under Program Files, whose default ACL already lets Users
-// read and execute them. See docs/data-directory.md.
+// read and execute them. See site/src/content/docs/reference/data-directory.md.
 const (
 	// parentSDDL is ${ProgramData}\<Name>'s: only administrators create
 	// entries there (no user-planted config.yaml), and Users read what sofcat

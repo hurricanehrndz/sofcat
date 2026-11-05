@@ -1,4 +1,7 @@
-# Zip items
+---
+title: Zip items
+description: Place directory trees such as AI skills and plugins from deterministic zips, per user or per machine.
+---
 
 A zip item places a directory tree, such as an AI skill or plugin, instead of
 running an installer. The catalog lists one zip per placement and OS:
@@ -35,7 +38,7 @@ runs on, in `harnesses.yaml` order. The service skips placements whose scope
 on this OS is `user`; they neither fail nor succeed the item. Instead, after
 each run that is not check-only, it stages their verified archives in
 `user-artifacts` inside its data directory, the one entry there users may
-read ([data-directory.md](data-directory.md)), each named `<hash>.zip` after
+read ([Data directory](/reference/data-directory/)), each named `<hash>.zip` after
 its sha256 (never after its catalog `location`), removes archives no entry
 references, and then stores the plan, built from that run's desired set
 (dependencies and `update_for` riders included), as `user-plan.json` in its
@@ -43,7 +46,7 @@ data directory. The per-user helper `<slug>-ui.exe --user-sync`, which runs
 at every logon and storefront start, fetches that stored plan, so it needs no
 repository access, and places the trees in each user's profile under the
 `windows_user` roots, with receipts in `%LOCALAPPDATA%\<NAME>\receipts`
-([Protocol](../ui/ARCHITECTURE.md#protocol)). The item succeeds when every
+([Protocol](https://github.com/hurricanehrndz/sofcat/blob/main/ui/ARCHITECTURE.md#protocol)). The item succeeds when every
 machine-scope placement does; a failed placement leaves the others alone and
 is reported on its own.
 
@@ -288,7 +291,7 @@ nothing, when:
 - a tree is empty or holds a symlink
 - a tree's root is a single directory named after the item
 
-[examples/zip-items/](../examples/zip-items) holds a rendered tree, the
+[examples/zip-items/](https://github.com/hurricanehrndz/sofcat/tree/main/examples/zip-items) holds a rendered tree, the
 input, and the output. To regenerate the output:
 
 ```sh
@@ -303,7 +306,7 @@ makecatalogs zip-item --harnesses examples/harnesses.yaml \
 
 `harnesses.yaml` sits at the repository root, next to `catalogs/` and
 `manifests/`. It names the placements. Unknown fields are rejected.
-[examples/harnesses.yaml](../examples/harnesses.yaml) shows every field.
+[examples/harnesses.yaml](https://github.com/hurricanehrndz/sofcat/blob/main/examples/harnesses.yaml) shows every field.
 
 ```yaml
 placements:

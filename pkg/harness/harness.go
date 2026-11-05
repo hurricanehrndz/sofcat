@@ -1,5 +1,5 @@
 // Package harness declares harnesses.yaml, the repository file that defines
-// where zip items are placed (see docs/zip-items.md). Keep it free of agent
+// where zip items are placed (see site/src/content/docs/guides/zip-items.md). Keep it free of agent
 // dependencies, like pkg/catalog.
 package harness
 

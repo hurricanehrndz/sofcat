@@ -1,5 +1,5 @@
 // Package software checks a catalog item's requires_software entries: software
-// sofcat needs on the machine but never installs (see docs/zip-items.md).
+// sofcat needs on the machine but never installs (see site/src/content/docs/guides/zip-items.md).
 package software
 
 import (

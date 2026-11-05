@@ -1,6 +1,6 @@
 // Package artifact defines the zip artifact format: the tree hash and the
 // deterministic zip writer that makecatalogs and the agent share (see
-// docs/zip-items.md). Keep it free of agent dependencies, like pkg/catalog.
+// site/src/content/docs/guides/zip-items.md). Keep it free of agent dependencies, like pkg/catalog.
 package artifact
 
 import (

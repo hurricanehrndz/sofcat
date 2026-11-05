@@ -1,0 +1,16 @@
+// Static-assets-only Worker for https://sofcat.app: the Starlight build plus
+// the storefront demo under /demo/ (`just site` writes both into dist/).
+// getsofcat.app is not served here; a Cloudflare redirect rule on that zone
+// sends it to sofcat.app.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sofcat-site",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./dist",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  },
+  "routes": [{ "pattern": "sofcat.app", "custom_domain": true }],
+  "preview_urls": true
+}

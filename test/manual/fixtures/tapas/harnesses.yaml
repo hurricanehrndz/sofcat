@@ -1,4 +1,4 @@
-# Placements of the Tapas smoke repository (docs/zip-items.md). Every machine
+# Placements of the Tapas smoke repository (site/src/content/docs/guides/zip-items.md). Every machine
 # placement except outside-skills sits under the fixture brand's write root,
 # ${ProgramData}\tapas-test-smoke on Windows and
 # /Library/Application Support/Tapas Test on macOS (brand/write-roots.yaml).

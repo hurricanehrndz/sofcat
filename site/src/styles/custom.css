@@ -1,0 +1,12 @@
+/* SofCat blue, from the storefront's default accent. */
+:root {
+  --sl-color-accent-low: #0f2a4d;
+  --sl-color-accent: #3b82d6;
+  --sl-color-accent-high: #c4dcf7;
+}
+
+:root[data-theme="light"] {
+  --sl-color-accent-low: #d6e6fa;
+  --sl-color-accent: #1a5fb4;
+  --sl-color-accent-high: #0f2f5c;
+}

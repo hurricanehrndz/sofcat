@@ -1,0 +1,57 @@
+name: Site
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - site/**
+      - ui/frontend/**
+      - assets/**
+      - mise.toml
+      - justfile
+      - .github/workflows/site.yml
+  pull_request:
+    paths:
+      - site/**
+      - ui/frontend/**
+      - assets/**
+      - mise.toml
+      - justfile
+      - .github/workflows/site.yml
+permissions:
+  contents: read
+concurrency:
+  group: site-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  site:
+    name: Build And Deploy Site
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195 # v5.2.5
+        with:
+          # The site needs only Node and just, not the Go and lint toolchain.
+          install_args: node just
+      # Builds the Starlight site and the storefront demo into site/dist.
+      - run: just site
+      # main deploys sofcat.app. A PR from this repository uploads a preview
+      # version (its URL is printed in the log) without touching production;
+      # fork PRs get no secrets, so they stop after the build.
+      - name: Deploy to Cloudflare
+        if: github.event_name == 'push'
+        working-directory: site
+        run: npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Upload preview to Cloudflare
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        working-directory: site
+        run: npx wrangler versions upload --preview-alias "pr-${{ github.event.pull_request.number }}"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

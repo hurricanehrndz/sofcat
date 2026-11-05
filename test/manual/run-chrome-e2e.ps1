@@ -23,7 +23,7 @@ fixture set built by build-e2e-repo.sh and asserts, in order:
   - inventory.json records the item as installed with requested_by, with the documented ACL
   - the self-serve manifest records the selection
   - the data directory, bin and the self-serve manifest carry exactly the documented
-    ACL (docs/data-directory.md), owned by Administrators
+    ACL (site/src/content/docs/reference/data-directory.md), owned by Administrators
   - a running chrome.exe defers RemoveItem (blocking_apps) and the inventory says why
   - with Chrome closed, RemoveItem streams Removing/ItemCompleted, ends Succeeded, and the
     registry entry, chrome.exe and the self-serve selection are gone
@@ -383,7 +383,7 @@ $item = Get-OptionalItem $ItemName
 if ($item.status -ne "Installed") { Fail "$ItemName status '$($item.status)', expected Installed" }
 Pass "managed_installs has $ItemName; status=Installed"
 
-# --- Step 5b: the data directory ACL (docs/data-directory.md)
+# --- Step 5b: the data directory ACL (site/src/content/docs/reference/data-directory.md)
 Write-Step "Data directory ACL: SYSTEM and Administrators only, plus Users read/execute on the parent and user-artifacts; nothing inherited from ProgramData"
 $dataDir = Split-Path $SelfServe
 $wantAcl = [ordered]@{

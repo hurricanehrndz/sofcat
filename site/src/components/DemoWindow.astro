@@ -1,0 +1,145 @@
+---
+// The storefront demo framed as an app window, with a switch between the two
+// Acme stores. The demo itself is the real UI built with `npm run build:demo`
+// in ui/frontend and copied to /demo/ by `just site`; `astro dev` does not
+// serve it.
+const stores = [
+  { id: "apps", label: "Acme Software Center", note: "Windows software" },
+  { id: "skills", label: "Acme AI Skills", note: "AI skills and plugins" },
+];
+const first = stores[0];
+---
+
+<div class="demo not-content">
+  <div class="tabs" role="group" aria-label="Demo store">
+    {
+      stores.map((s, i) => (
+        <button
+          type="button"
+          class="tab"
+          data-store={s.id}
+          aria-pressed={i === 0 ? "true" : "false"}
+        >
+          <span class="tab-label">{s.label}</span>
+          <span class="tab-note">{s.note}</span>
+        </button>
+      ))
+    }
+  </div>
+  <div class="window">
+    <div class="titlebar" aria-hidden="true">
+      <span class="dots"><i></i><i></i><i></i></span>
+      <span class="title">{first.label}</span>
+    </div>
+    <iframe
+      src={`/demo/?store=${first.id}`}
+      title="SofCat storefront demo"
+      loading="lazy"></iframe>
+  </div>
+  <p class="open">
+    Open full size:{" "}
+    {
+      stores.map((s, i) => (
+        <>
+          {i > 0 && " · "}
+          <a href={`/demo/?store=${s.id}`}>{s.label}</a>
+        </>
+      ))
+    }
+  </p>
+</div>
+
+<script>
+  for (const demo of document.querySelectorAll<HTMLElement>(".demo")) {
+    const frame = demo.querySelector("iframe")!;
+    const title = demo.querySelector(".title")!;
+    const tabs = demo.querySelectorAll<HTMLButtonElement>(".tab");
+    for (const tab of tabs) {
+      tab.addEventListener("click", () => {
+        for (const t of tabs) t.setAttribute("aria-pressed", String(t === tab));
+        frame.src = `/demo/?store=${tab.dataset.store}`;
+        title.textContent = tab.querySelector(".tab-label")!.textContent;
+      });
+    }
+  }
+</script>
+
+<style>
+  .demo {
+    margin-top: 1.5rem;
+  }
+  .tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+  .tab {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.1rem;
+    padding: 0.5rem 0.9rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    background: var(--sl-color-bg-nav);
+    color: var(--sl-color-white);
+    font: inherit;
+    cursor: pointer;
+  }
+  .tab[aria-pressed="true"] {
+    border-color: var(--sl-color-accent);
+    box-shadow: inset 0 0 0 1px var(--sl-color-accent);
+  }
+  .tab-label {
+    font-weight: 600;
+  }
+  .tab-note {
+    font-size: var(--sl-text-xs);
+    color: var(--sl-color-gray-3);
+  }
+  .window {
+    overflow: hidden;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.75rem;
+    background: var(--sl-color-bg-nav);
+    box-shadow: var(--sl-shadow-lg);
+  }
+  .titlebar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.55rem 0.9rem;
+    border-bottom: 1px solid var(--sl-color-gray-5);
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-2);
+  }
+  .dots {
+    display: flex;
+    gap: 0.4rem;
+  }
+  .dots i {
+    display: block;
+    width: 0.7rem;
+    height: 0.7rem;
+    border-radius: 50%;
+    background: var(--sl-color-gray-5);
+  }
+  .title {
+    flex: 1;
+    text-align: center;
+    margin-right: 2.9rem;
+  }
+  iframe {
+    display: block;
+    width: 100%;
+    height: min(42rem, 75vh);
+    border: 0;
+    background: #fff;
+  }
+  .open {
+    margin-top: 0.75rem;
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-3);
+  }
+</style>
