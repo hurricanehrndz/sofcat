@@ -621,6 +621,7 @@ func getOptionalItems(cfg config.Configuration) ([]OptionalInstallItem, error) {
 		item.Catalog = catName
 		item.Description = catItem.Description
 		item.Category = catItem.Category
+		item.Section = catItem.Section
 		item.Developer = catItem.Developer
 		item.IconName = catItem.IconName
 		item.RestartAction = catItem.RestartAction

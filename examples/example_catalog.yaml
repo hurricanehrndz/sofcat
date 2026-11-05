@@ -111,6 +111,8 @@ Firefox:
   # Self-service metadata: parsed and surfaced in ListOptionalInstalls (not honored yet)
   description: Fast, private and safe web browser
   category: Browsers
+  # section: the storefront tab the item appears under (free text, like category)
+  section: Apps
   developer: Mozilla
   icon_name: firefox.png
   restart_action: None

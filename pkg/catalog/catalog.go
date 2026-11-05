@@ -15,6 +15,7 @@ type Item struct {
 	UpdateFor           []string      `yaml:"update_for,omitempty"`
 	Description         string        `yaml:"description,omitempty"`
 	Category            string        `yaml:"category,omitempty"`
+	Section             string        `yaml:"section,omitempty"` // storefront tab; free text like Category
 	Developer           string        `yaml:"developer,omitempty"`
 	IconName            string        `yaml:"icon_name,omitempty"`
 	RestartAction       string        `yaml:"restart_action,omitempty"`

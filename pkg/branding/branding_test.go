@@ -2,8 +2,10 @@ package branding
 
 import (
 	"encoding/base64"
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -17,13 +19,13 @@ func TestMergePolicyWinsPerField(t *testing.T) {
 	policy := config.Branding{Title: "Policy", Accent: "  ", HelpURL: "https://policy.example/"}
 	got := merge(policy, cfg)
 	want := config.Branding{Title: "Policy", Tagline: "Config tagline", Accent: "#111111", HelpURL: "https://policy.example/"}
-	if got != want {
+	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("merge = %#v, want %#v", got, want)
 	}
 }
 
 func TestResolveNothingConfiguredIsEmpty(t *testing.T) {
-	if got := resolve(config.Branding{}); got != (Branding{}) {
+	if got := resolve(config.Branding{}); !reflect.DeepEqual(got, Branding{}) {
 		t.Fatalf("empty branding resolved to %#v", got)
 	}
 }
@@ -57,6 +59,37 @@ func TestResolveListHeading(t *testing.T) {
 	merged := merge(config.Branding{ListHeading: "Policy heading"}, config.Branding{ListHeading: "Config heading"})
 	if merged.ListHeading != "Policy heading" {
 		t.Errorf("merged heading %q, want the policy value", merged.ListHeading)
+	}
+}
+
+// Sections set the tab order as one list, so a policy list replaces the
+// config list whole rather than merging entry by entry; no policy list keeps
+// the config one.
+func TestMergeSections(t *testing.T) {
+	cfg := config.Branding{Sections: []string{"Config"}}
+	if got := merge(config.Branding{Sections: []string{"Policy", "Other"}}, cfg).Sections; !reflect.DeepEqual(got, []string{"Policy", "Other"}) {
+		t.Errorf("merged sections %q, want the policy list", got)
+	}
+	if got := merge(config.Branding{}, cfg).Sections; !reflect.DeepEqual(got, []string{"Config"}) {
+		t.Errorf("merged sections %q, want the config list", got)
+	}
+}
+
+// Each section name is a tab label, so it is validated like a heading; an
+// empty or repeated name would make an empty or duplicate tab.
+func TestResolveSections(t *testing.T) {
+	got := resolve(config.Branding{Sections: []string{" Skills\n", "", "\t", "Plugins", "skills", strings.Repeat("x", maxHeading+3)}}).Sections
+	want := []string{"Skills", "Plugins", strings.Repeat("x", maxHeading)}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("sections = %q, want %q", got, want)
+	}
+
+	many := make([]string, maxSections+5)
+	for i := range many {
+		many[i] = fmt.Sprintf("S%d", i)
+	}
+	if got := resolve(config.Branding{Sections: append([]string{"S0"}, many...)}).Sections; len(got) != maxSections || got[maxSections-1] != many[maxSections-1] {
+		t.Errorf("sections = %d entries ending %q, want the first %d", len(got), got[len(got)-1], maxSections)
 	}
 }
 

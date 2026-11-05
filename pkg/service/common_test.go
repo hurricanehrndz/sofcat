@@ -1,6 +1,7 @@
 package service
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -147,7 +148,7 @@ func TestExecuteCommandGetBranding(t *testing.T) {
 	if err != nil || resp.Branding == nil {
 		t.Fatalf("GetBranding = %#v, %v", resp, err)
 	}
-	if want := (branding.Branding{Title: "Acme"}); *resp.Branding != want {
+	if want := (branding.Branding{Title: "Acme"}); !reflect.DeepEqual(*resp.Branding, want) {
 		t.Fatalf("branding = %#v, want %#v", *resp.Branding, want)
 	}
 }

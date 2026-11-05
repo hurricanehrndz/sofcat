@@ -116,6 +116,8 @@ type Branding struct {
 	Accent    string `yaml:"accent,omitempty"`
 	// ListHeading replaces the UI's "Available software" heading.
 	ListHeading string `yaml:"list_heading,omitempty"`
+	// Sections orders the storefront tabs built from catalog item sections.
+	Sections []string `yaml:"sections,omitempty"`
 }
 
 func init() {

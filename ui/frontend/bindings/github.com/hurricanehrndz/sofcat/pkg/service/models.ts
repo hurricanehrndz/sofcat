@@ -52,6 +52,7 @@ export class OptionalInstallItem {
     "catalog": string;
     "description"?: string;
     "category"?: string;
+    "section"?: string;
     "developer"?: string;
     "iconName"?: string;
     "restartAction"?: string;
@@ -110,14 +111,14 @@ export class OptionalInstallItem {
      * Creates a new OptionalInstallItem instance from a string or object.
      */
     static createFrom($$source: any = {}): OptionalInstallItem {
-        const $$createField15_0 = $$createType0;
-        const $$createField16_0 = $$createType1;
+        const $$createField16_0 = $$createType0;
+        const $$createField17_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("actionLabels" in $$parsedSource) {
-            $$parsedSource["actionLabels"] = $$createField15_0($$parsedSource["actionLabels"]);
+            $$parsedSource["actionLabels"] = $$createField16_0($$parsedSource["actionLabels"]);
         }
         if ("worksIn" in $$parsedSource) {
-            $$parsedSource["worksIn"] = $$createField16_0($$parsedSource["worksIn"]);
+            $$parsedSource["worksIn"] = $$createField17_0($$parsedSource["worksIn"]);
         }
         return new OptionalInstallItem($$parsedSource as Partial<OptionalInstallItem>);
     }

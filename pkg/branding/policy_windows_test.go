@@ -3,6 +3,7 @@
 package branding
 
 import (
+	"reflect"
 	"testing"
 
 	"golang.org/x/sys/windows/registry"
@@ -21,7 +22,7 @@ func TestReadPolicyFromRegistry(t *testing.T) {
 		_ = registry.DeleteKey(registry.CURRENT_USER, path)
 	})
 
-	if got := readPolicy(); got != (config.Branding{}) {
+	if got := readPolicy(); !reflect.DeepEqual(got, config.Branding{}) {
 		t.Fatalf("missing key read as %#v", got)
 	}
 
@@ -32,9 +33,9 @@ func TestReadPolicyFromRegistry(t *testing.T) {
 	for name, value := range map[string]string{
 		"Title": "Policy Title", "Tagline": "T", "LogoPath": `C:\logo.png`,
 		"HelpUrl": "https://example.invalid/help", "HelpLabel": "Help", "Accent": "#0b6e4f",
-		"ListHeading": "Skills and plugins",
+		"ListHeading": "Skills and plugins", "Sections": " Skills, Plugins ,Agents",
 	} {
-		if err := key.SetStringValue(name, value); err != nil {
+		if err = key.SetStringValue(name, value); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -43,9 +44,23 @@ func TestReadPolicyFromRegistry(t *testing.T) {
 	want := config.Branding{
 		Title: "Policy Title", Tagline: "T", Logo: `C:\logo.png`,
 		HelpURL: "https://example.invalid/help", HelpLabel: "Help", Accent: "#0b6e4f",
-		ListHeading: "Skills and plugins",
+		ListHeading: "Skills and plugins", Sections: []string{"Skills", "Plugins", "Agents"},
 	}
-	if got := readPolicy(); got != want {
+	if got := readPolicy(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("readPolicy = %#v, want %#v", got, want)
+	}
+
+	// A commas-only value must read as unset, or merge would let it replace
+	// config.yaml's sections with nothing.
+	key, _, err = registry.CreateKey(registry.CURRENT_USER, path, registry.SET_VALUE)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = key.SetStringValue("Sections", " , ,"); err != nil {
+		t.Fatal(err)
+	}
+	_ = key.Close()
+	if got := readPolicy().Sections; got != nil {
+		t.Fatalf("commas-only Sections read as %#v, want nil", got)
 	}
 }

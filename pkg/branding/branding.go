@@ -27,6 +27,7 @@ const (
 	maxHelpLabel = 60
 	maxHeading   = 120
 	maxHelpURL   = 2048
+	maxSections  = 50
 	MaxLogoBytes = 512 << 10
 )
 
@@ -43,6 +44,8 @@ type Branding struct {
 	LogoBase64 string `json:"logoBase64"`
 	// ListHeading replaces the UI's "Available software" heading when set.
 	ListHeading string `json:"listHeading"`
+	// Sections is the storefront tab order; sections it omits follow it.
+	Sections []string `json:"sections,omitempty"`
 }
 
 // Resolve reads the policy registry values, merges them over cfg and returns
@@ -61,6 +64,10 @@ func merge(policy, cfg config.Branding) config.Branding {
 		}
 		return c
 	}
+	sections := cfg.Sections
+	if len(policy.Sections) > 0 {
+		sections = policy.Sections
+	}
 	return config.Branding{
 		Title:     pick(policy.Title, cfg.Title),
 		Tagline:   pick(policy.Tagline, cfg.Tagline),
@@ -70,6 +77,7 @@ func merge(policy, cfg config.Branding) config.Branding {
 		Accent:    pick(policy.Accent, cfg.Accent),
 
 		ListHeading: pick(policy.ListHeading, cfg.ListHeading),
+		Sections:    sections,
 	}
 }
 
@@ -81,6 +89,7 @@ func resolve(in config.Branding) Branding {
 		HelpLabel: plainText(in.HelpLabel, maxHelpLabel),
 
 		ListHeading: plainText(in.ListHeading, maxHeading),
+		Sections:    sectionList(in.Sections),
 	}
 	if accent := strings.TrimSpace(in.Accent); accentPattern.MatchString(accent) {
 		out.Accent = strings.ToLower(accent)
@@ -107,6 +116,28 @@ func plainText(value string, limit int) string {
 		value = strings.TrimSpace(string(runes[:limit]))
 	}
 	return value
+}
+
+// sectionList validates each entry like a heading, drops empties and
+// case-insensitive duplicates (the first spelling wins) and keeps at most
+// maxSections. The order is the storefront tab order.
+func sectionList(values []string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, value := range values {
+		value = plainText(value, maxHeading)
+		key := strings.ToLower(value)
+		if value == "" || seen[key] {
+			continue
+		}
+		if len(out) == maxSections {
+			slog.Debug("branding sections capped", "max", maxSections)
+			break
+		}
+		seen[key] = true
+		out = append(out, value)
+	}
+	return out
 }
 
 func helpURL(value string) string {

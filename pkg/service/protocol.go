@@ -161,6 +161,7 @@ type OptionalInstallItem struct {
 	Catalog            string `json:"catalog"`
 	Description        string `json:"description,omitempty"`
 	Category           string `json:"category,omitempty"`
+	Section            string `json:"section,omitempty"`
 	Developer          string `json:"developer,omitempty"`
 	IconName           string `json:"iconName,omitempty"`
 	RestartAction      string `json:"restartAction,omitempty"`
