@@ -1,6 +1,7 @@
 # Input to makecatalogs zip-item; just bootstrap-tapas packs rendered/tapas-exclusive-skill.
 item_name: tapas-exclusive-skill
 display_name: Tapas Exclusive Skill
+section: Skills
 description: A managed skill in an exclusive placement
 catalog: tapas
 version: 1.0.0

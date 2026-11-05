@@ -1,6 +1,7 @@
 # Input to makecatalogs zip-item; just bootstrap-tapas packs rendered/tapas-managed-plugin.
 item_name: tapas-managed-plugin
 display_name: Tapas Managed Plugin
+section: Plugins
 description: A managed plugin, enabled by the drop-in
 catalog: tapas
 version: 1.0.0

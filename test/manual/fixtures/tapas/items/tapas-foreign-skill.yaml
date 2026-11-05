@@ -1,6 +1,7 @@
 # Input to makecatalogs zip-item; just bootstrap-tapas packs rendered/tapas-foreign-skill.
 item_name: tapas-foreign-skill
 display_name: Tapas Foreign Skill
+section: Skills
 description: A skill for an exclusive root sofcat does not own
 catalog: tapas
 version: 1.0.0
