@@ -40,6 +40,7 @@ import {
   refusalText,
   releaseOperation,
   requestErrorText,
+  resolveTab,
   restartBadge,
   shouldAcceptRecord,
   showRetry,
@@ -47,6 +48,9 @@ import {
   statusRecord,
   stripLine,
   stripView,
+  type ListTab,
+  tabItems,
+  tabs,
   trackOperation,
   visibleItems,
   withFailure,
@@ -85,7 +89,6 @@ function need<E extends Element>(selector: string): E {
 const connection = need<HTMLParagraphElement>("#connection");
 const connectionText = need<HTMLSpanElement>("#connection-text");
 const retryButton = need<HTMLButtonElement>("#retry");
-const navSoftware = need<HTMLButtonElement>("#nav-software");
 const navMine = need<HTMLButtonElement>("#nav-mine");
 const navActivity = need<HTMLButtonElement>("#nav-activity");
 const navBusy = need<SVGElement>("#nav-busy");
@@ -108,14 +111,22 @@ const stripBar = need<HTMLProgressElement>("#strip-progress");
 const stripCancel = need<HTMLButtonElement>("#strip-cancel");
 const spinnerTemplate = need<HTMLTemplateElement>("#spinner");
 
-/** View is a page the nav can show; the detail page is drilled into from a list. */
-type View = "software" | "mine" | "activity";
+/**
+ * View is a page the nav can show; "list" is one of the list tabs. The detail
+ * page is drilled into from a list.
+ */
+type View = "list" | "mine" | "activity";
 
 let view: ListView = { items: [], source: "loading", savedAtUtc: "" };
 let lastError = "";
 let dialogOpener: HTMLElement | null = null;
 // The list the detail page was opened from, and which Back returns to.
-let currentView: View = "software";
+let currentView: View = "list";
+// The list tabs the nav shows, and the one last chosen (null for the first):
+// "list" shows it, or the first tab once it is gone.
+let listTabs: ListTab[] = [];
+let lastListTab: string | null = null;
+let navTabsDrawn = "";
 // The item shown on the detail page, or null when the list or Activity is up.
 let detailItemName: string | null = null;
 let activity: ActivityRecord[] = loadActivity(storage);
@@ -152,9 +163,6 @@ function applyBranding(next: BrandingView): void {
   bannerHelp.hidden = !next.helpUrl;
   bannerHelp.textContent = next.helpLabel;
   need<HTMLSpanElement>("#product-name").textContent = next.productName;
-  if (currentView !== "mine") {
-    homeHeading.textContent = next.listHeading;
-  }
   if (next.logoSrc) {
     productMark.replaceChildren(logoImage(next.logoSrc));
   } else if (next.productMark) {
@@ -172,6 +180,10 @@ function applyBranding(next: BrandingView): void {
     root.style.removeProperty("--on-brand");
     delete root.dataset.accent;
   }
+  // The tab order and the Software tab's heading are branding too.
+  renderNav();
+  renderCategories();
+  renderGrid();
 }
 
 /** refreshBranding converges on the service's branding; a failure keeps the cached one. */
@@ -197,6 +209,61 @@ function renderBanner(): void {
   retryButton.hidden = !showRetry(view);
 }
 
+/** currentTab is the list tab "list" shows: the last chosen, while it still exists. */
+function currentTab(): string {
+  return resolveTab(listTabs, lastListTab);
+}
+
+/** listedItems is what the current page lists before search and category filter it. */
+function listedItems(): OptionalInstallItem[] {
+  return currentView === "mine" ? myItems(view.items) : tabItems(view.items, currentTab());
+}
+
+/**
+ * renderNav draws a nav button per list tab before My items, then marks the
+ * current page. The buttons are rebuilt only when the tabs change, so a render
+ * does not take focus off them.
+ */
+function renderNav(): void {
+  listTabs = tabs(view.items, branding.sections);
+  // Adopt the fallback when the chosen tab is gone, so the tab does not jump
+  // back if its section returns on a later refresh.
+  if (lastListTab !== null) {
+    lastListTab = currentTab();
+  }
+  const drawn = JSON.stringify(listTabs);
+  if (drawn !== navTabsDrawn) {
+    navTabsDrawn = drawn;
+    for (const old of document.querySelectorAll('nav [data-view="list"]')) {
+      old.remove();
+    }
+    navMine.before(
+      ...listTabs.map((tab) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "nav-link";
+        button.dataset.view = "list";
+        button.dataset.tab = tab.key;
+        button.textContent = tab.label;
+        button.addEventListener("click", () => showView("list", tab.key));
+        return button;
+      }),
+    );
+  }
+  markNav();
+}
+
+/** markNav sets aria-current on the nav button of the page shown; none on the detail page. */
+function markNav(): void {
+  for (const link of document.querySelectorAll<HTMLButtonElement>("nav .nav-link")) {
+    const current =
+      viewDetail.hidden &&
+      link.dataset.view === currentView &&
+      (currentView !== "list" || link.dataset.tab === currentTab());
+    link.setAttribute("aria-current", current ? "page" : "false");
+  }
+}
+
 function renderCategories(): void {
   const selected = categorySelect.value;
   categorySelect.replaceChildren();
@@ -204,7 +271,7 @@ function renderCategories(): void {
   all.value = ALL_CATEGORIES;
   all.textContent = "All categories";
   categorySelect.append(all);
-  for (const category of categories(view.items)) {
+  for (const category of categories(listedItems())) {
     const option = document.createElement("option");
     option.value = category;
     option.textContent = category;
@@ -363,9 +430,15 @@ function renderCardFor(itemName: string): void {
 
 function renderGrid(): void {
   const mine = currentView === "mine";
-  const listed = mine ? myItems(view.items) : view.items;
+  const tab = currentTab();
+  const listed = listedItems();
   const shown = visibleItems(listed, searchInput.value, categorySelect.value);
-  homeHeading.textContent = mine ? "My items" : branding.listHeading;
+  // The Software tab keeps the admin's heading; a section tab is headed by its name.
+  homeHeading.textContent = mine
+    ? "My items"
+    : tab
+      ? (listTabs.find((candidate) => candidate.key === tab)?.label ?? "")
+      : branding.listHeading;
   grid.replaceChildren(...shown.map(card));
   if (listed.length === 0) {
     resultStatus.textContent =
@@ -373,7 +446,9 @@ function renderGrid(): void {
         ? ""
         : mine
           ? "Nothing here is installed or managed yet."
-          : "No software is available yet.";
+          : tab
+            ? "Nothing is available here yet."
+            : "No software is available yet.";
     return;
   }
   resultStatus.textContent =
@@ -429,6 +504,7 @@ function renderActivity(): void {
 
 function render(): void {
   renderBanner();
+  renderNav();
   renderCategories();
   renderGrid();
   renderDetail();
@@ -612,9 +688,7 @@ function openDetail(item: OptionalInstallItem, opener: HTMLElement): void {
   viewHome.hidden = true;
   viewActivity.hidden = true;
   viewDetail.hidden = false;
-  for (const link of [navSoftware, navMine, navActivity]) {
-    link.setAttribute("aria-current", "false");
-  }
+  markNav();
   detailBack.focus();
 }
 
@@ -642,21 +716,25 @@ async function refresh(): Promise<void> {
   render();
 }
 
-function showView(next: View): void {
-  const changed = next !== currentView;
+/** showView shows a page; "list" shows tab, or without one the last list tab. */
+function showView(next: View, tab?: string): void {
+  const changed = next !== currentView || (tab !== undefined && resolveTab(listTabs, tab) !== currentTab());
   currentView = next;
+  if (tab !== undefined) {
+    lastListTab = tab;
+  }
   viewDetail.hidden = true;
   detailItemName = null;
   viewHome.hidden = next === "activity";
   viewActivity.hidden = next !== "activity";
-  navSoftware.setAttribute("aria-current", next === "software" ? "page" : "false");
-  navMine.setAttribute("aria-current", next === "mine" ? "page" : "false");
-  navActivity.setAttribute("aria-current", next === "activity" ? "page" : "false");
+  markNav();
   if (next === "activity") {
     renderActivity();
   } else if (changed) {
-    // Software and My items share the grid; only switching lists rebuilds it,
-    // so Back from the detail page can refocus the card it came from.
+    // The list tabs and My items share the grid; only switching lists rebuilds
+    // it, so Back from the detail page can refocus the card it came from. Each
+    // list has its own categories.
+    renderCategories();
     renderGrid();
   }
 }
@@ -683,7 +761,6 @@ retryButton.addEventListener("click", () => {
   render();
   void refresh();
 });
-navSoftware.addEventListener("click", () => showView("software"));
 navMine.addEventListener("click", () => showView("mine"));
 navActivity.addEventListener("click", () => showView("activity"));
 detailBack.addEventListener("click", closeDetail);
@@ -693,7 +770,7 @@ document.addEventListener("keydown", (event) => {
     closeDetail();
   } else if (event.key === "Escape" && !viewActivity.hidden) {
     event.preventDefault();
-    showView("software");
+    showView("list");
   } else if (
     // Ctrl+L shows or hides the log, like Managed Software Center's ⌘L; it is
     // claimed here so the WebView does not treat it as address-bar focus.
@@ -704,7 +781,7 @@ document.addEventListener("keydown", (event) => {
     event.key.toLowerCase() === "l"
   ) {
     event.preventDefault();
-    showView(viewActivity.hidden ? "activity" : "software");
+    showView(viewActivity.hidden ? "activity" : "list");
   }
 });
 
@@ -713,6 +790,6 @@ document.addEventListener("keydown", (event) => {
 applyBranding(brandingView(loadBranding(storage)));
 view = fromCache(loadList(storage));
 render();
-showView("software");
+showView("list");
 void refresh();
 void refreshBranding();

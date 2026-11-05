@@ -87,6 +87,61 @@ export function categories(items: OptionalInstallItem[]): string[] {
   return [...seen.values()].sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }));
 }
 
+/** ListTab is a storefront tab: a catalog section, or key "" for items without one. */
+export type ListTab = { key: string; label: string };
+
+/** UNSECTIONED_LABEL names the tab of items with no section. */
+export const UNSECTIONED_LABEL = "Software";
+
+function sectionKey(item: OptionalInstallItem): string {
+  // A cached list is untrusted shape-wise, so a non-string section is none.
+  return typeof item.section === "string" ? fold(item.section) : "";
+}
+
+/**
+ * tabs is the storefront's list tabs: the sections the admin listed, in that
+ * order, then the rest alphabetically, then "Software" for items without a
+ * section. With no sections at all "Software" is the only tab, so a catalog
+ * that uses none (or a list still loading) looks as it always has.
+ */
+export function tabs(items: OptionalInstallItem[], order: string[]): ListTab[] {
+  const seen = new Map<string, string>();
+  let unsectioned = false;
+  for (const item of items) {
+    const key = sectionKey(item);
+    if (!key) {
+      unsectioned = true;
+    } else if (!seen.has(key)) {
+      seen.set(key, (item.section ?? "").trim());
+    }
+  }
+  const listed = new Map<string, string>();
+  for (const name of order) {
+    const key = fold(name);
+    if (seen.has(key) && !listed.has(key)) {
+      listed.set(key, name.trim());
+    }
+  }
+  const rest = [...seen].filter(([key]) => !listed.has(key));
+  rest.sort(([, a], [, b]) => a.localeCompare(b, "en", { sensitivity: "base" }));
+  const result = [...listed, ...rest].map(([key, label]) => ({ key, label }));
+  if (unsectioned || result.length === 0) {
+    result.push({ key: "", label: UNSECTIONED_LABEL });
+  }
+  return result;
+}
+
+/** resolveTab is key when it is still one of list, else the first tab's key. */
+export function resolveTab(list: ListTab[], key: string | null): string {
+  const found = list.find((tab) => tab.key === key) ?? list[0];
+  return found?.key ?? "";
+}
+
+/** tabItems is what a list tab shows: the items whose section folds to key. */
+export function tabItems(items: OptionalInstallItem[], key: string): OptionalInstallItem[] {
+  return items.filter((item) => sectionKey(item) === key);
+}
+
 export function categoryGlyph(category: string | undefined): string {
   return CATEGORY_GLYPHS[fold(category ?? "")] ?? GENERIC_GLYPH;
 }
@@ -701,6 +756,11 @@ export function brandingView(payload: unknown): BrandingView {
     productMark: (Array.from(title)[0] ?? "").toUpperCase(),
     showBanner: Boolean(title || tagline || logoSrc || helpUrl),
     listHeading: text(raw, "listHeading") || DEFAULT_LIST_HEADING,
+    sections: Array.isArray(raw.sections)
+      ? raw.sections
+          .filter((name): name is string => typeof name === "string" && name.trim() !== "")
+          .map((name) => name.trim())
+      : [],
   };
 }
 

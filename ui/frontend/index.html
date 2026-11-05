@@ -20,10 +20,10 @@
 
     <header class="app-bar">
       <h1 class="product"><span id="product-mark" class="product-mark" aria-hidden="true"><img alt="" src="/sofcat-icon.png" /></span><span id="product-name">%VITE_PRODUCT_NAME%</span></h1>
+      <!-- main.ts adds a button per list tab (catalog section) before My items. -->
       <nav aria-label="Primary">
-        <button type="button" id="nav-software" class="nav-link" aria-current="page">Software</button>
-        <button type="button" id="nav-mine" class="nav-link">My items</button>
-        <button type="button" id="nav-activity" class="nav-link" aria-keyshortcuts="Control+L">
+        <button type="button" id="nav-mine" class="nav-link" data-view="mine">My items</button>
+        <button type="button" id="nav-activity" class="nav-link" data-view="activity" aria-keyshortcuts="Control+L">
           Activity
           <svg id="nav-busy" class="spinner" aria-hidden="true" width="12" height="12" viewBox="0 0 16 16" hidden>
             <path d="M8 2a6 6 0 1 1-4.24 1.76" />
@@ -42,7 +42,7 @@
         <search>
           <form id="filters" class="filters">
             <p>
-              <label for="search">Search software</label>
+              <label for="search">Search</label>
               <input id="search" name="search" type="search" autocomplete="off" />
             </p>
             <p>

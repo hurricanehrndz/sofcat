@@ -101,6 +101,7 @@ comes from the first source that sets it:
 | `HelpLabel` | `help_label` | Plain text, up to 60 characters. Defaults to "Get help". |
 | `Accent` | `accent` | `#rrggbb`. Recolours buttons, links and the banner, and on Windows 11 the native title bar (Windows 10 keeps its default caption). |
 | `ListHeading` | `list_heading` | Plain text, up to 120 characters. Replaces the "Available software" heading; "My items" is unchanged. |
+| `Sections` | `sections` | A list in `config.yaml`; one comma-separated REG_SZ as policy. Up to 50 entries of plain text, up to 120 characters each. Sets the storefront tab order: the sections listed come first, then the rest alphabetically. Items without a catalog `section` appear under a "Software" tab, so give every item a section to hide it. |
 
 Set the policy values with Intune (a custom OMA-URI or a registry script), Group
 Policy Preferences, or `reg add`:

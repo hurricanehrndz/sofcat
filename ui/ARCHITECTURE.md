@@ -55,7 +55,7 @@ answer echoes the `id` with a `result` or an `error`:
 | --- | --- | --- |
 | `getServiceInfo` | none | `{version, protocolVersion: "2.0", apiVersion: 1, capabilities: [methods], busy, uptimeSeconds}` |
 | `listOptionalInstalls` | none | `{items: [OptionalInstallItem]}` (shape below) |
-| `getBranding` | none | `Branding`: `{title, tagline, helpUrl, helpLabel, accent, logoMime, logoBase64, listHeading}` |
+| `getBranding` | none | `Branding`: `{title, tagline, helpUrl, helpLabel, accent, logoMime, logoBase64, listHeading, sections?}` |
 | `installItem` | `{itemName}` | `AcceptedOperation` |
 | `removeItem` | `{itemName}` | `AcceptedOperation` |
 | `cancelOperation` | `{operationId}` | `{canceled: true}` |
@@ -69,7 +69,7 @@ command queue and answer while a managed run is under way;
 change to these methods; additions show up in `capabilities`.
 
 An `OptionalInstallItem` is `{itemName, displayName, version, catalog,
-description?, category?, developer?, iconName?, restartAction?, isManaged,
+description?, category?, section?, developer?, iconName?, restartAction?, isManaged,
 isRequired, isInstalled, status, statusUpdatedAtUtc, lastOperationId?,
 actionLabels?, worksIn?}`. `actionLabels` holds only the label keys
 (`install`, `installing`, `installed`, `remove`, `removing`, `update`,
@@ -239,9 +239,14 @@ blocking-app checks, or pre/post scripts.
 The app bar carries the connection state (a dot and the cached/stale message
 with Retry). Above it, the `#banner` section stays hidden until branding
 fills it (see Branding). "My items" is the same list filtered on the client to installed or
-managed items; it is not a separate service call. The Software view's heading
-is the branding `listHeading`, or "Available software"; "My items" keeps its
-name.
+managed items; it is not a separate service call. Each distinct item
+`section` is a nav tab before "My items": the branding `sections` first, in
+that order, then the rest alphabetically, then "Software" for items without
+one (the only tab when no item has a section). A tab's search and category
+filter cover only its items, and "My items" spans every section. A section
+tab is headed by its name; the Software tab's heading is the branding
+`listHeading`, or "Available software"; "My items" keeps its name. A tab
+that disappears on a refresh falls back to the first one.
 
 Buttons and status text use the item's labels: `install` on the install
 button, `remove` on the remove button, `cancel` on the Cancel of a pending

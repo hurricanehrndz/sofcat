@@ -5,6 +5,7 @@ package branding
 import (
 	"errors"
 	"log/slog"
+	"strings"
 
 	"golang.org/x/sys/windows/registry"
 
@@ -37,6 +38,14 @@ func readPolicy() config.Branding {
 		}
 		return s
 	}
+	// Sections is one comma-separated REG_SZ. Blank entries are dropped here,
+	// so a value of only commas reads as unset and keeps config.yaml's list.
+	var sections []string
+	for _, entry := range strings.Split(value("Sections"), ",") {
+		if entry = strings.TrimSpace(entry); entry != "" {
+			sections = append(sections, entry)
+		}
+	}
 	return config.Branding{
 		Title:     value("Title"),
 		Tagline:   value("Tagline"),
@@ -46,5 +55,6 @@ func readPolicy() config.Branding {
 		Accent:    value("Accent"),
 
 		ListHeading: value("ListHeading"),
+		Sections:    sections,
 	}
 }

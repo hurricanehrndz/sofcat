@@ -1,6 +1,7 @@
 # Input to makecatalogs zip-item; just bootstrap-tapas packs rendered/tapas-outside-skill.
 item_name: tapas-outside-skill
 display_name: Tapas Outside Skill
+section: Skills
 description: A skill for a placement outside the write roots
 catalog: tapas
 version: 1.0.0

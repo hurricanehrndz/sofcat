@@ -96,6 +96,8 @@ export type BrandingView = {
   /** The title's initial, or "" to show the SofCat icon. */
   productMark: string;
   showBanner: boolean;
-  /** The Software view's heading: the admin's list_heading or "Available software". */
+  /** The Software tab's heading: the admin's list_heading or "Available software". */
   listHeading: string;
+  /** The admin's tab order: these sections come first, in this order. */
+  sections: string[];
 };

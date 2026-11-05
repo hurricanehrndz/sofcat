@@ -49,6 +49,7 @@ const items: OptionalInstallItem[] = [
     catalog: "selfserve_catalog",
     description: "Always fails during installation, proving honest terminal state.",
     category: "Development",
+    section: "Plugins",
     developer: "SofCat",
     restartAction: "none",
     isManaged: false,
@@ -79,6 +80,7 @@ const items: OptionalInstallItem[] = [
     catalog: "selfserve_catalog",
     description: "Already requested; its primary action is Cancel.",
     category: "Security",
+    section: "Skills",
     developer: "SofCat",
     isManaged: true,
     isRequired: false,
@@ -135,6 +137,7 @@ const items: OptionalInstallItem[] = [
     catalog: "selfserve_catalog",
     description: "A skill whose placements relabel its actions and name the harnesses it reaches.",
     category: "Development",
+    section: "Skills",
     developer: "SofCat",
     isManaged: false,
     isRequired: false,
@@ -151,6 +154,7 @@ const items: OptionalInstallItem[] = [
     catalog: "selfserve_catalog",
     description: "Deferred because software it requires is missing.",
     category: "Development",
+    section: "Plugins",
     developer: "SofCat",
     isManaged: false,
     isRequired: false,
@@ -407,6 +411,8 @@ export const api: SofCatApi = {
       logoMime: "",
       logoBase64: "",
       listHeading: branded() ? "Software for Acme" : "",
+      // Unbranded, the tabs are alphabetical; branded, Plugins comes first.
+      sections: branded() ? ["Plugins"] : [],
     }),
   openExternal(url) {
     window.open(url, "_blank", "noopener,noreferrer");

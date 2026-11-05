@@ -22,6 +22,11 @@ export class Branding {
      */
     "listHeading": string;
 
+    /**
+     * Sections is the storefront tab order; sections it omits follow it.
+     */
+    "sections"?: string[];
+
     /** Creates a new Branding instance. */
     constructor($$source: Partial<Branding> = {}) {
         if (!("title" in $$source)) {
@@ -56,7 +61,14 @@ export class Branding {
      * Creates a new Branding instance from a string or object.
      */
     static createFrom($$source: any = {}): Branding {
+        const $$createField8_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("sections" in $$parsedSource) {
+            $$parsedSource["sections"] = $$createField8_0($$parsedSource["sections"]);
+        }
         return new Branding($$parsedSource as Partial<Branding>);
     }
 }
+
+// Private type creation functions
+const $$createType0 = $Create.Array($Create.Any);

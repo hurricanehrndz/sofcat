@@ -122,9 +122,10 @@ func stubZipList(t *testing.T, catalogs map[int]map[string]catalog.Item, get fun
 	harnessGet = get
 }
 
-// TestListStorefrontFields: the list call carries each item's resolved labels
-// and works-in harnesses, and an item with neither on this OS sends neither
-// key, so the UI falls back to its built-in labels.
+// TestListStorefrontFields: the list call carries each item's section (its
+// storefront tab), resolved labels and works-in harnesses, and an item with
+// none of them on this OS sends none of the keys, so the UI falls back to its
+// built-in tab and labels.
 func TestListStorefrontFields(t *testing.T) {
 	const goos = harness.Windows
 	table := harness.Table{
@@ -136,7 +137,7 @@ func TestListStorefrontFields(t *testing.T) {
 	}
 	variants := map[string]map[string]catalog.Variant{"codex": {goos: {}}, "skills": {goos: {}}}
 	catalogs := map[int]map[string]catalog.Item{1: {
-		"Skill": {Name: "Skill", CustomActionLabels: map[string]string{"installed": "Ready"}, Installer: catalog.InstallerItem{Type: "zip", Variants: variants}},
+		"Skill": {Name: "Skill", Section: "Skills", CustomActionLabels: map[string]string{"installed": "Ready"}, Installer: catalog.InstallerItem{Type: "zip", Variants: variants}},
 		// Its only variant is for another OS, so none of its placements count.
 		"Tool": {Name: "Tool", Installer: catalog.InstallerItem{Type: "zip", Variants: map[string]map[string]catalog.Variant{"skills": {harness.Darwin: {}}}}},
 	}}
@@ -159,12 +160,12 @@ func TestListStorefrontFields(t *testing.T) {
 		}
 		var fields map[string]json.RawMessage
 		_ = json.Unmarshal(line, &fields)
-		got[it.ItemName] = string(fields["actionLabels"]) + " " + string(fields["worksIn"])
+		got[it.ItemName] = string(fields["section"]) + " " + string(fields["actionLabels"]) + " " + string(fields["worksIn"])
 	}
-	if want := `{"install":"Add","installed":"Ready"} ["Claude Code","Codex"]`; got["Skill"] != want {
+	if want := `"Skills" {"install":"Add","installed":"Ready"} ["Claude Code","Codex"]`; got["Skill"] != want {
 		t.Errorf("Skill = %s, want %s", got["Skill"], want)
 	}
-	if got["Tool"] != " " {
-		t.Errorf("Tool = %q, want no actionLabels or worksIn keys", got["Tool"])
+	if got["Tool"] != "  " {
+		t.Errorf("Tool = %q, want no section, actionLabels or worksIn keys", got["Tool"])
 	}
 }

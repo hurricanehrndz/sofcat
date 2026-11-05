@@ -4,6 +4,7 @@
 # after writing a Munki report that lists DemoTool.
 item_name: tapas-choco-skill
 display_name: Tapas Choco Skill
+section: Skills
 description: A self-service skill that needs a Chocolatey package or Munki item
 catalog: tapas
 version: 1.0.0
