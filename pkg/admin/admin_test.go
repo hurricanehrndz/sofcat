@@ -24,6 +24,7 @@ catalog: base
 installer:
   type: nupkg
   location: packages/chrome/chrome.nupkg
+  package_id: chrome
   hash: abc
 `
 	itemB := `
@@ -32,6 +33,7 @@ catalog: base
 installer:
   type: nupkg
   location: packages/agent/agent.nupkg
+  package_id: agent
   hash: def
 `
 	itemSkip := `
@@ -39,6 +41,7 @@ display_name: No Catalog
 installer:
   type: nupkg
   location: packages/skip/skip.nupkg
+  package_id: skip
   hash: ghi
 `
 	if err := os.WriteFile(filepath.Join(packagesInfoPath, "chrome.yaml"), []byte(itemA), 0o644); err != nil {
@@ -183,5 +186,60 @@ custom_action_labels: {install: Get, cancel: Stop, pending_install: Getting soon
 	}
 	if got := set.Catalogs["base"]["tool"].CustomActionLabels["install"]; got != "Get" {
 		t.Errorf("install label = %q, want it carried into the catalog", got)
+	}
+}
+
+// The agent refuses a nupkg without a hash and cannot tell whether one with
+// neither a check block nor package_id is installed, so -check reports both
+// when the catalog is built rather than on every agent.
+func TestCollectCatalogsNupkgItem(t *testing.T) {
+	tests := map[string]struct {
+		info string
+		want string // problem text; empty for none
+	}{
+		"complete": {
+			info: "installer: {type: nupkg, location: a.nupkg, hash: abc, package_id: a}",
+		},
+		"check block in place of package_id": {
+			info: "installer: {type: nupkg, location: a.nupkg, hash: abc}\ncheck: {registry: {name: A, version: '1.0'}}",
+		},
+		"installer without hash": {
+			info: "installer: {type: nupkg, location: a.nupkg, package_id: a}",
+			want: "nupkg installer has no hash",
+		},
+		"uninstaller location without hash": {
+			info: "installer: {type: nupkg, location: a.nupkg, hash: abc, package_id: a}\nuninstaller: {type: nupkg, location: a.nupkg}",
+			want: "nupkg uninstaller has a location but no hash",
+		},
+		"no check block and no package_id": {
+			info: "installer: {type: nupkg, location: a.nupkg, hash: abc}",
+			want: "nupkg item has no check block and no installer.package_id",
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			repoPath := t.TempDir()
+			dir := filepath.Join(repoPath, "packages-info")
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(dir, "a.yaml")
+			if err := os.WriteFile(path, []byte("item_name: a\ncatalog: base\n"+tc.info+"\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			set, err := CollectCatalogs(repoPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.want == "" {
+				if len(set.Problems) != 0 {
+					t.Errorf("problems = %v, want none", set.Problems)
+				}
+				return
+			}
+			if len(set.Problems) != 1 || set.Problems[0] != path+": "+tc.want {
+				t.Errorf("problems = %v, want [%s: %s]", set.Problems, path, tc.want)
+			}
+		})
 	}
 }

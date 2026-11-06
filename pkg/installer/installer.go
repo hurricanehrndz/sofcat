@@ -55,6 +55,8 @@ type Runner struct {
 	CheckOnly   bool
 	// Zip places zip items; nil fails every zip item as placement_refused.
 	Zip *ZipInstaller
+	// NupkgPath is the root of the kept nupkg copies (config.NupkgPath).
+	NupkgPath string
 
 	// PulledBy names the items, outermost first, whose install is pulling in
 	// the current one as a dependency or updater; empty for a top-level item.

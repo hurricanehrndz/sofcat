@@ -27,7 +27,7 @@ export default defineConfig({
         },
         {
           label: "Guides",
-          items: ["guides/zip-items", "guides/conditions", "guides/osquery-inventory"],
+          items: ["guides/zip-items", "guides/nupkg-items", "guides/conditions", "guides/osquery-inventory"],
         },
         {
           label: "Reference",

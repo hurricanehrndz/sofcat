@@ -213,7 +213,8 @@ requires_software:
 
 - `display_name` is required. It names the software in the deferral message.
 - `chocolatey` is a package id, checked on Windows: present when
-  `%ProgramData%\chocolatey\lib\<id>` is a directory.
+  `%ProgramData%\chocolatey\lib\<id>` is a directory. A nupkg item that
+  sofcat installed does not count ([Nupkg items](/guides/nupkg-items/#required-software)).
 - `munki` is a Munki item name, checked on macOS: present when it is listed
   under `InstalledItems` in `/Library/Managed Installs/ManagedInstallReport.plist`.
   A missing, unreadable or binary report counts as missing. The macOS smoke

@@ -38,6 +38,7 @@ Guidance for coding agents working in this repository.
   - `just test-zip-only`: Go tests under the `zip_only` tag
   - `just bootstrap-tapas`: build the Tapas Test zip-item fixture brand and repository for a Windows VM
   - `just bootstrap-tapas-macos`: the same for a Mac, with a `.pkg` and config
+  - `just bootstrap-nupkg`: build `sofcat.exe` and an embala-built nupkg repository for the nupkg smoke on a Windows VM
   - `just build-macos`: build the CLI and `.app` for the host Mac
   - `just pkg`: wrap those into an unsigned `.pkg`
 
@@ -51,7 +52,7 @@ When changes span Go service/CLI and UI protocol layers, run `just test`, `just 
 pure-Go, windows-GUI `build/sofcat-ui.exe`
 (`GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -tags production -ldflags "-H windowsgui"`).
 `just setup` wraps them in embala's `setup.exe` (`installer/embala.toml`,
-`install.lua` and `uninstall.lua`, embala 0.9.1); it builds on Linux. The
+`install.lua` and `uninstall.lua`, embala 0.10.0); it builds on Linux. The
 installer copies them into `C:\Program Files\SofCat`, adds the Start-menu
 shortcut and the Add or remove programs entry, then runs
 `sofcat.exe -serviceinstall`, which registers and starts the service and
@@ -201,6 +202,22 @@ not log back in) and check the skill appears without opening the storefront.
 `C:\ProgramData\<Name>` alone, the staged archives in `Data\user-artifacts`
 included, as it leaves the config; remove the whole directory by hand for a
 clean slate.
+
+Nupkg items (`site/src/content/docs/guides/nupkg-items.md`) have their own
+loop, on a clean VM with no Chocolatey. `just bootstrap-nupkg` builds
+`build/sofcat.exe` and, with embala 0.10.0 from mise, plain-style packages
+`sofcat-nupkg-smoke` 1.0.0 and 2.0.0 (`scripts = "generate"`) and
+`sofcat-nupkg-bad` 1.0.0, whose install script calls an unknown command,
+into a repository at
+`build/manual-test/nupkg/server-root` (`test/manual/build-nupkg-repo.sh`).
+Serve it on `127.0.0.1:8080` and tunnel that port into the VM. `rig put`
+`build/sofcat.exe` and `test/manual/run-nupkg-smoke.ps1` (both land in
+`C:\rig`), then `rig ps test/manual/run-nupkg-smoke.ps1` with no arguments.
+It writes its own configs, runs `sofcat.exe -config` as SYSTEM through a
+temporary `rig-sofcat-nupkg-smoke` scheduled task for the install, update,
+uninstall and bad manifests, and must exit 0 and print `NUPKG SMOKE PASSED`
+(its log is `C:\sofcat-test\nupkg-smoke.log`). Its last step, informational
+only, logs whether plain `-File` would also have failed the bad script.
 
 To validate the installer instead of the raw executables: `just setup`, `rig
 put` `build/sofcat-<version>-x86_64-setup.exe` and

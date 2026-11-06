@@ -34,7 +34,8 @@ type CatalogSet struct {
 	// Catalogs maps catalog name to item name to item.
 	Catalogs map[string]map[string]catalog.Item
 	// Problems lists package-info files that were skipped or overridden, zip
-	// items with unusable variants, an invalid harnesses.yaml, and manifests
+	// items with unusable variants, nupkg items the agent would refuse or
+	// cannot check, an invalid harnesses.yaml, and manifests
 	// whose conditional_items conditions do not compile.
 	// A normal makecatalogs run warns about them and carries on; --check fails on them.
 	Problems []string
@@ -151,6 +152,7 @@ func CollectCatalogs(repoPath string) (CatalogSet, error) { //nolint:gocognit //
 		if parsed.Item.Installer.Type == "zip" {
 			set.Problems = append(set.Problems, checkZipItem(packageInfoPath, parsed.Item.Installer, harnesses)...)
 		}
+		set.Problems = append(set.Problems, checkNupkgItem(packageInfoPath, parsed.Item)...)
 		set.Catalogs[parsed.Catalog][itemName] = parsed.Item
 		source[parsed.Catalog][itemName] = packageInfoPath
 	}
@@ -281,6 +283,26 @@ func checkZipItem(path string, inst catalog.InstallerItem, harnesses repoHarness
 				problems = append(problems, fmt.Sprintf("%s: variant %s.%s needs location, hash and tree_hash", path, placement, goos))
 			}
 		}
+	}
+	return problems
+}
+
+// checkNupkgItem reports what the agent would refuse or could not check in a
+// nupkg item: an installer without hash, an uninstaller with a location but
+// no hash, and no check block and no installer.package_id, which leaves the
+// agent no way to tell whether the package is installed.
+func checkNupkgItem(path string, item catalog.Item) []string {
+	var problems []string
+	if item.Installer.Type == "nupkg" && item.Installer.Hash == "" {
+		problems = append(problems, fmt.Sprintf("%s: nupkg installer has no hash", path))
+	}
+	if item.Uninstaller.Type == "nupkg" && item.Uninstaller.Location != "" && item.Uninstaller.Hash == "" {
+		problems = append(problems, fmt.Sprintf("%s: nupkg uninstaller has a location but no hash", path))
+	}
+	check := item.Check
+	hasCheck := check.Script != "" || len(check.File) > 0 || check.Registry.Version != "" || check.Appx.Name != ""
+	if item.Installer.Type == "nupkg" && !hasCheck && item.Installer.PackageID == "" {
+		problems = append(problems, fmt.Sprintf("%s: nupkg item has no check block and no installer.package_id", path))
 	}
 	return problems
 }

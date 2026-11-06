@@ -418,6 +418,16 @@ _tapas-repo:
     build/makecatalogs {{tapas_server_root}}
     build/makecatalogs -check {{tapas_server_root}}
 
+# Nupkg-item manual-test assets under build/manual-test/nupkg/: a repository of
+# embala-built plain-style packages (test/manual/build-nupkg-repo.sh) and
+# build/sofcat.exe. The VM gate is test/manual/run-nupkg-smoke.ps1, which
+# writes its own config pointing at its -BaseUrl (default http://127.0.0.1:8080/).
+bootstrap-nupkg: build manual-test-server
+    test/manual/build-nupkg-repo.sh
+    @echo "Prepared nupkg assets in build/manual-test/nupkg/server-root"
+    @echo "Run: ./build/manual-test-server -root build/manual-test/nupkg/server-root -addr 127.0.0.1:8080"
+    @echo "VM:  put build/sofcat.exe and test/manual/run-nupkg-smoke.ps1 in C:\\rig, then: rig ps test/manual/run-nupkg-smoke.ps1 (no arguments)"
+
 # Guard that the tree keeps cross-compiling on Linux (CI-without-Windows goal).
 check-xplat:
     GOOS=linux GOARCH=amd64 go build -o /dev/null ./...

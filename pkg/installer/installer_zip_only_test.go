@@ -25,6 +25,7 @@ func TestZipOnlyCommandItemFails(t *testing.T) {
 	}{
 		{"install", catalog.Item{Name: "Exe", Installer: catalog.InstallerItem{Type: "exe"}}, `installer type "exe" is not available`},
 		{"uninstall", catalog.Item{Name: "Msi", Uninstaller: catalog.InstallerItem{Type: "msi"}}, `installer type "msi" is not available`},
+		{"install", catalog.Item{Name: "Nupkg", Installer: catalog.InstallerItem{Type: "nupkg"}}, `installer type "nupkg" is not available`},
 		{"install", catalog.Item{Name: "Scripted", Installer: catalog.InstallerItem{Type: "exe"}, PreScript: "exit 0"}, "catalog scripts are not available"},
 	} {
 		r := &Runner{Report: report.New(), Checker: &status.Checker{}}

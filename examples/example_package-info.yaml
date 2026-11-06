@@ -1,9 +1,9 @@
-item_name: GoogleChrome
-display_name: Google Chrome
-description: A fast, secure, and free web browser
-category: Browsers
-developer: Google
-icon_name: googlechrome.png
+item_name: hello
+display_name: Hello
+description: A small command-line tool, packaged with embala
+category: Utilities
+developer: Example Corp
+icon_name: hello.png
 restart_action: None
 # update_for: names of items this package is an update for
 # blocking_apps: process image names, case-insensitive, trailing `.exe` optional
@@ -18,22 +18,31 @@ restart_action: None
 # written by hand: makecatalogs zip-item generates it from rendered trees. See
 # site/src/content/docs/guides/zip-items.md and examples/zip-items/.
 blocking_apps:
-  - chrome
-check:
-  registry:
-    name: Google Chrome
-    version: 68.0.3440.106
+  - hello
+# No check block: sofcat checks a nupkg item against its kept copy of the
+# package, found by installer.package_id. A check block, when present, wins.
+# See site/src/content/docs/guides/nupkg-items.md.
 installer:
-  hash: ce9c44417489d6c1f205422a4b9e8d5181d1ac24b6dcae3bd68ec315efdeb18b
-  location: packages/google-chrome/GoogleChrome.68.0.3440.106.nupkg
-  package_id: GoogleChrome
+  hash: 3f1c9a7e52b84d06a1e9c3b7d25f8a64e0b1c7d93a5f2e86b4d0c1a9e7f35b28
+  location: packages/apps/hello/hello.1.2.0.nupkg
+  # package_id: the nuspec id. Required without a check block; the install
+  # fails if the package's id differs.
+  package_id: hello
   type: nupkg
   # success_codes: non-zero exit codes that still mean success. msi and nupkg
   # default to [1641, 3010] (restart required); listing codes replaces the default.
+# uninstaller: needed to remove the item. sofcat runs the kept copy's uninstall
+# script, and this file's only when there is no kept copy.
+uninstaller:
+  hash: 3f1c9a7e52b84d06a1e9c3b7d25f8a64e0b1c7d93a5f2e86b4d0c1a9e7f35b28
+  location: packages/apps/hello/hello.1.2.0.nupkg
+  type: nupkg
 # Uninstall-side scripts, mirroring preinstall_script/postinstall_script
 preuninstall_script: |
-  Stop-Process -Name chrome -ErrorAction SilentlyContinue
+  Stop-Process -Name hello -ErrorAction SilentlyContinue
 postuninstall_script: |
-  Remove-Item -Recurse -Force "$env:LOCALAPPDATA\Google\Chrome" -ErrorAction SilentlyContinue
-version: 68.0.3440.106
+  Remove-Item -Recurse -Force "$env:ProgramData\Hello" -ErrorAction SilentlyContinue
+# version: must equal the nuspec version, compared as versions (1.2 equals
+# 1.2.0). Left out, the item takes the package's version.
+version: 1.2.0
 catalog: testcatalog

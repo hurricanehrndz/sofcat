@@ -60,17 +60,33 @@ func checkSegment(seg string) error {
 	return nil
 }
 
+// archiveEntry is a zip entry and the relative, slash-separated path it
+// extracts to: a zip item's raw entry name, a nupkg's decoded one.
+type archiveEntry struct {
+	f    *zip.File
+	name string
+}
+
+// zipEntries names each entry by its raw name, as a zip item extracts it.
+func zipEntries(files []*zip.File) []archiveEntry {
+	entries := make([]archiveEntry, len(files))
+	for i, f := range files {
+		entries[i] = archiveEntry{f: f, name: f.Name}
+	}
+	return entries
+}
+
 // checkEntries refuses an archive whose headers break R11 or R12 before
 // anything is extracted.
-func checkEntries(files []*zip.File) error {
-	if len(files) > maxZipEntries {
-		return fmt.Errorf("%w: %d entries, more than %d", errUnsafeArchive, len(files), maxZipEntries)
+func checkEntries(entries []archiveEntry) error {
+	if len(entries) > maxZipEntries {
+		return fmt.Errorf("%w: %d entries, more than %d", errUnsafeArchive, len(entries), maxZipEntries)
 	}
 	seen := map[string]bool{} // lowercased file paths
 	dirs := map[string]bool{} // lowercased parent directories
 	var total uint64
-	for _, f := range files {
-		name := f.Name
+	for _, e := range entries {
+		f, name := e.f, e.name
 		if name == "" || strings.HasPrefix(name, "/") {
 			return fmt.Errorf("%w: %q is an absolute path", errUnsafeArchive, name)
 		}
@@ -124,7 +140,8 @@ func extractArchive(archive, hash, treeHash, dest, goos string) (err error) {
 		return fmt.Errorf("%w: %w", errUnsafeArchive, err)
 	}
 	defer func() { _ = zr.Close() }()
-	if err = checkEntries(zr.File); err != nil {
+	entries := zipEntries(zr.File)
+	if err = checkEntries(entries); err != nil {
 		return err
 	}
 
@@ -136,16 +153,8 @@ func extractArchive(archive, hash, treeHash, dest, goos string) (err error) {
 			_ = os.RemoveAll(dest)
 		}
 	}()
-	var total uint64
-	for _, f := range zr.File {
-		var n uint64
-		n, err = extractFile(f, dest)
-		if err != nil {
-			return err
-		}
-		if total += n; total > maxZipTotalSize {
-			return fmt.Errorf("%w: more than %d bytes uncompressed", errUnsafeArchive, maxZipTotalSize)
-		}
+	if err = extractEntries(entries, dest); err != nil {
+		return err
 	}
 
 	got, err := artifact.TreeHash(dest, goos)
@@ -158,11 +167,28 @@ func extractArchive(archive, hash, treeHash, dest, goos string) (err error) {
 	return nil
 }
 
+// extractEntries writes checked entries under dest, which must exist, and
+// stops once more than maxZipTotalSize bytes have actually been written.
+func extractEntries(entries []archiveEntry, dest string) error {
+	var total uint64
+	for _, e := range entries {
+		n, err := extractFile(e, dest)
+		if err != nil {
+			return err
+		}
+		if total += n; total > maxZipTotalSize {
+			return fmt.Errorf("%w: more than %d bytes uncompressed", errUnsafeArchive, maxZipTotalSize)
+		}
+	}
+	return nil
+}
+
 // extractFile writes one checked entry under dest and returns the bytes it
 // wrote. It counts what it actually reads, so a header that understates the
 // size cannot get past the limits.
-func extractFile(f *zip.File, dest string) (uint64, error) {
-	target := filepath.Join(dest, filepath.FromSlash(f.Name))
+func extractFile(e archiveEntry, dest string) (uint64, error) {
+	f := e.f
+	target := filepath.Join(dest, filepath.FromSlash(e.name))
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		return 0, err
 	}
@@ -188,7 +214,7 @@ func extractFile(f *zip.File, dest string) (uint64, error) {
 	}
 	written := uint64(n) //nolint:gosec // G115: io.Copy never returns a negative count
 	if written > limit || written > f.CompressedSize64*maxZipRatio {
-		return 0, fmt.Errorf("%w: %q holds more than its header declares", errUnsafeArchive, f.Name)
+		return 0, fmt.Errorf("%w: %q holds more than its header declares", errUnsafeArchive, e.name)
 	}
 	if runtime.GOOS != "windows" {
 		// Exact mode whatever the umask, since the tree hash reads it.

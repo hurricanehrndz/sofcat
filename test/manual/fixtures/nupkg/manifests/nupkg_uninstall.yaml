@@ -1,0 +1,3 @@
+name: nupkg_uninstall
+managed_uninstalls:
+  - nupkg-smoke-v2

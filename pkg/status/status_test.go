@@ -679,3 +679,103 @@ func TestInvalidateDropsRegistryCache(t *testing.T) {
 		t.Errorf("checkRegistry still reported the item installed after Invalidate")
 	}
 }
+
+// nupkgItem is a nupkg item with no check block, so its status comes from
+// the kept copy of package_id.
+func nupkgItem(itemVersion string) catalog.Item {
+	return catalog.Item{
+		DisplayName: "nupkgItem",
+		Version:     itemVersion,
+		Installer:   catalog.InstallerItem{Type: "nupkg", PackageID: "Tool"},
+	}
+}
+
+// keptNupkg stubs Checker.Nupkg with one kept copy of Tool.
+func keptNupkg(version string) func(string) (string, bool) {
+	return func(id string) (string, bool) {
+		if id != "Tool" {
+			return "", false
+		}
+		return version, true
+	}
+}
+
+// A nupkg item without a check block reads the kept copy with the registry
+// check's rules, so a reinstall happens only when the kept copy is older or
+// unreadable, and update never installs a package that was never kept.
+func TestCheckStatusNupkgKeptCopy(t *testing.T) {
+	noKept := func(string) (string, bool) { return "", false }
+	tests := []struct {
+		name        string
+		hook        func(string) (string, bool)
+		itemVersion string
+		installType string
+		want        bool
+	}{
+		{"install, none kept", noKept, "2.0.0", "install", true},
+		{"install, nil hook", nil, "2.0.0", "install", true},
+		{"install, kept older", keptNupkg("1.0.0"), "2.0.0", "install", true},
+		{"install, kept equal", keptNupkg("2.0.0"), "2.0.0", "install", false},
+		{"install, kept newer", keptNupkg("3.0.0"), "2.0.0", "install", false},
+		{"install, kept unreadable", keptNupkg(""), "2.0.0", "install", true},
+		{"install, kept unparsable", keptNupkg("not-a-version"), "2.0.0", "install", true},
+		{"install, item unparsable, equal string", keptNupkg("build_7"), "build_7", "install", false},
+		{"install, item unparsable, other string", keptNupkg("build_6"), "build_7", "install", true},
+		{"install, item no version, kept unreadable", keptNupkg(""), "", "install", true},
+		{"install, item no version, kept", keptNupkg("1.2.3"), "", "install", false},
+		{"update, item no version, kept", keptNupkg("1.2.3"), "", "update", false},
+		{"uninstall, item no version, kept", keptNupkg("1.2.3"), "", "uninstall", true},
+		{"update, none kept", noKept, "2.0.0", "update", false},
+		{"update, kept older", keptNupkg("1.0.0"), "2.0.0", "update", true},
+		{"update, kept equal", keptNupkg("2.0.0"), "2.0.0", "update", false},
+		{"update, kept newer", keptNupkg("3.0.0"), "2.0.0", "update", false},
+		{"update, kept unreadable", keptNupkg(""), "2.0.0", "update", true},
+		{"uninstall, none kept", noKept, "2.0.0", "uninstall", false},
+		{"uninstall, nil hook", nil, "2.0.0", "uninstall", false},
+		{"uninstall, kept", keptNupkg("2.0.0"), "2.0.0", "uninstall", true},
+		{"uninstall, kept unreadable", keptNupkg(""), "2.0.0", "uninstall", true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := (&Checker{Nupkg: tc.hook}).CheckStatus(nupkgItem(tc.itemVersion), tc.installType, "testdata/")
+			if err != nil {
+				t.Fatalf("CheckStatus error: %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("actionNeeded = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// A check block still decides a nupkg item: the file check sees the path
+// missing and installs, though the kept copy is current, and the kept copy
+// is never read.
+func TestCheckStatusNupkgCheckBlockWins(t *testing.T) {
+	item := nupkgItem("2.0.0")
+	item.Check.File = []catalog.FileCheck{{Path: "testdata/no-such-file.exe"}}
+	called := false
+	c := &Checker{Nupkg: func(string) (string, bool) { called = true; return "2.0.0", true }}
+	got, err := c.CheckStatus(item, "install", "testdata/")
+	if err != nil || !got {
+		t.Errorf("CheckStatus = %v, %v; want the file check's install", got, err)
+	}
+	if called {
+		t.Error("the kept copy was read for an item with a check block")
+	}
+}
+
+// Without a check block or package_id nothing identifies the kept copy, so a
+// nupkg item keeps the "Not enough data" warning and takes no action.
+func TestCheckStatusNupkgWithoutPackageID(t *testing.T) {
+	console := captureConsole(t)
+	item := nupkgItem("2.0.0")
+	item.Installer.PackageID = ""
+	c := &Checker{Nupkg: func(string) (string, bool) { return "", false }}
+	if got, _ := c.CheckStatus(item, "install", "testdata/"); got {
+		t.Error("actionNeeded = true, want no action")
+	}
+	if want := `msg="Not enough data to check the current status" item=nupkgItem`; !strings.Contains(console.String(), want) {
+		t.Errorf("console output missing %q:\n%s", want, console.String())
+	}
+}

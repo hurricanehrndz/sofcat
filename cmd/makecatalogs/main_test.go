@@ -60,6 +60,7 @@ version: 1.2.3.4
 installer:
   type: nupkg
   location: packages/chrome/chrome.nupkg
+  package_id: chrome
   hash: abc
 `
 
@@ -87,7 +88,7 @@ func TestBuildsCatalogWithoutAgentConfig(t *testing.T) {
 	want := map[string]catalog.Item{"Chrome": {
 		DisplayName: "Google Chrome",
 		Version:     "1.2.3.4",
-		Installer:   catalog.InstallerItem{Type: "nupkg", Location: "packages/chrome/chrome.nupkg", Hash: "abc"},
+		Installer:   catalog.InstallerItem{Type: "nupkg", Location: "packages/chrome/chrome.nupkg", Hash: "abc", PackageID: "chrome"},
 	}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("catalog mismatch\nwant %#v\ngot  %#v", want, got)

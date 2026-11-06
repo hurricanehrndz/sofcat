@@ -1,0 +1,3 @@
+name: nupkg_bad
+managed_installs:
+  - nupkg-bad

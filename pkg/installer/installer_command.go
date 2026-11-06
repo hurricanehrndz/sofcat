@@ -25,18 +25,24 @@ import (
 
 var (
 	// Base command for each installer type
-	commandNupkg = filepath.Join(os.Getenv("ProgramData"), "chocolatey/bin/choco.exe")
-	commandMsi   = filepath.Join(os.Getenv("WINDIR"), "system32/", "msiexec.exe")
-	commandPs1   = filepath.Join(os.Getenv("WINDIR"), "system32/", "WindowsPowershell", "v1.0", "powershell.exe")
+	commandMsi = filepath.Join(os.Getenv("WINDIR"), "system32/", "msiexec.exe")
+	commandPs1 = filepath.Join(os.Getenv("WINDIR"), "system32/", "WindowsPowershell", "v1.0", "powershell.exe")
 
 	// These abstractions allows us to override when testing
-	execCommand = exec.Command
-	runCommand  = runCMD
+	execCommand  = exec.Command
+	runCommand   = runCMD
+	runCommandIn = runCMDIn
 )
 
 // runCommand executes a command and it's argurments in the CMD environment
 func runCMD(command string, arguments []string) (string, error) {
+	return runCMDIn("", command, arguments)
+}
+
+// runCMDIn is runCMD with dir as the working directory ("" keeps sofcat's).
+func runCMDIn(dir, command string, arguments []string) (string, error) {
 	cmd := execCommand(command, arguments...)
+	cmd.Dir = dir
 	var cmdOutput []string
 	cmdReader, err := cmd.StdoutPipe()
 	if err != nil {
@@ -113,66 +119,24 @@ func acceptedExitCode(err error, successCodes []int) (int, bool) {
 	return 0, false
 }
 
-// Get a Nupkg's id using `choco list`
-func getNupkgIDs(nupkgDir, versionArg string) ([]string, error) {
-	// Compile the arguments needed to get the id
-	command := commandNupkg
-	arguments := []string{"list", versionArg, "--id-only", "-r", "-s", nupkgDir}
-
-	// Run the command and parse each non-empty line as a candidate id
-	cmdOut, cmdErr := runCommand(command, arguments)
-	outputLines := strings.Split(cmdOut, "\n")
-	ids := make([]string, 0, len(outputLines))
-	for _, line := range outputLines {
-		candidate := strings.TrimSpace(line)
-		if candidate == "" {
-			continue
-		}
-		ids = append(ids, candidate)
-	}
-
-	return ids, cmdErr
-}
-
-func resolveNupkgID(itemName, nupkgDir, versionArg, packageID string) (string, error) {
-	explicitID := strings.TrimSpace(packageID)
-	if explicitID != "" {
-		return explicitID, nil
-	}
-
-	if versionArg == "" {
-		return "", nil
-	}
-
-	ids, cmdErr := getNupkgIDs(nupkgDir, versionArg)
-	if cmdErr != nil {
-		return "", cmdErr
-	}
-
-	if len(ids) == 0 {
-		return "", fmt.Errorf("no package id was found for %s; set installer/uninstaller.package_id", itemName)
-	}
-
-	if len(ids) > 1 {
-		return "", fmt.Errorf("multiple package ids were found for %s: %s; set installer/uninstaller.package_id", itemName, strings.Join(ids, ", "))
-	}
-
-	return ids[0], nil
-}
-
-// typeInstaller translates a catalog item into the command and arguments for
-// one installer type.
+// typeInstaller is what every installer type tells actionItem.
 type typeInstaller interface {
-	installCommand(item catalog.Item, absFile string) (cmd string, args []string, err error)
-	uninstallCommand(item catalog.Item, absFile string) (cmd string, args []string, err error)
 	uninstallNeedsFile() bool
 	// successCodes are the non-zero exit codes this type treats as success
 	// unless the catalog item sets success_codes.
 	successCodes() []int
 }
 
+// commandInstaller is a type that installs and uninstalls with one command
+// line, translated from the catalog item. nupkg is the type that does not.
+type commandInstaller interface {
+	typeInstaller
+	installCommand(item catalog.Item, absFile string) (cmd string, args []string, err error)
+	uninstallCommand(item catalog.Item, absFile string) (cmd string, args []string, err error)
+}
+
 // msiRestartCodes are MSI's "success, restart required/initiated" exits.
-// Chocolatey passes them through, so nupkg shares them.
+// A nupkg script that runs an MSI passes them through, so nupkg shares them.
 var msiRestartCodes = []int{1641, 3010}
 
 // typeInstallers maps each supported installer type to its implementation.
@@ -183,6 +147,15 @@ var typeInstallers = map[string]typeInstaller{
 	"msix":  msixInstaller{},
 	"nupkg": nupkgInstaller{},
 }
+
+// The command-line types. prepareRun reaches their command methods through
+// a type switch, so these keep a type that loses one from compiling.
+var (
+	_ commandInstaller = msiInstaller{}
+	_ commandInstaller = exeInstaller{}
+	_ commandInstaller = ps1Installer{}
+	_ commandInstaller = msixInstaller{}
+)
 
 type msiInstaller struct{}
 
@@ -254,53 +227,9 @@ func (msixInstaller) uninstallNeedsFile() bool { return false }
 
 func (msixInstaller) successCodes() []int { return nil }
 
-type nupkgInstaller struct{}
-
-// nupkgCommand builds the choco command shared by install and uninstall.
-func nupkgCommand(verb string, item catalog.Item, absFile, packageID string) (string, []string, error) {
-	// choco wants the "id" and parent dir, so we need to determine both
-	slog.Info("Determining nupkg id", "item", item.DisplayName)
-	nupkgDir := filepath.Dir(absFile)
-
-	// Since choco recommends the source is a directory,
-	// we need to pass a version to filter unexpected nupkgs (if we have a version)
-	var versionArg string
-	if item.Version != "" {
-		versionArg = fmt.Sprintf("--version=%s", item.Version)
-	}
-
-	nupkgID, err := resolveNupkgID(item.DisplayName, nupkgDir, versionArg, packageID)
-	if err != nil {
-		return "", nil, fmt.Errorf("unable to determine nupkg id for %s: %w", item.DisplayName, err)
-	}
-
-	// Now pass the id along with the parent directory
-	var args []string
-	if nupkgID != "" && versionArg != "" {
-		// Only use this form if we have an ID and version number
-		args = []string{verb, nupkgID, "-s", nupkgDir, versionArg, "-f", "-y", "-r"}
-	} else {
-		// If we dont have an id and version, fallback to the method choco doesn't recommend (but works)
-		args = []string{verb, absFile, "-f", "-y", "-r"}
-	}
-	return commandNupkg, args, nil
-}
-
-func (nupkgInstaller) installCommand(item catalog.Item, absFile string) (string, []string, error) {
-	return nupkgCommand("install", item, absFile, item.Installer.PackageID)
-}
-
-func (nupkgInstaller) uninstallCommand(item catalog.Item, absFile string) (string, []string, error) {
-	return nupkgCommand("uninstall", item, absFile, item.Uninstaller.PackageID)
-}
-
-func (nupkgInstaller) uninstallNeedsFile() bool { return true }
-
-func (nupkgInstaller) successCodes() []int { return msiRestartCodes }
-
 // actionItem is the shared execution path for installs and uninstalls:
-// download if needed, build the type-specific command, run it, and record the
-// honest result in the report.
+// download if needed, prepare the type-specific command (or a nupkg's
+// package), run it, and record the honest result in the report.
 func (r *Runner) actionItem(item catalog.Item, itemURL, action string) (string, error) {
 	var installerItem catalog.InstallerItem
 	var state, verb string
@@ -352,20 +281,20 @@ func (r *Runner) actionItem(item catalog.Item, itemURL, action string) (string, 
 		}
 	}
 
-	// Build the command via the type implementation
-	var cmd string
-	var args []string
-	var err error
-	if action == "uninstall" {
-		cmd, args, err = impl.uninstallCommand(item, absFile)
-	} else {
-		cmd, args, err = impl.installCommand(item, absFile)
+	// A listed success_codes replaces the type's defaults; an explicit empty
+	// list turns them off.
+	successCodes := installerItem.SuccessCodes
+	if successCodes == nil {
+		successCodes = impl.successCodes()
 	}
+
+	run, cleanup, err := r.prepareRun(impl, &item, installerItem, absFile, action, verb, successCodes)
 	if err != nil {
-		slog.Warn("Unable to build command", "item", item.DisplayName, "installerType", installerItem.Type, "err", err)
+		slog.Warn("Unable to prepare the "+action, "item", item.DisplayName, "installerType", installerItem.Type, "err", err)
 		r.emit(item, "failed", NoPercent, err.Error())
 		return "", r.recordFailure(item, action, err)
 	}
+	defer cleanup()
 
 	// The last moment the user can withdraw the item; past this a cancel is refused.
 	if !r.Cancels.act(item.Name) {
@@ -375,17 +304,7 @@ func (r *Runner) actionItem(item catalog.Item, itemURL, action string) (string, 
 	// Run the command
 	r.emit(item, state, NoPercent, item.DisplayName)
 	slog.Info(verb+"ing", "item", item.DisplayName, "version", item.Version, "installerType", installerItem.Type)
-	out, err := runCommand(cmd, args)
-	// A listed success_codes replaces the type's defaults; an explicit empty
-	// list turns them off.
-	successCodes := installerItem.SuccessCodes
-	if successCodes == nil {
-		successCodes = impl.successCodes()
-	}
-	if code, ok := acceptedExitCode(err, successCodes); ok {
-		slog.Info(verb+"er exited with an accepted non-zero code", "item", item.DisplayName, "code", code)
-		err = nil
-	}
+	out, err := run()
 	if err != nil {
 		slog.Warn(verb+"ation FAILED", "item", item.DisplayName, "version", item.Version, "result", "error", "err", err)
 		r.emit(item, "failed", NoPercent, err.Error())
@@ -405,6 +324,46 @@ func (r *Runner) actionItem(item catalog.Item, itemURL, action string) (string, 
 	r.emit(item, "done", 100, "")
 
 	return out, nil
+}
+
+// prepareRun readies the action via the type implementation: one command
+// line, or a nupkg's checked and extracted package. Nothing runs until run
+// is called; cleanup removes what preparing left behind. A nupkg item with
+// no version takes the package's.
+func (r *Runner) prepareRun(impl typeInstaller, item *catalog.Item, installerItem catalog.InstallerItem, absFile, action, verb string, successCodes []int) (func() (string, error), func(), error) {
+	switch impl := impl.(type) {
+	case nupkgInstaller:
+		pkg, err := r.prepareNupkg(*item, installerItem, absFile, action)
+		if err != nil {
+			return nil, nil, err
+		}
+		if item.Version == "" && action != "uninstall" {
+			item.Version = pkg.version
+		}
+		return func() (string, error) { return pkg.run(successCodes) }, pkg.discard, nil
+	case commandInstaller:
+		var cmd string
+		var args []string
+		var err error
+		if action == "uninstall" {
+			cmd, args, err = impl.uninstallCommand(*item, absFile)
+		} else {
+			cmd, args, err = impl.installCommand(*item, absFile)
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+		name := item.DisplayName
+		return func() (string, error) {
+			out, err := runCommand(cmd, args)
+			if code, ok := acceptedExitCode(err, successCodes); ok {
+				slog.Info(verb+"er exited with an accepted non-zero code", "item", name, "code", code)
+				err = nil
+			}
+			return out, err
+		}, func() {}, nil
+	}
+	return nil, nil, fmt.Errorf("installer type %q has no way to run for %s", installerItem.Type, item.DisplayName)
 }
 
 func (r *Runner) installItem(item catalog.Item, itemURL string) (string, error) {

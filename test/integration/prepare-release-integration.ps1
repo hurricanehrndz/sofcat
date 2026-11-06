@@ -140,6 +140,21 @@ if (Test-Path -LiteralPath $marker) {
 }
 '@ | Set-Content -LiteralPath (Join-Path $toolsDir "chocolateyUninstall.ps1") -NoNewline
 
+# One line per run, "<own version> over <installed version>", so the update's
+# before-modify (1.0.0) and the uninstall's (2.0.0) are both on record when
+# run-release-integration.ps1 checks them. The installed version is the
+# install marker as it was when this script ran, which shows the update's
+# before-modify ran before the 2.0.0 install script.
+@'
+$marker = "C:\ProgramData\sofcat-it\nupkg-before-modify.txt"
+$installed = "none"
+if (Test-Path -LiteralPath "C:\ProgramData\sofcat-it\nupkg.txt") {
+    $installed = (Get-Content -LiteralPath "C:\ProgramData\sofcat-it\nupkg.txt" -Raw).Trim()
+}
+New-Item -Path (Split-Path -Path $marker -Parent) -ItemType Directory -Force | Out-Null
+Add-Content -LiteralPath $marker -Value "__VERSION__ over $installed"
+'@ | Set-Content -LiteralPath (Join-Path $toolsDir "chocolateyBeforeModify.template.ps1") -NoNewline
+
 function Build-Nupkg {
     param([string]$Version)
 
@@ -160,6 +175,9 @@ function Build-Nupkg {
     (Get-Content -LiteralPath (Join-Path $toolsDir "chocolateyInstall.template.ps1") -Raw).
         Replace("__VERSION__", $Version) |
         Set-Content -LiteralPath (Join-Path $toolsDir "chocolateyInstall.ps1") -NoNewline
+    (Get-Content -LiteralPath (Join-Path $toolsDir "chocolateyBeforeModify.template.ps1") -Raw).
+        Replace("__VERSION__", $Version) |
+        Set-Content -LiteralPath (Join-Path $toolsDir "chocolateyBeforeModify.ps1") -NoNewline
 
     & choco pack $nuspecPath --outputdirectory (Join-Path $packagesRoot "nupkg") | Out-Host
 }

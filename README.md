@@ -36,7 +36,7 @@ machine gets, catalogs say what exists, and both are plain YAML.
 | | Today | Planned |
 | --- | --- | --- |
 | Agent | Windows service, macOS launchd daemon | Linux |
-| Item types | `.msi`, `.exe`, `.ps1`, `.nupkg` via [Chocolatey](https://github.com/chocolatey/choco), zip items (directory trees such as AI skills and plugins) | Files and scripts on any platform, native packages |
+| Item types | `.msi`, `.exe`, `.ps1`, `.nupkg` (runs the package's own scripts, see [Nupkg items](site/src/content/docs/guides/nupkg-items.md)), zip items (directory trees such as AI skills and plugins) | Files and scripts on any platform, native packages |
 | Self-service app | Windows, macOS | Linux |
 | `makecatalogs` | Linux, macOS, Windows | |
 
