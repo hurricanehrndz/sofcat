@@ -25,6 +25,7 @@ func TestGet(t *testing.T) {
 		AuthUser:        "johnny",
 		AuthPass:        "pizza",
 		CachePath:       filepath.Clean("c:/cpe/sofcat/cache"),
+		NupkgPath:       filepath.Clean("c:/cpe/sofcat/nupkg"),
 		ServiceMode:     false,
 		ServiceCommand:  "",
 		ServiceInstall:  false,

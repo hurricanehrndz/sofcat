@@ -156,6 +156,7 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 		Cancels:     cancels,
 		URLPackages: cfg.URLPackages,
 		CachePath:   cfg.CachePath,
+		NupkgPath:   cfg.NupkgPath,
 		CheckOnly:   cfg.CheckOnly,
 		Zip:         zip,
 	}

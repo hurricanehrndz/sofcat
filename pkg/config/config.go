@@ -87,6 +87,7 @@ type Configuration struct {
 	TLSClientKey    string   `yaml:"tls_client_key,omitempty"`
 	TLSServerCert   string   `yaml:"tls_server_cert,omitempty"`
 	CachePath       string
+	NupkgPath       string
 	ServiceMode     bool `yaml:"service_mode,omitempty"`
 	ServiceCommand  string
 	ServiceInstall  bool
@@ -255,8 +256,9 @@ func Get() Configuration {
 	cfg.ServiceStop = serviceStopArg
 	cfg.ServiceStatus = serviceStatusArg
 
-	// Set the cache path
+	// Set the cache path and the root of the kept nupkg copies
 	cfg.CachePath = filepath.Join(cfg.AppDataPath, "cache")
+	cfg.NupkgPath = filepath.Join(cfg.AppDataPath, "nupkg")
 
 	// Configure service defaults.
 	if cfg.ServiceName == "" {
