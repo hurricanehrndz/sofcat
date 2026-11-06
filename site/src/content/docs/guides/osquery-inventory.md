@@ -1,4 +1,7 @@
-# osquery inventory contract
+---
+title: osquery inventory
+description: The inventory.json contract SofCat writes on every run, for osquery extension tables.
+---
 
 Every managed run writes `inventory.json`, a JSON file that a JSON-capable
 osquery extension (fleetd, or macadmins `osquery-extension`) can turn into
@@ -56,7 +59,7 @@ changing it, so readers should ignore keys they don't know.
 | `RemovedItems` | []string | Names of `managed_uninstall` items that are absent. |
 | `ItemsToInstall` | []item | Install-side items still `pending` or `deferred`. |
 | `ItemsToRemove` | []item | `managed_uninstall` items still `pending` or `deferred`. |
-| `Conditions` | object | The facts `installable_condition` was evaluated against, built-in and admin-provided; see [conditions.md](conditions.md). Munki reports the same key. |
+| `Conditions` | object | The facts `installable_condition` was evaluated against, built-in and admin-provided; see [Installable conditions](/guides/conditions/). Munki reports the same key. |
 
 Every list is present, and empty rather than `null`.
 

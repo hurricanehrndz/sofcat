@@ -9,6 +9,7 @@ import {
   saveBranding,
   saveList,
 } from "./cache.ts";
+import { mountDemoBar, scopedStorage } from "./demo.ts";
 import {
   ALL_CATEGORIES,
   REQUESTED_STATE,
@@ -70,13 +71,20 @@ import type {
 // When an origin has storage blocked, reading the `localStorage` property
 // itself throws SecurityError, so the try/catch has to wrap the property
 // access — cache.ts only guards the getItem/setItem calls.
-const storage: StorageLike = (() => {
+const browserStorage: StorageLike = (() => {
   try {
     return localStorage;
   } catch {
     return { getItem: () => null, setItem: () => {} };
   }
 })();
+// The mock (dev and demo modes) keeps a cache per fixture store. Vite folds
+// these checks to false in a production build, which drops ./demo.ts.
+const MOCK_MODE = import.meta.env.DEV || import.meta.env.MODE === "demo";
+const storage: StorageLike = MOCK_MODE ? scopedStorage(browserStorage) : browserStorage;
+if (import.meta.env.MODE === "demo") {
+  mountDemoBar();
+}
 
 function need<E extends Element>(selector: string): E {
   const element = document.querySelector<E>(selector);
@@ -168,7 +176,7 @@ function applyBranding(next: BrandingView): void {
   } else if (next.productMark) {
     productMark.textContent = next.productMark;
   } else {
-    productMark.replaceChildren(logoImage("/sofcat-icon.png"));
+    productMark.replaceChildren(logoImage(`${import.meta.env.BASE_URL}sofcat-icon.png`));
   }
   const root = document.documentElement;
   if (next.accent) {

@@ -1,6 +1,6 @@
 // Package facts gathers what installable_condition expressions are evaluated
 // against: built-in facts about this machine and the ones admin scripts in the
-// conditions directory print. See docs/conditions.md. It is separate from
+// conditions directory print. See site/src/content/docs/guides/conditions.md. It is separate from
 // pkg/conditions so makecatalogs can check expressions without the Windows
 // fact code.
 package facts

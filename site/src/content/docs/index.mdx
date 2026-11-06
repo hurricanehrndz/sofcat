@@ -1,0 +1,87 @@
+---
+title: SofCat
+description: A brandable catalog for anything you can put on disk or run, with a self-service storefront for standard users on Windows and macOS.
+template: splash
+editUrl: false
+banner:
+  content: |
+    SofCat is pre-beta. Config keys, the catalog format and the service protocol can still change between releases.
+hero:
+  title: A catalog for anything you can put on disk or run
+  tagline: Installers, scripts, packages, AI skills and plugins. A privileged agent on each machine keeps the required items in place, and a storefront with your organisation's name on it lets people add the optional ones without admin rights.
+  image:
+    file: ../../../../assets/sofcat-icon-1024.png
+  actions:
+    - text: Try the live demo
+      link: /demo/?store=apps
+      icon: right-arrow
+    - text: Get started
+      link: /getting-started/
+      variant: minimal
+    - text: GitHub
+      link: https://github.com/hurricanehrndz/sofcat
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkButton } from "@astrojs/starlight/components";
+import DemoWindow from "../../components/DemoWindow.astro";
+
+## Try the storefront
+
+This is the real storefront UI, running in your browser against sample data.
+Installs, removals and progress are simulated. There are two stores, both
+branded for a made-up company, Acme: one for Windows software, one for AI
+skills and plugins on Windows and macOS.
+
+<DemoWindow />
+
+## What it does
+
+<CardGrid>
+  <Card title="Windows and macOS" icon="laptop">
+    A Windows service and a macOS launchd daemon read the same manifests and
+    catalogs. `makecatalogs` runs on Linux, macOS and Windows, so a
+    repository's CI never needs a Windows runner.
+  </Card>
+  <Card title="AI skills and plugins" icon="puzzle">
+    Zip items package directory trees, such as AI skills and plugins, as
+    deterministic zips and place them per machine or in each user's profile.
+    [Zip items](/guides/zip-items/)
+  </Card>
+  <Card title="Installers and scripts" icon="seti:shell">
+    `.msi`, `.msix`, `.exe`, `.ps1` and `.nupkg` on Windows, with install
+    checks, dependencies, blocking apps and required software. A nupkg runs its
+    own scripts, with no Chocolatey ([Nupkg items](/guides/nupkg-items/)).
+  </Card>
+  <Card title="Your branding" icon="pencil">
+    Title, tagline, logo, accent colour, help link and section tab order come
+    from policy values or `config.yaml`, with no rebuild. A rebrand ships
+    under your own name, icon and installer. [Configuration](/configuration/#branding)
+  </Card>
+  <Card title="Installable conditions" icon="setting">
+    Limit an item to machines by architecture, OS build, model or facts your
+    own scripts provide, as with Munki's `installable_condition`.
+    [Installable conditions](/guides/conditions/)
+  </Card>
+  <Card title="osquery inventory" icon="magnifier">
+    Every run writes a Munki-compatible `inventory.json` that an osquery
+    extension can turn into tables. [osquery inventory](/guides/osquery-inventory/)
+  </Card>
+  <Card title="Privileged agent, standard users" icon="seti:lock">
+    The agent runs as SYSTEM on Windows and as root on macOS. The storefront
+    talks to it over a local named pipe or socket, so nobody needs to elevate
+    to install what they are allowed to.
+  </Card>
+</CardGrid>
+
+## How it works
+
+SofCat keeps the [Munki](https://github.com/munki/munki) model. You publish
+plain YAML on any web server: a manifest says what a machine gets, catalogs say
+what exists. The agent on each machine fetches both, installs what is required,
+and offers the optional items in the storefront. It started as a fork of
+[Gorilla](https://github.com/1dustindavis/gorilla).
+
+<LinkButton href="/getting-started/">Get started</LinkButton>
+<LinkButton href="/configuration/" variant="secondary">Configuration</LinkButton>

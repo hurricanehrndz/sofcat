@@ -8,7 +8,7 @@
 # The setup.exe puts both executables in C:\Program Files\SofCat and runs
 # `sofcat.exe -serviceinstall`, which registers and starts the SofCat service
 # and writes the HKLM Run value sofcat-user-sync that starts
-# `sofcat-ui.exe --user-sync` at every logon (docs/zip-items.md); its
+# `sofcat-ui.exe --user-sync` at every logon (site/src/content/docs/guides/zip-items.md); its
 # uninstaller runs `sofcat.exe -serviceremove`, which undoes both. sofcat owns
 # its service and that value, so the scripts only call it. The installer ships
 # no config.yaml: management tooling writes C:\ProgramData\SofCat\config.yaml,

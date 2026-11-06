@@ -1,4 +1,7 @@
-# Installable conditions
+---
+title: Installable conditions
+description: Limit a catalog item to the machines whose facts match an installable_condition expression.
+---
 
 A catalog item can say which machines it may be installed on with
 `installable_condition`, an expression over facts about the machine. This is
@@ -177,7 +180,7 @@ Then `"lab" in machine_groups` and `site == "east"` work in conditions.
 - Files starting with `.`, subfolders, and other file types are skipped.
 
 The folder inherits the app data directory's ACL (SYSTEM and Administrators
-only; see [data-directory.md](data-directory.md)), so a standard user can't
+only; see [Data directory](/reference/data-directory/)), so a standard user can't
 add a script that runs as SYSTEM. On macOS the Data directory is root-owned
 with mode 0700, and the ownership and mode rule above holds for each script
 as well.
@@ -189,6 +192,6 @@ them. The first list call after the service starts runs them once.
 ## Seeing the facts
 
 Every run writes the facts it used to `inventory.json` under `Conditions`
-(see [osquery-inventory.md](osquery-inventory.md)). `sofcat -checkonly`
+(see [osquery inventory](/guides/osquery-inventory/)). `sofcat -checkonly`
 prints the same inventory. Skipped items appear in the log as
 `skipping item: not installable on this machine`, with the condition.

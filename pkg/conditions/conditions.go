@@ -1,7 +1,7 @@
 // Package conditions decides which catalog items may be installed on this
 // machine. Each item's installable_condition is an expr expression
 // (github.com/expr-lang/expr) evaluated against facts that pkg/facts
-// gathers. See docs/conditions.md. It has no platform code, so makecatalogs
+// gathers. See site/src/content/docs/guides/conditions.md. It has no platform code, so makecatalogs
 // can check expressions.
 package conditions
 

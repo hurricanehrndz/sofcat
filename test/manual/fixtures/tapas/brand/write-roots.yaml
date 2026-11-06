@@ -1,4 +1,4 @@
-# Where the Tapas Test build may place zip items (docs/zip-items.md). Each
+# Where the Tapas Test build may place zip items (site/src/content/docs/guides/zip-items.md). Each
 # OS's machine root covers every placement in ../harnesses.yaml except
 # outside-skills, which lies outside it on purpose.
 darwin:

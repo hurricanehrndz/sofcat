@@ -25,7 +25,7 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/report"
 )
 
-// ZipInstaller places the trees of zip items (docs/zip-items.md). It holds no
+// ZipInstaller places the trees of zip items (site/src/content/docs/guides/zip-items.md). It holds no
 // run state, so it works outside a managed run: the service builds one with
 // NewMachineZip, and a per-user helper can build one with user roots and its
 // own receipt directory.

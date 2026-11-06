@@ -1,6 +1,6 @@
 # harnesses.yaml sits at the repository root, next to catalogs/ and
 # manifests/. It names the placements zip items are written to. See
-# docs/zip-items.md. Unknown fields are rejected.
+# site/src/content/docs/guides/zip-items.md. Unknown fields are rejected.
 #
 # The paths below are illustrative. Check each harness's documentation for
 # the directories it reads, and keep every path inside the build's write roots.

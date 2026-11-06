@@ -36,7 +36,7 @@ machine gets, catalogs say what exists, and both are plain YAML.
 | | Today | Planned |
 | --- | --- | --- |
 | Agent | Windows service, macOS launchd daemon | Linux |
-| Item types | `.msi`, `.exe`, `.ps1`, `.nupkg` (runs the package's own scripts, see [docs/nupkg-items.md](docs/nupkg-items.md)), zip items (directory trees such as AI skills and plugins) | Files and scripts on any platform, native packages |
+| Item types | `.msi`, `.exe`, `.ps1`, `.nupkg` (runs the package's own scripts, see [Nupkg items](site/src/content/docs/guides/nupkg-items.md)), zip items (directory trees such as AI skills and plugins) | Files and scripts on any platform, native packages |
 | Self-service app | Windows, macOS | Linux |
 | `makecatalogs` | Linux, macOS, Windows | |
 
@@ -51,14 +51,14 @@ What already works:
   service and installer, build a rebrand; see
   [examples/brand/README.md](examples/brand/README.md).
 - **Inventory for osquery.** Every run writes a Munki-compatible
-  `inventory.json`. See [docs/osquery-inventory.md](docs/osquery-inventory.md).
+  `inventory.json`. See [osquery inventory](site/src/content/docs/guides/osquery-inventory.md).
 - **Installable conditions.** An item can require an architecture, Windows
   build, model or a fact your own scripts provide, as with Munki's
-  `installable_condition`. See [docs/conditions.md](docs/conditions.md).
+  `installable_condition`. See [Installable conditions](site/src/content/docs/guides/conditions.md).
 - **Zip items.** Package directory trees, such as AI skills, as deterministic
   zips with `makecatalogs`. On Windows a per-user helper
   (`<slug>-ui.exe --user-sync`, started at logon) places them in each user's
-  profile. See [docs/zip-items.md](docs/zip-items.md).
+  profile. See [Zip items](site/src/content/docs/guides/zip-items.md).
 - **macOS.** A launchd daemon and a self-service app bundle, installed by the
   `.pkg` from `just pkg`, with the same features.
 - **Zip-only brands.** `INSTALLERS=zip` in a brand compiles out the command
@@ -105,7 +105,7 @@ flowchart LR
 3. `Restart-Service sofcat`.
 
 [examples/](examples/) has an annotated config, catalog, manifest and
-package-info file. [docs/data-directory.md](docs/data-directory.md) explains
+package-info file. [Data directory](site/src/content/docs/reference/data-directory.md) explains
 what lives in `C:\ProgramData\SofCat` and who can write to it.
 
 Nothing is code signed yet.
@@ -162,7 +162,7 @@ the Xcode command line tools) and `just pkg` wraps them in an unsigned `.pkg`.
 
 Both Windows executables are pure Go with no cgo, so they cross-compile from
 Linux or macOS. `just setup` uses [embala](https://github.com/hurricanehrndz/embala), so
-the installer builds there too. More in [docs/dev.md](docs/dev.md) and
+the installer builds there too. More in [Developer notes](site/src/content/docs/contributing/dev.md) and
 [ui/README.md](ui/README.md).
 
 ## Contributing

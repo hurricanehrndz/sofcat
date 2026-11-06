@@ -142,9 +142,31 @@ or Activity. Both are frontend-only; nothing is added to the bound surface.
 ## Development mock
 
 `npm run dev` serves a browser-only mock (`frontend/src/mock-api.ts`) selected by
-Vite's development-mode module alias. Every other mode aliases the Wails adapter,
-so the production bundle contains no mock fixture data and no
-`SOFCAT_VITE_MOCK_ONLY` marker.
+Vite's module alias in the `development` and `demo` modes. Every other mode
+aliases the Wails adapter, so the production bundle contains no mock fixture
+data and no `SOFCAT_VITE_MOCK_ONLY` marker; `src/vite-config.test.mjs` pins
+that mapping.
+
+The mock serves one of two Acme fixture stores (`frontend/src/mock-stores.ts`),
+each with its own branding, sections and items. They share the mock's
+behaviours: a failing install, a dependency installed in the same run, required
+and managed items, pending installs and removals, custom action labels, restart
+badges, a deferral, and Cancel during the download.
+
+- `?store=apps` (the default): Acme Software Center, Windows installers in
+  Productivity, Developer tools and Utilities.
+- `?store=skills`: Acme AI Skills, cross-platform skills and plugins with
+  `worksIn` harnesses and placement labels.
+- `?unbranded`: the same store's items with empty branding, the stock look.
+- `?offline`: the item list fails, showing the cached list or the offline state.
+
+Each store keeps its own cache and Activity in `localStorage` under the mock, so
+switching stores does not show the other store's list.
+
+`npm run build:demo` builds the public demo (`vite build --mode demo --base
+/demo/ --outDir dist-demo`) that sofcat.app serves at `/demo/`. Demo mode adds
+a bar above the shell saying the service is simulated, with links between the
+stores and the unbranded view; the bar and the mock are absent from `dist/`.
 
 ## Commands
 

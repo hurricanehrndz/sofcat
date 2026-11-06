@@ -42,6 +42,6 @@ export type SofCatApi = {
   openExternal(url: string): Promise<void>;
 };
 
-// The implementation is selected by mode in vite.config.ts: development
-// resolves to ./mock-api.ts, every other mode to ./wails-api.ts.
+// The implementation is selected by mode in vite.config.ts: development and
+// demo resolve to ./mock-api.ts, every other mode to ./wails-api.ts.
 export { api } from "sofcat-api-impl";

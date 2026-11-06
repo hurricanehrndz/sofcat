@@ -66,7 +66,7 @@ Everything the service writes lives under `C:\ProgramData\SofCat`, as under
 `/Library/Application Support/<Name>` on a Mac: `config.yaml`, the `Data`
 directory (the default `app_data_path`, SYSTEM and Administrators only
 except `Data\user-artifacts`, which Users read) and any placement of its own
-(`docs/data-directory.md`).
+(`site/src/content/docs/reference/data-directory.md`).
 A brand with `INSTALLERS=zip` in its `brand.env` adds the `zip_only` tag to both
 binaries, which compiles out the command installers and catalog scripts
 (`*_command.go`/`*_script.go` versus their `*_zip_only.go` twins); test that
@@ -203,11 +203,12 @@ not log back in) and check the skill appears without opening the storefront.
 included, as it leaves the config; remove the whole directory by hand for a
 clean slate.
 
-Nupkg items (`docs/nupkg-items.md`) have their own loop, on a clean VM with
-no Chocolatey. `just bootstrap-nupkg` builds `build/sofcat.exe` and, with
-embala 0.10.0 from mise, plain-style packages `sofcat-nupkg-smoke` 1.0.0 and
-2.0.0 (`scripts = "generate"`) and `sofcat-nupkg-bad` 1.0.0, whose install
-script calls an unknown command, into a repository at
+Nupkg items (`site/src/content/docs/guides/nupkg-items.md`) have their own
+loop, on a clean VM with no Chocolatey. `just bootstrap-nupkg` builds
+`build/sofcat.exe` and, with embala 0.10.0 from mise, plain-style packages
+`sofcat-nupkg-smoke` 1.0.0 and 2.0.0 (`scripts = "generate"`) and
+`sofcat-nupkg-bad` 1.0.0, whose install script calls an unknown command,
+into a repository at
 `build/manual-test/nupkg/server-root` (`test/manual/build-nupkg-repo.sh`).
 Serve it on `127.0.0.1:8080` and tunnel that port into the VM. `rig put`
 `build/sofcat.exe` and `test/manual/run-nupkg-smoke.ps1` (both land in

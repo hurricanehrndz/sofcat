@@ -1,4 +1,7 @@
-# Nupkg items
+---
+title: Nupkg items
+description: Install embala-built nupkgs by running the package's own PowerShell scripts, without Chocolatey.
+---
 
 A nupkg item installs a `.nupkg` built by
 [embala](https://github.com/hurricanehrndz/embala) 0.10.0 or later. sofcat
@@ -112,7 +115,7 @@ After the install script succeeds, sofcat keeps the whole extracted package
 at `<app_data_path>\nupkg\<id>`, where `<id>` is the nuspec id in lower case.
 With the default `app_data_path` that is `C:\ProgramData\SofCat\Data\nupkg\hello`.
 It sits under the `Data` ACL, SYSTEM and Administrators only
-([data-directory.md](data-directory.md)). There is one copy per id, not per
+([data-directory.md](/reference/data-directory/)). There is one copy per id, not per
 item or version: two items that ship the same id share it.
 
 Before anything extracts, sofcat checks the hash and refuses a package with
@@ -208,12 +211,12 @@ and 3010 mean Chocolatey's uninstall wants a restart, and the install goes on.
 ## Required software
 
 `requires_software` with `chocolatey: <id>` still checks for
-`%ProgramData%\chocolatey\lib\<id>` ([zip-items.md](zip-items.md#required-software)).
+`%ProgramData%\chocolatey\lib\<id>` ([zip-items.md](/guides/zip-items/#required-software)).
 It names software sofcat never installs, so a package sofcat installed does
 not satisfy it. For an item that needs a nupkg item, list the nupkg item
 under `dependencies`, and sofcat installs it first.
 
 ## Zip-only builds
 
-A [zip-only build](zip-items.md#zip-only-builds) has no nupkg engine and
+A [zip-only build](/guides/zip-items/#zip-only-builds) has no nupkg engine and
 rejects nupkg items.

@@ -38,7 +38,7 @@ func TestEval(t *testing.T) {
 		{`version(engine_version) == "1.10.0"`, true},
 		{`version(engine_version) > "1.9.9"`, true},
 		{`arch == "x86"`, false},
-		// The forms docs/conditions.md shows.
+		// The forms site/src/content/docs/guides/conditions.md shows.
 		{`hostname matches "^LAB-[A-Z]+-[0-9]+$"`, true},
 		{`hostname endsWith "-01" && hostname contains "GPU"`, true},
 		{`arch in ["arm64", "amd64"]`, true},

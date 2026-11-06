@@ -7,21 +7,21 @@ icon_name: hello.png
 restart_action: None
 # update_for: names of items this package is an update for
 # blocking_apps: process image names, case-insensitive, trailing `.exe` optional
-# installable_condition: install only where this expression is true; see docs/conditions.md
+# installable_condition: install only where this expression is true; see site/src/content/docs/guides/conditions.md
 # installable_condition: arch == "amd64" && os_build >= 19045
-# requires_software: software this item needs and sofcat never installs; see docs/zip-items.md
+# requires_software: software this item needs and sofcat never installs; see site/src/content/docs/guides/zip-items.md
 # requires_software:
 #   - display_name: Demo Tool   # shown in "Needs Demo Tool. Install it first, then try again."
 #     chocolatey: demo-tool     # Windows: %ProgramData%\chocolatey\lib\demo-tool exists
 #     munki: DemoTool           # macOS: InstalledItems in Munki's ManagedInstallReport.plist
 # A zip item (installer.type zip, with variants per placement and OS) is not
 # written by hand: makecatalogs zip-item generates it from rendered trees. See
-# docs/zip-items.md and examples/zip-items/.
+# site/src/content/docs/guides/zip-items.md and examples/zip-items/.
 blocking_apps:
   - hello
 # No check block: sofcat checks a nupkg item against its kept copy of the
 # package, found by installer.package_id. A check block, when present, wins.
-# See docs/nupkg-items.md.
+# See site/src/content/docs/guides/nupkg-items.md.
 installer:
   hash: 3f1c9a7e52b84d06a1e9c3b7d25f8a64e0b1c7d93a5f2e86b4d0c1a9e7f35b28
   location: packages/apps/hello/hello.1.2.0.nupkg

@@ -1,7 +1,7 @@
 // Command makecatalogs compiles a SofCat repository's packages-info files
 // into its catalogs, like Munki's makecatalogs. It runs on any platform and
 // reads no agent configuration. Its pack, tree-hash and zip-item subcommands
-// build zip items (see docs/zip-items.md).
+// build zip items (see site/src/content/docs/guides/zip-items.md).
 package main
 
 import (

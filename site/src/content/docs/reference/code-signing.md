@@ -1,4 +1,7 @@
-# Code signing and Defender false positives
+---
+title: Code signing and Defender
+description: Why unsigned SofCat binaries can trip Defender's ML heuristics, and what the build embeds to help.
+---
 
 ## Background
 

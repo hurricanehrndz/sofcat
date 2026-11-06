@@ -17,7 +17,7 @@ identifier := shell(_read, _brand_env, "IDENTIFIER", "ca.hrndz.sofcat")
 description := shell(_read, _brand_env, "DESCRIPTION", "A catalog for anything you can put on disk or run")
 homepage := shell(_read, _brand_env, "HOMEPAGE", "https://github.com/hurricanehrndz/sofcat")
 # INSTALLERS=zip builds both binaries with the zip_only tag: no command
-# installers or catalog scripts are compiled in (docs/zip-items.md).
+# installers or catalog scripts are compiled in (site/src/content/docs/guides/zip-items.md).
 installers := shell(_read, _brand_env, "INSTALLERS", "")
 _zip_tag := if installers == "zip" { ",zip_only" } else { "" }
 _brand_ico := if brand == "" { "" } else { brand / "icon.ico" }
@@ -89,11 +89,31 @@ ui-bindings-check:
 # Type check plus committed-binding verification.
 ui-lint: ui-type ui-bindings-check
 
+# Documentation site dependencies.
+site-install:
+    npm ci --prefix site
+
+# Documentation site with live reload, without the storefront demo (`just site`).
+site-dev: site-install
+    npm run dev --prefix site
+
+# The storefront demo (npm run build:demo, ui/frontend/dist-demo) is copied
+# into the Astro build, so astro dev and the link check never see /demo/.
+# Documentation site in site/dist, with the storefront demo at site/dist/demo/.
+site: site-install ui-install
+    rm -rf ui/frontend/dist-demo
+    npm run build:demo --prefix ui/frontend
+    npm run build --prefix site
+    @if [ ! -f ui/frontend/dist-demo/index.html ]; then \
+      echo "ui/frontend/dist-demo/index.html is missing: npm run build:demo wrote no demo" >&2 && exit 1; fi
+    rm -rf site/dist/demo
+    cp -R ui/frontend/dist-demo site/dist/demo
+
 # Windows resources (rsrc_windows_<arch>.syso, gitignored) that go build links
 # into each executable: icon, VERSIONINFO (company, product, and file and
 # product version from `version`) and an asInvoker application manifest, all
 # from <pkg>/winres/winres.json. Unsigned binaries without these look anonymous
-# to antivirus ML heuristics (docs/code-signing.md). The UI manifest declares
+# to antivirus ML heuristics (site/src/content/docs/reference/code-signing.md). The UI manifest declares
 # what Wails' own template does: per-monitor-v2 DPI and common controls v6.
 # Each template is rendered with the brand values beside a copy of the icon
 # under build/winres/<pkg>/.

@@ -2,8 +2,9 @@ hello:
   display_name: Hello
   # A nupkg built by embala 0.10.0 or later with the scripts key. sofcat runs
   # the package's own scripts and keeps a copy of the package; see
-  # docs/nupkg-items.md. With no check block, status comes from that kept
-  # copy, so package_id is required and must equal the nuspec id.
+  # site/src/content/docs/guides/nupkg-items.md. With no check block, status
+  # comes from that kept copy, so package_id is required and must equal the
+  # nuspec id.
   installer:
     hash: 3f1c9a7e52b84d06a1e9c3b7d25f8a64e0b1c7d93a5f2e86b4d0c1a9e7f35b28
     location: packages/apps/hello/hello.1.2.0.nupkg
@@ -24,7 +25,7 @@ ColorPrinter:
   # cancel and the pending statuses (install, installing, installed, remove,
   # removing, update, cancel, pending_install, pending_remove).
   # A key left out falls back to the item's placements (zip items, see
-  # docs/zip-items.md), then the built-in label. Shown as plain text.
+  # site/src/content/docs/guides/zip-items.md), then the built-in label. Shown as plain text.
   custom_action_labels:
     install: Add printer
     installing: Adding printer…
@@ -172,7 +173,7 @@ hello-world:
   # A zip item places a directory tree, such as an AI skill, instead of running
   # an installer. variants maps a placement in harnesses.yaml to an OS (darwin
   # or windows) to one zip. makecatalogs zip-item writes this block; see
-  # docs/zip-items.md. A zip item needs no check block or uninstaller.
+  # site/src/content/docs/guides/zip-items.md. A zip item needs no check block or uninstaller.
   installer:
     type: zip
     variants:

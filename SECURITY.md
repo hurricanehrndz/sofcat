@@ -20,5 +20,5 @@ SofCat runs as SYSTEM and installs software, so these matter most:
 - the service and its local named pipe (`pkg/service`)
 - what the agent downloads and runs from a repo (`pkg/download`, `pkg/installer`)
 - the data directory and its ACL (`C:\ProgramData\SofCat`, see
-  [docs/data-directory.md](docs/data-directory.md))
+  [Data directory](site/src/content/docs/reference/data-directory.md))
 - the self-service app and the branding it loads (`ui/`)

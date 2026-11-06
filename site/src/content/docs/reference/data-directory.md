@@ -1,4 +1,7 @@
-# Data directory ACL
+---
+title: Data directory
+description: What SofCat keeps under ProgramData or Application Support, and who can read or write it.
+---
 
 On Windows, everything SofCat writes after install lives under
 `C:\ProgramData\SofCat`, as it does under
@@ -9,7 +12,7 @@ On Windows, everything SofCat writes after install lives under
   `C:\ProgramData\SofCat\Data`), which holds SofCat's state.
 - Any placement of SofCat's own, such as a marketplace, beside them: the
   stock write root is `${ProgramData}\SofCat`
-  ([zip-items.md](zip-items.md#write-roots)).
+  ([Zip items](/guides/zip-items/#write-roots)).
 
 Under the default `ProgramData` ACL, standard users can read everything there
 and create files and folders in it, and they own what they create. That would
@@ -28,11 +31,11 @@ these its own ACL.
 - `Data\conditions\` holds admin fact scripts, which run as SYSTEM.
 - `Data\nupkg\` holds the kept copy of each installed nupkg, whose
   before-modify and uninstall scripts run as SYSTEM
-  ([nupkg-items.md](nupkg-items.md#the-kept-copy)).
+  ([Nupkg items](/guides/nupkg-items/#the-kept-copy)).
 - `Data\sofcat.log` may name paths and items.
 
 `Data\user-artifacts\` is the one entry users read: the staged archives the
-per-user helper places into each profile ([zip-items.md](zip-items.md#installing)).
+per-user helper places into each profile ([Zip items](/guides/zip-items/#installing)).
 
 The executables are not here. `sofcat.exe` and `sofcat-ui.exe` install to
 `C:\Program Files\SofCat`, whose default ACL already lets Users read and
@@ -57,7 +60,7 @@ writes there.
   inherits: `(A;OICI;0x1200a9;;;BU)`, Users read and execute, inherited by
   the staged archives.
 - **`Data\inventory.json`** keeps its own protected ACL, which is stricter
-  (see [osquery-inventory.md](osquery-inventory.md)).
+  (see [osquery inventory](/guides/osquery-inventory/)).
 - **`config.yaml`:** SDDL `O:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)`, SYSTEM and
   Administrators only, owner Administrators, whatever its creator set.
 

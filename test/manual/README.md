@@ -108,7 +108,7 @@ msix fixtures install; do not run it on a machine you keep.
 
 ## Nupkg loop (embala packages as SYSTEM, no Chocolatey)
 
-Checks [nupkg items](../../docs/nupkg-items.md) end to end on a clean VM
+Checks [nupkg items](../../site/src/content/docs/guides/nupkg-items.md) end to end on a clean VM
 with no Chocolatey and no guest internet.
 
 1. `just bootstrap-nupkg` (needs embala 0.10.0 from `mise install`) builds
