@@ -47,6 +47,11 @@ type Checker struct {
 	// placed trees (installer.ZipInstaller.Installed). A zip item never has a
 	// check block; with Zip nil it reads as not installed.
 	Zip func(catalog.Item) bool
+
+	// Nupkg returns the version of the kept copy of the nupkg package with
+	// this id, and whether a kept copy exists (installer.KeptNupkgVersion).
+	// With Nupkg nil no kept copy exists.
+	Nupkg func(id string) (version string, kept bool)
 }
 
 // Invalidate drops the cached registry snapshot so the next registry check
@@ -104,17 +109,61 @@ func (c *Checker) checkRegistry(catalogItem catalog.Item, installType string) (a
 		}
 	}
 
-	if installType == "update" && !installed {
-		actionNeeded = false
-	} else if installType == "uninstall" {
-		actionNeeded = installed
-	} else if installed && versionMatch {
-		actionNeeded = false
-	} else {
-		actionNeeded = true
-	}
+	return needsAction(installType, installed, versionMatch), checkErr
+}
 
-	return actionNeeded, checkErr
+// needsAction holds the registry check's rules: install acts unless the item
+// is installed at a matching version, update acts only on an installed item
+// whose version does not match, and uninstall acts on an installed item.
+func needsAction(installType string, installed, versionMatch bool) bool {
+	switch {
+	case installType == "update" && !installed:
+		return false
+	case installType == "uninstall":
+		return installed
+	default:
+		return !installed || !versionMatch
+	}
+}
+
+// checkNupkg checks a nupkg item against the kept copy of its package, with
+// the registry check's rules. A kept copy with an empty version (its nuspec
+// could not be read) is installed but never matches, like an unparsable
+// registry version: install and update both reinstall over it. An item with no
+// version accepts any readable kept copy.
+func (c *Checker) checkNupkg(catalogItem catalog.Item, installType string) bool {
+	id := catalogItem.Installer.PackageID
+	var have string
+	var kept bool
+	if c.Nupkg != nil {
+		have, kept = c.Nupkg(id)
+	}
+	slog.Debug("Kept nupkg copy", "id", id, "kept", kept, "version", have)
+	return needsAction(installType, kept, kept && versionAtLeast(have, catalogItem.Version))
+}
+
+// versionAtLeast reports whether have is at least want. When want does not
+// parse it falls back to string equality, as checkRegistry does. An empty or
+// unparsable have never matches. An empty want (the item omits version, so it
+// takes the package's nuspec version at install) accepts any non-empty have.
+func versionAtLeast(have, want string) bool {
+	if have == "" {
+		return false
+	}
+	if want == "" {
+		return true
+	}
+	wantVersion, err := version.NewVersion(want)
+	if err != nil {
+		slog.Warn("Unable to parse new version", "version", want, "err", err)
+		return have == want
+	}
+	haveVersion, err := version.NewVersion(have)
+	if err != nil {
+		slog.Warn("Unable to parse current version", "version", have, "err", err)
+		return false
+	}
+	return !haveVersion.LessThan(wantVersion)
 }
 
 func checkPath(catalogItem catalog.Item, installType string) (actionNeeded bool, checkErr error) { //nolint:gocognit // CEILING: known-complex, split in Workstream B (kernel-repair)
@@ -251,17 +300,7 @@ func checkAppx(catalogItem catalog.Item, installType string) (actionNeeded bool,
 		versionMatch = !currentVersion.LessThan(catalogVersion)
 	}
 
-	if installType == "update" && !installed {
-		actionNeeded = false
-	} else if installType == "uninstall" {
-		actionNeeded = installed
-	} else if installed && versionMatch {
-		actionNeeded = false
-	} else {
-		actionNeeded = true
-	}
-
-	return actionNeeded, checkErr
+	return needsAction(installType, installed, versionMatch), checkErr
 }
 
 // CheckStatus determines the method for checking status
@@ -292,6 +331,10 @@ func (c *Checker) CheckStatus(catalogItem catalog.Item, installType, cachePath s
 	} else if catalogItem.Check.Appx.Name != "" {
 		slog.Info("Checking status via appx", "item", catalogItem.DisplayName)
 		return checkAppx(catalogItem, installType)
+
+	} else if catalogItem.Installer.Type == "nupkg" && catalogItem.Installer.PackageID != "" {
+		slog.Info("Checking status via the kept nupkg copy", "item", catalogItem.DisplayName)
+		return c.checkNupkg(catalogItem, installType), nil
 	}
 
 	slog.Warn("Not enough data to check the current status", "item", catalogItem.DisplayName)

@@ -151,7 +151,7 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 	zip.Held = func(item string) bool { return heldSet[item] }
 	runner := &installer.Runner{
 		Report:      run,
-		Checker:     &status.Checker{Zip: zip.Installed},
+		Checker:     &status.Checker{Zip: zip.Installed, Nupkg: func(id string) (string, bool) { return installer.KeptNupkgVersion(cfg.NupkgPath, id) }},
 		Emit:        progress,
 		Cancels:     cancels,
 		URLPackages: cfg.URLPackages,
