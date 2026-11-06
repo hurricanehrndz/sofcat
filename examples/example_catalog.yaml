@@ -1,15 +1,21 @@
-GoogleChrome:
-  display_name: Google Chrome
-  check:
-    registry:
-      name: Google Chrome
-      version: 68.0.3440.106
+hello:
+  display_name: Hello
+  # A nupkg built by embala 0.10.0 or later with the scripts key. sofcat runs
+  # the package's own scripts and keeps a copy of the package; see
+  # docs/nupkg-items.md. With no check block, status comes from that kept
+  # copy, so package_id is required and must equal the nuspec id.
   installer:
-    hash: ce9c44417489d6c1f205422a4b9e8d5181d1ac24b6dcae3bd68ec315efdeb18b
-    location: packages/google-chrome/GoogleChrome.68.0.3440.106.nupkg
-    package_id: GoogleChrome
+    hash: 3f1c9a7e52b84d06a1e9c3b7d25f8a64e0b1c7d93a5f2e86b4d0c1a9e7f35b28
+    location: packages/apps/hello/hello.1.2.0.nupkg
+    package_id: hello
     type: nupkg
-  version: 68.0.3440.106
+  # Removal runs the kept copy's uninstall script, or this file's when there
+  # is no kept copy.
+  uninstaller:
+    hash: 3f1c9a7e52b84d06a1e9c3b7d25f8a64e0b1c7d93a5f2e86b4d0c1a9e7f35b28
+    location: packages/apps/hello/hello.1.2.0.nupkg
+    type: nupkg
+  version: 1.2.0
 ColorPrinter:
   dependencies:
     - Canon-Drivers
@@ -44,17 +50,6 @@ CanonDrivers:
     location: packages/Canon-Drivers.1.0.nupkg
     package_id: Canon-Drivers
     type: nupkg
-  version: 1.0
-Chocolatey:
-  display_name: Chocolatey
-  check:
-    file:
-      - path: C:\ProgramData\chocolatey\bin\choco.exe
-        hash: bd82a10e75c5be624d916557b3d711a867d40bedd7b9e4be862eadb74f622e37
-  installer:
-    location: packages/chocolatey/chocolateyInstall.ps1
-    hash: 38cf17a230dbe53efc49f63bbc9931296b5cea84f45ac6528ce60767fe370230
-    type: ps1
   version: 1.0
 ChefClient:
   display_name: Chef Client

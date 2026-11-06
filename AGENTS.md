@@ -51,7 +51,7 @@ When changes span Go service/CLI and UI protocol layers, run `just test`, `just 
 pure-Go, windows-GUI `build/sofcat-ui.exe`
 (`GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -tags production -ldflags "-H windowsgui"`).
 `just setup` wraps them in embala's `setup.exe` (`installer/embala.toml`,
-`install.lua` and `uninstall.lua`, embala 0.9.1); it builds on Linux. The
+`install.lua` and `uninstall.lua`, embala 0.10.0); it builds on Linux. The
 installer copies them into `C:\Program Files\SofCat`, adds the Start-menu
 shortcut and the Add or remove programs entry, then runs
 `sofcat.exe -serviceinstall`, which registers and starts the service and

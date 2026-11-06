@@ -26,6 +26,9 @@ these its own ACL.
   on removals.
 - `Data\cache\` holds installers and scripts that run as SYSTEM.
 - `Data\conditions\` holds admin fact scripts, which run as SYSTEM.
+- `Data\nupkg\` holds the kept copy of each installed nupkg, whose
+  before-modify and uninstall scripts run as SYSTEM
+  ([nupkg-items.md](nupkg-items.md#the-kept-copy)).
 - `Data\sofcat.log` may name paths and items.
 
 `Data\user-artifacts\` is the one entry users read: the staged archives the

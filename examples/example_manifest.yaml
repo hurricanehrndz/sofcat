@@ -1,7 +1,6 @@
 name: example_manifest
 managed_installs:
-  - Chocolatey
-  - GoogleChrome
+  - hello
 optional_installs:
   - VLC
   - Slack
