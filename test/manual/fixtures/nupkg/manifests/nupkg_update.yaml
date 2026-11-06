@@ -1,0 +1,3 @@
+name: nupkg_update
+managed_updates:
+  - nupkg-smoke-v2

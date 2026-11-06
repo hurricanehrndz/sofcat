@@ -106,6 +106,40 @@ $thumbprint = ./test/integration/new-sideload-cert.ps1
 `new-sideload-cert.ps1` trusts a throwaway certificate machine-wide so the
 msix fixtures install; do not run it on a machine you keep.
 
+## Nupkg loop (embala packages as SYSTEM, no Chocolatey)
+
+Checks [nupkg items](../../docs/nupkg-items.md) end to end on a clean VM
+with no Chocolatey and no guest internet.
+
+1. `just bootstrap-nupkg` (needs embala 0.10.0 from `mise install`) builds
+   `build/sofcat.exe` and runs `build-nupkg-repo.sh`, which builds three
+   plain-style packages with embala: `sofcat-nupkg-smoke` 1.0.0 and 2.0.0
+   (`scripts = "generate"`, a `readme.txt` payload) and `sofcat-nupkg-bad`
+   1.0.0, whose install script is `fixtures/nupkg/bad-install.ps1`. It writes
+   their catalog items (`package_id`, no check block) and compiles them with
+   `makecatalogs`, beside the `nupkg_install`, `nupkg_update`,
+   `nupkg_uninstall` and `nupkg_bad` manifests, under
+   `build/manual-test/nupkg/server-root`.
+2. Serve it: `./build/manual-test-server -root build/manual-test/nupkg/server-root -addr 127.0.0.1:8080`,
+   and expose that port to the VM as `127.0.0.1:8080`.
+3. Copy `build/sofcat.exe` and `run-nupkg-smoke.ps1` to `C:\rig` on the VM
+   and run the script as an administrator, with no arguments (`-SofCat`,
+   `-BaseUrl`, `-DataDir` and `-LogPath` have defaults).
+
+`run-nupkg-smoke.ps1` writes a config per manifest under
+`C:\sofcat-test\nupkg-smoke` and runs `sofcat.exe -config` as SYSTEM through
+a temporary `rig-sofcat-nupkg-smoke` scheduled task, removed at the end, on
+failure too. It asserts that `%ProgramData%\chocolatey` never appears; that
+after install and update the install directory
+`C:\Program Files\SofCat Nupkg Smoke (nupkg)`, embala's
+`HKLM\SOFTWARE\embala\nupkg\ca.hrndz.sofcat.sofcat-nupkg-smoke` marker and the
+kept copy `C:\ProgramData\SofCat\Data\nupkg\sofcat-nupkg-smoke` hold 1.0.0,
+then 2.0.0; that uninstall removes all three; and that the bad package fails
+at its unknown command and leaves no kept copy and no staging directory. It
+exits 0 and prints `NUPKG SMOKE PASSED`, and logs to
+`C:\sofcat-test\nupkg-smoke.log`. Its last step only logs whether plain
+`-File` would also have failed the bad script.
+
 ## Chrome end-to-end loop (local file:// repo)
 
 A real-package loop that installs and removes Google Chrome through the

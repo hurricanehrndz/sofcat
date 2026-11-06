@@ -31,6 +31,22 @@ function Assert-Missing {
     }
 }
 
+function Assert-Lines {
+    param(
+        [string]$Path,
+        [string[]]$Expected
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        throw "Expected file does not exist: $Path"
+    }
+
+    $actual = @(Get-Content -LiteralPath $Path | Where-Object { $_.Trim() -ne "" }) -join ","
+    if ($actual -ne ($Expected -join ",")) {
+        throw "Unexpected lines in $Path. expected='$($Expected -join ",")' actual='$actual'"
+    }
+}
+
 function Assert-AppxInstalled {
     param(
         [string]$Name,
@@ -128,6 +144,11 @@ $markerRoot = "C:\ProgramData\sofcat-it"
 $exeMarker = Join-Path $markerRoot "exe.txt"
 $msiMarker = Join-Path $markerRoot "msi.txt"
 $nupkgMarker = Join-Path $markerRoot "nupkg.txt"
+# The fixture's chocolateyBeforeModify.ps1 appends its own version here.
+$nupkgBeforeModifyMarker = Join-Path $markerRoot "nupkg-before-modify.txt"
+# sofcat installs nupkg items without Chocolatey, which is on this runner only
+# for choco pack and WiX: nothing may land in its lib directory.
+$chocoLibNupkg = Join-Path $env:ProgramData "chocolatey\lib\sofcat-it-nupkg"
 $ps1Marker = Join-Path $markerRoot "ps1.txt"
 $msixPackageName = "SofCatIntegrationTest"
 $msixNoUninstallerPackageName = "SofCatIntegrationTestNoUninstaller"
@@ -175,6 +196,8 @@ try {
     Assert-Content -Path $exeMarker -Expected "1.0.0"
     Assert-Content -Path $msiMarker -Expected "1.0.0"
     Assert-Content -Path $nupkgMarker -Expected "1.0.0"
+    Assert-Missing -Path $nupkgBeforeModifyMarker
+    Assert-Missing -Path $chocoLibNupkg
     Assert-Content -Path $ps1Marker -Expected "1.0.0"
     Assert-AppxInstalled -Name $msixPackageName -ExpectedVersion "1.0.0"
     Assert-AppxInstalled -Name $msixNoUninstallerPackageName -ExpectedVersion "1.0.0"
@@ -185,6 +208,8 @@ try {
     Assert-Content -Path $exeMarker -Expected "2.0.0"
     Assert-Content -Path $msiMarker -Expected "2.0.0"
     Assert-Content -Path $nupkgMarker -Expected "2.0.0"
+    Assert-Lines -Path $nupkgBeforeModifyMarker -Expected @("1.0.0 over 1.0.0")
+    Assert-Missing -Path $chocoLibNupkg
     Assert-Content -Path $ps1Marker -Expected "2.0.0"
     Assert-AppxInstalled -Name $msixPackageName -ExpectedVersion "2.0.0"
     Assert-AppxInstalled -Name $msixNoUninstallerPackageName -ExpectedVersion "1.0.0"
@@ -195,6 +220,8 @@ try {
     Assert-Missing -Path $exeMarker
     Assert-Missing -Path $msiMarker
     Assert-Missing -Path $nupkgMarker
+    Assert-Lines -Path $nupkgBeforeModifyMarker -Expected @("1.0.0 over 1.0.0", "2.0.0 over 2.0.0")
+    Assert-Missing -Path $chocoLibNupkg
     Assert-Missing -Path $ps1Marker
     Assert-AppxMissing -Name $msixPackageName
     Assert-AppxMissing -Name $msixNoUninstallerPackageName

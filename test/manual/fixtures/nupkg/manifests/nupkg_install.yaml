@@ -1,0 +1,3 @@
+name: nupkg_install
+managed_installs:
+  - nupkg-smoke-v1
