@@ -19,7 +19,6 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/conditions"
 	"github.com/hurricanehrndz/sofcat/pkg/config"
 	"github.com/hurricanehrndz/sofcat/pkg/download"
-	"github.com/hurricanehrndz/sofcat/pkg/harness"
 	"github.com/hurricanehrndz/sofcat/pkg/identity"
 	"github.com/hurricanehrndz/sofcat/pkg/placement"
 	"github.com/hurricanehrndz/sofcat/pkg/receipt"
@@ -32,8 +31,8 @@ import (
 // own receipt directory.
 type ZipInstaller struct {
 	// Guard holds the OS, the write roots and the refusals every path passes.
-	Guard     placement.Guard
-	Harnesses harness.Table
+	Guard placement.Guard
+	Table placement.Table
 	// ReceiptDir holds this installer's receipts.
 	ReceiptDir string
 	// Slug names the ownership marker and staging directories; identity.Slug
@@ -73,11 +72,11 @@ func (z *ZipInstaller) templates() treeRenderer {
 }
 
 // NewMachineZip returns the service's zip installer for cfg and the
-// repository's harness table: machine roots, receipts in the data directory.
-func NewMachineZip(cfg config.Configuration, table harness.Table) *ZipInstaller {
+// repository's placement table: machine roots, receipts in the data directory.
+func NewMachineZip(cfg config.Configuration, table placement.Table) *ZipInstaller {
 	return &ZipInstaller{
 		Guard:       placement.MachineGuard(cfg.AppDataPath),
-		Harnesses:   table,
+		Table:       table,
 		ReceiptDir:  receipt.MachineDir(cfg.AppDataPath),
 		CachePath:   cfg.CachePath,
 		URLPackages: cfg.URLPackages,
@@ -149,9 +148,9 @@ func (r Result) Failed() bool { return r.Err != nil }
 type Target struct {
 	Placement string
 	Variant   catalog.Variant
-	// Spec is the harness table's entry; Known is false when the table lacks
+	// Spec is the placement table's entry; Known is false when the table lacks
 	// the placement, which refuses it.
-	Spec  harness.Placement
+	Spec  placement.Spec
 	Known bool
 }
 
@@ -169,7 +168,7 @@ func (z *ZipInstaller) clock() time.Time {
 	return time.Now().UTC()
 }
 
-// Targets returns item's placements on this OS, in harness-table order, then
+// Targets returns item's placements on this OS, in table order, then
 // any the table lacks, by name. Placements whose scope here is user are
 // returned apart in user: a machine run skips them, neither failing nor
 // succeeding the item.
@@ -179,13 +178,13 @@ func (z *ZipInstaller) Targets(item catalog.Item) (machine []Target, user []stri
 		v, ok := item.Installer.Variants[name][goos]
 		return v, ok
 	}
-	for _, name := range z.Harnesses.Names() {
+	for _, name := range z.Table.Names() {
 		v, ok := variantFor(name)
 		if !ok {
 			continue
 		}
-		spec := z.Harnesses.Placements[name]
-		if spec.ScopeFor(goos) == harness.ScopeUser {
+		spec := z.Table.Placements[name]
+		if spec.ScopeFor(goos) == placement.ScopeUser {
 			user = append(user, name)
 			continue
 		}
@@ -193,7 +192,7 @@ func (z *ZipInstaller) Targets(item catalog.Item) (machine []Target, user []stri
 	}
 	var unknown []string
 	for name := range item.Installer.Variants {
-		if _, known := z.Harnesses.Placements[name]; known {
+		if _, known := z.Table.Placements[name]; known {
 			continue
 		}
 		if _, ok := variantFor(name); ok {
@@ -211,9 +210,9 @@ func (z *ZipInstaller) Targets(item catalog.Item) (machine []Target, user []stri
 // root resolves and checks the target's placement root.
 func (z *ZipInstaller) root(t Target) (string, error) {
 	if !t.Known {
-		return "", fmt.Errorf("%w: placement %q is not in harnesses.yaml", placement.ErrRefused, t.Placement)
+		return "", fmt.Errorf("%w: placement %q is not in placements.yaml", placement.ErrRefused, t.Placement)
 	}
-	if t.Spec.Kind != harness.KindDirectory && t.Spec.Kind != harness.KindMarketplace {
+	if t.Spec.Kind != placement.KindDirectory && t.Spec.Kind != placement.KindMarketplace {
 		// A settings placement is one generated file, never an item's target.
 		return "", fmt.Errorf("%w: placement %q is kind %s, which takes no item trees", placement.ErrRefused, t.Placement, t.Spec.Kind)
 	}
@@ -221,7 +220,7 @@ func (z *ZipInstaller) root(t Target) (string, error) {
 }
 
 // resolve expands, resolves and checks placement name's path on this OS.
-func (z *ZipInstaller) resolve(name string, spec harness.Placement) (string, error) {
+func (z *ZipInstaller) resolve(name string, spec placement.Spec) (string, error) {
 	raw, ok := spec.Path(z.Guard.GOOS)
 	if !ok {
 		return "", fmt.Errorf("%w: placement %q has no path on %s", placement.ErrRefused, name, z.Guard.GOOS)
@@ -235,8 +234,8 @@ func (z *ZipInstaller) resolve(name string, spec harness.Placement) (string, err
 
 // treeIn is item's tree under its placement root: <root>/<item>, or
 // <root>/plugins/<item> in a marketplace.
-func treeIn(spec harness.Placement, root, item string) string {
-	if spec.Kind == harness.KindMarketplace {
+func treeIn(spec placement.Spec, root, item string) string {
+	if spec.Kind == placement.KindMarketplace {
 		return filepath.Join(root, pluginsDir, item)
 	}
 	return filepath.Join(root, item)
@@ -645,8 +644,8 @@ func (z *ZipInstaller) receiptManaged(item, placement string) (bool, error) {
 func (z *ZipInstaller) Remove(rc receipt.Receipt) Result {
 	t := Target{Placement: rc.Placement}
 	res := Result{Placement: rc.Placement, Path: rc.Path}
-	scope := harness.ScopeMachine
-	if spec, ok := z.Harnesses.Placements[rc.Placement]; ok {
+	scope := placement.ScopeMachine
+	if spec, ok := z.Table.Placements[rc.Placement]; ok {
 		scope = spec.ScopeFor(z.Guard.GOOS)
 	}
 	if err := checkItemName(rc.Item); err != nil {

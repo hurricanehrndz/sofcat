@@ -44,7 +44,7 @@ function wire(overrides) {
   };
 }
 
-// Labels are catalog and harness-table text. Escaping them here would show
+// Labels are catalog and placement-table text. Escaping them here would show
 // "&lt;b&gt;" on a button, and the shell must never parse them as markup, so
 // they pass through untouched and the shell only ever assigns text.
 test("a label containing markup is kept literally and the shell never parses HTML", () => {

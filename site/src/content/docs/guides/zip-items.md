@@ -20,7 +20,7 @@ hello-world:
         windows: {location: ..., hash: ..., tree_hash: ...}
 ```
 
-- `variants` maps a placement name from `harnesses.yaml` to an OS, `darwin` or
+- `variants` maps a placement name from `placements.yaml` to an OS, `darwin` or
   `windows`, to one zip.
 - `location` is the zip's path in the repository, `hash` its sha256 and
   `tree_hash` the tree hash of its contents.
@@ -34,7 +34,7 @@ Do not write the `installer` block by hand. `makecatalogs zip-item` writes it.
 ## Installing
 
 sofcat installs a zip item by placing one tree per placement for the OS it
-runs on, in `harnesses.yaml` order. The service skips placements whose scope
+runs on, in `placements.yaml` order. The service skips placements whose scope
 on this OS is `user`; they neither fail nor succeed the item. Instead, after
 each run that is not check-only, it stages their verified archives in
 `user-artifacts` inside its data directory, the one entry there users may
@@ -190,7 +190,7 @@ marketplace, which the default reads. See Templates for placement files.
 Generated files are written by the service only: marketplace and settings
 placements cannot be `user` scope.
 
-To change either file, copy the default into `harnesses.yaml`, as a
+To change either file, copy the default into `placements.yaml`, as a
 `manifest_files` entry `{path, template}` or as the `settings` placement's
 `template`, and edit it there. sofcat then renders the copy and nothing
 else, so the repository owns the file's shape. A file rendered from either
@@ -201,14 +201,14 @@ template of your own may name any path.
 ### Templates for placement files
 
 Every file a placement generates is rendered from a template in
-`harnesses.yaml`: a `manifest_files` entry written as `{path, template}`, a
+`placements.yaml`: a `manifest_files` entry written as `{path, template}`, a
 `template` on a `settings` placement, or the two defaults above where none
 is given. Each is rendered from the placement's receipts after every change
 there and once per run, and removed when the output is empty. Templates are
 Go [`text/template`](https://pkg.go.dev/text/template) with
 `missingkey=error`, so a field the context lacks fails the render instead of
 printing `<no value>`. A template cannot read files, include other files or
-reach the network. Templates live inline in `harnesses.yaml` as block
+reach the network. Templates live inline in `placements.yaml` as block
 scalars (`|`).
 
 The context is:
@@ -217,7 +217,7 @@ The context is:
 |---|---|
 | `.OS` | `windows` or `darwin`. |
 | `.Scope` | `machine` or `user` (today always `machine`: generated files are written by the service). |
-| `.Placement` | The placement the file belongs to: `.Name`, `.Root` (the expanded placement root; for a `settings` placement, the file's own path), `.Kind`, and for a marketplace `.Marketplace` with `.Name`, `.Owner`, `.Renames` and `.AllowCrossMarketplaceDependenciesOn` as written in `harnesses.yaml` (`.Owner.name` reads a key of the owner map). |
+| `.Placement` | The placement the file belongs to: `.Name`, `.Root` (the expanded placement root; for a `settings` placement, the file's own path), `.Kind`, and for a marketplace `.Marketplace` with `.Name`, `.Owner`, `.Renames` and `.AllowCrossMarketplaceDependenciesOn` as written in `placements.yaml` (`.Owner.name` reads a key of the owner map). |
 | `.Registers` | For a `settings` placement, the registered placement: `.Name`, `.Root`, `.Kind` and, when it is a marketplace, `.Marketplace` as under `.Placement` (nil otherwise). Absent in a manifest template. |
 | `.Items` | The receipts of the placement the file describes (the registered one for a `settings` placement), sorted by item: `.Name`, `.Version`, `.Managed`, `.Path`, `.TreeHash`, `.PlacedHash`. `{{ json .Items }}` emits them with the receipt's field names (`name`, `version`, `managed`, `path`, `tree_hash`, `placed_hash`). |
 | `.User` | Empty in machine scope. |
@@ -277,7 +277,7 @@ Codex reads `.agents/plugins/marketplace.json` from a local marketplace in
 its own format. This entry writes it beside the default Claude catalog,
 with each plugin's version stamped from its placed hash so Codex reloads a
 plugin whose rendered files changed (the fixture in
-`test/manual/fixtures/tapas/harnesses.yaml` and `examples/harnesses.yaml`
+`test/manual/fixtures/tapas/placements.yaml` and `examples/placements.yaml`
 carry the same template):
 
 ```yaml
@@ -373,7 +373,7 @@ template in the repository's zips, without a machine (see
 the tree templates it packs the same way. Their facts are a sample value for
 every built-in fact of the OS, the example values of the
 [conditions guide's table](/guides/conditions/#built-in-facts), overlaid with the
-top-level `check_facts` map in `harnesses.yaml`: the admin facts the
+top-level `check_facts` map in `placements.yaml`: the admin facts the
 templates read, with values to check them against.
 
 ```yaml
@@ -569,7 +569,7 @@ sofcat's data directory, or inside, equal to or around a directory holding
 sofcat's binaries, so the stock root never overlaps `Data` or
 `${ProgramFiles}\<NAME>`. An `exclusive` placement that exists, is not empty
 and lacks the marker file `.<slug>-owned` is refused too; a root sofcat
-creates gets the marker. A repository without `harnesses.yaml` fails every
+creates gets the marker. A repository without `placements.yaml` fails every
 zip item with `placement_refused`.
 
 ### Zip-only builds
@@ -650,7 +650,7 @@ OS computes the hash. Empty directories do not count.
 ```sh
 makecatalogs pack [--os darwin|windows] <dir> -o <file.zip>
 makecatalogs tree-hash [--os darwin|windows] <dir>
-makecatalogs zip-item --harnesses <harnesses.yaml> --item <item.yaml> \
+makecatalogs zip-item --placements <placements.yaml> --item <item.yaml> \
   --rendered <dir> --location-prefix <prefix> -o <repo>
 ```
 
@@ -674,7 +674,7 @@ nothing, when:
 
 - `<item.yaml>` already has an `installer`
 - `<dir>` has no placement directories
-- a placement is not in `harnesses.yaml`
+- a placement is not in `placements.yaml`
 - an OS directory is not `darwin` or `windows`
 - the placement has no path for that OS
 - a tree is empty or holds a symlink
@@ -689,18 +689,18 @@ nothing, when:
 input, and the output. To regenerate the output:
 
 ```sh
-makecatalogs zip-item --harnesses examples/harnesses.yaml \
+makecatalogs zip-item --placements examples/placements.yaml \
   --item examples/zip-items/hello-world.yaml \
   --rendered examples/zip-items/rendered/hello-world \
   --location-prefix packages/skills -o examples/zip-items/generated \
   > examples/zip-items/generated/hello-world.yaml
 ```
 
-## harnesses.yaml
+## placements.yaml
 
-`harnesses.yaml` sits at the repository root, next to `catalogs/` and
+`placements.yaml` sits at the repository root, next to `catalogs/` and
 `manifests/`. It names the placements. Unknown fields are rejected.
-[examples/harnesses.yaml](https://github.com/hurricanehrndz/sofcat/blob/main/examples/harnesses.yaml) shows every field.
+[examples/placements.yaml](https://github.com/hurricanehrndz/sofcat/blob/main/examples/placements.yaml) shows every field.
 
 ```yaml
 placements:
@@ -742,7 +742,7 @@ Only placements with a variant for the machine's OS count, for labels and for
 `works_in`, in file order, without repeats. For example:
 
 ```yaml
-# harnesses.yaml
+# placements.yaml
 placements:
   tapas-marketplace:
     kind: marketplace
@@ -765,14 +765,14 @@ so the status reads in the same words as the button that made the request.
 
 ## makecatalogs -check
 
-`makecatalogs` validates `harnesses.yaml` when the repository has one, and
+`makecatalogs` validates `placements.yaml` when the repository has one, and
 checks every zip item. It reports:
 
 - a zip item with no variants
 - a variant without `location`, `hash` or `tree_hash`
 - a variant OS other than `darwin` or `windows`
-- a variant placement that `harnesses.yaml` does not define
-- a zip item in a repository with no `harnesses.yaml`
+- a variant placement that `placements.yaml` does not define
+- a zip item in a repository with no `placements.yaml`
 - a `custom_action_labels` key other than the nine above, on any item
 - a placement template (a `manifest_files` entry, a `settings` placement's
   `template`, or the default where none is given) that fails to render: for

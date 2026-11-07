@@ -11,7 +11,6 @@ import (
 
 	"github.com/hurricanehrndz/sofcat/pkg/artifact"
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
-	"github.com/hurricanehrndz/sofcat/pkg/harness"
 	"github.com/hurricanehrndz/sofcat/pkg/placement"
 	"github.com/hurricanehrndz/sofcat/pkg/receipt"
 	"github.com/hurricanehrndz/sofcat/pkg/report"
@@ -34,7 +33,7 @@ func newMarketTest(t *testing.T, settings string) marketTest {
 	if settings == "" {
 		settings = filepath.Join(roots, "settings.d", "50-acme.json")
 	}
-	table, err := harness.Parse(fmt.Appendf(nil, `placements:
+	table, err := placement.Parse(fmt.Appendf(nil, `placements:
   market:
     kind: marketplace
     paths: {%[1]s: '%[2]s'}
@@ -62,7 +61,7 @@ func newMarketTest(t *testing.T, settings string) marketTest {
 				Roots:   placement.Roots{Darwin: []string{roots}, Windows: []string{roots}},
 				DataDir: filepath.Join(base, "data"),
 			},
-			Harnesses:  table,
+			Table:      table,
 			ReceiptDir: filepath.Join(base, "data", "receipts"),
 			Slug:       "sofcat-test",
 		},

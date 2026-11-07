@@ -8,11 +8,11 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/download"
 )
 
-// TestGetHarnesses: a missing harnesses.yaml is an empty table so a
+// TestGetPlacements: a missing placements.yaml is an empty table so a
 // repository without zip items keeps working, while any other failure stops
 // the run like a catalog fetch error would.
-func TestGetHarnesses(t *testing.T) {
-	const url = "https://repo.example/harnesses.yaml"
+func TestGetPlacements(t *testing.T) {
+	const url = "https://repo.example/placements.yaml"
 	cases := []struct {
 		name       string
 		body       []byte
@@ -34,7 +34,7 @@ func TestGetHarnesses(t *testing.T) {
 			if tc.err == nil {
 				downloadGet = fakeDownloadByURL(map[string][]byte{url: tc.body}, nil)
 			}
-			table, err := GetHarnesses(config.Configuration{URL: "https://repo.example/"})
+			table, err := GetPlacements(config.Configuration{URL: "https://repo.example/"})
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("err = %v, wantErr %v", err, tc.wantErr)
 			}

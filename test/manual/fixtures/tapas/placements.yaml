@@ -60,7 +60,7 @@ placements:
     works_in: [Claude Code]
   # A marketplace sofcat creates, so it gets the marker: plugins under
   # plugins\<item>, a .claude-plugin\marketplace.json rendered from the
-  # default catalog template (harness.DefaultCatalogTemplate), and a
+  # default catalog template (placement.DefaultCatalogTemplate), and a
   # Codex-format catalog rendered from a template, its versions stamped with
   # each plugin's placed hash.
   tapas-marketplace:
@@ -105,7 +105,7 @@ placements:
             }
   # The drop-in that registers tapas-marketplace and enables its managed
   # plugins, rendered from the default settings template
-  # (harness.DefaultSettingsTemplate).
+  # (placement.DefaultSettingsTemplate).
   tapas-settings:
     kind: settings
     paths:

@@ -261,7 +261,7 @@ func TestCheckFlagsBadConditionalItems(t *testing.T) {
 	}
 }
 
-// -check renders every placement template in harnesses.yaml against the
+// -check renders every placement template in placements.yaml against the
 // catalog's items and the sample facts, so a template that would fail on
 // every device fails the PR instead. Each fixture under testdata/check is a
 // repository with one broken template; the error names the placement and
@@ -293,13 +293,13 @@ func TestCheckRejectsBadTemplates(t *testing.T) {
 	}
 }
 
-// examples/harnesses.yaml carries the guide's templates; they must pass the
+// examples/placements.yaml carries the guide's templates; they must pass the
 // check they document, against the example zip item.
 func TestCheckExamples(t *testing.T) {
 	examples := filepath.Join("..", "..", "examples")
 	repo := t.TempDir()
 	for src, dst := range map[string]string{
-		filepath.Join(examples, "harnesses.yaml"):                             "harnesses.yaml",
+		filepath.Join(examples, "placements.yaml"):                            "placements.yaml",
 		filepath.Join(examples, "zip-items", "generated", "hello-world.yaml"): filepath.Join("packages-info", "hello-world.yaml"),
 	} {
 		body, err := os.ReadFile(src)

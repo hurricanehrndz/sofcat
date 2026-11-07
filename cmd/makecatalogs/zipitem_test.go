@@ -17,7 +17,7 @@ import (
 	"go.yaml.in/yaml/v4"
 )
 
-const testHarnesses = `
+const testPlacements = `
 placements:
   claude-code-skills:
     kind: directory
@@ -49,12 +49,12 @@ func writeFiles(t *testing.T, root string, files map[string]string) string {
 }
 
 // zipItemFixture lays out a valid zip-item input in a temp dir and returns
-// it. Paths under it: harnesses.yaml, item.yaml, rendered/.
+// it. Paths under it: placements.yaml, item.yaml, rendered/.
 func zipItemFixture(t *testing.T) string {
 	t.Helper()
 	return writeFiles(t, t.TempDir(), map[string]string{
-		"harnesses.yaml": testHarnesses,
-		"item.yaml":      testItem,
+		"placements.yaml": testPlacements,
+		"item.yaml":       testItem,
 		"rendered/claude-code-skills/darwin/SKILL.md":  "claude\n",
 		"rendered/claude-code-skills/windows/SKILL.md": "claude\n",
 		"rendered/codex-skills/windows/SKILL.md":       "codex\n",
@@ -65,7 +65,7 @@ func runZipItemIn(dir, out string) (code int, stdout, stderr string) {
 	var o, e bytes.Buffer
 	code = run([]string{
 		"zip-item",
-		"--harnesses", filepath.Join(dir, "harnesses.yaml"),
+		"--placements", filepath.Join(dir, "placements.yaml"),
 		"--item", filepath.Join(dir, "item.yaml"),
 		"--rendered", filepath.Join(dir, "rendered"),
 		"--location-prefix", "packages/skills",
@@ -132,7 +132,7 @@ func TestZipItemRefusals(t *testing.T) {
 			t.Helper()
 			writeFiles(t, dir, map[string]string{"item.yaml": testItem + "installer: {type: msi, location: x.msi}\n"})
 		}, "already has an installer"},
-		"placement not in harnesses.yaml": {func(t *testing.T, dir string) {
+		"placement not in placements.yaml": {func(t *testing.T, dir string) {
 			t.Helper()
 			writeFiles(t, dir, map[string]string{"rendered/cursor-skills/darwin/SKILL.md": "x"})
 		}, `placement "cursor-skills" is not in`},
@@ -265,7 +265,7 @@ func TestZipItemKeepsAuthorKeys(t *testing.T) {
 // zip-item output is a package-info file the repo's -check gate accepts.
 func TestZipItemRoundTripPassesCheck(t *testing.T) {
 	dir := zipItemFixture(t)
-	repo := writeFiles(t, t.TempDir(), map[string]string{"harnesses.yaml": testHarnesses})
+	repo := writeFiles(t, t.TempDir(), map[string]string{"placements.yaml": testPlacements})
 	code, stdout, stderr := runZipItemIn(dir, repo)
 	if code != 0 {
 		t.Fatalf("zip-item exit %d: %s", code, stderr)
@@ -288,7 +288,7 @@ func TestExampleZipItemsMatchGenerator(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	code := run([]string{
 		"zip-item",
-		"--harnesses", filepath.Join(examples, "harnesses.yaml"),
+		"--placements", filepath.Join(examples, "placements.yaml"),
 		"--item", filepath.Join(itemDir, "hello-world.yaml"),
 		"--rendered", filepath.Join(itemDir, "rendered", "hello-world"),
 		"--location-prefix", "packages/skills",
@@ -339,29 +339,29 @@ func TestCheckZipItems(t *testing.T) {
 		return "item_name: hello\ncatalog: skills\nversion: 1.0.0\ninstaller:\n" + installer
 	}
 	tests := map[string]struct {
-		harnesses string // "" means no harnesses.yaml
-		info      string
-		want      string // "" means -check passes
+		placements string // "" means no placements.yaml
+		info       string
+		want       string // "" means -check passes
 	}{
-		"valid":       {testHarnesses, item("  type: zip\n  variants: {claude-code-skills: {darwin: " + variant + "}}\n"), ""},
-		"no variants": {testHarnesses, item("  type: zip\n"), "has no variants"},
+		"valid":       {testPlacements, item("  type: zip\n  variants: {claude-code-skills: {darwin: " + variant + "}}\n"), ""},
+		"no variants": {testPlacements, item("  type: zip\n"), "has no variants"},
 		"variant missing tree_hash": {
-			testHarnesses, item("  type: zip\n  variants: {claude-code-skills: {darwin: {location: a.zip, hash: abc}}}\n"),
+			testPlacements, item("  type: zip\n  variants: {claude-code-skills: {darwin: {location: a.zip, hash: abc}}}\n"),
 			"needs location, hash and tree_hash",
 		},
 		"unknown OS": {
-			testHarnesses, item("  type: zip\n  variants: {claude-code-skills: {linux: " + variant + "}}\n"),
+			testPlacements, item("  type: zip\n  variants: {claude-code-skills: {linux: " + variant + "}}\n"),
 			"OS must be darwin or windows",
 		},
-		"placement not in harnesses.yaml": {
-			testHarnesses, item("  type: zip\n  variants: {cursor-skills: {darwin: " + variant + "}}\n"),
-			`placement "cursor-skills" is not in harnesses.yaml`,
+		"placement not in placements.yaml": {
+			testPlacements, item("  type: zip\n  variants: {cursor-skills: {darwin: " + variant + "}}\n"),
+			`placement "cursor-skills" is not in placements.yaml`,
 		},
-		"zip item without harnesses.yaml": {
+		"zip item without placements.yaml": {
 			"", item("  type: zip\n  variants: {claude-code-skills: {darwin: " + variant + "}}\n"),
-			"no harnesses.yaml",
+			"no placements.yaml",
 		},
-		"invalid harnesses.yaml without zip items": {
+		"invalid placements.yaml without zip items": {
 			"placements:\n  p: {kind: folder, paths: {darwin: /p}}\n", chromeInfo, "unknown kind",
 		},
 	}
@@ -369,12 +369,12 @@ func TestCheckZipItems(t *testing.T) {
 		repo := writeRepo(t, map[string]string{
 			"hello.yaml": item("  type: zip\n  variants: {cursor-skills: {darwin: " + variant + "}}\n"),
 		})
-		writeFiles(t, repo, map[string]string{"harnesses.yaml": testHarnesses})
+		writeFiles(t, repo, map[string]string{"placements.yaml": testPlacements})
 		var stdout, stderr bytes.Buffer
 		if code := run([]string{repo}, &stdout, &stderr); code != 0 {
 			t.Fatalf("exit %d, stderr: %s", code, stderr.String())
 		}
-		want := `placement "cursor-skills" is not in harnesses.yaml`
+		want := `placement "cursor-skills" is not in placements.yaml`
 		if !strings.Contains(stderr.String(), "warning:") || !strings.Contains(stderr.String(), want) {
 			t.Fatalf("stderr %q, want a warning: %q", stderr.String(), want)
 		}
@@ -382,8 +382,8 @@ func TestCheckZipItems(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			repo := writeRepo(t, map[string]string{"hello.yaml": tc.info})
-			if tc.harnesses != "" {
-				writeFiles(t, repo, map[string]string{"harnesses.yaml": tc.harnesses})
+			if tc.placements != "" {
+				writeFiles(t, repo, map[string]string{"placements.yaml": tc.placements})
 			}
 			var stdout, stderr bytes.Buffer
 			code := run([]string{"-check", repo}, &stdout, &stderr)
@@ -406,7 +406,7 @@ func TestCheckZipItems(t *testing.T) {
 func TestZipItemChecksTemplates(t *testing.T) {
 	dir := zipItemFixture(t)
 	writeFiles(t, dir, map[string]string{
-		"harnesses.yaml": "check_facts: {assigned_user: jdoe}\n" + testHarnesses,
+		"placements.yaml": "check_facts: {assigned_user: jdoe}\n" + testPlacements,
 		"rendered/codex-skills/windows/NOTE.md.tmpl": `{{ .Item.Name }} {{ .Item.Version }} for {{ .User }} ({{ fact "assigned_user" }}, {{ fact "os" }}) managed={{ .Item.Managed }}` +
 			`{{ if cond "os == \"windows\" && os_build > 1" }} win{{ end }}`,
 		"rendered/claude-code-skills/darwin/.claude-plugin/plugin.json.tmpl": `{"installationPreference": {{ if .Item.Managed }}"auto_install"{{ else }}"available"{{ end }}, "user": {{ json .User }}}`,
@@ -461,7 +461,7 @@ func TestCheckZipTemplates(t *testing.T) {
 	}
 
 	repo := t.TempDir()
-	writeFiles(t, repo, map[string]string{"harnesses.yaml": testHarnesses})
+	writeFiles(t, repo, map[string]string{"placements.yaml": testPlacements})
 	good := pack(t, repo, map[string]string{"SKILL.md": "s", "NOTE.md.tmpl": `{{ .Item.Name }} on {{ fact "os" }}`}, "darwin")
 	writeFiles(t, repo, map[string]string{"packages-info/hello.yaml": good})
 	if code, stderr := run(t, repo); code != 0 {

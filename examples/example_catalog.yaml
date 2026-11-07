@@ -171,7 +171,7 @@ FirefoxLangPack:
 hello-world:
   display_name: Hello World
   # A zip item places a directory tree, such as an AI skill, instead of running
-  # an installer. variants maps a placement in harnesses.yaml to an OS (darwin
+  # an installer. variants maps a placement in placements.yaml to an OS (darwin
   # or windows) to one zip. makecatalogs zip-item writes this block; see
   # site/src/content/docs/guides/zip-items.md. A zip item needs no check block or uninstaller.
   installer:

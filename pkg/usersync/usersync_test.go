@@ -15,7 +15,6 @@ import (
 
 	"github.com/hurricanehrndz/sofcat/pkg/artifact"
 	"github.com/hurricanehrndz/sofcat/pkg/conditions"
-	"github.com/hurricanehrndz/sofcat/pkg/harness"
 	"github.com/hurricanehrndz/sofcat/pkg/installer"
 	"github.com/hurricanehrndz/sofcat/pkg/placement"
 	"github.com/hurricanehrndz/sofcat/pkg/receipt"
@@ -69,13 +68,13 @@ func fixtureTree(t *testing.T, files map[string]string) (service.UserPlacement, 
 		}
 	}
 	archive := filepath.Join(t.TempDir(), "skill.zip")
-	packed, err := artifact.PackFile(src, harness.Windows, archive)
+	packed, err := artifact.PackFile(src, placement.Windows, archive)
 	if err != nil {
 		t.Fatal(err)
 	}
 	profile := t.TempDir()
 	guard := placement.Guard{
-		GOOS:  harness.Windows,
+		GOOS:  placement.Windows,
 		Roots: placement.Roots{WindowsUser: []string{"${USERPROFILE}/.agents"}},
 		Vars:  map[string]string{"USERPROFILE": profile},
 	}
@@ -119,7 +118,7 @@ func TestSyncWithoutPlanRemovesNothing(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(tree, "SKILL.md"), []byte("old"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	hash, hashErr := artifact.TreeHash(tree, harness.Windows)
+	hash, hashErr := artifact.TreeHash(tree, placement.Windows)
 	if hashErr != nil {
 		t.Fatal(hashErr)
 	}

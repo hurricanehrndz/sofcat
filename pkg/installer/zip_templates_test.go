@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/hurricanehrndz/sofcat/pkg/conditions"
-	"github.com/hurricanehrndz/sofcat/pkg/harness"
+	"github.com/hurricanehrndz/sofcat/pkg/placement"
 	"github.com/hurricanehrndz/sofcat/pkg/receipt"
 )
 
@@ -108,7 +108,7 @@ func TestZipTreeTemplates(t *testing.T) {
 		t.Fatalf("plugin.json = %q, want canonical %q", got, wantPlugin)
 	}
 	platform := "macos"
-	if testOS() == harness.Windows {
+	if testOS() == placement.Windows {
 		platform = "windows"
 	}
 	if got := readFile(t, file(".mcp.json")); !strings.Contains(got, `"x-litellm-api-key": "Bearer jdoe/claudecode"`) || !strings.Contains(got, `"x-platform": "`+platform+`"`) {
@@ -192,8 +192,8 @@ func TestZipTreeUser(t *testing.T) {
 	item, _ := packVersion(t, "1.0", map[string]string{"SKILL.md": "s"})
 	dir := writeTree(t, map[string]string{"NOTE.md.tmpl": "user={{ .User }}"})
 	root := t.TempDir()
-	for scope, want := range map[string]string{harness.ScopeUser: "alice", harness.ScopeMachine: ""} {
-		tg := Target{Placement: "codex", Spec: harness.Placement{Kind: harness.KindDirectory, Scope: map[string]string{testOS(): scope}}, Known: true}
+	for scope, want := range map[string]string{placement.ScopeUser: "alice", placement.ScopeMachine: ""} {
+		tg := Target{Placement: "codex", Spec: placement.Spec{Kind: placement.KindDirectory, Scope: map[string]string{testOS(): scope}}, Known: true}
 		outs, err := treeTemplates{z}.render(item, tg, root, dir, true)
 		if err != nil || len(outs) != 1 {
 			t.Fatalf("%s: render = %+v, %v", scope, outs, err)

@@ -90,9 +90,9 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 	}
 
 	// The placement table for zip items; a repository without one has none.
-	harnesses, err := manifest.GetHarnesses(cfg)
+	table, err := manifest.GetPlacements(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("unable to retrieve harness table: %w", err)
+		return nil, fmt.Errorf("unable to retrieve placement table: %w", err)
 	}
 
 	// Decide which catalog items this machine may install (installable_condition).
@@ -145,7 +145,7 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 	// A held item is never removed (not by managed_uninstalls, a pending
 	// self-service removal, or scope exit), nor its managed flag rewritten.
 	heldSet := heldItems(held)
-	zip := newZipInstaller(cfg, harnesses)
+	zip := newZipInstaller(cfg, table)
 	zip.Facts = machineFacts
 	managed := managedInstalls(manifests)
 	zip.Managed = func(item string) bool { return managed[item] }
@@ -235,7 +235,7 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 			delete(planDesired, d.Name)
 			planHeld[d.Name] = true
 		}
-		userPlan := service.UserPlan(planDesired, planHeld, managed, catalogs, harnesses, zip.Guard.GOOS, dir)
+		userPlan := service.UserPlan(planDesired, planHeld, managed, catalogs, table, zip.Guard.GOOS, dir)
 		service.StageUserArtifacts(context.Background(), zip, userPlan, dir)
 		if err := service.SaveUserPlan(cfg.AppDataPath, service.UserPlacements{Entries: userPlan, Facts: machineFacts}); err != nil {
 			slog.Warn("unable to store the user-placement plan", "err", err)

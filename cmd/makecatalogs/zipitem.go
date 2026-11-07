@@ -12,12 +12,12 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/admin"
 	"github.com/hurricanehrndz/sofcat/pkg/artifact"
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
-	"github.com/hurricanehrndz/sofcat/pkg/harness"
+	"github.com/hurricanehrndz/sofcat/pkg/placement"
 	"github.com/hurricanehrndz/sofcat/pkg/render"
 	"go.yaml.in/yaml/v4"
 )
 
-const zipItemUsage = `Usage: makecatalogs zip-item --harnesses <harnesses.yaml> --item <item.yaml>
+const zipItemUsage = `Usage: makecatalogs zip-item --placements <placements.yaml> --item <item.yaml>
        --rendered <dir> --location-prefix <prefix> -o <out>
 
 Packs <dir>/<placement>/<darwin|windows>/ trees into zips under
@@ -34,7 +34,7 @@ type zipVariant struct {
 
 func runZipItem(args []string, stdout, stderr io.Writer) int {
 	flags := newFlagSet("zip-item", zipItemUsage, stderr)
-	harnessesPath := flags.String("harnesses", "", "harnesses.yaml (required)")
+	placementsPath := flags.String("placements", "", "placements.yaml (required)")
 	itemPath := flags.String("item", "", "package-info file without installer (required)")
 	rendered := flags.String("rendered", "", "rendered trees, laid out <placement>/<os>/ (required)")
 	prefix := flags.String("location-prefix", "", "repo-relative directory for the zips, such as packages/skills (required)")
@@ -42,12 +42,12 @@ func runZipItem(args []string, stdout, stderr io.Writer) int {
 	if _, code := parseArgs(flags, args, 0); code >= 0 {
 		return code
 	}
-	if *harnessesPath == "" || *itemPath == "" || *rendered == "" || *prefix == "" || *out == "" {
+	if *placementsPath == "" || *itemPath == "" || *rendered == "" || *prefix == "" || *out == "" {
 		flags.Usage()
 		return 2
 	}
 
-	info, doc, variants, err := planZipItem(*harnessesPath, *itemPath, *rendered, *prefix)
+	info, doc, variants, err := planZipItem(*placementsPath, *itemPath, *rendered, *prefix)
 	if err != nil {
 		return fail(stderr, err)
 	}
@@ -75,14 +75,14 @@ func runZipItem(args []string, stdout, stderr io.Writer) int {
 // planZipItem checks the inputs and hashes every rendered tree without
 // writing anything. It returns the item file's top-level mapping for
 // runZipItem to complete.
-func planZipItem(harnessesPath, itemPath, rendered, prefix string) (admin.PackageInfo, *yaml.Node, []zipVariant, error) {
-	body, err := os.ReadFile(harnessesPath)
+func planZipItem(placementsPath, itemPath, rendered, prefix string) (admin.PackageInfo, *yaml.Node, []zipVariant, error) {
+	body, err := os.ReadFile(placementsPath)
 	if err != nil {
 		return admin.PackageInfo{}, nil, nil, err
 	}
-	table, err := harness.Parse(body)
+	table, err := placement.Parse(body)
 	if err != nil {
-		return admin.PackageInfo{}, nil, nil, fmt.Errorf("%s: %w", harnessesPath, err)
+		return admin.PackageInfo{}, nil, nil, fmt.Errorf("%s: %w", placementsPath, err)
 	}
 	info, doc, err := readZipItem(itemPath)
 	if err != nil {
@@ -103,7 +103,7 @@ func planZipItem(harnessesPath, itemPath, rendered, prefix string) (admin.Packag
 	var variants []zipVariant
 	for _, placement := range placements {
 		if _, ok := table.Placements[placement]; !ok {
-			return info, nil, nil, fmt.Errorf("%s: placement %q is not in %s", rendered, placement, harnessesPath)
+			return info, nil, nil, fmt.Errorf("%s: placement %q is not in %s", rendered, placement, placementsPath)
 		}
 		found, err := planPlacement(filepath.Join(rendered, placement), placement, table, info)
 		if err != nil {
@@ -160,7 +160,7 @@ func stripComments(n *yaml.Node) {
 
 // planPlacement checks, hashes and test-renders the <os>/ trees under dir,
 // one placement's rendered output for info's item.
-func planPlacement(dir, placement string, table harness.Table, info admin.PackageInfo) ([]zipVariant, error) {
+func planPlacement(dir, name string, table placement.Table, info admin.PackageInfo) ([]zipVariant, error) {
 	osDirs, err := subdirs(dir)
 	if err != nil {
 		return nil, err
@@ -168,15 +168,15 @@ func planPlacement(dir, placement string, table harness.Table, info admin.Packag
 	if len(osDirs) == 0 {
 		return nil, fmt.Errorf("%s: no darwin or windows directory", dir)
 	}
-	p := table.Placements[placement]
+	p := table.Placements[name]
 	var variants []zipVariant
 	for _, goos := range osDirs {
 		treeDir := filepath.Join(dir, goos)
-		if goos != harness.Darwin && goos != harness.Windows {
+		if goos != placement.Darwin && goos != placement.Windows {
 			return nil, fmt.Errorf("%s: OS directory must be darwin or windows", treeDir)
 		}
 		if _, ok := p.Path(goos); !ok {
-			return nil, fmt.Errorf("%s: placement %q has no %s path", treeDir, placement, goos)
+			return nil, fmt.Errorf("%s: placement %q has no %s path", treeDir, name, goos)
 		}
 		tree, err := artifact.Read(treeDir, goos)
 		if err != nil {
@@ -189,10 +189,10 @@ func planPlacement(dir, placement string, table harness.Table, info admin.Packag
 		if err != nil {
 			return nil, err
 		}
-		if err := checkTemplates(treeDir, tree, placement, goos, table, info, sum); err != nil {
+		if err := checkTemplates(treeDir, tree, name, goos, table, info, sum); err != nil {
 			return nil, err
 		}
-		variants = append(variants, zipVariant{placement, goos, treeDir, sum})
+		variants = append(variants, zipVariant{name, goos, treeDir, sum})
 	}
 	return variants, nil
 }
@@ -200,7 +200,7 @@ func planPlacement(dir, placement string, table harness.Table, info admin.Packag
 // checkTemplates renders the templates the tree at treeDir ships as the
 // device would (admin.CheckTreeTemplates), so a template that would fail on
 // every device fails the pack, naming the item, the OS and the template.
-func checkTemplates(treeDir string, tree *artifact.Tree, placement, goos string, table harness.Table, info admin.PackageInfo, treeHash string) error {
+func checkTemplates(treeDir string, tree *artifact.Tree, placement, goos string, table placement.Table, info admin.PackageInfo, treeHash string) error {
 	templates, err := artifact.ShippedTemplates(tree.Paths())
 	if err != nil {
 		return fmt.Errorf("%s: %w", treeDir, err)

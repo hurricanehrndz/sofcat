@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/hurricanehrndz/sofcat/pkg/conditions"
-	"github.com/hurricanehrndz/sofcat/pkg/harness"
 	"github.com/hurricanehrndz/sofcat/pkg/placement"
 	"github.com/hurricanehrndz/sofcat/pkg/receipt"
 	"github.com/hurricanehrndz/sofcat/pkg/report"
@@ -57,7 +56,7 @@ func newTemplateTest(t *testing.T, index string) templateTest {
 	market := filepath.Join(roots, "market")
 	skills := filepath.Join(roots, "skills")
 	indexPath := filepath.Join(roots, "skills-index.json")
-	table, err := harness.Parse(fmt.Appendf(nil, `placements:
+	table, err := placement.Parse(fmt.Appendf(nil, `placements:
   skills:
     kind: directory
     paths: {%[1]s: '%[2]s'}
@@ -89,7 +88,7 @@ func newTemplateTest(t *testing.T, index string) templateTest {
 				Roots:   placement.Roots{Darwin: []string{roots}, Windows: []string{roots}},
 				DataDir: filepath.Join(base, "data"),
 			},
-			Harnesses:  table,
+			Table:      table,
 			ReceiptDir: filepath.Join(base, "data", "receipts"),
 			Slug:       "sofcat-test",
 			Facts:      conditions.Facts{"os": testOS(), "os_build": 22631},
@@ -227,7 +226,7 @@ func TestTemplateRenderFailureRefuses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	empty.z.Harnesses.Placements["market"].Marketplace.ManifestFiles[1].Template = "{{ if .Registers }}never{{ end }}"
+	empty.z.Table.Placements["market"].Marketplace.ManifestFiles[1].Template = "{{ if .Registers }}never{{ end }}"
 	res = empty.install(t, "two", "market", true)
 	if res.Outcome != OutcomeRefused || !strings.Contains(res.Err.Error(), "rendered nothing") {
 		t.Errorf("empty manifest = %s (%v)", res.Outcome, res.Err)

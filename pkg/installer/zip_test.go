@@ -12,19 +12,18 @@ import (
 
 	"github.com/hurricanehrndz/sofcat/pkg/artifact"
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
-	"github.com/hurricanehrndz/sofcat/pkg/harness"
 	"github.com/hurricanehrndz/sofcat/pkg/placement"
 	"github.com/hurricanehrndz/sofcat/pkg/receipt"
 	"github.com/hurricanehrndz/sofcat/pkg/report"
 )
 
-// testOS is the harness OS the tests place for: the host's, with POSIX hosts
+// testOS is the placement OS the tests place for: the host's, with POSIX hosts
 // standing in for macOS.
 func testOS() string {
 	if runtime.GOOS == "windows" {
-		return harness.Windows
+		return placement.Windows
 	}
-	return harness.Darwin
+	return placement.Darwin
 }
 
 func osHasModes() bool { return runtime.GOOS != "windows" }
@@ -86,12 +85,12 @@ func newTestZip(t *testing.T) (*ZipInstaller, string) {
 	roots := filepath.Join(base, "roots")
 	paths := func(dir string) map[string]string {
 		p := filepath.Join(roots, dir)
-		return map[string]string{harness.Darwin: p, harness.Windows: p}
+		return map[string]string{placement.Darwin: p, placement.Windows: p}
 	}
-	table := harness.Table{
-		Placements: map[string]harness.Placement{
-			"skills":    {Kind: harness.KindDirectory, Paths: paths("skills")},
-			"exclusive": {Kind: harness.KindDirectory, Paths: paths("exclusive"), Exclusive: true},
+	table := placement.Table{
+		Placements: map[string]placement.Spec{
+			"skills":    {Kind: placement.KindDirectory, Paths: paths("skills")},
+			"exclusive": {Kind: placement.KindDirectory, Paths: paths("exclusive"), Exclusive: true},
 		},
 		Order: []string{"skills", "exclusive"},
 	}
@@ -101,7 +100,7 @@ func newTestZip(t *testing.T) (*ZipInstaller, string) {
 			Roots:   placement.Roots{Darwin: []string{roots}, Windows: []string{roots}},
 			DataDir: filepath.Join(base, "data"),
 		},
-		Harnesses:  table,
+		Table:      table,
 		ReceiptDir: filepath.Join(base, "data", "receipts"),
 		Slug:       "sofcat-test",
 	}, roots
@@ -248,14 +247,14 @@ func TestZipExclusive(t *testing.T) {
 	assertAbsent(t, filepath.Join(root, "hello"))
 }
 
-// TestZipTargets: placements come in harness-table order, user-scope ones are
+// TestZipTargets: placements come in table order, user-scope ones are
 // set apart for a machine run (R43a), and a placement the table lacks is
 // refused rather than guessed.
 func TestZipTargets(t *testing.T) {
 	z, _ := newTestZip(t)
-	userSpec := harness.Placement{Kind: harness.KindDirectory, Paths: map[string]string{testOS(): "/u"}, Scope: map[string]string{testOS(): harness.ScopeUser}}
-	z.Harnesses.Placements["user"] = userSpec
-	z.Harnesses.Order = append([]string{"user"}, z.Harnesses.Order...)
+	userSpec := placement.Spec{Kind: placement.KindDirectory, Paths: map[string]string{testOS(): "/u"}, Scope: map[string]string{testOS(): placement.ScopeUser}}
+	z.Table.Placements["user"] = userSpec
+	z.Table.Order = append([]string{"user"}, z.Table.Order...)
 	item, _ := packVersion(t, "1.0", map[string]string{"a": "b"})
 	v := item.Installer.Variants["skills"]
 	item.Installer.Variants["user"] = v

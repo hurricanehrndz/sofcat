@@ -15,7 +15,7 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/artifact"
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
 	"github.com/hurricanehrndz/sofcat/pkg/conditions"
-	"github.com/hurricanehrndz/sofcat/pkg/harness"
+	"github.com/hurricanehrndz/sofcat/pkg/placement"
 	"github.com/hurricanehrndz/sofcat/pkg/render"
 )
 
@@ -25,7 +25,7 @@ import (
 
 // checkFacts are what a check renders with on goos: the built-in samples
 // under the table's check_facts.
-func checkFacts(table harness.Table, goos string) conditions.Facts {
+func checkFacts(table placement.Table, goos string) conditions.Facts {
 	facts := conditions.SampleFacts(goos)
 	maps.Copy(facts, table.CheckFacts)
 	return facts
@@ -36,21 +36,21 @@ func checkFacts(table harness.Table, goos string) conditions.Facts {
 // with .Items built from the catalog items that target the placement,
 // managed both ways. A template that fails is a problem; a repository
 // without a usable table has none to check.
-func checkPlacementTemplates(h repoHarnesses, catalogs map[string]map[string]catalog.Item) []string {
+func checkPlacementTemplates(h repoPlacements, catalogs map[string]map[string]catalog.Item) []string {
 	if !h.present || h.problem != "" {
 		return nil
 	}
 	var problems []string
 	for _, name := range h.table.Names() {
 		p := h.table.Placements[name]
-		for _, goos := range []string{harness.Darwin, harness.Windows} {
+		for _, goos := range []string{placement.Darwin, placement.Windows} {
 			root, ok := p.Path(goos)
 			if !ok {
 				continue
 			}
 			facts := checkFacts(h.table, goos)
 			switch {
-			case p.Kind == harness.KindMarketplace && p.Marketplace != nil:
+			case p.Kind == placement.KindMarketplace && p.Marketplace != nil:
 				ctx := render.FileContext{OS: goos, Scope: p.ScopeFor(goos), Placement: p.View(name, root)}
 				items := targetingItems(catalogs, name, p, goos, root)
 				for _, f := range p.Marketplace.Manifests() {
@@ -58,7 +58,7 @@ func checkPlacementTemplates(h repoHarnesses, catalogs map[string]map[string]cat
 						problems = append(problems, fmt.Sprintf("%s: placement %q: manifest_files %q on %s: %v", h.path, name, f.Path, goos, err))
 					}
 				}
-			case p.Kind == harness.KindSettings:
+			case p.Kind == placement.KindSettings:
 				for _, err := range h.renderSettings(name, p, goos, root, facts, catalogs) {
 					problems = append(problems, fmt.Sprintf("%s: placement %q: template on %s: %v", h.path, name, goos, err))
 				}
@@ -70,7 +70,7 @@ func checkPlacementTemplates(h repoHarnesses, catalogs map[string]map[string]cat
 
 // renderSettings renders settings placement name's template on goos with the
 // registered placement's items.
-func (h repoHarnesses) renderSettings(name string, p harness.Placement, goos, root string, facts conditions.Facts, catalogs map[string]map[string]catalog.Item) []error {
+func (h repoPlacements) renderSettings(name string, p placement.Spec, goos, root string, facts conditions.Facts, catalogs map[string]map[string]catalog.Item) []error {
 	regSpec := h.table.Placements[p.Registers]
 	regRoot, _ := regSpec.Path(goos)
 	ctx := render.FileContext{
@@ -80,13 +80,13 @@ func (h repoHarnesses) renderSettings(name string, p harness.Placement, goos, ro
 		Registers: regSpec.Registered(p.Registers, regRoot),
 	}
 	items := targetingItems(catalogs, p.Registers, regSpec, goos, regRoot)
-	return renderBothWays(harness.ManifestFile{Path: root, Template: p.SettingsTemplate()}, ctx, items, facts)
+	return renderBothWays(placement.ManifestFile{Path: root, Template: p.SettingsTemplate()}, ctx, items, facts)
 }
 
 // renderBothWays renders f's template, named after f.Path (a settings
 // template is named "template"), for an output at f.Path, with items all
 // managed and all optional, and returns the distinct errors.
-func renderBothWays(f harness.ManifestFile, ctx render.FileContext, items []render.Item, facts conditions.Facts) []error {
+func renderBothWays(f placement.ManifestFile, ctx render.FileContext, items []render.Item, facts conditions.Facts) []error {
 	name := f.Path
 	if ctx.Registers != nil {
 		name = "template"
@@ -113,7 +113,7 @@ func renderBothWays(f harness.ManifestFile, ctx render.FileContext, items []rend
 // targetingItems lists, sorted by name, the catalog items with a variant for
 // placement name on goos, as the receipts would describe them once placed
 // under root, with nothing rendered.
-func targetingItems(catalogs map[string]map[string]catalog.Item, name string, p harness.Placement, goos, root string) []render.Item {
+func targetingItems(catalogs map[string]map[string]catalog.Item, name string, p placement.Spec, goos, root string) []render.Item {
 	byName := map[string]render.Item{}
 	for _, items := range catalogs {
 		for itemName, item := range items {
@@ -146,12 +146,12 @@ const SampleUser = "jdoe"
 // zip-items guide "Tree templates"): managed both ways, SampleUser in user
 // scope and the check facts. item's Managed and Path are set here. It
 // returns the distinct errors, each naming the template.
-func CheckTreeTemplates(table harness.Table, name, goos string, item render.TreeItem, templates map[string]string) []error {
+func CheckTreeTemplates(table placement.Table, name, goos string, item render.TreeItem, templates map[string]string) []error {
 	spec := table.Placements[name]
 	root, _ := spec.Path(goos)
 	item.Path = placedPath(root, goos, treePath(spec, item.Name))
 	ctx := render.TreeContext{OS: goos, Scope: spec.ScopeFor(goos), Placement: spec.View(name, root), Item: item}
-	if ctx.Scope == harness.ScopeUser {
+	if ctx.Scope == placement.ScopeUser {
 		ctx.User = SampleUser
 	}
 	facts := checkFacts(table, goos)
@@ -179,7 +179,7 @@ func CheckTreeTemplates(table harness.Table, name, goos string, item render.Tree
 // CheckTreeTemplates does. A zip the repository does not hold (one hosted
 // elsewhere) is not checked; one that cannot be read, or that ships
 // template names sofcat refuses (artifact.ShippedTemplates), is a problem.
-func checkZipTemplates(repoPath string, h repoHarnesses, catalogs map[string]map[string]catalog.Item) []string {
+func checkZipTemplates(repoPath string, h repoPlacements, catalogs map[string]map[string]catalog.Item) []string {
 	if !h.present || h.problem != "" {
 		return nil
 	}
@@ -211,7 +211,7 @@ func checkZipTemplates(repoPath string, h repoHarnesses, catalogs map[string]map
 // checkZipVariant renders the templates in the zip at location, item's tree
 // for placement name on goos, and returns the errors. A zip the repository
 // does not hold is not checked.
-func checkZipVariant(repoPath string, table harness.Table, name, goos string, item render.TreeItem, location string) []error {
+func checkZipVariant(repoPath string, table placement.Table, name, goos string, item render.TreeItem, location string) []error {
 	local := filepath.FromSlash(location)
 	if !filepath.IsLocal(local) {
 		return []error{errors.New("location is not a path inside the repo")}
@@ -266,8 +266,8 @@ func zipTemplates(path string) (map[string]string, error) {
 
 // treePath is item's tree relative to its placement root: plugins/<item> in
 // a marketplace, <item> elsewhere.
-func treePath(p harness.Placement, item string) string {
-	if p.Kind == harness.KindMarketplace {
+func treePath(p placement.Spec, item string) string {
+	if p.Kind == placement.KindMarketplace {
 		return path.Join("plugins", item)
 	}
 	return item
@@ -277,7 +277,7 @@ func treePath(p harness.Placement, item string) string {
 // that OS would record the tree's path.
 func placedPath(root, goos, tree string) string {
 	sep := "/"
-	if goos == harness.Windows {
+	if goos == placement.Windows {
 		sep = `\`
 	}
 	return strings.TrimRight(root, sep) + sep + strings.ReplaceAll(tree, "/", sep)

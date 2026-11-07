@@ -1,4 +1,4 @@
-package harness
+package placement
 
 import (
 	"os"
@@ -13,7 +13,7 @@ import (
 
 // The sample table under examples/ is documentation; it must stay valid.
 func TestExampleTableParses(t *testing.T) {
-	body, err := os.ReadFile(filepath.Join("..", "..", "examples", "harnesses.yaml"))
+	body, err := os.ReadFile(filepath.Join("..", "..", "examples", "placements.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ placements:
 	}
 }
 
-// Action labels and "Works in" follow harness-table order, which is the
+// Action labels and "Works in" follow table order, which is the
 // order the author wrote, not the alphabet.
 func TestNamesKeepFileOrder(t *testing.T) {
 	table, err := Parse([]byte(`
@@ -388,14 +388,14 @@ func TestGuideShowsDefaultTemplates(t *testing.T) {
 // nothing, so the file is removed, when the marketplace holds no plugin. A
 // change to the default text shows up here.
 func TestDefaultTemplates(t *testing.T) {
-	full := Placement{Kind: KindMarketplace, Marketplace: &Marketplace{
+	full := Spec{Kind: KindMarketplace, Marketplace: &Marketplace{
 		Name:                                "acme",
 		Owner:                               map[string]any{"name": "Acme IT"},
 		Renames:                             map[string]any{"old-plugin": "new-plugin"},
 		AllowCrossMarketplaceDependenciesOn: []any{"other-marketplace"},
 	}}
-	minimal := Placement{Kind: KindMarketplace, Marketplace: &Marketplace{Name: "acme", Owner: "Acme IT"}}
-	empties := Placement{Kind: KindMarketplace, Marketplace: &Marketplace{Name: "acme", Owner: "Acme IT", Renames: map[string]any{}, AllowCrossMarketplaceDependenciesOn: []any{}}}
+	minimal := Spec{Kind: KindMarketplace, Marketplace: &Marketplace{Name: "acme", Owner: "Acme IT"}}
+	empties := Spec{Kind: KindMarketplace, Marketplace: &Marketplace{Name: "acme", Owner: "Acme IT", Renames: map[string]any{}, AllowCrossMarketplaceDependenciesOn: []any{}}}
 	items := []render.Item{
 		{Name: "alpha", Version: "1.0.0", Path: `C:\m\plugins\alpha`},
 		{Name: "zeta", Version: "2.0.0", Managed: true, Path: `C:\m\plugins\zeta`},
@@ -446,7 +446,7 @@ func TestDefaultTemplates(t *testing.T) {
   "renames": {}
 }
 `},
-		"drop-in": {DefaultSettingsTemplate, render.FileContext{OS: Windows, Scope: ScopeMachine, Placement: Placement{Kind: KindSettings}.View("drop-in", `C:\s.json`), Registers: full.Registered("market", `C:\ProgramData\Acme\marketplace`), Items: items}, `{
+		"drop-in": {DefaultSettingsTemplate, render.FileContext{OS: Windows, Scope: ScopeMachine, Placement: Spec{Kind: KindSettings}.View("drop-in", `C:\s.json`), Registers: full.Registered("market", `C:\ProgramData\Acme\marketplace`), Items: items}, `{
   "enabledPlugins": {
     "zeta@acme": true
   },
@@ -460,7 +460,7 @@ func TestDefaultTemplates(t *testing.T) {
   }
 }
 `},
-		"drop-in with no managed plugin": {DefaultSettingsTemplate, render.FileContext{OS: Darwin, Scope: ScopeMachine, Placement: Placement{Kind: KindSettings}.View("drop-in", "/s.json"), Registers: minimal.Registered("market", "/Library/Application Support/Acme/marketplace"), Items: items[:1]}, `{
+		"drop-in with no managed plugin": {DefaultSettingsTemplate, render.FileContext{OS: Darwin, Scope: ScopeMachine, Placement: Spec{Kind: KindSettings}.View("drop-in", "/s.json"), Registers: minimal.Registered("market", "/Library/Application Support/Acme/marketplace"), Items: items[:1]}, `{
   "enabledPlugins": {},
   "extraKnownMarketplaces": {
     "acme": {
@@ -472,7 +472,7 @@ func TestDefaultTemplates(t *testing.T) {
   }
 }
 `},
-		"drop-in with no plugin": {DefaultSettingsTemplate, render.FileContext{OS: Darwin, Scope: ScopeMachine, Placement: Placement{Kind: KindSettings}.View("drop-in", "/s.json"), Registers: minimal.Registered("market", "/m")}, ""},
+		"drop-in with no plugin": {DefaultSettingsTemplate, render.FileContext{OS: Darwin, Scope: ScopeMachine, Placement: Spec{Kind: KindSettings}.View("drop-in", "/s.json"), Registers: minimal.Registered("market", "/m")}, ""},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {

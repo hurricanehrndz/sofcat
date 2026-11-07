@@ -26,9 +26,9 @@ import (
 )
 
 var (
-	manifestGet = manifest.Get
-	catalogGet  = manifest.GetCatalogs
-	harnessGet  = manifest.GetHarnesses
+	manifestGet   = manifest.Get
+	catalogGet    = manifest.GetCatalogs
+	placementsGet = manifest.GetPlacements
 	// newZipInstaller builds the installer whose receipts give zip items'
 	// status; tests swap in one with temporary write roots.
 	newZipInstaller = installer.NewMachineZip
@@ -559,9 +559,9 @@ func getOptionalItems(cfg config.Configuration) ([]OptionalInstallItem, error) {
 	conditions.Apply(catalogs, machineFacts)
 
 	// Zip items' status comes from receipts and placed trees, located through
-	// the harness table, never from a check block. Every list call fetches it
+	// the placement table, never from a check block. Every list call fetches it
 	// (R6); a repository without one has an empty table.
-	table, err := harnessGet(cfg)
+	table, err := placementsGet(cfg)
 	if err != nil {
 		return nil, err
 	}

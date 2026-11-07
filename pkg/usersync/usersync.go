@@ -17,7 +17,6 @@ import (
 
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
 	"github.com/hurricanehrndz/sofcat/pkg/download"
-	"github.com/hurricanehrndz/sofcat/pkg/harness"
 	"github.com/hurricanehrndz/sofcat/pkg/installer"
 	"github.com/hurricanehrndz/sofcat/pkg/placement"
 	"github.com/hurricanehrndz/sofcat/pkg/receipt"
@@ -31,7 +30,7 @@ type Client interface {
 }
 
 // Sync applies the service's user-placement plan for one user. guard holds
-// the OS (harness.Windows), the compiled write roots, whose user-scope roots
+// the OS (placement.Windows), the compiled write roots, whose user-scope roots
 // apply, the refused data and binary directories, and Vars["USERPROFILE"].
 // Receipts live in receiptDir. Held entries are neither placed nor removed.
 // The trees' templates render with the plan's facts, each entry's managed
@@ -67,7 +66,7 @@ func Sync(ctx context.Context, client Client, guard placement.Guard, receiptDir 
 	}
 	z := &installer.ZipInstaller{
 		Guard:      guard,
-		Harnesses:  userTable(plan.Entries, receipts, guard.GOOS),
+		Table:      userTable(plan.Entries, receipts, guard.GOOS),
 		ReceiptDir: receiptDir,
 		Managed:    func(item string) bool { return managed[item] },
 		Facts:      plan.Facts,
@@ -175,7 +174,7 @@ func apply(z *installer.ZipInstaller, e service.UserPlacement) installer.Result 
 	t := installer.Target{
 		Placement: e.Placement,
 		Variant:   catalog.Variant{Hash: e.Hash, TreeHash: e.TreeHash},
-		Spec:      z.Harnesses.Placements[e.Placement],
+		Spec:      z.Table.Placements[e.Placement],
 		Known:     true,
 	}
 	res := z.Inspect(item, t)
@@ -190,16 +189,16 @@ func apply(z *installer.ZipInstaller, e service.UserPlacement) installer.Result 
 	return z.Apply(item, t, e.Archive)
 }
 
-// userTable is the harness table the plan implies: one user-scope directory
+// userTable is the placement table the plan implies: one user-scope directory
 // placement per plan placement, plus the placements of receipts that left
 // the plan, so their removal is checked against the user roots too.
-func userTable(plan []service.UserPlacement, receipts []receipt.Receipt, goos string) harness.Table {
-	table := harness.Table{Placements: map[string]harness.Placement{}}
+func userTable(plan []service.UserPlacement, receipts []receipt.Receipt, goos string) placement.Table {
+	table := placement.Table{Placements: map[string]placement.Spec{}}
 	add := func(name, path string) {
 		if _, ok := table.Placements[name]; ok {
 			return
 		}
-		p := harness.Placement{Kind: harness.KindDirectory, Scope: map[string]string{goos: harness.ScopeUser}}
+		p := placement.Spec{Kind: placement.KindDirectory, Scope: map[string]string{goos: placement.ScopeUser}}
 		if path != "" {
 			p.Paths = map[string]string{goos: path}
 		}

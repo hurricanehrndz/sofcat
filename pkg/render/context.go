@@ -34,7 +34,7 @@ type Placement struct {
 	Marketplace *Marketplace
 }
 
-// Marketplace is a marketplace block as harnesses.yaml holds it. Owner,
+// Marketplace is a marketplace block as placements.yaml holds it. Owner,
 // Renames and AllowCrossMarketplaceDependenciesOn are the YAML values.
 type Marketplace struct {
 	Name                                string

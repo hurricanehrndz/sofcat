@@ -13,7 +13,6 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/artifact"
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
 	"github.com/hurricanehrndz/sofcat/pkg/conditions"
-	"github.com/hurricanehrndz/sofcat/pkg/harness"
 	"github.com/hurricanehrndz/sofcat/pkg/placement"
 	"github.com/hurricanehrndz/sofcat/pkg/receipt"
 	"github.com/hurricanehrndz/sofcat/pkg/render"
@@ -86,7 +85,7 @@ func (r treeTemplates) context(item catalog.Item, t Target, root string, managed
 			TreeHash: t.Variant.TreeHash,
 		},
 	}
-	if ctx.Scope == harness.ScopeUser {
+	if ctx.Scope == placement.ScopeUser {
 		ctx.User = r.z.User
 	}
 	return ctx

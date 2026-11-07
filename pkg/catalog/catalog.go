@@ -103,7 +103,7 @@ type AppxCheck struct {
 	Version string `yaml:"version,omitempty"`
 }
 
-// ActionLabelKeys are the keys of custom_action_labels and of a harness
+// ActionLabelKeys are the keys of custom_action_labels and of a
 // placement's action_labels: Munki's, plus sofcat's cancel and the
 // pending_install and pending_remove statuses of a queued request.
 var ActionLabelKeys = []string{

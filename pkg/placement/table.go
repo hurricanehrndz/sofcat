@@ -1,7 +1,4 @@
-// Package harness declares harnesses.yaml, the repository file that defines
-// where zip items are placed (see site/src/content/docs/guides/zip-items.md). Keep it free of agent
-// dependencies, like pkg/catalog.
-package harness
+package placement
 
 import (
 	"bytes"
@@ -32,7 +29,7 @@ const (
 	ScopeUser    = "user"
 )
 
-// OS keys of Placement.Paths and Placement.Scope.
+// OS keys of Spec.Paths and Spec.Scope.
 const (
 	Darwin  = "darwin"
 	Windows = "windows"
@@ -87,9 +84,9 @@ const DefaultSettingsTemplate = `{{- if .Items }}
 {{- end }}
 `
 
-// Table is a parsed harnesses.yaml.
+// Table is a parsed placements.yaml.
 type Table struct {
-	Placements map[string]Placement `yaml:"placements"`
+	Placements map[string]Spec `yaml:"placements"`
 	// CheckFacts are the facts makecatalogs -check renders templates with,
 	// over the built-in samples (conditions.SampleFacts): the admin facts
 	// the templates read.
@@ -98,8 +95,8 @@ type Table struct {
 	Order []string `yaml:"-"`
 }
 
-// Placement is a named destination for zip items.
-type Placement struct {
+// Spec is a named destination for zip items.
+type Spec struct {
 	Kind string `yaml:"kind"`
 	// Paths maps an OS (darwin, windows) to the placement root on it.
 	Paths map[string]string `yaml:"paths,omitempty"`
@@ -177,7 +174,7 @@ func (m Marketplace) Manifests() []ManifestFile {
 
 // SettingsTemplate returns the template a settings placement's file is
 // rendered from: its own, or DefaultSettingsTemplate.
-func (p Placement) SettingsTemplate() string {
+func (p Spec) SettingsTemplate() string {
 	if p.Template != "" {
 		return p.Template
 	}
@@ -195,7 +192,7 @@ func (m Marketplace) Files() []string {
 }
 
 // View describes placement name, rooted at root, to a template.
-func (p Placement) View(name, root string) render.Placement {
+func (p Spec) View(name, root string) render.Placement {
 	v := render.Placement{Name: name, Root: root, Kind: p.Kind}
 	if p.Kind == KindMarketplace && p.Marketplace != nil {
 		v.Marketplace = &render.Marketplace{
@@ -210,19 +207,19 @@ func (p Placement) View(name, root string) render.Placement {
 
 // Registered describes placement name, rooted at root, to the template of a
 // settings placement that registers it.
-func (p Placement) Registered(name, root string) *render.Registered {
+func (p Spec) Registered(name, root string) *render.Registered {
 	v := p.View(name, root)
 	return &render.Registered{Name: v.Name, Root: v.Root, Kind: v.Kind, Marketplace: v.Marketplace}
 }
 
 // Path returns the placement root for goos and whether it has one.
-func (p Placement) Path(goos string) (string, bool) {
+func (p Spec) Path(goos string) (string, bool) {
 	path, ok := p.Paths[goos]
 	return path, ok && path != ""
 }
 
 // ScopeFor returns the placement's scope on goos.
-func (p Placement) ScopeFor(goos string) string {
+func (p Spec) ScopeFor(goos string) string {
 	if scope := p.Scope[goos]; scope != "" {
 		return scope
 	}
@@ -242,7 +239,7 @@ func (t Table) Names() []string {
 // the UI's built-in label. worksIn is the union of those placements'
 // works_in, in table order. Only a zip item has placements.
 func (t Table) Storefront(item catalog.Item, goos string) (labels map[string]string, worksIn []string) {
-	var placements []Placement
+	var placements []Spec
 	if item.Installer.Type == "zip" {
 		for _, name := range t.Names() {
 			if _, ok := item.Installer.Variants[name][goos]; ok {
@@ -263,27 +260,27 @@ func (t Table) Storefront(item catalog.Item, goos string) (labels map[string]str
 		}
 	}
 	for _, p := range placements {
-		for _, harness := range p.WorksIn {
-			if !slices.Contains(worksIn, harness) {
-				worksIn = append(worksIn, harness)
+		for _, name := range p.WorksIn {
+			if !slices.Contains(worksIn, name) {
+				worksIn = append(worksIn, name)
 			}
 		}
 	}
 	return labels, worksIn
 }
 
-// Parse decodes harnesses.yaml, rejecting unknown fields, and validates it.
+// Parse decodes placements.yaml, rejecting unknown fields, and validates it.
 // An empty file is an empty table.
 func Parse(data []byte) (Table, error) {
 	var t Table
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
 	if err := dec.Decode(&t); err != nil && !errors.Is(err, io.EOF) {
-		return Table{}, fmt.Errorf("parse harnesses.yaml: %w", err)
+		return Table{}, fmt.Errorf("parse placements.yaml: %w", err)
 	}
 	order, err := placementOrder(data)
 	if err != nil {
-		return Table{}, fmt.Errorf("parse harnesses.yaml: %w", err)
+		return Table{}, fmt.Errorf("parse placements.yaml: %w", err)
 	}
 	t.Order = order
 	if err := t.Validate(); err != nil {
@@ -384,7 +381,7 @@ func (t Table) validatePlacement(name string) []error {
 }
 
 // validateKindBlocks checks the fields that belong to one kind only.
-func (t Table) validateKindBlocks(p Placement) []error {
+func (t Table) validateKindBlocks(p Spec) []error {
 	var errs []error
 	fail := func(format string, args ...any) { errs = append(errs, fmt.Errorf(format, args...)) }
 	if p.Kind != KindDirectory && (p.ScopeFor(Darwin) == ScopeUser || p.ScopeFor(Windows) == ScopeUser) {
@@ -449,7 +446,7 @@ func isJSONPath(path string) bool {
 
 // validateSettings checks what a settings placement registers and its
 // template: a marketplace, or with a template any directory or marketplace.
-func (t Table) validateSettings(p Placement) []error {
+func (t Table) validateSettings(p Spec) []error {
 	var errs []error
 	target, ok := t.Placements[p.Registers]
 	switch {

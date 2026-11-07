@@ -1,4 +1,4 @@
-# harnesses.yaml sits at the repository root, next to catalogs/ and
+# placements.yaml sits at the repository root, next to catalogs/ and
 # manifests/. It names the placements zip items are written to. See
 # site/src/content/docs/guides/zip-items.md. Unknown fields are rejected.
 #

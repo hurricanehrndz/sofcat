@@ -10,7 +10,6 @@ import (
 	"slices"
 
 	"github.com/hurricanehrndz/sofcat/pkg/conditions"
-	"github.com/hurricanehrndz/sofcat/pkg/harness"
 	"github.com/hurricanehrndz/sofcat/pkg/placement"
 	"github.com/hurricanehrndz/sofcat/pkg/receipt"
 	"github.com/hurricanehrndz/sofcat/pkg/render"
@@ -23,10 +22,10 @@ const pluginsDir = "plugins"
 // The generated files have no receipts: sofcat owns them outright and
 // rewrites them from the receipts after every change to the placement and
 // once per run (RegenerateAll). Each is rendered from a template: the
-// entry's or the placement's own, else harness.DefaultCatalogTemplate and
-// harness.DefaultSettingsTemplate.
+// entry's or the placement's own, else placement.DefaultCatalogTemplate and
+// placement.DefaultSettingsTemplate.
 
-// RegenerateAll regenerates every placement in the harness table that has
+// RegenerateAll regenerates every placement in the placement table that has
 // generated files (generates) and a path on this OS, and returns a failed
 // Result per placement that failed. A managed run calls it once, after scope
 // exit, so a generated file deleted, refused or left stale by an earlier
@@ -35,8 +34,8 @@ const pluginsDir = "plugins"
 // marketplace would only be clutter.
 func (z *ZipInstaller) RegenerateAll() []Result {
 	var failed []Result
-	for _, name := range z.Harnesses.Names() {
-		spec := z.Harnesses.Placements[name]
+	for _, name := range z.Table.Names() {
+		spec := z.Table.Placements[name]
 		if _, ok := spec.Path(z.Guard.GOOS); !ok || !z.generates(name, spec) {
 			continue
 		}
@@ -57,16 +56,16 @@ func (z *ZipInstaller) RegenerateAll() []Result {
 // generates reports whether placement name has generated files: a
 // marketplace's manifests, or the file of a settings placement registering
 // it.
-func (z *ZipInstaller) generates(name string, spec harness.Placement) bool {
-	return spec.Kind == harness.KindMarketplace || len(z.registrars(name)) > 0
+func (z *ZipInstaller) generates(name string, spec placement.Spec) bool {
+	return spec.Kind == placement.KindMarketplace || len(z.registrars(name)) > 0
 }
 
 // registrars returns the settings placements that register name, in table
 // order.
 func (z *ZipInstaller) registrars(name string) []string {
 	var out []string
-	for _, settings := range z.Harnesses.Names() {
-		if s := z.Harnesses.Placements[settings]; s.Kind == harness.KindSettings && s.Registers == name {
+	for _, settings := range z.Table.Names() {
+		if s := z.Table.Placements[settings]; s.Kind == placement.KindSettings && s.Registers == name {
 			out = append(out, settings)
 		}
 	}
@@ -81,7 +80,7 @@ func (z *ZipInstaller) registrars(name string) []string {
 // the files are current at once, and RegenerateAll once per run, so a file
 // deleted or refused on one run is restored on the next.
 func (z *ZipInstaller) regenerate(name string) error {
-	spec, ok := z.Harnesses.Placements[name]
+	spec, ok := z.Table.Placements[name]
 	if !ok || !z.generates(name, spec) {
 		return nil
 	}
@@ -96,13 +95,13 @@ func (z *ZipInstaller) regenerate(name string) error {
 	rcs := slices.DeleteFunc(all, func(rc receipt.Receipt) bool { return rc.Placement != name })
 
 	var errs []error
-	if spec.Kind == harness.KindMarketplace && spec.Marketplace != nil {
+	if spec.Kind == placement.KindMarketplace && spec.Marketplace != nil {
 		if err := z.writeManifests(name, spec, root, rcs); err != nil {
 			errs = append(errs, err)
 		}
 	}
 	for _, settings := range z.registrars(name) {
-		if err := z.writeSettings(settings, z.Harnesses.Placements[settings], name, spec, root, rcs); err != nil {
+		if err := z.writeSettings(settings, z.Table.Placements[settings], name, spec, root, rcs); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -113,7 +112,7 @@ func (z *ZipInstaller) regenerate(name string) error {
 // root: the entry's template rendered with the plugins rcs records as
 // .Items. Every entry is rendered before any is written, so a failed render
 // leaves all of them as they were.
-func (z *ZipInstaller) writeManifests(name string, spec harness.Placement, root string, rcs []receipt.Receipt) error {
+func (z *ZipInstaller) writeManifests(name string, spec placement.Spec, root string, rcs []receipt.Receipt) error {
 	ctx := z.fileContext(name, spec, root, rcs)
 	type file struct {
 		path string
@@ -126,7 +125,7 @@ func (z *ZipInstaller) writeManifests(name string, spec harness.Placement, root 
 		if !filepath.IsLocal(local) {
 			return fmt.Errorf("%w: placement %q: manifest file %q is not a path inside the placement", placement.ErrRefused, name, f.Path)
 		}
-		path, err := z.Guard.Check(filepath.Join(root, local), harness.ScopeMachine)
+		path, err := z.Guard.Check(filepath.Join(root, local), placement.ScopeMachine)
 		if err != nil {
 			return fmt.Errorf("placement %q: %w", name, err)
 		}
@@ -153,7 +152,7 @@ func (z *ZipInstaller) writeManifests(name string, spec harness.Placement, root 
 // the registered placement's receipts as .Items, removed when the output is
 // empty. The default template is the Claude Code drop-in registering the
 // marketplace and enabling its managed plugins, empty with no plugin left.
-func (z *ZipInstaller) writeSettings(name string, spec harness.Placement, registered string, regSpec harness.Placement, root string, rcs []receipt.Receipt) error {
+func (z *ZipInstaller) writeSettings(name string, spec placement.Spec, registered string, regSpec placement.Spec, root string, rcs []receipt.Receipt) error {
 	if _, ok := spec.Path(z.Guard.GOOS); !ok {
 		return nil
 	}
@@ -184,7 +183,7 @@ func (z *ZipInstaller) writeSettings(name string, spec harness.Placement, regist
 // fileContext is what a placement file template of placement name sees:
 // the placement at root and rcs as its items (zip-items guide, "Templates
 // for placement files").
-func (z *ZipInstaller) fileContext(name string, spec harness.Placement, root string, rcs []receipt.Receipt) render.FileContext {
+func (z *ZipInstaller) fileContext(name string, spec placement.Spec, root string, rcs []receipt.Receipt) render.FileContext {
 	items := make([]render.Item, len(rcs))
 	for i, rc := range rcs {
 		items[i] = render.Item{Name: rc.Item, Version: rc.Version, Managed: rc.Managed, Path: rc.Path, TreeHash: rc.TreeHash, PlacedHash: rc.PlacedHash}

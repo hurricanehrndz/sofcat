@@ -75,7 +75,7 @@ actionLabels?, worksIn?}`. `actionLabels` holds only the label keys
 (`install`, `installing`, `installed`, `remove`, `removing`, `update`,
 `cancel`, `pending_install`, `pending_remove`) that resolved: from the catalog item's `custom_action_labels`, else
 from the first of its placements with a variant on this OS, in
-`harnesses.yaml` order, whose `action_labels` sets the key. `worksIn` is the
+`placements.yaml` order, whose `action_labels` sets the key. `worksIn` is the
 union of those placements' `works_in`, in table order, without repeats. Both
 are left out when empty, and only zip items have placements, so another item
 gets at most its own labels. The UI fills in its built-in labels ("Install",

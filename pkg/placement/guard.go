@@ -9,7 +9,6 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/hurricanehrndz/sofcat/pkg/harness"
 	"github.com/hurricanehrndz/sofcat/pkg/identity"
 )
 
@@ -20,8 +19,8 @@ var ErrRefused = errors.New("placement refused")
 // Guard checks placement paths against the write roots and the directories
 // sofcat must never write into.
 type Guard struct {
-	// GOOS picks the harness paths and roots: harness.Darwin or
-	// harness.Windows. Paths compare case-insensitively for both.
+	// GOOS picks the placement paths and roots: Darwin or
+	// Windows. Paths compare case-insensitively for both.
 	GOOS  string
 	Roots Roots
 	// DataDir is sofcat's data directory; nothing is placed inside it.
@@ -34,8 +33,8 @@ type Guard struct {
 	Vars map[string]string
 }
 
-// HostOS is the harness OS key of the running system, or runtime.GOOS when
-// harnesses.yaml has no key for it (no variant then matches).
+// HostOS is the placement OS key of the running system, or runtime.GOOS when
+// placements.yaml has no key for it (no variant then matches).
 func HostOS() string { return runtime.GOOS }
 
 // MachineGuard is the service's guard: this OS, the compiled-in roots, the
@@ -51,13 +50,13 @@ func BinaryDirs(goos string) []string {
 	if exe, err := os.Executable(); err == nil {
 		dirs = append(dirs, filepath.Dir(exe))
 	}
-	if goos == harness.Darwin {
+	if goos == Darwin {
 		dirs = append(dirs, identity.BinDir())
 	}
 	return dirs
 }
 
-// Resolve expands a harness path for scope, resolves its symlinks and checks
+// Resolve expands a placement path for scope, resolves its symlinks and checks
 // it (see Check). It returns the resolved path.
 func (g Guard) Resolve(raw, scope string) (string, error) {
 	path, err := g.expand(raw, scope)
@@ -126,12 +125,12 @@ func (g Guard) root(raw, scope string) (string, error) {
 // relative to the profile. Anything left unexpanded is refused.
 func (g Guard) expand(raw, scope string) (string, error) {
 	vars := map[string]string{}
-	if g.GOOS == harness.Windows {
+	if g.GOOS == Windows {
 		vars["ProgramFiles"] = os.Getenv("ProgramFiles")
 		vars["ProgramData"] = os.Getenv("ProgramData")
 	}
 	profile := ""
-	if scope == harness.ScopeUser {
+	if scope == ScopeUser {
 		profile = g.Vars["USERPROFILE"]
 		vars["USERPROFILE"] = profile
 	}
@@ -144,7 +143,7 @@ func (g Guard) expand(raw, scope string) (string, error) {
 	if strings.Contains(path, "${") {
 		return "", fmt.Errorf("%w: %s: unexpanded variable", ErrRefused, raw)
 	}
-	if scope == harness.ScopeUser && profile != "" && !filepath.IsAbs(path) {
+	if scope == ScopeUser && profile != "" && !filepath.IsAbs(path) {
 		path = filepath.Join(profile, path)
 	}
 	if !filepath.IsAbs(path) {
@@ -183,7 +182,7 @@ func resolve(path string) (string, error) {
 // case-insensitively for Windows and macOS, whose volumes ignore case by
 // default. On a case-sensitive APFS volume this only refuses more.
 func (g Guard) within(path, dir string) bool {
-	if g.GOOS == harness.Windows || g.GOOS == harness.Darwin {
+	if g.GOOS == Windows || g.GOOS == Darwin {
 		path, dir = strings.ToLower(path), strings.ToLower(dir)
 	}
 	rel, err := filepath.Rel(dir, path)

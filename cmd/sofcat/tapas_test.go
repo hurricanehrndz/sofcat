@@ -21,7 +21,6 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
 	"github.com/hurricanehrndz/sofcat/pkg/config"
 	"github.com/hurricanehrndz/sofcat/pkg/download"
-	"github.com/hurricanehrndz/sofcat/pkg/harness"
 	"github.com/hurricanehrndz/sofcat/pkg/installer"
 	"github.com/hurricanehrndz/sofcat/pkg/manifest"
 	"github.com/hurricanehrndz/sofcat/pkg/placement"
@@ -34,12 +33,12 @@ import (
 	"go.yaml.in/yaml/v4"
 )
 
-// tapasOS is the harness OS the end-to-end tests place for. Windows keys work
+// tapasOS is the placement OS the end-to-end tests place for. Windows keys work
 // on every host (paths are absolute either way, every file hashes as 644,
 // comparisons fold case) and, unlike darwin, allow user-scope placements.
-const tapasOS = harness.Windows
+const tapasOS = placement.Windows
 
-// tapasRepo is a sofcat repository served over HTTP: harnesses.yaml,
+// tapasRepo is a sofcat repository served over HTTP: placements.yaml,
 // catalogs, manifests and zip archives built from in-test trees. Files can be
 // replaced or withdrawn between runs.
 type tapasRepo struct {
@@ -48,7 +47,7 @@ type tapasRepo struct {
 	mu    sync.Mutex
 	files map[string][]byte // URL path without the leading slash
 	items map[string]catalog.Item
-	// paths holds each placement's path from the last harnesses call.
+	// paths holds each placement's path from the last servePlacements call.
 	paths map[string]string
 }
 
@@ -116,9 +115,9 @@ func (r *tapasRepo) publishCatalog() {
 	r.put("catalogs/tapas.yaml", data)
 }
 
-// harnesses serves harnesses.yaml with one directory placement per entry of
+// servePlacements serves placements.yaml with one directory placement per entry of
 // paths; exclusive and user name placements that get those settings.
-func (r *tapasRepo) harnesses(paths map[string]string, exclusive, user []string) {
+func (r *tapasRepo) servePlacements(paths map[string]string, exclusive, user []string) {
 	var b strings.Builder
 	b.WriteString("placements:\n")
 	for _, name := range slices.Sorted(maps.Keys(paths)) {
@@ -130,10 +129,10 @@ func (r *tapasRepo) harnesses(paths map[string]string, exclusive, user []string)
 			fmt.Fprintf(&b, "    scope: {%s: user}\n", tapasOS)
 		}
 	}
-	if _, err := harness.Parse([]byte(b.String())); err != nil {
-		r.t.Fatalf("fixture harnesses.yaml invalid: %v\n%s", err, b.String())
+	if _, err := placement.Parse([]byte(b.String())); err != nil {
+		r.t.Fatalf("fixture placements.yaml invalid: %v\n%s", err, b.String())
 	}
-	r.put("harnesses.yaml", []byte(b.String()))
+	r.put("placements.yaml", []byte(b.String()))
 	r.paths = paths
 }
 
@@ -192,7 +191,7 @@ func newTapasEnv(t *testing.T) *tapasEnv {
 	origUserArtifacts := service.UserArtifactsDir
 	service.UserArtifactsDir = func(string) string { return e.userArtifacts }
 	t.Cleanup(func() { service.UserArtifactsDir = origUserArtifacts })
-	newZipInstaller = func(cfg config.Configuration, table harness.Table) *installer.ZipInstaller {
+	newZipInstaller = func(cfg config.Configuration, table placement.Table) *installer.ZipInstaller {
 		z := installer.NewMachineZip(cfg, table)
 		z.Guard = placement.Guard{
 			GOOS:       tapasOS,
@@ -220,7 +219,7 @@ func (e *tapasEnv) run() *report.Report {
 	return rep
 }
 
-// seed places files as item's tree in placement (as harnesses set it), as an earlier run or
+// seed places files as item's tree in placement (as servePlacements set it), as an earlier run or
 // a user would have, and returns its tree hash. With a version it also writes
 // the receipt sofcat would have written.
 func (e *tapasEnv) seed(placementName, item, version string, files map[string]string) string {
@@ -283,7 +282,7 @@ func TestTapasZipPlacements(t *testing.T) {
 	if err := os.Symlink(outside, escape); err != nil {
 		t.Skipf("cannot create a symlink here: %v", err)
 	}
-	e.harnesses(map[string]string{
+	e.servePlacements(map[string]string{
 		"skills":  skills,
 		"market":  market,
 		"escape":  filepath.Join(escape, "skills"),
@@ -427,10 +426,10 @@ conditional_items:
 	}
 }
 
-// TestTapasMissingHarnesses: a repository without harnesses.yaml still runs.
+// TestTapasMissingPlacements: a repository without placements.yaml still runs.
 // Items that are not zip items are unaffected, and every zip item fails with
 // placement_refused because no placement is defined.
-func TestTapasMissingHarnesses(t *testing.T) {
+func TestTapasMissingPlacements(t *testing.T) {
 	e := newTapasEnv(t)
 	e.zipItem("hello", "1.0", map[string]map[string]string{"skills": {"SKILL.md": "x"}})
 	present := filepath.Join(tempDir(t), "present.txt")
@@ -448,7 +447,7 @@ func TestTapasMissingHarnesses(t *testing.T) {
 		t.Errorf("hello codes = %v, want placement_refused", codes)
 	}
 	if codes := failedCodes(rep, "Tool"); codes != nil {
-		t.Errorf("Tool failed without harnesses.yaml: %v", rep.FailedItems)
+		t.Errorf("Tool failed without placements.yaml: %v", rep.FailedItems)
 	}
 }
 
@@ -479,7 +478,7 @@ func TestTapasBadArchive(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			e := newTapasEnv(t)
 			skills := filepath.Join(e.roots, "skills")
-			e.harnesses(map[string]string{"skills": skills}, nil, nil)
+			e.servePlacements(map[string]string{"skills": skills}, nil, nil)
 			e.zipItem("hello", "1.0", map[string]map[string]string{"skills": {"SKILL.md": "hello"}})
 			tc.corrupt(e, e.items["hello"].Installer.Variants["skills"][tapasOS])
 			e.publishCatalog()
@@ -539,7 +538,7 @@ func TestTapasUserSync(t *testing.T) {
 	e := newTapasEnv(t)
 	skills := filepath.Join(e.roots, "skills")
 	// Slashes, not backslashes, so the paths split on this host too.
-	e.harnesses(map[string]string{
+	e.servePlacements(map[string]string{
 		"skills": skills,
 		"codex":  "${USERPROFILE}/.agents/skills",
 		"stray":  "${USERPROFILE}/elsewhere/skills",
@@ -726,8 +725,8 @@ func TestTapasMarketplace(t *testing.T) {
 	e := newTapasEnv(t)
 	market := filepath.Join(e.roots, "market")
 	dropIn := filepath.Join(e.roots, "claude", "managed-settings.d", "50-tapas-test.json")
-	setHarnesses := func(dropIn string) {
-		e.put("harnesses.yaml", []byte(`placements:
+	setPlacements := func(dropIn string) {
+		e.put("placements.yaml", []byte(`placements:
   market:
     kind: marketplace
     paths: {`+tapasOS+`: '`+market+`'}
@@ -745,7 +744,7 @@ func TestTapasMarketplace(t *testing.T) {
 	}
 	// The first run's drop-in path is outside the write roots.
 	outside := filepath.Join(tempDir(t), "managed-settings.d", "50-tapas-test.json")
-	setHarnesses(outside)
+	setPlacements(outside)
 	plugin := func(name string) map[string]map[string]string {
 		return map[string]map[string]string{"market": {
 			".claude-plugin/plugin.json": `{"name": "` + name + `", "version": "1.0.0"}`,
@@ -840,7 +839,7 @@ conditional_items:
 
 	// The next run, with the drop-in inside the roots, changes no tree but
 	// writes it.
-	setHarnesses(dropIn)
+	setPlacements(dropIn)
 	rep = e.run()
 	if len(rep.InstalledItems) != 0 || len(rep.FailedItems) != 0 {
 		t.Fatalf("healing run: installed %v, failed %+v", rep.InstalledItems, rep.FailedItems)
@@ -891,7 +890,7 @@ func TestTapasRequiresSoftware(t *testing.T) {
 	t.Cleanup(func() { software.GOOS, software.ChocolateyLib = origOS, origLib })
 
 	skills := filepath.Join(e.roots, "skills")
-	e.harnesses(map[string]string{"skills": skills}, nil, nil)
+	e.servePlacements(map[string]string{"skills": skills}, nil, nil)
 	e.zipItem("needs-tool", "1.0", map[string]map[string]string{"skills": {"SKILL.md": "needs tool"}})
 	e.zipItem("rider", "1.0", map[string]map[string]string{"skills": {"SKILL.md": "rider"}})
 	needs := e.items["needs-tool"]
@@ -950,7 +949,7 @@ func TestTapasUserScopeRequiresSoftware(t *testing.T) {
 	software.ChocolateyLib = func() string { return lib }
 	t.Cleanup(func() { software.GOOS, software.ChocolateyLib = origOS, origLib })
 
-	e.harnesses(map[string]string{"codex": "${USERPROFILE}/.agents/skills"}, nil, []string{"codex"})
+	e.servePlacements(map[string]string{"codex": "${USERPROFILE}/.agents/skills"}, nil, []string{"codex"})
 	e.zipItem("needs-tool", "1.0", map[string]map[string]string{"codex": {"SKILL.md": "needs tool"}})
 	needs := e.items["needs-tool"]
 	needs.RequiresSoftware = []catalog.RequiredSoftware{{DisplayName: "Demo Tool", Chocolatey: "demo-tool"}}
