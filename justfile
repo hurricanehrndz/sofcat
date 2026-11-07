@@ -41,6 +41,23 @@ version := `git describe --tags --always --dirty 2>/dev/null || echo dev`
 # hands to embala as [sign.windows] for setup.exe and the uninstaller stub.
 # Unset, nothing is signed.
 SIGN_CMD := env("SIGN_CMD", "")
+# macOS signing (same page). With CODESIGN_IDENTITY set, `build-macos`
+# codesigns the CLI and the app bundle with it (hardened runtime; `-` is the
+# ad-hoc identity); with PRODUCTSIGN_IDENTITY set, `pkg` signs the product
+# archive; with NOTARIZE=1, `pkg` then runs `notarize` on it, which needs
+# NOTARY_AUTH=api-key and an App Store Connect API key. Unset, nothing is
+# signed or notarized.
+CODESIGN_IDENTITY := env("CODESIGN_IDENTITY", "")
+PRODUCTSIGN_IDENTITY := env("PRODUCTSIGN_IDENTITY", "")
+NOTARIZE := env("NOTARIZE", "")
+NOTARY_AUTH := env("NOTARY_AUTH", "")
+NOTARY_API_KEY_PATH := env("NOTARY_API_KEY_PATH", "")
+NOTARY_API_KEY_ID := env("NOTARY_API_KEY_ID", "")
+NOTARY_API_ISSUER_ID := env("NOTARY_API_ISSUER_ID", "")
+# The first notary variable a run would lack, or empty.
+_notary_missing := if NOTARY_AUTH != "api-key" { "NOTARY_AUTH=api-key" } else if NOTARY_API_KEY_PATH == "" { "NOTARY_API_KEY_PATH" } else if NOTARY_API_KEY_ID == "" { "NOTARY_API_KEY_ID" } else if NOTARY_API_ISSUER_ID == "" { "NOTARY_API_ISSUER_ID" } else { "" }
+# No --timestamp for the ad-hoc identity: codesign refuses to timestamp it.
+_codesign := "codesign --force --options runtime" + (if CODESIGN_IDENTITY == "-" { "" } else { " --timestamp" }) + " --sign " + quote(CODESIGN_IDENTITY)
 pkg_version := replace_regex(replace_regex(version, "^v", ""), "[-+].*$", "")
 manual_test_dir := "build/manual-test"
 server_root := manual_test_dir / "server-root"
@@ -179,12 +196,16 @@ _require-macos:
 # macOS binaries for the host architecture -> build/<app> (the CLI, pure Go)
 # and build/<product>.app (the UI: Wails needs cgo and the Xcode command line
 # tools). Same tags and identity as `build`; no -H windowsgui. The icon.icns
-# is made with sips and iconutil, which ship with macOS.
+# is made with sips and iconutil, which ship with macOS. With
+# CODESIGN_IDENTITY set, the CLI is signed after its build and the app as a
+# bundle once it is complete, since the signature seals Info.plist and the
+# icon too; the bundle's main executable is covered by that one signature.
 build-macos: _require-macos ui-assets
     mkdir -p build
     {{ if write_roots == "" { "true" } else { "cp '" + write_roots + "' pkg/placement/brand-write-roots.yaml" } }}
     CGO_ENABLED=0 go build -tags "{{_svc_tags}}" -ldflags "-X github.com/hurricanehrndz/sofcat/pkg/version.appName={{app}} -X github.com/hurricanehrndz/sofcat/pkg/version.version={{version}} {{_identity}}" \
         -o build/{{app}} ./cmd/sofcat
+    {{ if CODESIGN_IDENTITY == "" { "true" } else { _codesign + " --identifier " + identifier + ".cli build/" + app } }}
     {{ if icon_png == "" { "true" } else { "cp '" + icon_png + "' ui/brand-icon.png" } }}
     rm -rf "{{_app_bundle}}" build/icon.iconset
     mkdir -p "{{_app_bundle}}/Contents/MacOS" "{{_app_bundle}}/Contents/Resources" build/icon.iconset
@@ -211,8 +232,23 @@ build-macos: _require-macos ui-assets
       '	<key>NSHighResolutionCapable</key>' '	<true/>' \
       '</dict>' '</plist>' > "{{_app_bundle}}/Contents/Info.plist"
     plutil -lint "{{_app_bundle}}/Contents/Info.plist"
+    {{ if CODESIGN_IDENTITY == "" { "true" } else { _codesign + " " + quote(_app_bundle) } }}
 
-# Unsigned macOS installer -> build/<app>-<version>.pkg: the app in
+# Fail before any build when the signing variables do not go together: a
+# signed pkg needs a signed app, and a notarized one both signatures and the
+# notary key. Whether the key file exists is left to notarytool.
+_sign-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    fail() { echo "pkg: $*" >&2; exit 1; }
+    NOTARIZE={{quote(NOTARIZE)}}; CODESIGN_IDENTITY={{quote(CODESIGN_IDENTITY)}}; PRODUCTSIGN_IDENTITY={{quote(PRODUCTSIGN_IDENTITY)}}
+    case $NOTARIZE in ''|1) ;; *) fail "NOTARIZE '$NOTARIZE' must be unset or 1" ;; esac
+    [ -z "$PRODUCTSIGN_IDENTITY" ] || [ -n "$CODESIGN_IDENTITY" ] || fail "PRODUCTSIGN_IDENTITY needs CODESIGN_IDENTITY"
+    [ "$NOTARIZE" != 1 ] || for v in CODESIGN_IDENTITY PRODUCTSIGN_IDENTITY; do [ -n "${!v}" ] || fail "NOTARIZE=1 needs $v"; done
+    [ "$NOTARIZE" != 1 ] || [ -z {{quote(_notary_missing)}} ] || fail "NOTARIZE=1 needs {{_notary_missing}}"
+
+# macOS installer -> build/<app>-<version>.pkg (unsigned without
+# PRODUCTSIGN_IDENTITY): the app in
 # /Applications, the CLI in /Library/Application Support/<product>/bin and the
 # launchd plist in /Library/LaunchDaemons, all root:wheel. Each goes in its own
 # component rooted at its install location, so the payload never lists
@@ -221,8 +257,10 @@ build-macos: _require-macos ui-assets
 # `<app> -serviceinstall` writes for that layout (`-print-launchd-plist`), and
 # the postinstall script bootstraps it, so the daemon starts with no config
 # until config.yaml is written and the daemon kickstarted, as the Windows
-# installer does.
-pkg: _require-macos build-macos
+# installer does. With PRODUCTSIGN_IDENTITY set, productbuild signs the
+# product archive (the component pkgs stay unsigned; the product signature
+# covers them), and with NOTARIZE=1 the pkg is then notarized in place.
+pkg: _require-macos _sign-check build-macos
     #!/usr/bin/env bash
     set -euo pipefail
     work=build/pkg
@@ -264,9 +302,25 @@ pkg: _require-macos build-macos
     # Last, so its postinstall runs after the app and the CLI are in place.
     pkgbuild --root "$work/daemon" --scripts "$work/scripts" --install-location /Library/LaunchDaemons \
       --identifier {{identifier}}.daemon --version {{version}} "$work/daemon.pkg"
+    pkg=build/{{app}}-{{version}}.pkg
     productbuild --package "$work/app.pkg" --package "$work/cli.pkg" --package "$work/daemon.pkg" \
-      build/{{app}}-{{version}}.pkg
-    echo "Built build/{{app}}-{{version}}.pkg"
+      {{ if PRODUCTSIGN_IDENTITY == "" { "" } else { "--sign " + quote(PRODUCTSIGN_IDENTITY) } }} "$pkg"
+    echo "Built $pkg"
+    # The notary variables are passed on, so a `just VAR=... pkg` override
+    # reaches the nested just as its environment.
+    [ {{quote(NOTARIZE)}} != 1 ] || NOTARY_AUTH={{quote(NOTARY_AUTH)}} NOTARY_API_KEY_PATH={{quote(NOTARY_API_KEY_PATH)}} \
+      NOTARY_API_KEY_ID={{quote(NOTARY_API_KEY_ID)}} NOTARY_API_ISSUER_ID={{quote(NOTARY_API_ISSUER_ID)}} {{just_executable()}} notarize "$pkg"
+
+# Notarize a signed pkg in place: submit it to Apple's notary service and wait
+# for the verdict, staple the ticket to it, then check the staple. Needs
+# NOTARY_AUTH=api-key (the only mode) and an App Store Connect API key:
+# NOTARY_API_KEY_PATH (the .p8 file), NOTARY_API_KEY_ID and
+# NOTARY_API_ISSUER_ID. `pkg` runs this when NOTARIZE=1.
+notarize pkg: _require-macos
+    @[ -z {{quote(_notary_missing)}} ] || { echo "notarize: needs {{_notary_missing}}" >&2; exit 1; }
+    xcrun notarytool submit {{quote(pkg)}} --key {{quote(NOTARY_API_KEY_PATH)}} --key-id {{quote(NOTARY_API_KEY_ID)}} --issuer {{quote(NOTARY_API_ISSUER_ID)}} --wait
+    xcrun stapler staple {{quote(pkg)}}
+    xcrun stapler validate {{quote(pkg)}}
 
 # Reject brand values that would break a template or collide with a stock
 # install. SLUG, NAME and IDENTIFIER must all keep or all change the stock

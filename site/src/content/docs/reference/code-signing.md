@@ -1,6 +1,6 @@
 ---
 title: Code signing and Defender
-description: Why unsigned SofCat binaries can trip Defender's ML heuristics, what the build embeds to help, and how SIGN_CMD signs the Windows executables and installer.
+description: Why unsigned SofCat binaries can trip Defender's ML heuristics, what the build embeds to help, how SIGN_CMD signs the Windows executables and installer, and how the macOS app and pkg are signed and notarized.
 ---
 
 ## Background
@@ -99,3 +99,63 @@ release what comes back.
 
 No Windows signing credential exists for this project yet, and no WDSI
 submission has been made. Both need the maintainer's account and identity.
+
+## macOS signing and notarization
+
+Gatekeeper refuses an app or pkg downloaded from the web unless it is signed
+with a Developer ID and notarized by Apple. `just build-macos` and `just pkg`
+sign and notarize when these variables are set and do nothing about signing
+when they are not, so a local `just pkg` still produces the unsigned pkg it
+always has. Each is also a `just` variable, like `SIGN_CMD`: `just
+CODESIGN_IDENTITY=... pkg` is the same as setting the environment variable,
+and the command line wins when both are set.
+
+| Variable | Read by | Value |
+| --- | --- | --- |
+| `CODESIGN_IDENTITY` | `build-macos` | The `codesign` identity for the CLI and the app: a Developer ID Application certificate's name or SHA-1, or `-` for an ad-hoc signature. |
+| `PRODUCTSIGN_IDENTITY` | `pkg` | The Developer ID Installer identity for `productbuild --sign`. Needs `CODESIGN_IDENTITY`. |
+| `NOTARIZE` | `pkg` | `1` runs `just notarize` on the pkg once it is built. Needs both identities and the four variables below; any other value is an error. |
+| `NOTARY_AUTH` | `notarize` | `api-key`, the only mode: an App Store Connect API key. |
+| `NOTARY_API_KEY_PATH` | `notarize` | The key's `.p8` file. |
+| `NOTARY_API_KEY_ID` | `notarize` | The key ID. |
+| `NOTARY_API_ISSUER_ID` | `notarize` | The issuer ID. |
+
+`just build-macos` codesigns `build/<slug>` right after its `go build`, with
+the identifier `<IDENTIFIER>.cli`, and `build/<Name>.app` as a bundle once
+its `Info.plist` and icon are in place, since the signature seals them along
+with the main executable. Both get `--options runtime` (the hardened runtime,
+which notarization requires) and `--timestamp`, except that the ad-hoc
+identity gets no timestamp, which `codesign` refuses for it. `--force`
+replaces the signature of an earlier build. No entitlements: the Wails app
+runs under the hardened runtime without any.
+
+`just pkg` checks the variables before anything is built: a
+`PRODUCTSIGN_IDENTITY` without `CODESIGN_IDENTITY`, or `NOTARIZE=1` without
+either identity or one of the notary variables, fails naming the missing
+one. It passes `--sign` to `productbuild` only; the three component pkgs stay
+unsigned, since the product signature covers them. With `NOTARIZE=1` it
+then runs `just notarize build/<slug>-<version>.pkg`.
+
+`just notarize <pkg>` runs `xcrun notarytool submit <pkg> --key <path>
+--key-id <id> --issuer <issuer> --wait`, then `xcrun stapler staple <pkg>`
+and `xcrun stapler validate <pkg>`, and stops at the first that fails. It
+does not check that the key file exists; `notarytool` reports that itself.
+Apple refuses an ad-hoc signature, so a pkg for notarization needs real
+identities for both variables.
+
+Verify each stage:
+
+    codesign --verify --strict build/sofcat
+    codesign --verify --strict --deep build/SofCat.app
+    codesign -d --verbose=2 build/SofCat.app 2>&1 | grep runtime        # flags=0x10000(runtime)
+    pkgutil --check-signature build/sofcat-<version>.pkg                 # Status: signed by ...
+    xcrun stapler validate build/sofcat-<version>.pkg                    # The validate action worked
+    spctl --assess --type install -v build/sofcat-<version>.pkg          # accepted, source=Notarized Developer ID
+
+With a Developer ID, for example (`security find-identity -v` lists the
+identities in the keychain):
+
+    CODESIGN_IDENTITY='Developer ID Application: Name (TEAMID)' PRODUCTSIGN_IDENTITY='Developer ID Installer: Name (TEAMID)' NOTARIZE=1 NOTARY_AUTH=api-key NOTARY_API_KEY_PATH=~/AuthKey_ABC123DEF.p8 NOTARY_API_KEY_ID=ABC123DEF NOTARY_API_ISSUER_ID=<issuer uuid> just pkg
+
+No macOS signing credential exists for this project yet either; it needs the
+maintainer's Apple Developer account.
