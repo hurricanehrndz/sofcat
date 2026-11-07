@@ -32,10 +32,10 @@ func checkFacts(table harness.Table, goos string) conditions.Facts {
 }
 
 // checkPlacementTemplates renders every placement file template in the
-// table, for each OS the placement has a path on, with .Items built from the
-// catalog items that target the placement, managed both ways. A template
-// that fails is a problem; a repository without a usable table has none to
-// check.
+// table, the defaults included, for each OS the placement has a path on,
+// with .Items built from the catalog items that target the placement,
+// managed both ways. A template that fails is a problem; a repository
+// without a usable table has none to check.
 func checkPlacementTemplates(h repoHarnesses, catalogs map[string]map[string]catalog.Item) []string {
 	if !h.present || h.problem != "" {
 		return nil
@@ -58,7 +58,7 @@ func checkPlacementTemplates(h repoHarnesses, catalogs map[string]map[string]cat
 						problems = append(problems, fmt.Sprintf("%s: placement %q: manifest_files %q on %s: %v", h.path, name, f.Path, goos, err))
 					}
 				}
-			case p.Kind == harness.KindSettings && p.Template != "":
+			case p.Kind == harness.KindSettings:
 				for _, err := range h.renderSettings(name, p, goos, root, facts, catalogs) {
 					problems = append(problems, fmt.Sprintf("%s: placement %q: template on %s: %v", h.path, name, goos, err))
 				}
@@ -77,20 +77,16 @@ func (h repoHarnesses) renderSettings(name string, p harness.Placement, goos, ro
 		OS:        goos,
 		Scope:     p.ScopeFor(goos),
 		Placement: p.View(name, root),
-		Registers: &render.Registered{Name: p.Registers, Root: regRoot, Kind: regSpec.Kind},
+		Registers: regSpec.Registered(p.Registers, regRoot),
 	}
 	items := targetingItems(catalogs, p.Registers, regSpec, goos, regRoot)
-	return renderBothWays(harness.ManifestFile{Path: root, Template: p.Template}, ctx, items, facts)
+	return renderBothWays(harness.ManifestFile{Path: root, Template: p.SettingsTemplate()}, ctx, items, facts)
 }
 
 // renderBothWays renders f's template, named after f.Path (a settings
 // template is named "template"), for an output at f.Path, with items all
-// managed and all optional, and returns the distinct errors. An entry
-// without a template has none.
+// managed and all optional, and returns the distinct errors.
 func renderBothWays(f harness.ManifestFile, ctx render.FileContext, items []render.Item, facts conditions.Facts) []error {
-	if f.Template == "" {
-		return nil
-	}
 	name := f.Path
 	if ctx.Registers != nil {
 		name = "template"

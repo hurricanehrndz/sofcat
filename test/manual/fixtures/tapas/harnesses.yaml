@@ -59,7 +59,8 @@ placements:
       windows: ${ProgramData}\tapas-test-outside\skills
     works_in: [Claude Code]
   # A marketplace sofcat creates, so it gets the marker: plugins under
-  # plugins\<item>, a generated .claude-plugin\marketplace.json, and a
+  # plugins\<item>, a .claude-plugin\marketplace.json rendered from the
+  # default catalog template (harness.DefaultCatalogTemplate), and a
   # Codex-format catalog rendered from a template, its versions stamped with
   # each plugin's placed hash.
   tapas-marketplace:
@@ -103,7 +104,8 @@ placements:
               ]
             }
   # The drop-in that registers tapas-marketplace and enables its managed
-  # plugins.
+  # plugins, rendered from the default settings template
+  # (harness.DefaultSettingsTemplate).
   tapas-settings:
     kind: settings
     paths:

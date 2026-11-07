@@ -42,6 +42,51 @@ const (
 // block lists no manifest_files.
 var DefaultManifestFiles = []string{".claude-plugin/marketplace.json"}
 
+// DefaultCatalogTemplate renders a manifest_files entry written as a bare
+// path: the Claude Code marketplace catalog (zip-items guide, "Marketplace
+// and settings placements"). It is a template like any a brand writes, so a
+// brand overrides it by copying it under {path, template}.
+const DefaultCatalogTemplate = `{
+  "name": {{ json .Placement.Marketplace.Name }},
+  "owner": {{ json .Placement.Marketplace.Owner }},
+  {{- if ne .Placement.Marketplace.Renames nil }}
+  "renames": {{ json .Placement.Marketplace.Renames }},
+  {{- end }}
+  {{- if ne .Placement.Marketplace.AllowCrossMarketplaceDependenciesOn nil }}
+  "allowCrossMarketplaceDependenciesOn": {{ json .Placement.Marketplace.AllowCrossMarketplaceDependenciesOn }},
+  {{- end }}
+  "plugins": [
+    {{- range $i, $p := .Items }}{{ if $i }},{{ end }}
+    {
+      "name": {{ json $p.Name }},
+      "source": {{ json (printf "./plugins/%s" $p.Name) }},
+      "version": {{ json $p.Version }},
+      "defaultEnabled": {{ $p.Managed }}
+    }
+    {{- end }}
+  ]
+}
+`
+
+// DefaultSettingsTemplate renders a settings placement that has no
+// template: the Claude Code drop-in that registers the marketplace and
+// enables its managed plugins, or nothing, which removes the file, when the
+// marketplace holds no plugin.
+const DefaultSettingsTemplate = `{{- if .Items }}
+{
+  "extraKnownMarketplaces": {
+    {{ json .Registers.Marketplace.Name }}: {"source": {"source": "directory", "path": {{ json .Registers.Root }}}}
+  },
+  "enabledPlugins": {
+    {{- $first := true }}
+    {{- range .Items }}{{ if .Managed }}{{ if not $first }},{{ end }}{{ $first = false }}
+    {{ json (printf "%s@%s" .Name $.Registers.Marketplace.Name) }}: true
+    {{- end }}{{ end }}
+  }
+}
+{{- end }}
+`
+
 // Table is a parsed harnesses.yaml.
 type Table struct {
 	Placements map[string]Placement `yaml:"placements"`
@@ -68,8 +113,9 @@ type Placement struct {
 	// Registers names the placement a KindSettings file registers: a
 	// marketplace, or with Template any directory or marketplace.
 	Registers string `yaml:"registers,omitempty"`
-	// Template renders a KindSettings file in place of the built-in Claude
-	// Code drop-in (render.FileContext). An empty output removes the file.
+	// Template renders a KindSettings file in place of
+	// DefaultSettingsTemplate (render.FileContext). An empty output removes
+	// the file.
 	Template string `yaml:"template,omitempty"`
 }
 
@@ -84,9 +130,9 @@ type Marketplace struct {
 	ManifestFiles                       []ManifestFile `yaml:"manifest_files,omitempty"`
 }
 
-// ManifestFile is one manifest_files entry: a path, which gets the built-in
-// Claude-format catalog, or {path, template}, which gets the rendered
-// template (render.FileContext). In YAML a bare string is a path.
+// ManifestFile is one manifest_files entry: a path, which gets
+// DefaultCatalogTemplate, or {path, template}, which gets that template
+// (render.FileContext). In YAML a bare string is a path.
 type ManifestFile struct {
 	Path     string `yaml:"path"`
 	Template string `yaml:"template,omitempty"`
@@ -110,16 +156,32 @@ func (f *ManifestFile) UnmarshalYAML(node *yaml.Node) error {
 }
 
 // Manifests returns the manifest files to write, relative to the placement
-// root: the default when the block lists none.
+// root, each with its template: DefaultCatalogTemplate for an entry written
+// as a path, and DefaultManifestFiles when the block lists none.
 func (m Marketplace) Manifests() []ManifestFile {
-	if len(m.ManifestFiles) == 0 {
-		files := make([]ManifestFile, len(DefaultManifestFiles))
-		for i, p := range DefaultManifestFiles {
-			files[i] = ManifestFile{Path: p}
+	files := m.ManifestFiles
+	if len(files) == 0 {
+		for _, p := range DefaultManifestFiles {
+			files = append(files, ManifestFile{Path: p})
 		}
-		return files
 	}
-	return m.ManifestFiles
+	out := make([]ManifestFile, len(files))
+	for i, f := range files {
+		if f.Template == "" {
+			f.Template = DefaultCatalogTemplate
+		}
+		out[i] = f
+	}
+	return out
+}
+
+// SettingsTemplate returns the template a settings placement's file is
+// rendered from: its own, or DefaultSettingsTemplate.
+func (p Placement) SettingsTemplate() string {
+	if p.Template != "" {
+		return p.Template
+	}
+	return DefaultSettingsTemplate
 }
 
 // Files returns the paths of Manifests.
@@ -144,6 +206,13 @@ func (p Placement) View(name, root string) render.Placement {
 		}
 	}
 	return v
+}
+
+// Registered describes placement name, rooted at root, to the template of a
+// settings placement that registers it.
+func (p Placement) Registered(name, root string) *render.Registered {
+	v := p.View(name, root)
+	return &render.Registered{Name: v.Name, Root: v.Root, Kind: v.Kind, Marketplace: v.Marketplace}
 }
 
 // Path returns the placement root for goos and whether it has one.
@@ -364,9 +433,18 @@ func validateMarketplace(m *Marketplace) []error {
 			if _, err := render.Parse(f.Path, f.Template); err != nil {
 				errs = append(errs, fmt.Errorf("marketplace: manifest_files %q: %w", f.Path, err))
 			}
+		} else if !isJSONPath(f.Path) {
+			// Only a .json render is canonical; any other path is written as
+			// rendered, template whitespace and all.
+			errs = append(errs, fmt.Errorf("marketplace: manifest_files %q without a template must end in .json: the default template is the Claude catalog", f.Path))
 		}
 	}
 	return errs
+}
+
+// isJSONPath reports whether render.Render canonicalizes path's output.
+func isJSONPath(path string) bool {
+	return strings.HasSuffix(strings.ToLower(path), ".json")
 }
 
 // validateSettings checks what a settings placement registers and its
@@ -381,7 +459,7 @@ func (t Table) validateSettings(p Placement) []error {
 		errs = append(errs, fmt.Errorf("registers %q, which is a settings placement", p.Registers))
 	case target.Kind != KindMarketplace && p.Template == "":
 		// Only a template knows how to describe a directory placement.
-		errs = append(errs, fmt.Errorf("registers %q, which is not a marketplace placement, without a template", p.Registers))
+		errs = append(errs, fmt.Errorf("registers %q, which is not a marketplace placement, without a template: the default template is the Claude Code drop-in", p.Registers))
 	case target.ScopeFor(Darwin) == ScopeUser || target.ScopeFor(Windows) == ScopeUser:
 		// The service writes generated files; it cannot expand a user path.
 		errs = append(errs, fmt.Errorf("registers %q, which has user scope: generated files are machine scope only", p.Registers))
@@ -389,6 +467,14 @@ func (t Table) validateSettings(p Placement) []error {
 	if p.Template != "" {
 		if _, err := render.Parse("template", p.Template); err != nil {
 			errs = append(errs, err)
+		}
+	} else {
+		// Only a .json render is canonical; any other path is written as
+		// rendered, template whitespace and all.
+		for goos, path := range p.Paths {
+			if !isJSONPath(path) {
+				errs = append(errs, fmt.Errorf("paths: %s path %q without a template must end in .json: the default template is the Claude Code drop-in", goos, path))
+			}
 		}
 	}
 	return errs
