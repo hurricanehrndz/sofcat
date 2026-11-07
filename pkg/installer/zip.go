@@ -50,13 +50,17 @@ type ZipInstaller struct {
 	// item's managed flag is never rewritten: the run cannot tell whether it
 	// is managed. Nil means nothing is held.
 	Held func(item string) bool
-	// Facts are the run's facts (pkg/facts), which placement file templates
-	// read through fact and cond. Nil means the machine has no facts, so a
-	// template that reads one fails.
+	// Facts are the run's facts (pkg/facts), which placement file and tree
+	// templates read through fact and cond. Nil means the machine has no
+	// facts, so a template that reads one fails.
 	Facts conditions.Facts
+	// User is the login name, without domain, of the account this installer
+	// runs as: the tree templates' .User in user scope. The service leaves
+	// it empty; the per-user helper sets it.
+	User string
 
-	// renderer decides what sofcat renders inside a tree; noTemplates when
-	// nil.
+	// renderer decides what sofcat renders inside a tree; the tree's own
+	// templates (treeTemplates) when nil.
 	renderer treeRenderer
 	now      func() time.Time
 }
@@ -65,7 +69,7 @@ func (z *ZipInstaller) templates() treeRenderer {
 	if z.renderer != nil {
 		return z.renderer
 	}
-	return noTemplates{}
+	return treeTemplates{z}
 }
 
 // NewMachineZip returns the service's zip installer for cfg and the
@@ -311,6 +315,9 @@ type finding struct {
 	// place: one sofcat did not place, or whose rendered inputs changed. An
 	// adopted tree with current outputs only gets its receipt rewritten.
 	render bool
+	// shipped is set for an adopted tree that equals the catalog's tree as
+	// shipped, so it must pass the shipped checks before it is rendered.
+	shipped bool
 }
 
 // inspect is Inspect with the placement root once resolved.
@@ -363,7 +370,7 @@ func (z *ZipInstaller) inspectTree(item catalog.Item, t Target, root string) fin
 			f.Outcome = OutcomeUnchanged
 			return f
 		}
-		match, err := z.templates().inputsMatch(item, t, tree, rc, z.managedNow(rc))
+		match, err := z.templates().inputsMatch(item, t, root, tree, rc, z.managedNow(rc))
 		if err != nil {
 			return finding{Result: fail(t, tree, err)}
 		}
@@ -378,7 +385,7 @@ func (z *ZipInstaller) inspectTree(item catalog.Item, t Target, root string) fin
 	case hashErr == nil && hash == t.Variant.TreeHash:
 		// The catalog's tree as shipped, which sofcat did not place: put
 		// there by hand, or before sofcat rendered anything.
-		f.Outcome, f.render = OutcomeAdopted, true
+		f.Outcome, f.render, f.shipped = OutcomeAdopted, true, true
 	default:
 		f.Outcome = OutcomeConflict
 		f.Err = fmt.Errorf("placement %q: %s was changed outside sofcat; leaving it alone", t.Placement, tree)
@@ -439,7 +446,14 @@ func (z *ZipInstaller) Apply(item catalog.Item, t Target, archive string) Result
 	switch res.Outcome {
 	case OutcomeMissing, OutcomeUnchanged:
 	case OutcomeAdopted:
-		if err := z.adopt(item, t, res.Path, f.render); err != nil {
+		// A tree as shipped is held to the same rules as a staged one; a
+		// placed tree legitimately holds each template beside its output.
+		if f.shipped {
+			if err := checkShipped(res.Path, z.Guard.GOOS); err != nil {
+				return fail(t, res.Path, fmt.Errorf("placement %q: %w", t.Placement, err))
+			}
+		}
+		if err := z.adopt(item, t, f.root, res.Path, f.render); err != nil {
 			return fail(t, res.Path, err)
 		}
 		slog.Info("Adopted placed tree", "item", item.Name, "placement", t.Placement, "path", res.Path, "rendered", f.render)
@@ -466,7 +480,10 @@ func (z *ZipInstaller) Apply(item catalog.Item, t Target, archive string) Result
 	}
 	// The archive's hashes are checked; now the tree becomes this device's.
 	// Staging is discarded on failure, so its undo is not needed.
-	placed, recs, _, err := z.renderTree(item, t, stage)
+	if err := checkShipped(stage, z.Guard.GOOS); err != nil {
+		return fail(t, res.Path, fmt.Errorf("placement %q: %w", t.Placement, err))
+	}
+	placed, recs, _, err := z.renderTree(item, t, f.root, stage)
 	if err != nil {
 		return fail(t, res.Path, fmt.Errorf("placement %q: %w", t.Placement, err))
 	}
@@ -481,11 +498,11 @@ func (z *ZipInstaller) Apply(item catalog.Item, t Target, archive string) Result
 	return z.regenerated(t, res)
 }
 
-// adopt writes the receipt for a tree Inspect found adopted. With render it
-// first renders the tree's templates in place, all or nothing, and records
-// the hash of the result; otherwise the receipt keeps what it recorded of
-// the tree, which is unchanged.
-func (z *ZipInstaller) adopt(item catalog.Item, t Target, tree string, render bool) error {
+// adopt writes the receipt for a tree Inspect found adopted under root. With
+// render it first renders the tree's templates in place, all or nothing, and
+// records the hash of the result; otherwise the receipt keeps what it
+// recorded of the tree, which is unchanged.
+func (z *ZipInstaller) adopt(item catalog.Item, t Target, root, tree string, render bool) error {
 	if !render {
 		rc, ok, err := receipt.Read(z.ReceiptDir, t.Placement, item.Name)
 		if err != nil {
@@ -495,7 +512,7 @@ func (z *ZipInstaller) adopt(item catalog.Item, t Target, tree string, render bo
 			return z.writeReceipt(item, t, tree, rc.PlacedHash, rc.Rendered)
 		}
 	}
-	placed, recs, undo, err := z.renderTree(item, t, tree)
+	placed, recs, undo, err := z.renderTree(item, t, root, tree)
 	if err != nil {
 		return fmt.Errorf("placement %q: %w", t.Placement, err)
 	}
@@ -507,24 +524,25 @@ func (z *ZipInstaller) adopt(item catalog.Item, t Target, tree string, render bo
 	return nil
 }
 
-// renderTree renders item's templates in tree, staged or in place, through
-// writeRendered, and returns the tree's hash as written with the records for
-// its receipt and an undo that puts the tree's previous bytes back. A tree
-// that cannot be rehashed is put back before the error returns.
-func (z *ZipInstaller) renderTree(item catalog.Item, t Target, tree string) (string, []receipt.Rendered, func() error, error) {
+// renderTree renders item's templates in dir, its tree under root staged or
+// in place, through writeRendered, and returns the tree's hash as written
+// with the records for its receipt and an undo that puts the tree's previous
+// bytes back. A tree that cannot be rehashed is put back before the error
+// returns.
+func (z *ZipInstaller) renderTree(item catalog.Item, t Target, root, dir string) (string, []receipt.Rendered, func() error, error) {
 	managed, err := z.receiptManaged(item.Name, t.Placement)
 	if err != nil {
 		return "", nil, nil, err
 	}
-	outs, err := z.templates().render(item, t, tree, managed)
+	outs, err := z.templates().render(item, t, root, dir, managed)
 	if err != nil {
 		return "", nil, nil, err
 	}
-	undo, err := writeRendered(tree, outs)
+	undo, err := writeRendered(dir, outs)
 	if err != nil {
 		return "", nil, nil, err
 	}
-	placed, err := artifact.TreeHash(tree, z.Guard.GOOS)
+	placed, err := artifact.TreeHash(dir, z.Guard.GOOS)
 	if err != nil {
 		return "", nil, nil, errors.Join(err, undo())
 	}

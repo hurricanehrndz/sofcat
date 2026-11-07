@@ -235,9 +235,9 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 			delete(planDesired, d.Name)
 			planHeld[d.Name] = true
 		}
-		userPlan := service.UserPlan(planDesired, planHeld, catalogs, harnesses, zip.Guard.GOOS, dir)
+		userPlan := service.UserPlan(planDesired, planHeld, managed, catalogs, harnesses, zip.Guard.GOOS, dir)
 		service.StageUserArtifacts(context.Background(), zip, userPlan, dir)
-		if err := service.SaveUserPlan(cfg.AppDataPath, userPlan); err != nil {
+		if err := service.SaveUserPlan(cfg.AppDataPath, service.UserPlacements{Entries: userPlan, Facts: machineFacts}); err != nil {
 			slog.Warn("unable to store the user-placement plan", "err", err)
 		}
 	}

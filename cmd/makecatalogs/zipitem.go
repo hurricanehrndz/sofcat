@@ -13,6 +13,7 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/artifact"
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
 	"github.com/hurricanehrndz/sofcat/pkg/harness"
+	"github.com/hurricanehrndz/sofcat/pkg/render"
 	"go.yaml.in/yaml/v4"
 )
 
@@ -101,11 +102,10 @@ func planZipItem(harnessesPath, itemPath, rendered, prefix string) (admin.Packag
 	}
 	var variants []zipVariant
 	for _, placement := range placements {
-		p, ok := table.Placements[placement]
-		if !ok {
+		if _, ok := table.Placements[placement]; !ok {
 			return info, nil, nil, fmt.Errorf("%s: placement %q is not in %s", rendered, placement, harnessesPath)
 		}
-		found, err := planPlacement(filepath.Join(rendered, placement), placement, p, info.ItemName)
+		found, err := planPlacement(filepath.Join(rendered, placement), placement, table, info)
 		if err != nil {
 			return info, nil, nil, err
 		}
@@ -158,9 +158,9 @@ func stripComments(n *yaml.Node) {
 	}
 }
 
-// planPlacement checks and hashes the <os>/ trees under dir, one placement's
-// rendered output.
-func planPlacement(dir, placement string, p harness.Placement, itemName string) ([]zipVariant, error) {
+// planPlacement checks, hashes and test-renders the <os>/ trees under dir,
+// one placement's rendered output for info's item.
+func planPlacement(dir, placement string, table harness.Table, info admin.PackageInfo) ([]zipVariant, error) {
 	osDirs, err := subdirs(dir)
 	if err != nil {
 		return nil, err
@@ -168,6 +168,7 @@ func planPlacement(dir, placement string, p harness.Placement, itemName string) 
 	if len(osDirs) == 0 {
 		return nil, fmt.Errorf("%s: no darwin or windows directory", dir)
 	}
+	p := table.Placements[placement]
 	var variants []zipVariant
 	for _, goos := range osDirs {
 		treeDir := filepath.Join(dir, goos)
@@ -181,16 +182,42 @@ func planPlacement(dir, placement string, p harness.Placement, itemName string) 
 		if err != nil {
 			return nil, err
 		}
-		if wrappedInItemDir(tree.Paths(), itemName) {
-			return nil, fmt.Errorf("%s: the tree is wrapped in a %s/ directory; put the item's files at its root", treeDir, itemName)
+		if wrappedInItemDir(tree.Paths(), info.ItemName) {
+			return nil, fmt.Errorf("%s: the tree is wrapped in a %s/ directory; put the item's files at its root", treeDir, info.ItemName)
 		}
 		sum, err := tree.Hash()
 		if err != nil {
 			return nil, err
 		}
+		if err := checkTemplates(treeDir, tree, placement, goos, table, info, sum); err != nil {
+			return nil, err
+		}
 		variants = append(variants, zipVariant{placement, goos, treeDir, sum})
 	}
 	return variants, nil
+}
+
+// checkTemplates renders the templates the tree at treeDir ships as the
+// device would (admin.CheckTreeTemplates), so a template that would fail on
+// every device fails the pack, naming the item, the OS and the template.
+func checkTemplates(treeDir string, tree *artifact.Tree, placement, goos string, table harness.Table, info admin.PackageInfo, treeHash string) error {
+	templates, err := artifact.ShippedTemplates(tree.Paths())
+	if err != nil {
+		return fmt.Errorf("%s: %w", treeDir, err)
+	}
+	sources := make(map[string]string, len(templates))
+	for _, p := range templates {
+		body, err := os.ReadFile(filepath.Join(treeDir, filepath.FromSlash(p)))
+		if err != nil {
+			return err
+		}
+		sources[p] = string(body)
+	}
+	item := render.TreeItem{Name: info.ItemName, Version: info.Item.Version, TreeHash: treeHash}
+	if errs := admin.CheckTreeTemplates(table, placement, goos, item, sources); len(errs) > 0 {
+		return fmt.Errorf("%s: item %q on %s: %w", treeDir, info.ItemName, goos, errors.Join(errs...))
+	}
+	return nil
 }
 
 // writeZips packs each distinct tree once into <out>/<prefix> and returns

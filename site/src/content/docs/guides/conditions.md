@@ -170,6 +170,16 @@ if ($env:COMPUTERNAME -like 'LAB-*') { $groups += 'lab' }
 
 Then `"lab" in machine_groups` and `site == "east"` work in conditions.
 
+Templates read the same facts: a placement file template or a tree template
+([Zip items](/guides/zip-items/#tree-templates)) calls `fact "site"` or
+`cond "site == \"east\""`, so a value management tooling wants in a rendered
+file comes from a script here, not from a new setting. The service also
+hands the whole facts map to every logged-on user's helper with the
+user-placement plan, so user-scope trees render with the same values and
+the helper runs no script. A script must therefore not print anything a
+standard user may not see, and a value a machine-scope template writes lands
+in a machine-wide directory every user can read.
+
 - Keys from all scripts are merged. When two scripts print the same key, the
   later one wins.
 - A built-in fact always wins over a script's key of the same name, so a

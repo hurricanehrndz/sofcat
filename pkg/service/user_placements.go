@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
+	"github.com/hurricanehrndz/sofcat/pkg/conditions"
 	"github.com/hurricanehrndz/sofcat/pkg/download"
 	"github.com/hurricanehrndz/sofcat/pkg/harness"
 	"github.com/hurricanehrndz/sofcat/pkg/installer"
@@ -42,9 +43,23 @@ type UserPlacement struct {
 	// Held is true for an item under a conditional_items block the service
 	// could not decide: the helper neither installs nor removes it.
 	Held bool `json:"held"`
+	// Managed is true when a manifest lists the item in managed_installs:
+	// the helper's receipt records it and the tree's templates read it as
+	// .Item.Managed, so a flip is detected in user scope as in machine scope.
+	Managed bool `json:"managed"`
 
 	// location is the variant's repository path, for staging.
 	location string
+}
+
+// UserPlacements is the user-placement plan as listUserPlacements serves it
+// and as a run stores it: the entries, and the facts that run collected,
+// once, which the helper renders user-scope tree templates with. The helper
+// runs no scripts; whatever an admin script prints reaches every logged-on
+// user's helper (conditions guide, "Admin-provided facts").
+type UserPlacements struct {
+	Entries []UserPlacement  `json:"entries"`
+	Facts   conditions.Facts `json:"facts"`
 }
 
 // UserPlacementResult is the helper's outcome for one placement, sent with
@@ -54,10 +69,6 @@ type UserPlacementResult struct {
 	Placement string `json:"placement"`
 	Outcome   string `json:"outcome"`
 	Error     string `json:"error,omitempty"`
-}
-
-type listUserPlacementsResponse struct {
-	Entries []UserPlacement `json:"entries"`
 }
 
 type reportUserPlacementsParams struct {
@@ -81,12 +92,13 @@ var UserArtifactsDir = func(dataDir string) string {
 // riders) and its held set (names under conditional_items blocks it could not
 // decide), so the plan never diverges from what the run acted on. In v1 every
 // user gets the same plan: those items' zip variants whose placement scope on
-// goos is user. Held names outside the desired set are listed with Held set.
-// Entries are sorted by item, then placement in table order. Each archive is
-// named <hash>.zip inside dir, so two variants share a file only when they
-// are the same archive and a catalog location never shapes a path; a variant
-// whose hash is not a sha256 is left out.
-func UserPlan(desired, held map[string]bool, catalogs map[int]map[string]catalog.Item, table harness.Table, goos, dir string) []UserPlacement {
+// goos is user. Held names outside the desired set are listed with Held set;
+// managed holds the names the manifests list in managed_installs. Entries
+// are sorted by item, then placement in table order. Each archive is named
+// <hash>.zip inside dir, so two variants share a file only when they are the
+// same archive and a catalog location never shapes a path; a variant whose
+// hash is not a sha256 is left out.
+func UserPlan(desired, held, managed map[string]bool, catalogs map[int]map[string]catalog.Item, table harness.Table, goos, dir string) []UserPlacement {
 	var userPlacements []string
 	for _, name := range table.Names() {
 		if table.Placements[name].ScopeFor(goos) == harness.ScopeUser {
@@ -128,6 +140,7 @@ func UserPlan(desired, held map[string]bool, catalogs map[int]map[string]catalog
 				Hash:      hash,
 				TreeHash:  v.TreeHash,
 				Held:      !desired[name],
+				Managed:   managed[name],
 				location:  v.Location,
 			})
 		}
@@ -142,8 +155,14 @@ func UserPlanPath(appDataPath string) string {
 
 // SaveUserPlan stores plan at UserPlanPath through a temporary file, so a
 // concurrent listUserPlacements reads either the old plan or the new one.
-func SaveUserPlan(appDataPath string, plan []UserPlacement) error {
-	data, err := json.Marshal(listUserPlacementsResponse{Entries: plan})
+func SaveUserPlan(appDataPath string, plan UserPlacements) error {
+	if plan.Entries == nil {
+		plan.Entries = []UserPlacement{}
+	}
+	if plan.Facts == nil {
+		plan.Facts = conditions.Facts{}
+	}
+	data, err := json.Marshal(plan)
 	if err != nil {
 		return err
 	}
@@ -159,22 +178,26 @@ func SaveUserPlan(appDataPath string, plan []UserPlacement) error {
 // LoadUserPlan reads the plan the last run stored; before the first run there
 // is none, which is an empty plan. It reads no repository, so the helper gets
 // its plan at logon even while the repository is unreachable.
-func LoadUserPlan(appDataPath string) ([]UserPlacement, error) {
+func LoadUserPlan(appDataPath string) (UserPlacements, error) {
+	empty := UserPlacements{Entries: []UserPlacement{}, Facts: conditions.Facts{}}
 	data, err := os.ReadFile(UserPlanPath(appDataPath))
 	if errors.Is(err, fs.ErrNotExist) {
-		return []UserPlacement{}, nil
+		return empty, nil
 	}
 	if err != nil {
-		return nil, err
+		return UserPlacements{}, err
 	}
-	var stored listUserPlacementsResponse
+	var stored UserPlacements
 	if err := json.Unmarshal(data, &stored); err != nil {
-		return nil, fmt.Errorf("decode %s: %w", UserPlanPath(appDataPath), err)
+		return UserPlacements{}, fmt.Errorf("decode %s: %w", UserPlanPath(appDataPath), err)
 	}
 	if stored.Entries == nil {
-		stored.Entries = []UserPlacement{}
+		stored.Entries = empty.Entries
 	}
-	return stored.Entries, nil
+	if stored.Facts == nil {
+		stored.Facts = empty.Facts
+	}
+	return stored, nil
 }
 
 // StageUserArtifacts makes dir hold exactly the archives plan references:
@@ -295,7 +318,7 @@ func (sr *serviceRunner) dispatchUserPlacements(conn clientConn, req rpcRequest,
 		if err != nil {
 			return nil, commandError(err, "")
 		}
-		return listUserPlacementsResponse{Entries: resp.UserPlacements}, nil
+		return resp.UserPlan, nil
 	}
 	params, err := decodeParams[reportUserPlacementsParams](req.Params)
 	if err != nil || params.Results == nil {
@@ -320,12 +343,12 @@ func sendUserPlacementCommand(ctx context.Context, client *Client, cmd Command) 
 		}
 		return CommandResponse{Status: "ok", Message: "user placement result reported"}, nil
 	}
-	entries, err := client.ListUserPlacements(ctx)
+	plan, err := client.ListUserPlacements(ctx)
 	if err != nil {
 		return CommandResponse{}, err
 	}
-	resp := CommandResponse{Status: "ok", UserPlacements: entries, Items: make([]string, 0, len(entries))}
-	for _, e := range entries {
+	resp := CommandResponse{Status: "ok", UserPlan: &plan, Items: make([]string, 0, len(plan.Entries))}
+	for _, e := range plan.Entries {
 		line, err := json.Marshal(e)
 		if err != nil {
 			return CommandResponse{}, fmt.Errorf("failed to encode user placement %q: %w", e.Item, err)

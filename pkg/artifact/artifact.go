@@ -13,8 +13,10 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -80,6 +82,60 @@ func Read(dir, goos string) (*Tree, error) {
 	}
 	sort.Slice(t.files, func(i, j int) bool { return t.files[i].path < t.files[j].path })
 	return &t, nil
+}
+
+// TemplateSuffix marks a file in a tree as the template of the file of the
+// same name without it, which sofcat renders beside it on the device
+// (zip-items guide, "Tree templates").
+const TemplateSuffix = ".tmpl"
+
+// Templates returns, in order, the templates among paths, a tree's
+// slash-separated file paths. It refuses a file named just .tmpl and an
+// x.tmpl.tmpl, which the render would have nowhere to put. A placed tree
+// holds each template beside its output; see ShippedTemplates for a tree as
+// an archive ships it.
+func Templates(paths []string) ([]string, error) {
+	var templates []string
+	for _, p := range paths {
+		if !strings.HasSuffix(p, TemplateSuffix) {
+			continue
+		}
+		switch {
+		case path.Base(p) == TemplateSuffix:
+			return nil, fmt.Errorf("%s: a template needs a name before %s", p, TemplateSuffix)
+		case strings.HasSuffix(strings.TrimSuffix(p, TemplateSuffix), TemplateSuffix):
+			return nil, fmt.Errorf("%s: a template cannot render another template", p)
+		}
+		templates = append(templates, p)
+	}
+	return templates, nil
+}
+
+// ShippedTemplates is Templates for a tree as an archive ships it, which
+// must not hold both x and x.tmpl: the render would overwrite x. A directory
+// x (files under x/) is refused too: the render could not write x at all.
+// makecatalogs refuses such a tree at pack time and in the repository's
+// zips, and the device refuses it when placing.
+func ShippedTemplates(paths []string) ([]string, error) {
+	templates, err := Templates(paths)
+	if err != nil {
+		return nil, err
+	}
+	// Every entry the tree holds, by path: a file, or a directory above one.
+	present := make(map[string]string, len(paths))
+	for _, p := range paths {
+		present[p] = ""
+		for dir := path.Dir(p); dir != "."; dir = path.Dir(dir) {
+			present[dir] = "a directory "
+		}
+	}
+	for _, p := range templates {
+		out := strings.TrimSuffix(p, TemplateSuffix)
+		if kind, ok := present[out]; ok {
+			return nil, fmt.Errorf("%s: the tree also ships %s%s, which the template would overwrite", p, kind, out)
+		}
+	}
+	return templates, nil
 }
 
 // Paths returns the slash-separated relative path of every file, sorted.

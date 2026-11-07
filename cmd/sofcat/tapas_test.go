@@ -511,7 +511,7 @@ type tapasUserClient struct {
 	reported []service.UserPlacementResult
 }
 
-func (c *tapasUserClient) ListUserPlacements(context.Context) ([]service.UserPlacement, error) {
+func (c *tapasUserClient) ListUserPlacements(context.Context) (service.UserPlacements, error) {
 	return service.LoadUserPlan(c.cfg.AppDataPath)
 }
 
@@ -581,15 +581,19 @@ conditional_items:
 		t.Fatalf("LoadUserPlan: %v", err)
 	}
 	got := map[string]service.UserPlacement{}
-	for _, entry := range plan {
+	for _, entry := range plan.Entries {
 		got[entry.Item+"/"+entry.Placement] = entry
 	}
 	if len(got) != 4 || got["both/codex"].Held || got["dep/codex"].Held || got["stray/stray"].Held || !got["held/codex"].Held {
 		t.Fatalf("plan = %+v, want both/codex, dep/codex and stray/stray, and held/codex held", plan)
 	}
+	// The plan carries the run's facts, for the helper's templates.
+	if _, ok := plan.Facts["os"]; !ok {
+		t.Errorf("plan facts = %v, want the run's, os included", plan.Facts)
+	}
 	// What the run stored is what it staged: every non-held entry's archive
 	// is at its hash-named path and verifies.
-	for _, entry := range plan {
+	for _, entry := range plan.Entries {
 		if entry.Archive != filepath.Join(e.userArtifacts, entry.Hash+".zip") {
 			t.Errorf("%s/%s archive %s is not named by its hash", entry.Item, entry.Placement, entry.Archive)
 		}
@@ -967,10 +971,10 @@ func TestTapasUserScopeRequiresSoftware(t *testing.T) {
 	planEntry := func() service.UserPlacement {
 		t.Helper()
 		plan, err := service.LoadUserPlan(e.cfg.AppDataPath)
-		if err != nil || len(plan) != 1 || plan[0].Item != "needs-tool" {
+		if err != nil || len(plan.Entries) != 1 || plan.Entries[0].Item != "needs-tool" {
 			t.Fatalf("plan = %+v, %v; want needs-tool/codex only", plan, err)
 		}
-		return plan[0]
+		return plan.Entries[0]
 	}
 	sync := func() []service.UserPlacementResult {
 		t.Helper()

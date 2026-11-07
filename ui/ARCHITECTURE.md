@@ -60,7 +60,7 @@ answer echoes the `id` with a `result` or an `error`:
 | `removeItem` | `{itemName}` | `AcceptedOperation` |
 | `cancelOperation` | `{operationId}` | `{canceled: true}` |
 | `streamOperationStatus` | `{operationId}` | `{streamAccepted: true}`, then notifications |
-| `listUserPlacements` | none | `{entries: [{item, version, placement, path, archive, hash, treeHash, held}]}` |
+| `listUserPlacements` | none | `{entries: [{item, version, placement, path, archive, hash, treeHash, held, managed}], facts: {...}}` |
 | `reportUserPlacements` | `{results: [{item, placement, outcome, error?}]}` | `{}` |
 
 `getServiceInfo`, `getBranding`, the two mutations and `cancelOperation` skip the
@@ -93,16 +93,21 @@ that is not check-only stages each verified archive as `<hash>.zip` in
 `user-artifacts` inside the data directory
 (`${ProgramData}\<Name>\Data\user-artifacts`, which administrators write and
 users read), removes archives no plan entry references, and then stores the
-plan in the data directory as `user-plan.json` (`{entries: [...]}`, written
-atomically). The plan is that run's desired set (installs and updates with
-their dependencies and `update_for` riders, the set scope exit keeps)
-filtered to those variants, the same for every caller. `listUserPlacements`
-skips the queue and returns the last run's stored plan without reading the
-repository, so it answers at logon even while the repository is unreachable;
-a helper that runs before the first run gets an empty plan. `path` is the
-unexpanded placement root, `archive` the staged copy, and `held` marks an
-item under an undecided `conditional_items` block, which the helper neither
-places nor removes. The helper, run at logon by the HKLM `Run` value
+plan in the data directory as `user-plan.json` (`{entries: [...], facts:
+{...}}`, written atomically). The plan is that run's desired set (installs
+and updates with their dependencies and `update_for` riders, the set scope
+exit keeps) filtered to those variants, the same for every caller, with the
+facts that run collected (built-in and admin-script facts alike, once per
+response, not per entry). `listUserPlacements` skips the queue and returns
+the last run's stored plan without reading the repository, so it answers at
+logon even while the repository is unreachable; a helper that runs before
+the first run gets an empty plan. `path` is the unexpanded placement root,
+`archive` the staged copy, `held` marks an item under an undecided
+`conditional_items` block, which the helper neither places nor removes, and
+`managed` is the manifest's flag, which the helper records in its receipt and
+renders the tree's templates with (`.Item.Managed`); the templates also
+render with `facts` and the account's login name, and the helper runs no
+script. The helper, run at logon by the HKLM `Run` value
 `<slug>.exe -serviceinstall` writes
 and in the background whenever the storefront starts, retries a service it
 cannot connect to every 5 seconds for up to a minute (without a plan it

@@ -16,7 +16,19 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/receipt"
 )
 
-// fakeTemplates stands in for the renderer a later phase adds: it renders
+// noTemplates renders nothing, so a tree is placed as shipped and every
+// receipt's inputs match: the installer before tree templates existed.
+type noTemplates struct{}
+
+func (noTemplates) render(catalog.Item, Target, string, string, bool) ([]rendered, error) {
+	return nil, nil
+}
+
+func (noTemplates) inputsMatch(catalog.Item, Target, string, string, receipt.Receipt, bool) (bool, error) {
+	return true, nil
+}
+
+// fakeTemplates exercises the seam apart from the real renderer: it renders
 // every .tmpl in the tree to the path without the suffix, as the template's
 // bytes followed by the live inputs, and records those inputs.
 type fakeTemplates struct {
@@ -26,7 +38,7 @@ type fakeTemplates struct {
 	outputs map[string]string
 }
 
-func (f *fakeTemplates) render(_ catalog.Item, _ Target, tree string, managed bool) ([]rendered, error) {
+func (f *fakeTemplates) render(_ catalog.Item, _ Target, _, tree string, managed bool) ([]rendered, error) {
 	tr, err := artifact.Read(tree, testOS())
 	if err != nil {
 		return nil, err
@@ -37,14 +49,14 @@ func (f *fakeTemplates) render(_ catalog.Item, _ Target, tree string, managed bo
 	}
 	var outs []rendered
 	for _, p := range tr.Paths() {
-		if !strings.HasSuffix(p, templateSuffix) {
+		if !strings.HasSuffix(p, artifact.TemplateSuffix) {
 			continue
 		}
 		src, err := os.ReadFile(filepath.Join(tree, filepath.FromSlash(p)))
 		if err != nil {
 			return nil, err
 		}
-		out := strings.TrimSuffix(p, templateSuffix)
+		out := strings.TrimSuffix(p, artifact.TemplateSuffix)
 		if o, ok := f.outputs[p]; ok {
 			out = o
 		}
@@ -53,7 +65,7 @@ func (f *fakeTemplates) render(_ catalog.Item, _ Target, tree string, managed bo
 	return outs, nil
 }
 
-func (f *fakeTemplates) inputsMatch(_ catalog.Item, _ Target, tree string, rc receipt.Receipt, managed bool) (bool, error) {
+func (f *fakeTemplates) inputsMatch(_ catalog.Item, _ Target, _, tree string, rc receipt.Receipt, managed bool) (bool, error) {
 	if ok, err := templatesRecorded(tree, testOS(), rc.Rendered); !ok || err != nil {
 		return ok, err
 	}
@@ -216,8 +228,9 @@ func TestZipAdoptsUnrenderedTree(t *testing.T) {
 	tg := target(t, z, item, "skills")
 	tree := filepath.Join(roots, "skills", "hello")
 
-	// Placed as shipped: the default renderer renders nothing, and the
-	// receipt says so.
+	// Placed as shipped by an installer from before tree templates, which
+	// rendered nothing; the receipt says so.
+	z.renderer = noTemplates{}
 	wantOutcome(t, "install as shipped", z.Apply(item, tg, archive), OutcomeInstalled)
 	rc := readReceipt(t, z)
 	wantPlaced(t, "install as shipped", tree, rc, 0)

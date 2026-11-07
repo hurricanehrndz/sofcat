@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/hurricanehrndz/sofcat/pkg/admin"
+	"github.com/hurricanehrndz/sofcat/pkg/artifact"
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
 	"go.yaml.in/yaml/v4"
 )
@@ -159,6 +160,22 @@ func TestZipItemRefusals(t *testing.T) {
 			}
 			writeFiles(t, dir, map[string]string{"rendered/codex-skills/windows/hello/SKILL.md": "x"})
 		}, "wrapped in a hello/ directory"},
+		"x beside x.tmpl": {func(t *testing.T, dir string) {
+			t.Helper()
+			writeFiles(t, dir, map[string]string{"rendered/codex-skills/windows/x": "shipped", "rendered/codex-skills/windows/x.tmpl": "rendered"})
+		}, "x.tmpl: the tree also ships x"},
+		"directory x beside x.tmpl": {func(t *testing.T, dir string) {
+			t.Helper()
+			writeFiles(t, dir, map[string]string{"rendered/codex-skills/windows/x/y": "shipped", "rendered/codex-skills/windows/x.tmpl": "rendered"})
+		}, "x.tmpl: the tree also ships a directory x"},
+		"bare .tmpl": {func(t *testing.T, dir string) {
+			t.Helper()
+			writeFiles(t, dir, map[string]string{"rendered/codex-skills/windows/.tmpl": "x"})
+		}, ".tmpl: a template needs a name"},
+		"template reads a missing fact": {func(t *testing.T, dir string) {
+			t.Helper()
+			writeFiles(t, dir, map[string]string{"rendered/claude-code-skills/darwin/NOTE.md.tmpl": `{{ fact "missing" }}`})
+		}, `fact "missing": no such fact`},
 		"no placement directories": {func(t *testing.T, dir string) {
 			t.Helper()
 			if err := os.RemoveAll(filepath.Join(dir, "rendered")); err != nil {
@@ -380,5 +397,100 @@ func TestCheckZipItems(t *testing.T) {
 				t.Fatalf("exit %d, stderr %q; want 1 and %q", code, stderr.String(), tc.want)
 			}
 		})
+	}
+}
+
+// zip-item renders every template in a tree as the device would, with the
+// sample facts, check_facts, the sample user in user scope and the managed
+// flag both ways; a failure names the item, the OS and the template.
+func TestZipItemChecksTemplates(t *testing.T) {
+	dir := zipItemFixture(t)
+	writeFiles(t, dir, map[string]string{
+		"harnesses.yaml": "check_facts: {assigned_user: jdoe}\n" + testHarnesses,
+		"rendered/codex-skills/windows/NOTE.md.tmpl": `{{ .Item.Name }} {{ .Item.Version }} for {{ .User }} ({{ fact "assigned_user" }}, {{ fact "os" }}) managed={{ .Item.Managed }}` +
+			`{{ if cond "os == \"windows\" && os_build > 1" }} win{{ end }}`,
+		"rendered/claude-code-skills/darwin/.claude-plugin/plugin.json.tmpl": `{"installationPreference": {{ if .Item.Managed }}"auto_install"{{ else }}"available"{{ end }}, "user": {{ json .User }}}`,
+	})
+	if code, _, stderr := runZipItemIn(dir, t.TempDir()); code != 0 {
+		t.Fatalf("exit %d: %s", code, stderr)
+	}
+
+	// A fact only one managed branch reads still fails: both are rendered.
+	writeFiles(t, dir, map[string]string{
+		"rendered/claude-code-skills/darwin/.claude-plugin/plugin.json.tmpl": `{{ if .Item.Managed }}{}{{ else }}{{ fact "missing" }}{{ end }}`,
+	})
+	out := filepath.Join(t.TempDir(), "repo")
+	code, _, stderr := runZipItemIn(dir, out)
+	if code == 0 {
+		t.Fatal("a template reading a missing fact packed")
+	}
+	for _, want := range []string{`item "hello"`, "on darwin", "plugin.json.tmpl", "managed false", `fact "missing": no such fact`} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("stderr lacks %q:\n%s", want, stderr)
+		}
+	}
+	if _, err := os.Stat(out); !os.IsNotExist(err) {
+		t.Error("zip-item wrote on failure")
+	}
+}
+
+// -check opens every zip the repository holds and renders its templates the
+// way zip-item does, so a zip packed elsewhere with a broken template fails
+// the check naming the item, the placement, the OS and the template. A zip
+// the repository does not hold is not checked.
+func TestCheckZipTemplates(t *testing.T) {
+	pack := func(t *testing.T, repo string, files map[string]string, goos string) string {
+		t.Helper()
+		tree := writeFiles(t, t.TempDir(), files)
+		zipPath := filepath.Join(repo, "packages", "skills", "hello.zip")
+		if err := os.MkdirAll(filepath.Dir(zipPath), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		packed, err := artifact.PackFile(tree, goos, zipPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return "item_name: hello\ncatalog: skills\nversion: 1.0.0\ninstaller:\n  type: zip\n  variants:\n    claude-code-skills:\n      " +
+			goos + ": {location: packages/skills/hello.zip, hash: " + packed.Hash + ", tree_hash: '" + packed.TreeHash + "'}\n"
+	}
+	run := func(t *testing.T, repo string) (int, string) {
+		t.Helper()
+		var stdout, stderr bytes.Buffer
+		code := run([]string{"-check", repo}, &stdout, &stderr)
+		return code, stderr.String()
+	}
+
+	repo := t.TempDir()
+	writeFiles(t, repo, map[string]string{"harnesses.yaml": testHarnesses})
+	good := pack(t, repo, map[string]string{"SKILL.md": "s", "NOTE.md.tmpl": `{{ .Item.Name }} on {{ fact "os" }}`}, "darwin")
+	writeFiles(t, repo, map[string]string{"packages-info/hello.yaml": good})
+	if code, stderr := run(t, repo); code != 0 {
+		t.Fatalf("good template: exit %d: %s", code, stderr)
+	}
+
+	bad := pack(t, repo, map[string]string{"SKILL.md": "s", "sub/NOTE.md.tmpl": `{{ fact "missing" }}`}, "windows")
+	writeFiles(t, repo, map[string]string{"packages-info/hello.yaml": bad})
+	code, stderr := run(t, repo)
+	if code != 1 {
+		t.Fatalf("bad template: exit %d: %s", code, stderr)
+	}
+	for _, want := range []string{`zip item "hello"`, `placement "claude-code-skills"`, "on windows", "sub/NOTE.md.tmpl", `fact "missing": no such fact`} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("stderr lacks %q:\n%s", want, stderr)
+		}
+	}
+
+	both := pack(t, repo, map[string]string{"x": "shipped", "x.tmpl": "rendered"}, "windows")
+	writeFiles(t, repo, map[string]string{"packages-info/hello.yaml": both})
+	if code, stderr := run(t, repo); code != 1 || !strings.Contains(stderr, "x.tmpl: the tree also ships x") {
+		t.Errorf("x beside x.tmpl: exit %d: %s", code, stderr)
+	}
+
+	// The zip is gone: nothing to open, nothing to report.
+	if err := os.Remove(filepath.Join(repo, "packages", "skills", "hello.zip")); err != nil {
+		t.Fatal(err)
+	}
+	if code, stderr := run(t, repo); code != 0 {
+		t.Errorf("missing zip: exit %d: %s", code, stderr)
 	}
 }

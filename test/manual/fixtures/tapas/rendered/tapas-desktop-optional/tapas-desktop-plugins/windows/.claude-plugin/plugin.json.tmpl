@@ -1,0 +1,6 @@
+{
+  "name": {{ json .Item.Name }},
+  "version": {{ json .Item.Version }},
+  "description": "A self-service Claude Desktop plugin from the Tapas smoke",
+  "installationPreference": {{ if .Item.Managed }}"auto_install"{{ else }}"available"{{ end }}
+}

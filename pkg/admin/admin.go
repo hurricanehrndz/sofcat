@@ -164,6 +164,7 @@ func CollectCatalogs(repoPath string) (CatalogSet, error) { //nolint:gocognit //
 	}
 
 	set.Problems = append(set.Problems, checkPlacementTemplates(harnesses, set.Catalogs)...)
+	set.Problems = append(set.Problems, checkZipTemplates(repoPath, harnesses, set.Catalogs)...)
 	set.Problems = append(set.Problems, checkManifests(repoPath)...)
 	return set, nil
 }

@@ -2,6 +2,12 @@
 # placement except outside-skills sits under the fixture brand's write root,
 # ${ProgramData}\tapas-test-smoke on Windows and
 # /Library/Application Support/Tapas Test on macOS (brand/write-roots.yaml).
+#
+# makecatalogs renders the tree templates (tapas-desktop-managed's .mcp.json)
+# with this admin fact over the built-in samples; the smokes' condition
+# script provides it on the device.
+check_facts:
+  assigned_user: jdoe
 placements:
   claude-skills:
     kind: directory
@@ -35,6 +41,16 @@ placements:
     scope:
       windows: user
     works_in: [Codex]
+  # Claude Desktop style organization plugins, whose trees ship templates:
+  # .claude-plugin/plugin.json.tmpl sets installationPreference from the
+  # managed flag, and tapas-desktop-managed's .mcp.json.tmpl reads the
+  # assigned_user admin fact and branches on the os built-in.
+  tapas-desktop-plugins:
+    kind: directory
+    paths:
+      darwin: /Library/Application Support/Tapas Test/desktop/org-plugins
+      windows: ${ProgramData}\tapas-test-smoke\desktop\org-plugins
+    works_in: [Claude Desktop]
   # Outside every write root: refused.
   outside-skills:
     kind: directory
