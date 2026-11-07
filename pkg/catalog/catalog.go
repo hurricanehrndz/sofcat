@@ -104,9 +104,10 @@ type AppxCheck struct {
 }
 
 // ActionLabelKeys are the keys of custom_action_labels and of a
-// placement's action_labels: Munki's, plus sofcat's cancel and the
-// pending_install and pending_remove statuses of a queued request.
+// placement's action_labels: Munki's, plus sofcat's cancel, the
+// pending_install and pending_remove statuses of a queued request, and
+// applies_to, the prefix of the storefront's applies_to line.
 var ActionLabelKeys = []string{
 	"install", "installing", "installed", "remove", "removing", "update", "cancel",
-	"pending_install", "pending_remove",
+	"pending_install", "pending_remove", "applies_to",
 }

@@ -71,19 +71,19 @@ change to these methods; additions show up in `capabilities`.
 An `OptionalInstallItem` is `{itemName, displayName, version, catalog,
 description?, category?, section?, developer?, iconName?, restartAction?, isManaged,
 isRequired, isInstalled, status, statusUpdatedAtUtc, lastOperationId?,
-actionLabels?, worksIn?}`. `actionLabels` holds only the label keys
+actionLabels?, appliesTo?}`. `actionLabels` holds only the label keys
 (`install`, `installing`, `installed`, `remove`, `removing`, `update`,
-`cancel`, `pending_install`, `pending_remove`) that resolved: from the catalog item's `custom_action_labels`, else
+`cancel`, `pending_install`, `pending_remove`, `applies_to`) that resolved: from the catalog item's `custom_action_labels`, else
 from the first of its placements with a variant on this OS, in
-`placements.yaml` order, whose `action_labels` sets the key. `worksIn` is the
-union of those placements' `works_in`, in table order, without repeats. Both
+`placements.yaml` order, whose `action_labels` sets the key. `appliesTo` is the
+union of those placements' `applies_to`, in table order, without repeats. Both
 are left out when empty, and only zip items have placements, so another item
 gets at most its own labels. The UI fills in its built-in labels ("Install",
 "Installing…", "Installed", "Remove", "Removing…", "Update", "Cancel",
-"Will be installed", "Will be removed") for the keys left out:
+"Will be installed", "Will be removed", "Applies to") for the keys left out:
 
 ```json
-{"itemName":"tapas-optional-plugin","displayName":"Tapas Optional Plugin","version":"1.0.0","catalog":"tapas","isManaged":false,"isRequired":false,"isInstalled":false,"status":"NotInstalled","statusUpdatedAtUtc":"2026-11-03T12:00:00Z","actionLabels":{"install":"Enable for me","installed":"Available","installing":"Making available…","remove":"Withdraw"},"worksIn":["Claude Code","Codex"]}
+{"itemName":"tapas-optional-plugin","displayName":"Tapas Optional Plugin","version":"1.0.0","catalog":"tapas","isManaged":false,"isRequired":false,"isInstalled":false,"status":"NotInstalled","statusUpdatedAtUtc":"2026-11-03T12:00:00Z","actionLabels":{"install":"Enable for me","installed":"Available","installing":"Making available…","remove":"Withdraw","applies_to":"Works in"},"appliesTo":["Claude Code","Codex"]}
 ```
 
 The two user-placement methods serve the per-user helper, `<slug>-ui.exe
@@ -259,8 +259,11 @@ request and on the strip's Cancel, `installing` and `removing` while the
 item's own install or removal runs, `installed` as an installed item's status
 on the detail page, and `pending_install` and `pending_remove` as a pending
 item's status on its card and detail page. Nothing shows an update action yet,
-so `update` is accepted but unused. A card and the detail page add "Works in: Claude Code, Codex" when
-`worksIn` is set. Labels, the heading and the works-in line are catalog or
+so `update` is accepted but unused. A card and the detail page add a line such as
+"Applies to: Claude Code, Codex" when `appliesTo` is set, prefixed with the
+`applies_to` label; it is display text and scopes nothing. An offline cache
+entry from before the rename carries `worksIn` and shows no line. Labels,
+the heading and the applies-to line are catalog or
 admin text and go into the DOM only as `textContent`. A `Deferred` card shows
 the deferral reason: for `missing_software` the service's message ("Needs Git
 for Windows. Install it first, then try again."), for

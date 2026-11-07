@@ -15,7 +15,7 @@ placements:
     paths:
       darwin: /Library/Application Support/Tapas Test/claude/skills
       windows: ${ProgramData}\tapas-test-smoke\claude\skills
-    works_in: [Claude Code]
+    applies_to: [Claude Code]
     action_labels: {install: Add, installed: Added, pending_install: Will be added}
     files:
       - paths:
@@ -36,7 +36,7 @@ placements:
     paths:
       darwin: /Library/Application Support/Tapas Test/exclusive/skills
       windows: ${ProgramData}\tapas-test-smoke\exclusive\skills
-    works_in: [Claude Code]
+    applies_to: [Claude Code]
     exclusive: true
     files:
       - paths:
@@ -51,7 +51,7 @@ placements:
     paths:
       darwin: /Library/Application Support/Tapas Test/foreign/skills
       windows: ${ProgramData}\tapas-test-smoke\foreign\skills
-    works_in: [Claude Code]
+    applies_to: [Claude Code]
     exclusive: true
   # Per user on Windows: the service skips it. Per machine on macOS.
   codex-skills:
@@ -60,7 +60,7 @@ placements:
       windows: ${USERPROFILE}\.agents\skills
     scope:
       windows: user
-    works_in: [Codex]
+    applies_to: [Codex]
   # Claude Desktop style organization plugins, whose trees ship templates:
   # .claude-plugin/plugin.json.tmpl sets installationPreference from the
   # managed flag, and tapas-desktop-managed's .mcp.json.tmpl reads the
@@ -69,13 +69,13 @@ placements:
     paths:
       darwin: /Library/Application Support/Tapas Test/desktop/org-plugins
       windows: ${ProgramData}\tapas-test-smoke\desktop\org-plugins
-    works_in: [Claude Desktop]
+    applies_to: [Claude Desktop]
   # Outside every write root: refused.
   outside-skills:
     paths:
       darwin: /Library/Application Support/tapas-test-outside/skills
       windows: ${ProgramData}\tapas-test-outside\skills
-    works_in: [Claude Code]
+    applies_to: [Claude Code]
   # A Claude Code marketplace sofcat creates, so it gets the marker: plugins
   # under plugins\<item>, the Claude catalog in .claude-plugin\marketplace.json,
   # a Codex-format catalog whose versions carry each plugin's placed hash,
@@ -86,8 +86,9 @@ placements:
     paths:
       darwin: /Library/Application Support/Tapas Test/marketplace
       windows: ${ProgramData}\tapas-test-smoke\marketplace
-    works_in: [Claude Code, Codex]
+    applies_to: [Claude Code, Codex]
     action_labels:
+      applies_to: Works in
       install: Make available
       installing: Making available…
       installed: Available

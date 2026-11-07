@@ -11,7 +11,7 @@ import {
   deriveAction,
   statusLabel,
   statusRecord,
-  worksInLine,
+  appliesToLine,
 } from "./state.ts";
 
 function item(overrides) {
@@ -77,7 +77,7 @@ test("a resolved label is used verbatim and a missing key falls back to the buil
   assert.equal(actionLabel(item({ actionLabels: { install: "  ", remove: 7 } }), "remove"), "Remove");
   assert.deepEqual(Object.values(BUILT_IN_LABELS), [
     "Install", "Installing…", "Installed", "Remove", "Removing…", "Update", "Cancel",
-    "Will be installed", "Will be removed",
+    "Will be installed", "Will be removed", "Applies to",
   ]);
 });
 
@@ -103,11 +103,17 @@ test("the list heading is the admin's when set, else Available software", () => 
   assert.equal(brandingView({ listHeading: "Skills" }).showBanner, false);
 });
 
-test("the works-in line lists the harnesses in the order the service sent", () => {
-  assert.equal(worksInLine(item({ worksIn: ["Claude Code", "Codex"] })), "Works in: Claude Code, Codex");
-  assert.equal(worksInLine(item({ worksIn: [] })), "");
-  assert.equal(worksInLine(item({})), "");
-  assert.equal(worksInLine(item({ worksIn: "Codex" })), "", "a non-array cache value shows nothing");
+test("the applies-to line lists the names in the order the service sent, after its label", () => {
+  assert.equal(appliesToLine(item({ appliesTo: ["Claude Code", "Codex"] })), "Applies to: Claude Code, Codex");
+  assert.equal(
+    appliesToLine(item({ appliesTo: ["Claude Code"], actionLabels: { applies_to: "Works in" } })),
+    "Works in: Claude Code",
+  );
+  assert.equal(appliesToLine(item({ appliesTo: [] })), "");
+  assert.equal(appliesToLine(item({})), "");
+  assert.equal(appliesToLine(item({ appliesTo: "Codex" })), "", "a non-array cache value shows nothing");
+  // An old offline cache entry carries worksIn, which no longer shows.
+  assert.equal(appliesToLine(item({ worksIn: ["Codex"] })), "");
 });
 
 test("a deferral reads as the missing software or the blocking app", () => {

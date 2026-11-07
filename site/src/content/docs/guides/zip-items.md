@@ -148,7 +148,7 @@ placements:
     paths:
       darwin: /Library/Application Support/Acme/marketplace
       windows: ${ProgramData}\Acme\marketplace
-    works_in: [Claude Code]
+    applies_to: [Claude Code]
     exclusive: true
     items_dir: plugins
     vars:
@@ -718,7 +718,7 @@ placements:
       darwin: /etc/codex/skills
       windows: ${USERPROFILE}\.agents\skills
     scope: {windows: user}
-    works_in: [Codex]
+    applies_to: [Codex]
 ```
 
 | Field | Meaning |
@@ -726,8 +726,8 @@ placements:
 | key | The placement name. Variants and rendered trees use it. |
 | `paths` | The placement root, keyed by `darwin` and `windows`. Every placement is a directory: one tree per item at `<root>/<item_name>`. |
 | `scope` | `machine` or `user`, keyed like `paths`. An OS left out is `machine`. `darwin: user` is not supported, and `user` not with `items_dir` or `files`. |
-| `works_in` | Harness display names, such as `[Claude Code]`. The storefront shows "Works in: …" for an item (see Storefront labels). |
-| `action_labels` | Optional storefront label overrides for the placement's items. Keys: `install`, `installing`, `installed`, `remove`, `removing`, `update`, `cancel`, `pending_install`, `pending_remove`. |
+| `applies_to` | Display names, such as `[Claude Code]`. The storefront shows a line such as "Applies to: Claude Code" for an item (see Storefront labels). Display only: it does not limit where an item is placed. |
+| `action_labels` | Optional storefront label overrides for the placement's items. Keys: `install`, `installing`, `installed`, `remove`, `removing`, `update`, `cancel`, `pending_install`, `pending_remove`, `applies_to`. |
 | `exclusive` | Optional. When true, sofcat does not write into an existing, non-empty root it did not create. |
 | `items_dir` | Optional. Item trees go to `<root>/<items_dir>/<item_name>` instead. A clean relative path, slash-separated, whose first segment does not start with `.`. |
 | `vars` | Optional. Any mapping, read by the placement's templates as `.Placement.Vars`. |
@@ -742,18 +742,21 @@ Where order matters, placements are taken in file order.
 ### Storefront labels
 
 Each label key resolves from the item's own `custom_action_labels` (the same
-nine keys), then from the first of the item's placements, in file order,
+ten keys), then from the first of the item's placements, in file order,
 whose `action_labels` sets it, then from the storefront's built-in label.
 Only placements with a variant for the machine's OS count, for labels and for
-`works_in`. An item's "Works in" line is the union of those placements'
-`works_in`, in file order, without repeats. For example:
+`applies_to`. An item's applies-to line lists the union of those placements'
+`applies_to`, in file order, without repeats, after the `applies_to` label
+("Applies to" unless a layer sets it). The line is only text: it names where
+the item is meant to be used and never scopes the item, so a label such as
+"Works in" may read better. For example:
 
 ```yaml
 # placements.yaml
 placements:
   tapas-marketplace:
-    works_in: [Claude Code]
-    action_labels: {install: Make available, remove: Withdraw}
+    applies_to: [Claude Code]
+    action_labels: {install: Make available, remove: Withdraw, applies_to: Works in}
     # paths, items_dir, vars and files as above
 
 # packages-info/tapas-optional-plugin.yaml
@@ -762,7 +765,8 @@ custom_action_labels: {install: Enable for me}
 
 The storefront shows "Enable for me" from the item, "Withdraw" from the
 placement, and the built-in "Cancel", since neither sets `cancel`. The remove
-label stays "Remove" unless a layer sets `remove`.
+label stays "Remove" unless a layer sets `remove`. The applies-to line reads
+"Works in: Claude Code", from the placement.
 
 `pending_install` and `pending_remove` word the status of a request waiting
 for the next run ("Will be installed", "Will be removed"), which the card
@@ -779,7 +783,7 @@ checks every zip item. It reports:
 - a variant OS other than `darwin` or `windows`
 - a variant placement that `placements.yaml` does not define
 - a zip item in a repository with no `placements.yaml`
-- a `custom_action_labels` key other than the nine above, on any item
+- a `custom_action_labels` key other than the ten above, on any item
 - a `files` template that fails to render: for each OS the entry has a
   path on, the template is rendered with `.Items` built from the catalog
   items that target the placement, managed both ways, against a sample of every

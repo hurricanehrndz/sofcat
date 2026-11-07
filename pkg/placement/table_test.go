@@ -96,7 +96,7 @@ func TestView(t *testing.T) {
 	}
 }
 
-// Action labels and "Works in" follow table order, which is the
+// Action labels and "Applies to" follow table order, which is the
 // order the author wrote, not the alphabet.
 func TestNamesKeepFileOrder(t *testing.T) {
 	table, err := Parse([]byte(`
@@ -302,22 +302,22 @@ func TestParseAcceptsFiles(t *testing.T) {
 }
 
 // Labels resolve item first, then the first placement in table order (not
-// variant or map order) that sets the key; works_in is the ordered union.
+// variant or map order) that sets the key; applies_to is the ordered union.
 // A placement without a variant on this OS contributes nothing.
 func TestStorefront(t *testing.T) {
 	table, err := Parse([]byte(`
 placements:
   skills:
     paths: {windows: 'C:\skills'}
-    works_in: [Claude Code]
-    action_labels: {install: Add, installing: Adding, installed: Added}
+    applies_to: [Claude Code]
+    action_labels: {install: Add, installing: Adding, installed: Added, applies_to: Works in}
   market:
     paths: {windows: 'C:\market'}
-    works_in: [Claude Code, Codex]
+    applies_to: [Claude Code, Codex]
     action_labels: {install: Make available, installing: Making available, remove: Withdraw, pending_remove: Will be withdrawn}
   mac-only:
     paths: {darwin: /skills}
-    works_in: [Cursor]
+    applies_to: [Cursor]
     action_labels: {cancel: Stop}
 `))
 	if err != nil {
@@ -330,26 +330,26 @@ placements:
 			"market": variant, "skills": variant, "mac-only": {Darwin: {}},
 		}},
 	}
-	labels, worksIn := table.Storefront(item, Windows)
+	labels, appliesTo := table.Storefront(item, Windows)
 	want := map[string]string{
 		"install": "Enable for me", "installing": "Adding", "installed": "Added", "remove": "Withdraw",
-		"pending_remove": "Will be withdrawn",
+		"pending_remove": "Will be withdrawn", "applies_to": "Works in",
 	}
 	if !reflect.DeepEqual(labels, want) {
 		t.Errorf("labels = %v, want %v", labels, want)
 	}
-	if want := []string{"Claude Code", "Codex"}; !reflect.DeepEqual(worksIn, want) {
-		t.Errorf("worksIn = %v, want %v", worksIn, want)
+	if want := []string{"Claude Code", "Codex"}; !reflect.DeepEqual(appliesTo, want) {
+		t.Errorf("appliesTo = %v, want %v", appliesTo, want)
 	}
 
 	// A non-zip item has no placements: only its own labels apply.
 	plain := catalog.Item{CustomActionLabels: map[string]string{"cancel": "Stop"}, Installer: catalog.InstallerItem{Type: "msi"}}
-	labels, worksIn = table.Storefront(plain, Windows)
-	if !reflect.DeepEqual(labels, map[string]string{"cancel": "Stop"}) || worksIn != nil {
-		t.Errorf("non-zip item: labels %v, worksIn %v", labels, worksIn)
+	labels, appliesTo = table.Storefront(plain, Windows)
+	if !reflect.DeepEqual(labels, map[string]string{"cancel": "Stop"}) || appliesTo != nil {
+		t.Errorf("non-zip item: labels %v, appliesTo %v", labels, appliesTo)
 	}
-	if labels, worksIn = table.Storefront(catalog.Item{}, Windows); labels != nil || worksIn != nil {
-		t.Errorf("unlabelled item: labels %v, worksIn %v, want both nil", labels, worksIn)
+	if labels, appliesTo = table.Storefront(catalog.Item{}, Windows); labels != nil || appliesTo != nil {
+		t.Errorf("unlabelled item: labels %v, appliesTo %v, want both nil", labels, appliesTo)
 	}
 }
 

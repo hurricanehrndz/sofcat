@@ -22,8 +22,9 @@ ColorPrinter:
     - Canon-Drivers
   display_name: Color Printer
   # custom_action_labels: storefront labels for this item, Munki's keys plus
-  # cancel and the pending statuses (install, installing, installed, remove,
-  # removing, update, cancel, pending_install, pending_remove).
+  # cancel, the pending statuses and the applies-to prefix (install,
+  # installing, installed, remove, removing, update, cancel, pending_install,
+  # pending_remove, applies_to).
   # A key left out falls back to the item's placements (zip items, see
   # site/src/content/docs/guides/zip-items.md), then the built-in label. Shown as plain text.
   custom_action_labels:

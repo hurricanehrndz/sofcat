@@ -46,8 +46,9 @@ type Spec struct {
 	// Paths maps an OS (darwin, windows) to the placement root on it.
 	Paths map[string]string `yaml:"paths,omitempty"`
 	// Scope maps an OS to machine or user. An OS left out is machine.
-	Scope        map[string]string `yaml:"scope,omitempty"`
-	WorksIn      []string          `yaml:"works_in,omitempty"`
+	Scope map[string]string `yaml:"scope,omitempty"`
+	// AppliesTo is display text for the storefront, never scoping.
+	AppliesTo    []string          `yaml:"applies_to,omitempty"`
 	ActionLabels map[string]string `yaml:"action_labels,omitempty"`
 	Exclusive    bool              `yaml:"exclusive,omitempty"`
 	// ItemsDir puts item trees in <root>/<ItemsDir>/<item> rather than
@@ -95,12 +96,12 @@ func (t Table) Names() []string {
 }
 
 // Storefront returns what the storefront shows for item on goos: its action
-// labels and the harnesses it works in. A label comes from the item's
-// custom_action_labels, else from the first of its placements with a variant
-// on goos, in table order, that sets it; a key set nowhere is left out, for
-// the UI's built-in label. worksIn is the union of those placements'
-// works_in, in table order. Only a zip item has placements.
-func (t Table) Storefront(item catalog.Item, goos string) (labels map[string]string, worksIn []string) {
+// labels and the names on its applies_to line. A label comes from the
+// item's custom_action_labels, else from the first of its placements with a
+// variant on goos, in table order, that sets it; a key set nowhere is left
+// out, for the UI's built-in label. appliesTo is the union of those
+// placements' applies_to, in table order. Only a zip item has placements.
+func (t Table) Storefront(item catalog.Item, goos string) (labels map[string]string, appliesTo []string) {
 	var placements []Spec
 	if item.Installer.Type == "zip" {
 		for _, name := range t.Names() {
@@ -122,13 +123,13 @@ func (t Table) Storefront(item catalog.Item, goos string) (labels map[string]str
 		}
 	}
 	for _, p := range placements {
-		for _, name := range p.WorksIn {
-			if !slices.Contains(worksIn, name) {
-				worksIn = append(worksIn, name)
+		for _, name := range p.AppliesTo {
+			if !slices.Contains(appliesTo, name) {
+				appliesTo = append(appliesTo, name)
 			}
 		}
 	}
-	return labels, worksIn
+	return labels, appliesTo
 }
 
 // Parse decodes placements.yaml, rejecting unknown fields, and validates it.

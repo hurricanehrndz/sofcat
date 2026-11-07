@@ -20,11 +20,12 @@ placements:
     paths:
       darwin: /Library/Application Support/ClaudeCode/.claude/skills
       windows: ${ProgramData}\ClaudeCode\.claude\skills
-    # Harness display names, shown in the self-service app.
-    works_in: [Claude Code]
+    # Display names for the self-service app's line "Applies to: Claude
+    # Code". Display only: it does not limit where the item goes.
+    applies_to: [Claude Code]
     # Optional overrides for the app's labels. Keys: install, installing,
     # installed, remove, removing, update, cancel, pending_install,
-    # pending_remove.
+    # pending_remove, and applies_to, the prefix of that line.
     action_labels:
       install: Add
       installed: Added
@@ -55,12 +56,12 @@ placements:
     # A placement with items_dir or files must be machine scope everywhere.
     scope:
       windows: user
-    works_in: [Codex]
+    applies_to: [Codex]
   acme-marketplace:
     paths:
       darwin: /Library/Application Support/Acme/marketplace
       windows: ${ProgramData}\Acme\marketplace
-    works_in: [Claude Code, Codex]
+    applies_to: [Claude Code, Codex]
     # Refuse to write into this directory if it already exists, is not empty
     # and sofcat did not create it.
     exclusive: true

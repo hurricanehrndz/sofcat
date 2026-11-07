@@ -122,15 +122,15 @@ func stubZipList(t *testing.T, catalogs map[int]map[string]catalog.Item, get fun
 }
 
 // TestListStorefrontFields: the list call carries each item's section (its
-// storefront tab), resolved labels and works-in harnesses, and an item with
+// storefront tab), resolved labels and applies_to names, and an item with
 // none of them on this OS sends none of the keys, so the UI falls back to its
 // built-in tab and labels.
 func TestListStorefrontFields(t *testing.T) {
 	const goos = placement.Windows
 	table := placement.Table{
 		Placements: map[string]placement.Spec{
-			"skills": {WorksIn: []string{"Claude Code"}, ActionLabels: map[string]string{"install": "Add", "installed": "Added"}},
-			"codex":  {WorksIn: []string{"Codex", "Claude Code"}, ActionLabels: map[string]string{"install": "Place"}},
+			"skills": {AppliesTo: []string{"Claude Code"}, ActionLabels: map[string]string{"install": "Add", "installed": "Added"}},
+			"codex":  {AppliesTo: []string{"Codex", "Claude Code"}, ActionLabels: map[string]string{"install": "Place"}},
 		},
 		Order: []string{"skills", "codex"},
 	}
@@ -159,12 +159,12 @@ func TestListStorefrontFields(t *testing.T) {
 		}
 		var fields map[string]json.RawMessage
 		_ = json.Unmarshal(line, &fields)
-		got[it.ItemName] = string(fields["section"]) + " " + string(fields["actionLabels"]) + " " + string(fields["worksIn"])
+		got[it.ItemName] = string(fields["section"]) + " " + string(fields["actionLabels"]) + " " + string(fields["appliesTo"])
 	}
 	if want := `"Skills" {"install":"Add","installed":"Ready"} ["Claude Code","Codex"]`; got["Skill"] != want {
 		t.Errorf("Skill = %s, want %s", got["Skill"], want)
 	}
 	if got["Tool"] != "  " {
-		t.Errorf("Tool = %q, want no section, actionLabels or worksIn keys", got["Tool"])
+		t.Errorf("Tool = %q, want no section, actionLabels or appliesTo keys", got["Tool"])
 	}
 }

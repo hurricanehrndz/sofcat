@@ -627,7 +627,7 @@ func getOptionalItems(cfg config.Configuration) ([]OptionalInstallItem, error) {
 		item.Developer = catItem.Developer
 		item.IconName = catItem.IconName
 		item.RestartAction = catItem.RestartAction
-		item.ActionLabels, item.WorksIn = table.Storefront(catItem, zip.Guard.GOOS)
+		item.ActionLabels, item.AppliesTo = table.Storefront(catItem, zip.Guard.GOOS)
 
 		// Script-only checks are not run on a list call (R9/OQ-C4): report Unknown.
 		if catItem.Check.Script != "" &&
