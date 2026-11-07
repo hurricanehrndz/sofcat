@@ -425,6 +425,61 @@ func TestPlacementFileEmptyRender(t *testing.T) {
 	}
 }
 
+// TestFilePathIntoTreeRefused: an absolute files path is checked against the
+// placement too, once resolved: one inside an item tree is refused, and so is
+// one that two entries name, whatever their case.
+func TestFilePathIntoTreeRefused(t *testing.T) {
+	for name, tc := range map[string]struct {
+		path func(m marketTest) string
+		want string
+	}{
+		"inside an item tree": {func(m marketTest) string { return filepath.Join(m.root, "plugins", "one", "x.json") }, `is under items_dir "plugins"`},
+		"the drop-in again": {func(m marketTest) string {
+			return filepath.Join(filepath.Dir(m.settings), strings.ToUpper(filepath.Base(m.settings)))
+		}, "named by two files entries"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := newMarketTest(t, "")
+			spec := m.z.Table.Placements["market"]
+			spec.Files = append(spec.Files, placement.File{Paths: map[string]string{testOS(): tc.path(m)}, Template: "{}"})
+			m.z.Table.Placements["market"] = spec
+			item, archive := plugin(t, "one", "market")
+			res := m.z.Apply(item, target(t, m.z, item, "market"), archive)
+			if res.Outcome != OutcomeRefused || res.Code() != report.CodePlacementRefused || !strings.Contains(res.Err.Error(), tc.want) {
+				t.Errorf("result = %s %q (%v), want refused: %s", res.Outcome, res.Code(), res.Err, tc.want)
+			}
+			if exists(filepath.Join(m.root, "plugins", "one", "x.json")) {
+				t.Error("wrote into the item tree")
+			}
+		})
+	}
+}
+
+// TestItemsDirLinkRefused: an items_dir that already exists as a link out of
+// the write roots is refused before any tree is written through it.
+func TestItemsDirLinkRefused(t *testing.T) {
+	m := newMarketTest(t, "")
+	outside := tempDir(t)
+	if err := os.MkdirAll(m.root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(m.root, "plugins")); err != nil {
+		t.Skipf("no symlinks here: %v", err)
+	}
+	// Owned, so the exclusive check passes and the link is what is refused.
+	if err := os.WriteFile(filepath.Join(m.root, ".sofcat-test-owned"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	item, archive := plugin(t, "one", "market")
+	res := m.z.Apply(item, target(t, m.z, item, "market"), archive)
+	if res.Outcome != OutcomeRefused || res.Code() != report.CodePlacementRefused {
+		t.Errorf("result = %s %q (%v), want refused", res.Outcome, res.Code(), res.Err)
+	}
+	if entries, _ := os.ReadDir(outside); len(entries) != 0 {
+		t.Errorf("wrote through the link: %v", entries)
+	}
+}
+
 // TestSettingsPathOutsideRootsRefused: the drop-in's path passes the same
 // guard as any placement. The plugin is placed, but the item fails with
 // placement_refused naming the placement, and since every file of a

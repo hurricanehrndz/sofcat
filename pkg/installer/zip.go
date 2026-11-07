@@ -237,7 +237,7 @@ func treeIn(spec placement.Spec, root, item string) string {
 // checkItemName refuses an item name that cannot be one directory under a
 // placement root, or that could collide with sofcat's own dot entries there.
 func checkItemName(name string) error {
-	if err := checkSegment(name); err != nil || name[0] == '.' || len(name) > 255 {
+	if err := placement.CheckSegment(name); err != nil || name[0] == '.' || len(name) > 255 {
 		return fmt.Errorf("%w: item name %q cannot name a directory", placement.ErrRefused, name)
 	}
 	return nil
@@ -412,7 +412,7 @@ func (z *ZipInstaller) Fetch(ctx context.Context, t Target, progress download.Pr
 	// the cache: every segment of the cleaned path must be a plain name.
 	rel := path.Clean(t.Variant.Location)
 	for _, seg := range strings.Split(rel, "/") {
-		if err := checkSegment(seg); err != nil {
+		if err := placement.CheckSegment(seg); err != nil {
 			return "", fmt.Errorf("placement %q: archive location %q refused: %w", t.Placement, t.Variant.Location, err)
 		}
 	}
@@ -460,6 +460,11 @@ func (z *ZipInstaller) Apply(item catalog.Item, t Target, archive string) Result
 	parent := filepath.Dir(res.Path)
 	if err := os.MkdirAll(parent, 0o755); err != nil {
 		return fail(t, res.Path, err)
+	}
+	// items_dir may already exist as a link somewhere else; the tree goes
+	// only where the guard allows.
+	if _, err := z.Guard.Check(parent, t.Spec.ScopeFor(z.Guard.GOOS)); err != nil {
+		return fail(t, res.Path, fmt.Errorf("placement %q: %w", t.Placement, err))
 	}
 	stage := filepath.Join(parent, "."+z.slug()+"-staging-"+item.Name)
 	if err := os.RemoveAll(stage); err != nil {

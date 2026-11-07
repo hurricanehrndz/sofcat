@@ -183,6 +183,37 @@ func TestZipTreeTemplates(t *testing.T) {
 	wantOutcome(t, "facts back", z.Inspect(item, tg), OutcomeCurrent)
 }
 
+// TestZipTreeVars: a record stores the placement's vars, so changing them
+// re-renders the tree in place, and a placement without vars stores none, so
+// a receipt written before vars existed still matches.
+func TestZipTreeVars(t *testing.T) {
+	z, roots := newTestZip(t)
+	z.Facts = testFacts()
+	item, archive := packVersion(t, "1.0", map[string]string{"SKILL.md": "x", "NAME.md.tmpl": "{{ with .Placement.Vars }}{{ .name }}{{ end }}\n"})
+	name := filepath.Join(roots, "skills", "hello", "NAME.md")
+	wantOutcome(t, "install", z.Apply(item, target(t, z, item, "skills"), archive), OutcomeInstalled)
+	if in := string(readReceipt(t, z).Rendered[0].Inputs); strings.Contains(in, "vars") {
+		t.Fatalf("inputs without vars = %s", in)
+	}
+
+	setVars := func(v map[string]any) {
+		spec := z.Table.Placements["skills"]
+		spec.Vars = v
+		z.Table.Placements["skills"] = spec
+	}
+	setVars(map[string]any{"name": "acme"})
+	wantOutcome(t, "vars set", z.Apply(item, target(t, z, item, "skills"), ""), OutcomeAdopted)
+	if got := readFile(t, name); got != "acme\n" {
+		t.Fatalf("NAME.md = %q", got)
+	}
+	wantOutcome(t, "vars unchanged", z.Inspect(item, target(t, z, item, "skills")), OutcomeCurrent)
+	setVars(map[string]any{"name": "globex"})
+	wantOutcome(t, "vars changed", z.Apply(item, target(t, z, item, "skills"), ""), OutcomeAdopted)
+	if got := readFile(t, name); got != "globex\n" {
+		t.Fatalf("NAME.md after the change = %q", got)
+	}
+}
+
 // TestZipTreeUser: .User is the installer's user in user scope and empty in
 // machine scope, and the record stores it either way.
 func TestZipTreeUser(t *testing.T) {

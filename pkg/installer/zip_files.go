@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/hurricanehrndz/sofcat/pkg/conditions"
 	"github.com/hurricanehrndz/sofcat/pkg/placement"
@@ -80,14 +81,21 @@ func (z *ZipInstaller) regenerate(name string) error {
 		data []byte
 	}
 	outputs := make([]output, 0, len(spec.Files))
+	seen := map[string]bool{}
 	for i, f := range spec.Files {
-		path, ok, err := z.filePath(name, f, root)
+		path, ok, err := z.filePath(name, spec, f, root)
 		if err != nil {
 			return err
 		}
 		if !ok {
 			continue
 		}
+		// Two entries writing one file would overwrite each other every run.
+		key := strings.ToLower(path)
+		if seen[key] {
+			return fmt.Errorf("%w: placement %q: %s is named by two files entries", placement.ErrRefused, name, path)
+		}
+		seen[key] = true
 		data, err := renderFile(fmt.Sprintf("files[%d]", i), f.Template, ctx, z.Facts, path)
 		if err != nil {
 			return fmt.Errorf("%w: placement %q: %w", placement.ErrRefused, name, err)
@@ -113,7 +121,7 @@ func (z *ZipInstaller) regenerate(name string) error {
 // filePath resolves and checks where files entry f of placement name is
 // written on this OS: under root for a relative path, else its own path
 // here. ok is false when the entry has no path on this OS.
-func (z *ZipInstaller) filePath(name string, f placement.File, root string) (path string, ok bool, err error) {
+func (z *ZipInstaller) filePath(name string, spec placement.Spec, f placement.File, root string) (path string, ok bool, err error) {
 	if f.Path != "" {
 		local := filepath.FromSlash(f.Path)
 		if !filepath.IsLocal(local) {
@@ -129,6 +137,14 @@ func (z *ZipInstaller) filePath(name string, f placement.File, root string) (pat
 	}
 	if err != nil {
 		return "", false, fmt.Errorf("placement %q: %w", name, err)
+	}
+	// A path that resolves inside the root, through its own spelling or a
+	// symlink, is held to the rules for a relative path, so it never lands
+	// in an item tree or on sofcat's own entries.
+	if rel, in := z.Guard.RelativeTo(path, root); in {
+		if err := spec.CheckFile(rel); err != nil {
+			return "", false, fmt.Errorf("%w: placement %q: %w", placement.ErrRefused, name, err)
+		}
 	}
 	return path, true, nil
 }

@@ -191,3 +191,17 @@ func (g Guard) within(path, dir string) bool {
 	}
 	return rel == "." || rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
+
+// RelativeTo returns path relative to dir, slash-separated, and whether path
+// is within dir, comparing as the guard does: case-insensitively on Windows
+// and macOS, where the relative path comes back lower-cased.
+func (g Guard) RelativeTo(path, dir string) (string, bool) {
+	if !g.within(path, dir) {
+		return "", false
+	}
+	if g.GOOS == Windows || g.GOOS == Darwin {
+		path, dir = strings.ToLower(path), strings.ToLower(dir)
+	}
+	rel, err := filepath.Rel(dir, path)
+	return filepath.ToSlash(rel), err == nil
+}

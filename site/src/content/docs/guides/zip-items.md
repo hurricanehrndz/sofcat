@@ -115,12 +115,15 @@ Each entry has a `template` (see Templates for placement files) and exactly
 one of:
 
 - `path`, relative to the placement root and slash-separated, written on
-  every OS the placement has a path on. It must not reach into an item tree:
-  with `items_dir` its first segment differs from `items_dir`'s, and without
-  it the path starts with a `.` segment, which no item name has.
+  every OS the placement has a path on. Every segment must be one Windows
+  can hold. It must not reach into an item tree: with `items_dir` its first
+  segment differs from `items_dir`'s, ignoring case, and without it the path
+  starts with a `.` segment, which no item name has. A first segment
+  starting with `.<slug>-` or `.sofcat-` is sofcat's own and refused.
 - `paths`, one path per OS, like the placement's own `paths`, for a file
   outside the root. Its OSes must be among the placement's; an OS left out
-  gets no file.
+  gets no file. A path that resolves inside the root is held to the rules
+  for `path`. Two entries may not name the same file.
 
 sofcat renders every entry with a path on this OS before it writes any, so a
 failed render leaves all of them as they were. It then writes each through a
@@ -131,8 +134,9 @@ refused path or a failed render fails the item that triggered the rewrite
 with `placement_refused`, and nothing is written; the per-run rewrite reports
 it under the placement's name, action `generate`.
 
-Files are written by the service only, so a placement with `files` or
-`items_dir` must be `machine` scope on every OS.
+Files are written by the service only, and the per-user helper places trees
+without `items_dir` or `vars`, so a placement with `files`, `items_dir` or
+`vars` must be `machine` scope on every OS.
 
 #### A Claude Code marketplace
 
@@ -207,7 +211,8 @@ reload them otherwise. `defaultEnabled` is the receipt's `managed` flag:
 true when a manifest lists the item in `managed_installs`. A run updates the
 flag only for items it decides. An item held by an unknown
 `conditional_items` condition keeps its recorded flag. With no plugin left,
-the catalog still lists `"plugins": []`.
+the catalog still lists `"plugins": []`. The `source` of each plugin names
+`./plugins/`, the `items_dir`: change both together.
 
 In the drop-in, `path` is `.Placement.Root`, the marketplace's resolved
 path. `enabledPlugins` lists only the managed plugins, keyed
@@ -725,11 +730,11 @@ placements:
 |---|---|
 | key | The placement name. Variants and rendered trees use it. |
 | `paths` | The placement root, keyed by `darwin` and `windows`. Every placement is a directory: one tree per item at `<root>/<item_name>`. |
-| `scope` | `machine` or `user`, keyed like `paths`. An OS left out is `machine`. `darwin: user` is not supported, and `user` not with `items_dir` or `files`. |
+| `scope` | `machine` or `user`, keyed like `paths`. An OS left out is `machine`. `darwin: user` is not supported, and `user` not with `items_dir`, `vars` or `files`. |
 | `applies_to` | Display names, such as `[Claude Code]`. The storefront shows a line such as "Applies to: Claude Code" for an item (see Storefront labels). Display only: it does not limit where an item is placed. |
 | `action_labels` | Optional storefront label overrides for the placement's items. Keys: `install`, `installing`, `installed`, `remove`, `removing`, `update`, `cancel`, `pending_install`, `pending_remove`, `applies_to`. |
 | `exclusive` | Optional. When true, sofcat does not write into an existing, non-empty root it did not create. |
-| `items_dir` | Optional. Item trees go to `<root>/<items_dir>/<item_name>` instead. A clean relative path, slash-separated, whose first segment does not start with `.`. |
+| `items_dir` | Optional. Item trees go to `<root>/<items_dir>/<item_name>` instead. A clean relative path, slash-separated, each segment one Windows can hold, whose first segment does not start with `.`. |
 | `vars` | Optional. Any mapping, read by the placement's templates as `.Placement.Vars`. |
 | `files` | Optional. Files rendered from the placement's receipts, each a `template` with a relative `path` or per-OS `paths` (Placement files). |
 | `check_facts` | Top level, beside `placements`: facts for `makecatalogs -check` over the built-in samples, for the admin facts templates read. |

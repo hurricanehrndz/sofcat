@@ -7,13 +7,13 @@ import (
 	"io"
 	"maps"
 	"path"
-	"path/filepath"
 	"slices"
 	"strings"
 
 	"go.yaml.in/yaml/v4"
 
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
+	"github.com/hurricanehrndz/sofcat/pkg/identity"
 	"github.com/hurricanehrndz/sofcat/pkg/render"
 )
 
@@ -72,7 +72,12 @@ type File struct {
 
 // View describes placement name, rooted at root, to a template.
 func (p Spec) View(name, root string) render.Placement {
-	return render.Placement{Name: name, Root: root, Vars: render.JSONValue(p.Vars)}
+	v := render.Placement{Name: name, Root: root}
+	// Nil without vars, so tree inputs (installer.treeInputs) leave it out.
+	if len(p.Vars) > 0 {
+		v.Vars = render.JSONValue(p.Vars)
+	}
+	return v
 }
 
 // Path returns the placement root for goos and whether it has one.
@@ -228,11 +233,12 @@ func validatePlacement(name string, p Spec) []error {
 	}
 	// Deliberately machine scope only: the per-user helper rebuilds a
 	// user-scope spec from name and path alone (usersync.userTable), so it
-	// would place trees at <root>/<item> and render no files. Lifting this
+	// would place trees at <root>/<item>, render no files and give tree
+	// templates no vars. Lifting this
 	// means carrying the spec in the user plan
 	// (.tmp/user-scope-spec/plan.md).
-	if (p.ItemsDir != "" || len(p.Files) > 0) && (p.ScopeFor(Darwin) == ScopeUser || p.ScopeFor(Windows) == ScopeUser) {
-		fail("scope: items_dir and files need machine scope on every OS")
+	if (p.ItemsDir != "" || len(p.Files) > 0 || len(p.Vars) > 0) && (p.ScopeFor(Darwin) == ScopeUser || p.ScopeFor(Windows) == ScopeUser) {
+		fail("scope: items_dir, vars and files need machine scope on every OS")
 	}
 	return append(errs, validateFiles(p)...)
 }
@@ -270,10 +276,8 @@ func validateFiles(p Spec) []error {
 		case f.Path != "" && f.Paths != nil:
 			fail("set path or paths, not both")
 		case f.Path != "":
-			if !isCleanRelative(f.Path) {
-				fail("path %q is not a clean relative path", f.Path)
-			} else if err := itemTreeCollision(f.Path, p.ItemsDir); err != "" {
-				fail("path %q %s", f.Path, err)
+			if err := p.CheckFile(f.Path); err != nil {
+				fail("%w", err)
 			}
 			if seen[f.Path] {
 				fail("path %q is listed twice", f.Path)
@@ -298,26 +302,58 @@ func validateFiles(p Spec) []error {
 	return errs
 }
 
+// CheckFile refuses rel, a file's path relative to the placement root,
+// unless it is clean, relative, slash-separated, holdable on Windows and
+// outside every item tree and sofcat's own entries at the root. Parse
+// applies it to a relative files path and the installer to an absolute one
+// that resolves inside the root.
+func (p Spec) CheckFile(rel string) error {
+	if !isCleanRelative(rel) {
+		return fmt.Errorf("path %q is not a clean relative path", rel)
+	}
+	if why := itemTreeCollision(rel, p.ItemsDir); why != "" {
+		return fmt.Errorf("path %q %s", rel, why)
+	}
+	return nil
+}
+
 // itemTreeCollision explains why file, relative to the placement root,
 // could be inside an item tree, or returns "". Trees live under itemsDir,
 // or at the root when it is empty, where item names never start with "."
 // (checkItemName in pkg/installer).
 func itemTreeCollision(file, itemsDir string) string {
 	first, _, _ := strings.Cut(file, "/")
+	// sofcat's own entries at the root: the ownership marker, staging and
+	// backup trees (.<slug>-*) and temporary files (.sofcat-*.tmp).
+	for _, own := range []string{"." + identity.Slug + "-", ".sofcat-"} {
+		if len(first) >= len(own) && strings.EqualFold(first[:len(own)], own) {
+			return fmt.Sprintf("starts with %s, which sofcat keeps for its own files", own)
+		}
+	}
 	if itemsDir == "" {
 		if !strings.HasPrefix(first, ".") {
 			return "must start with a . segment, which no item name has, or the placement must set items_dir"
 		}
 		return ""
 	}
-	if dir, _, _ := strings.Cut(itemsDir, "/"); first == dir {
+	// Windows and macOS compare names case-insensitively.
+	if dir, _, _ := strings.Cut(itemsDir, "/"); strings.EqualFold(first, dir) {
 		return fmt.Sprintf("is under items_dir %q", dir)
 	}
 	return ""
 }
 
-// isCleanRelative reports whether p is clean, relative, slash-separated on
-// every OS and stays under the directory it is relative to.
+// isCleanRelative reports whether p is clean, relative and slash-separated,
+// with every segment one Windows can hold, so a table parses the same on
+// every OS.
 func isCleanRelative(p string) bool {
-	return filepath.IsLocal(p) && !strings.Contains(p, `\`) && p == path.Clean(p)
+	if p != path.Clean(p) || strings.HasPrefix(p, "/") {
+		return false
+	}
+	for seg := range strings.SplitSeq(p, "/") {
+		if CheckSegment(seg) != nil {
+			return false
+		}
+	}
+	return true
 }

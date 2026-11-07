@@ -193,7 +193,7 @@ func TestParseItemsDir(t *testing.T) {
 			t.Errorf("items_dir %q: %v", dir, err)
 		}
 	}
-	for _, dir := range []string{"../x", "/abs", `a\b`, "a/../b", "a/", ".", ".hidden", "./plugins"} {
+	for _, dir := range []string{"../x", "/abs", `a\b`, "a/../b", "a/", ".", ".hidden", "./plugins", "con", "plugins.", "a:b"} {
 		_, err := Parse([]byte("placements:\n  p: {paths: {darwin: /p}, items_dir: '" + dir + "'}\n"))
 		if err == nil || !strings.Contains(err.Error(), "items_dir") {
 			t.Errorf("items_dir %q: error %v", dir, err)
@@ -207,6 +207,7 @@ func TestParseUserScopeLimits(t *testing.T) {
 	for name, extra := range map[string]string{
 		"items_dir": "items_dir: plugins",
 		"files":     "files: [{path: .x.json, template: x}]",
+		"vars":      "vars: {name: x}",
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := Parse([]byte("placements:\n  p: {paths: {windows: '${USERPROFILE}\\p'}, scope: {windows: user}, " + extra + "}\n"))
@@ -271,6 +272,21 @@ func TestParseRejectsFiles(t *testing.T) {
 		},
 		"paths with USERPROFILE": {
 			`{paths: {windows: 'C:\p'}, files: [{paths: {windows: '${USERPROFILE}\x.json'}, template: x}]}`, "${USERPROFILE}",
+		},
+		"path under items_dir in another case": {
+			`{paths: {darwin: /p}, items_dir: plugins, files: [{path: Plugins/x.json, template: x}]}`, `is under items_dir "plugins"`,
+		},
+		"path with a trailing dot Windows drops": {
+			`{paths: {darwin: /p}, items_dir: plugins, files: [{path: plugins./x.json, template: x}]}`, "not a clean relative path",
+		},
+		"path with a Windows reserved name": {
+			`{paths: {darwin: /p}, files: [{path: .a/con/x.json, template: x}]}`, "not a clean relative path",
+		},
+		"path with a colon": {
+			`{paths: {darwin: /p}, files: [{path: ".a:b", template: x}]}`, "not a clean relative path",
+		},
+		"path over sofcat's own files": {
+			`{paths: {darwin: /p}, files: [{path: .SOFCAT-owned, template: x}]}`, "sofcat keeps for its own files",
 		},
 	}
 	for name, tc := range tests {
