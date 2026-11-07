@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -510,7 +511,7 @@ type tapasUserClient struct {
 	reported []service.UserPlacementResult
 }
 
-func (c *tapasUserClient) ListUserPlacements(context.Context) ([]service.UserPlacement, error) {
+func (c *tapasUserClient) ListUserPlacements(context.Context) (service.UserPlacements, error) {
 	return service.LoadUserPlan(c.cfg.AppDataPath)
 }
 
@@ -580,15 +581,19 @@ conditional_items:
 		t.Fatalf("LoadUserPlan: %v", err)
 	}
 	got := map[string]service.UserPlacement{}
-	for _, entry := range plan {
+	for _, entry := range plan.Entries {
 		got[entry.Item+"/"+entry.Placement] = entry
 	}
 	if len(got) != 4 || got["both/codex"].Held || got["dep/codex"].Held || got["stray/stray"].Held || !got["held/codex"].Held {
 		t.Fatalf("plan = %+v, want both/codex, dep/codex and stray/stray, and held/codex held", plan)
 	}
+	// The plan carries the run's facts, for the helper's templates.
+	if _, ok := plan.Facts["os"]; !ok {
+		t.Errorf("plan facts = %v, want the run's, os included", plan.Facts)
+	}
 	// What the run stored is what it staged: every non-held entry's archive
 	// is at its hash-named path and verifies.
-	for _, entry := range plan {
+	for _, entry := range plan.Entries {
 		if entry.Archive != filepath.Join(e.userArtifacts, entry.Hash+".zip") {
 			t.Errorf("%s/%s archive %s is not named by its hash", entry.Item, entry.Placement, entry.Archive)
 		}
@@ -611,7 +616,7 @@ conditional_items:
 	if err != nil {
 		t.Fatal(err)
 	}
-	heldRc := receipt.Receipt{Item: "held", Version: "0.9", Placement: "codex", Path: heldTree, TreeHash: heldHash, InstalledAtUTC: time.Now().UTC().Truncate(time.Second)}
+	heldRc := receipt.Receipt{Item: "held", Version: "0.9", Placement: "codex", Path: heldTree, TreeHash: heldHash, PlacedHash: heldHash, Rendered: []receipt.Rendered{}, InstalledAtUTC: time.Now().UTC().Truncate(time.Second)}
 	if err := receipt.Write(userReceipts, heldRc); err != nil {
 		t.Fatal(err)
 	}
@@ -650,7 +655,7 @@ conditional_items:
 	if outcomeOf(results, "stray", "stray") != string(installer.OutcomeRefused) || exists(filepath.Join(profile, "elsewhere")) {
 		t.Errorf("stray outside the user roots: %+v", results)
 	}
-	if rc, _, _ := receipt.Read(userReceipts, "codex", "held"); rc != heldRc || readFile(t, filepath.Join(heldTree, "SKILL.md")) != "held, older" {
+	if rc, _, _ := receipt.Read(userReceipts, "codex", "held"); !reflect.DeepEqual(rc, heldRc) || readFile(t, filepath.Join(heldTree, "SKILL.md")) != "held, older" {
 		t.Errorf("held item touched: receipt %+v", rc)
 	}
 	if outcomeOf(results, "held", "codex") != "" {
@@ -776,7 +781,7 @@ conditional_items:
 		t.Fatal(err)
 	}
 	writeFiles(t, market, map[string]string{".tapas-test-owned": ""})
-	heldRc := receipt.Receipt{Item: "held-plugin", Version: "1.0.0", Placement: "market", Path: heldTree, TreeHash: heldHash, Managed: true, InstalledAtUTC: time.Now().UTC().Truncate(time.Second)}
+	heldRc := receipt.Receipt{Item: "held-plugin", Version: "1.0.0", Placement: "market", Path: heldTree, TreeHash: heldHash, PlacedHash: heldHash, Rendered: []receipt.Rendered{}, Managed: true, InstalledAtUTC: time.Now().UTC().Truncate(time.Second)}
 	if err := receipt.Write(e.receiptDir(), heldRc); err != nil {
 		t.Fatal(err)
 	}
@@ -843,7 +848,7 @@ conditional_items:
 	check("startup run",
 		map[string]entry{"managed-plugin": {"1.0.0", true}, "held-plugin": {"1.0.0", true}},
 		[]string{"held-plugin@tapas-test", "managed-plugin@tapas-test"})
-	if rc, _, _ := receipt.Read(e.receiptDir(), "market", "held-plugin"); rc != heldRc {
+	if rc, _, _ := receipt.Read(e.receiptDir(), "market", "held-plugin"); !reflect.DeepEqual(rc, heldRc) {
 		t.Errorf("held receipt changed: %+v", rc)
 	}
 
@@ -966,10 +971,10 @@ func TestTapasUserScopeRequiresSoftware(t *testing.T) {
 	planEntry := func() service.UserPlacement {
 		t.Helper()
 		plan, err := service.LoadUserPlan(e.cfg.AppDataPath)
-		if err != nil || len(plan) != 1 || plan[0].Item != "needs-tool" {
+		if err != nil || len(plan.Entries) != 1 || plan.Entries[0].Item != "needs-tool" {
 			t.Fatalf("plan = %+v, %v; want needs-tool/codex only", plan, err)
 		}
-		return plan[0]
+		return plan.Entries[0]
 	}
 	sync := func() []service.UserPlacementResult {
 		t.Helper()

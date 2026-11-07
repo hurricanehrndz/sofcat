@@ -16,6 +16,7 @@ import (
 	"go.yaml.in/yaml/v4"
 
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
+	"github.com/hurricanehrndz/sofcat/pkg/render"
 )
 
 // Placement kinds.
@@ -44,6 +45,10 @@ var DefaultManifestFiles = []string{".claude-plugin/marketplace.json"}
 // Table is a parsed harnesses.yaml.
 type Table struct {
 	Placements map[string]Placement `yaml:"placements"`
+	// CheckFacts are the facts makecatalogs -check renders templates with,
+	// over the built-in samples (conditions.SampleFacts): the admin facts
+	// the templates read.
+	CheckFacts map[string]any `yaml:"check_facts,omitempty"`
 	// Order holds the placement names in file order. Parse fills it.
 	Order []string `yaml:"-"`
 }
@@ -60,28 +65,85 @@ type Placement struct {
 	Exclusive    bool              `yaml:"exclusive,omitempty"`
 	// Marketplace is set for KindMarketplace only.
 	Marketplace *Marketplace `yaml:"marketplace,omitempty"`
-	// Registers names the marketplace placement a KindSettings drop-in
-	// registers.
+	// Registers names the placement a KindSettings file registers: a
+	// marketplace, or with Template any directory or marketplace.
 	Registers string `yaml:"registers,omitempty"`
+	// Template renders a KindSettings file in place of the built-in Claude
+	// Code drop-in (render.FileContext). An empty output removes the file.
+	Template string `yaml:"template,omitempty"`
 }
 
 // Marketplace configures a marketplace placement's manifest. Owner, Renames
 // and AllowCrossMarketplaceDependenciesOn are written to the manifest
 // unchanged, so they stay untyped.
 type Marketplace struct {
-	Name                                string   `yaml:"name"`
-	Owner                               any      `yaml:"owner"`
-	Renames                             any      `yaml:"renames,omitempty"`
-	AllowCrossMarketplaceDependenciesOn any      `yaml:"allowCrossMarketplaceDependenciesOn,omitempty"`
-	ManifestFiles                       []string `yaml:"manifest_files,omitempty"`
+	Name                                string         `yaml:"name"`
+	Owner                               any            `yaml:"owner"`
+	Renames                             any            `yaml:"renames,omitempty"`
+	AllowCrossMarketplaceDependenciesOn any            `yaml:"allowCrossMarketplaceDependenciesOn,omitempty"`
+	ManifestFiles                       []ManifestFile `yaml:"manifest_files,omitempty"`
 }
 
-// Files returns the manifest files to write, relative to the placement root.
-func (m Marketplace) Files() []string {
+// ManifestFile is one manifest_files entry: a path, which gets the built-in
+// Claude-format catalog, or {path, template}, which gets the rendered
+// template (render.FileContext). In YAML a bare string is a path.
+type ManifestFile struct {
+	Path     string `yaml:"path"`
+	Template string `yaml:"template,omitempty"`
+}
+
+// UnmarshalYAML accepts a string or a {path, template} mapping.
+func (f *ManifestFile) UnmarshalYAML(node *yaml.Node) error {
+	if node.Kind == yaml.ScalarNode {
+		return node.Decode(&f.Path)
+	}
+	if node.Kind != yaml.MappingNode {
+		return fmt.Errorf("line %d: manifest_files entry must be a path or {path, template}", node.Line)
+	}
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		if key := node.Content[i].Value; key != "path" && key != "template" {
+			return fmt.Errorf("line %d: manifest_files entry: unknown field %q", node.Content[i].Line, key)
+		}
+	}
+	type plain ManifestFile
+	return node.Decode((*plain)(f))
+}
+
+// Manifests returns the manifest files to write, relative to the placement
+// root: the default when the block lists none.
+func (m Marketplace) Manifests() []ManifestFile {
 	if len(m.ManifestFiles) == 0 {
-		return DefaultManifestFiles
+		files := make([]ManifestFile, len(DefaultManifestFiles))
+		for i, p := range DefaultManifestFiles {
+			files[i] = ManifestFile{Path: p}
+		}
+		return files
 	}
 	return m.ManifestFiles
+}
+
+// Files returns the paths of Manifests.
+func (m Marketplace) Files() []string {
+	manifests := m.Manifests()
+	files := make([]string, len(manifests))
+	for i, f := range manifests {
+		files[i] = f.Path
+	}
+	return files
+}
+
+// View describes placement name, rooted at root, to a template.
+func (p Placement) View(name, root string) render.Placement {
+	v := render.Placement{Name: name, Root: root, Kind: p.Kind}
+	if p.Kind == KindMarketplace && p.Marketplace != nil {
+		v.Marketplace = &render.Marketplace{
+			Name:                                p.Marketplace.Name,
+			Owner:                               render.JSONValue(p.Marketplace.Owner),
+			Renames:                             render.JSONValue(p.Marketplace.Renames),
+			AllowCrossMarketplaceDependenciesOn: render.JSONValue(p.Marketplace.AllowCrossMarketplaceDependenciesOn),
+		}
+	}
+	return v
 }
 
 // Path returns the placement root for goos and whether it has one.
@@ -261,30 +323,73 @@ func (t Table) validateKindBlocks(p Placement) []error {
 		fail("scope: user is supported on kind directory only")
 	}
 	if p.Kind == KindMarketplace {
-		switch {
-		case p.Marketplace == nil:
-			fail("kind marketplace needs a marketplace block")
-		case p.Marketplace.Name == "" || p.Marketplace.Owner == nil:
-			fail("marketplace: name and owner are required")
-		}
-		if p.Marketplace != nil {
-			for _, f := range p.Marketplace.ManifestFiles {
-				// Slash-separated on every OS, like the default.
-				if !filepath.IsLocal(f) || strings.Contains(f, `\`) || f != path.Clean(f) {
-					fail("marketplace: manifest_files: %q is not a clean relative path", f)
-				}
-			}
-		}
+		errs = append(errs, validateMarketplace(p.Marketplace)...)
 	} else if p.Marketplace != nil {
 		fail("marketplace block on kind %q", p.Kind)
 	}
-
 	if p.Kind == KindSettings {
-		if target, ok := t.Placements[p.Registers]; !ok || target.Kind != KindMarketplace {
-			fail("registers %q, which is not a marketplace placement", p.Registers)
+		errs = append(errs, t.validateSettings(p)...)
+	} else {
+		if p.Registers != "" {
+			fail("registers on kind %q", p.Kind)
 		}
-	} else if p.Registers != "" {
-		fail("registers on kind %q", p.Kind)
+		if p.Template != "" {
+			fail("template on kind %q", p.Kind)
+		}
+	}
+	return errs
+}
+
+// validateMarketplace checks a marketplace placement's block: name and
+// owner, clean manifest paths, and templates that parse.
+func validateMarketplace(m *Marketplace) []error {
+	if m == nil {
+		return []error{errors.New("kind marketplace needs a marketplace block")}
+	}
+	var errs []error
+	if m.Name == "" || m.Owner == nil {
+		errs = append(errs, errors.New("marketplace: name and owner are required"))
+	}
+	seen := map[string]bool{}
+	for _, f := range m.ManifestFiles {
+		// Slash-separated on every OS, like the default.
+		if !filepath.IsLocal(f.Path) || strings.Contains(f.Path, `\`) || f.Path != path.Clean(f.Path) {
+			errs = append(errs, fmt.Errorf("marketplace: manifest_files: %q is not a clean relative path", f.Path))
+		}
+		if seen[f.Path] {
+			errs = append(errs, fmt.Errorf("marketplace: manifest_files: %q is listed twice", f.Path))
+		}
+		seen[f.Path] = true
+		if f.Template != "" {
+			if _, err := render.Parse(f.Path, f.Template); err != nil {
+				errs = append(errs, fmt.Errorf("marketplace: manifest_files %q: %w", f.Path, err))
+			}
+		}
+	}
+	return errs
+}
+
+// validateSettings checks what a settings placement registers and its
+// template: a marketplace, or with a template any directory or marketplace.
+func (t Table) validateSettings(p Placement) []error {
+	var errs []error
+	target, ok := t.Placements[p.Registers]
+	switch {
+	case !ok:
+		errs = append(errs, fmt.Errorf("registers %q, which is not a placement", p.Registers))
+	case target.Kind == KindSettings:
+		errs = append(errs, fmt.Errorf("registers %q, which is a settings placement", p.Registers))
+	case target.Kind != KindMarketplace && p.Template == "":
+		// Only a template knows how to describe a directory placement.
+		errs = append(errs, fmt.Errorf("registers %q, which is not a marketplace placement, without a template", p.Registers))
+	case target.ScopeFor(Darwin) == ScopeUser || target.ScopeFor(Windows) == ScopeUser:
+		// The service writes generated files; it cannot expand a user path.
+		errs = append(errs, fmt.Errorf("registers %q, which has user scope: generated files are machine scope only", p.Registers))
+	}
+	if p.Template != "" {
+		if _, err := render.Parse("template", p.Template); err != nil {
+			errs = append(errs, err)
+		}
 	}
 	return errs
 }

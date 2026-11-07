@@ -1,6 +1,6 @@
 ---
 title: Code signing and Defender
-description: Why unsigned SofCat binaries can trip Defender's ML heuristics, and what the build embeds to help.
+description: Why unsigned SofCat binaries can trip Defender's ML heuristics, what the build embeds to help, how SIGN_CMD signs the Windows executables and installer, and how the macOS app and pkg are signed and notarized.
 ---
 
 ## Background
@@ -48,37 +48,114 @@ Options (prices as of 2026; confirm before buying):
 | OV code-signing certificate (Sectigo, DigiCert, SSL.com and others) | about US$200-400 a year | Medium to high: identity validation, and the key must live on an HSM or a cloud key service (CA/B rules since 2023), so CI needs the CA's cloud signing API | Shows your name. |
 | EV code-signing certificate | about US$300-600 a year | High: company validation, hardware or cloud key | No longer skips SmartScreen. Worth it only if a customer requires EV. |
 
-## How it would plug in
+## Windows signing hook: `SIGN_CMD`
 
-Sign the executables first, then let embala sign the installer.
+The build signs when `SIGN_CMD` is set and does nothing about signing when it
+is not, so a local `just build` or `just setup` still produces the unsigned
+files it always has. `SIGN_CMD` is a shell command line; the build appends the
+file to sign and runs it.
 
-1. **Executables.** In the `build` recipe in the `justfile`, after each
-   `go build`, run a signing command, kept optional so local builds still
-   work unsigned, for example:
+- `just build` runs it once, after both `go build`s, with `build/<slug>.exe`
+  and `build/<slug>-ui.exe` appended, and fails if the command fails.
+- `just setup`, which depends on `build`, appends a `[sign.windows]` section
+  with `command = "<SIGN_CMD> $f"` to the `embala.toml` it renders into
+  `build/setup/`, so embala runs the same command on the uninstaller stub it
+  embeds and then on the finished `setup.exe` (embala README, "Signing").
+  `installer/embala.toml` itself carries no sign section.
 
-       if [ -n "${SOFCAT_SIGN_CMD:-}" ]; then $SOFCAT_SIGN_CMD build/sofcat.exe build/sofcat-ui.exe; fi
+`SIGN_CMD` is also a `just` variable: `just SIGN_CMD=... setup` is the same as
+setting the environment variable, and the command line wins when both are set.
 
-   with `SOFCAT_SIGN_CMD` set to something like
-   `jsign --storetype TRUSTEDSIGNING --keystore <region>.codesigning.azure.net --storepass "$AZURE_TOKEN" --alias <account>/<profile> --tsaurl http://timestamp.acs.microsoft.com`.
-   Always timestamp, so signatures stay valid after the certificate expires.
-2. **setup.exe.** embala runs your own tool on the built `setup.exe`, and on
-   the uninstaller stub it embeds in it, through an optional `[sign.windows]`
-   section in `installer/embala.toml`, with `$f` as the file (see the embala
-   README, "Signing"):
+With Azure Trusted Signing, for example:
 
-       [sign.windows]
-       command = "jsign ... $f"
+    SIGN_CMD='jsign --storetype TRUSTEDSIGNING --keystore <region>.codesigning.azure.net --storepass "$AZURE_TOKEN" --alias <account>/<profile> --tsaurl http://timestamp.acs.microsoft.com' just setup
 
-   Add `signed-stub = "<path>"` there to embed a stub you signed beforehand
-   instead. `embala build --no-sign` skips it for local builds.
-3. **CI.** In `.github/workflows/build_release.yml`, before the
-   "Build executables, setup.exe and makecatalogs" step, install `jsign` (Java) and
-   log in to Azure with OIDC (`azure/login`, using the existing
-   `id-token: write` permission) to get an access token, and pass it to the
-   build step as a secret environment variable. Keep provenance attestation
-   after signing so it covers the signed bytes. SignPath works differently:
-   upload the unsigned artifacts with `signpath/github-action-submit-signing-request`
-   and attest and release what comes back.
+Always timestamp, so signatures stay valid after the certificate expires.
 
-Neither signing nor a WDSI submission has been done yet. Both need the
-maintainer's account and identity.
+Quoting: `build` runs the value through bash and embala through `sh -c`, so
+write it as you would any shell command line. A tool path with a space goes in
+single quotes, and `"$AZURE_TOKEN"` expands when the command runs, not when
+just echoes the line, so the token stays out of the build log. Double quotes
+and backslashes are escaped for the TOML string, so they reach embala as
+written. embala quotes the `$f` path itself, and replaces every `$f` in the
+command textually, so do not name another variable `$f...` in it. Keep the
+value on one line: a newline splits the `build` line and breaks the TOML
+string. embala uses `sh -c` on Linux and macOS hosts, which is where `setup`
+runs in CI; on a Windows host it uses `cmd /C`, where `"$AZURE_TOKEN"` would
+not expand.
+
+Verify a signed file with `osslsigncode verify build/sofcat.exe` on Linux or
+`Get-AuthenticodeSignature .\sofcat.exe` on Windows (Status `Valid`), and the
+same for `setup.exe`.
+
+In CI, set `SIGN_CMD` in the environment of the "Build executables, setup.exe
+and makecatalogs" step of `.github/workflows/build_release.yml`. For Trusted
+Signing, install `jsign` (Java) and log in to Azure with OIDC (`azure/login`,
+using the existing `id-token: write` permission) first, and pass the token as
+a secret environment variable. Keep provenance attestation after signing so it
+covers the signed bytes. SignPath works differently: upload the unsigned
+artifacts with `signpath/github-action-submit-signing-request` and attest and
+release what comes back.
+
+No Windows signing credential exists for this project yet, and no WDSI
+submission has been made. Both need the maintainer's account and identity.
+
+## macOS signing and notarization
+
+Gatekeeper refuses an app or pkg downloaded from the web unless it is signed
+with a Developer ID and notarized by Apple. `just build-macos` and `just pkg`
+sign and notarize when these variables are set and do nothing about signing
+when they are not, so a local `just pkg` still produces the unsigned pkg it
+always has. Each is also a `just` variable, like `SIGN_CMD`: `just
+CODESIGN_IDENTITY=... pkg` is the same as setting the environment variable,
+and the command line wins when both are set.
+
+| Variable | Read by | Value |
+| --- | --- | --- |
+| `CODESIGN_IDENTITY` | `build-macos` | The `codesign` identity for the CLI and the app: a Developer ID Application certificate's name or SHA-1, or `-` for an ad-hoc signature. |
+| `PRODUCTSIGN_IDENTITY` | `pkg` | The Developer ID Installer identity for `productbuild --sign`. Needs `CODESIGN_IDENTITY`. |
+| `NOTARIZE` | `pkg` | `1` runs `just notarize` on the pkg once it is built. Needs both identities and the four variables below; any other value is an error. |
+| `NOTARY_AUTH` | `notarize` | `api-key`, the only mode: an App Store Connect API key. |
+| `NOTARY_API_KEY_PATH` | `notarize` | The key's `.p8` file. |
+| `NOTARY_API_KEY_ID` | `notarize` | The key ID. |
+| `NOTARY_API_ISSUER_ID` | `notarize` | The issuer ID. |
+
+`just build-macos` codesigns `build/<slug>` right after its `go build`, with
+the identifier `<IDENTIFIER>.cli`, and `build/<Name>.app` as a bundle once
+its `Info.plist` and icon are in place, since the signature seals them along
+with the main executable. Both get `--options runtime` (the hardened runtime,
+which notarization requires) and `--timestamp`, except that the ad-hoc
+identity gets no timestamp, which `codesign` refuses for it. `--force`
+replaces the signature of an earlier build. No entitlements: the Wails app
+runs under the hardened runtime without any.
+
+`just pkg` checks the variables before anything is built: a
+`PRODUCTSIGN_IDENTITY` without `CODESIGN_IDENTITY`, or `NOTARIZE=1` without
+either identity or one of the notary variables, fails naming the missing
+one. It passes `--sign` to `productbuild` only; the three component pkgs stay
+unsigned, since the product signature covers them. With `NOTARIZE=1` it
+then runs `just notarize build/<slug>-<version>.pkg`.
+
+`just notarize <pkg>` runs `xcrun notarytool submit <pkg> --key <path>
+--key-id <id> --issuer <issuer> --wait`, then `xcrun stapler staple <pkg>`
+and `xcrun stapler validate <pkg>`, and stops at the first that fails. It
+does not check that the key file exists; `notarytool` reports that itself.
+Apple refuses an ad-hoc signature, so a pkg for notarization needs real
+identities for both variables.
+
+Verify each stage:
+
+    codesign --verify --strict build/sofcat
+    codesign --verify --strict --deep build/SofCat.app
+    codesign -d --verbose=2 build/SofCat.app 2>&1 | grep runtime        # flags=0x10000(runtime)
+    pkgutil --check-signature build/sofcat-<version>.pkg                 # Status: signed by ...
+    xcrun stapler validate build/sofcat-<version>.pkg                    # The validate action worked
+    spctl --assess --type install -v build/sofcat-<version>.pkg          # accepted, source=Notarized Developer ID
+
+With a Developer ID, for example (`security find-identity -v` lists the
+identities in the keychain):
+
+    CODESIGN_IDENTITY='Developer ID Application: Name (TEAMID)' PRODUCTSIGN_IDENTITY='Developer ID Installer: Name (TEAMID)' NOTARIZE=1 NOTARY_AUTH=api-key NOTARY_API_KEY_PATH=~/AuthKey_ABC123DEF.p8 NOTARY_API_KEY_ID=ABC123DEF NOTARY_API_ISSUER_ID=<issuer uuid> just pkg
+
+No macOS signing credential exists for this project yet either; it needs the
+maintainer's Apple Developer account.

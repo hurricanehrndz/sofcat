@@ -62,6 +62,10 @@ helper, `<slug>-ui.exe --user-sync`, at logon. Its `uninstall.exe` runs
 the value, then reverses the copies. sofcat owns both on every platform, so
 the installer scripts only call it. `setup.exe /S` and `uninstall.exe /S` are
 the unattended forms; `setup.exe` refuses to install over an existing service.
+With `SIGN_CMD` set (environment or `just SIGN_CMD=... setup`), `build` runs
+it on both executables and `setup` has embala run it on `setup.exe` and the
+uninstaller stub (`site/src/content/docs/reference/code-signing.md`); unset,
+nothing is signed.
 Everything the service writes lives under `C:\ProgramData\SofCat`, as under
 `/Library/Application Support/<Name>` on a Mac: `config.yaml`, the `Data`
 directory (the default `app_data_path`, SYSTEM and Administrators only
@@ -75,8 +79,13 @@ set with `just test-zip-only` and
 
 On a Mac, `just build-macos` builds the CLI for the host architecture
 (`build/<slug>`, pure Go) and the UI as `build/<Name>.app` (cgo, so the Xcode
-command line tools), and `just pkg` wraps both with the launchd plist into an
-unsigned `build/<slug>-<version>.pkg`. It installs the app in `/Applications`,
+command line tools), and `just pkg` wraps both with the launchd plist into
+`build/<slug>-<version>.pkg`, unsigned by default. With `CODESIGN_IDENTITY` set,
+`build-macos` codesigns the CLI and the app (hardened runtime; `-` is
+ad-hoc), with `PRODUCTSIGN_IDENTITY` set `pkg` signs the product archive, and
+with `NOTARIZE=1` plus `NOTARY_AUTH=api-key`, `NOTARY_API_KEY_PATH`,
+`NOTARY_API_KEY_ID` and `NOTARY_API_ISSUER_ID` it runs `just notarize` on it
+(`site/src/content/docs/reference/code-signing.md`). It installs the app in `/Applications`,
 the CLI in `/Library/Application Support/<Name>/bin/<slug>` and the plist,
 labelled with the brand's `IDENTIFIER`, in `/Library/LaunchDaemons`; its
 postinstall script bootstraps the daemon. The daemon reads

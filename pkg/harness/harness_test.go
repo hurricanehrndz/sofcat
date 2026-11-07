@@ -212,3 +212,107 @@ placements:
 		t.Errorf("unlabelled item: labels %v, worksIn %v, want both nil", labels, worksIn)
 	}
 }
+
+// A manifest_files entry is a path, for the built-in catalog, or
+// {path, template}; a settings placement may carry a template and then
+// register a directory; check_facts is a free map.
+func TestParseTemplates(t *testing.T) {
+	table, err := Parse([]byte(`
+check_facts: {site: east, floors: [1, 2]}
+placements:
+  skills: {kind: directory, paths: {darwin: /s}}
+  market:
+    kind: marketplace
+    paths: {darwin: /m}
+    marketplace:
+      name: acme
+      owner: {name: Acme}
+      manifest_files:
+        - .claude-plugin/marketplace.json
+        - path: .agents/plugins/marketplace.json
+          template: |
+            {"name": {{ json .Placement.Marketplace.Name }}}
+  index:
+    kind: settings
+    paths: {darwin: /index.json}
+    registers: skills
+    template: '{{ if .Items }}{{ json .Items }}{{ end }}'
+  drop-in: {kind: settings, paths: {darwin: /d.json}, registers: market}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := table.Placements["market"].Marketplace
+	want := []ManifestFile{
+		{Path: ".claude-plugin/marketplace.json"},
+		{Path: ".agents/plugins/marketplace.json", Template: "{\"name\": {{ json .Placement.Marketplace.Name }}}\n"},
+	}
+	if !reflect.DeepEqual(m.Manifests(), want) {
+		t.Errorf("manifests = %+v", m.Manifests())
+	}
+	if got := m.Files(); !reflect.DeepEqual(got, []string{".claude-plugin/marketplace.json", ".agents/plugins/marketplace.json"}) {
+		t.Errorf("files = %v", got)
+	}
+	if got := table.Placements["index"].Template; got != "{{ if .Items }}{{ json .Items }}{{ end }}" {
+		t.Errorf("settings template = %q", got)
+	}
+	if table.CheckFacts["site"] != "east" || len(table.CheckFacts) != 2 {
+		t.Errorf("check_facts = %v", table.CheckFacts)
+	}
+	view := table.Placements["market"].View("market", "/m")
+	if view.Kind != KindMarketplace || view.Marketplace == nil || view.Marketplace.Name != "acme" || view.Marketplace.Owner.(map[string]any)["name"] != "Acme" {
+		t.Errorf("view = %+v", view)
+	}
+	if view := table.Placements["skills"].View("skills", "/s"); view.Marketplace != nil {
+		t.Errorf("directory view has a marketplace: %+v", view)
+	}
+}
+
+// Templates are checked at load, so a repository fails -check rather than
+// every device failing the placement.
+func TestParseRejectsTemplates(t *testing.T) {
+	tests := map[string]struct{ yaml, want string }{
+		"manifest entry with an unknown field": {`
+placements:
+  m: {kind: marketplace, paths: {darwin: /m}, marketplace: {name: a, owner: b, manifest_files: [{path: x.json, mode: 644}]}}`, "unknown field"},
+		"manifest entry that is a list": {`
+placements:
+  m: {kind: marketplace, paths: {darwin: /m}, marketplace: {name: a, owner: b, manifest_files: [[x.json]]}}`, "path or {path, template}"},
+		"manifest template that does not parse": {`
+placements:
+  m: {kind: marketplace, paths: {darwin: /m}, marketplace: {name: a, owner: b, manifest_files: [{path: x.json, template: '{{ .Items'}]}}`, `manifest_files "x.json"`},
+		"manifest template calling now()": {`
+placements:
+  m: {kind: marketplace, paths: {darwin: /m}, marketplace: {name: a, owner: b, manifest_files: [{path: x.json, template: '{{ cond "now() > date(\"2020-01-01\")" }}'}]}}`, "now()"},
+		"settings template that does not parse": {`
+placements:
+  m: {kind: marketplace, paths: {darwin: /m}, marketplace: {name: a, owner: b}}
+  s: {kind: settings, paths: {darwin: /s.json}, registers: m, template: '{{ end }}'}`, "unexpected {{end}}"},
+		"settings registering a settings placement": {`
+placements:
+  m: {kind: marketplace, paths: {darwin: /m}, marketplace: {name: a, owner: b}}
+  s: {kind: settings, paths: {darwin: /s.json}, registers: m}
+  t: {kind: settings, paths: {darwin: /t.json}, registers: s, template: x}`, `registers "s", which is a settings placement`},
+		"settings template registering a user-scope placement": {`
+placements:
+  p: {kind: directory, paths: {windows: '${USERPROFILE}\p'}, scope: {windows: user}}
+  s: {kind: settings, paths: {windows: 'C:\s.json'}, registers: p, template: x}`, `placement "s": registers "p", which has user scope`},
+		"manifest path listed twice": {`
+placements:
+  m: {kind: marketplace, paths: {darwin: /m}, marketplace: {name: a, owner: b, manifest_files: [.claude-plugin/marketplace.json, {path: .claude-plugin/marketplace.json, template: x}]}}`, `manifest_files: ".claude-plugin/marketplace.json" is listed twice`},
+		"template on a directory": {`
+placements:
+  p: {kind: directory, paths: {darwin: /p}, template: x}`, "template on kind"},
+		"template on a marketplace": {`
+placements:
+  m: {kind: marketplace, paths: {darwin: /m}, marketplace: {name: a, owner: b}, template: x}`, "template on kind"},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			_, err := Parse([]byte(tc.yaml))
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error %v, want %q", err, tc.want)
+			}
+		})
+	}
+}

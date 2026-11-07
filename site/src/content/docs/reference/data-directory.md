@@ -28,7 +28,11 @@ these its own ACL.
   authorization that the service pipe applies, including the per-user check
   on removals.
 - `Data\cache\` holds installers and scripts that run as SYSTEM.
-- `Data\conditions\` holds admin fact scripts, which run as SYSTEM.
+- `Data\conditions\` holds admin fact scripts, which run as SYSTEM. What
+  they print feeds conditions and templates, and reaches every logged-on
+  user's helper with the user-placement plan (`Data\user-plan.json`), so it
+  must hold nothing a standard user may not see
+  ([Conditions](/guides/conditions/#admin-provided-facts)).
 - `Data\nupkg\` holds the kept copy of each installed nupkg, whose
   before-modify and uninstall scripts run as SYSTEM
   ([Nupkg items](/guides/nupkg-items/#the-kept-copy)).

@@ -3,7 +3,9 @@
 # file, install.lua and uninstall.lua under build/setup/ and runs `embala build`
 # there, so `src` paths are plain file names. @VERSION@ is the package version
 # (major.minor.patch); the other @PLACEHOLDERS@ are the justfile brand values
-# (stock SofCat unless `just brand=…`).
+# (stock SofCat unless `just brand=…`). With SIGN_CMD set, `just setup` appends
+# a [sign.windows] section to the rendered copy, so embala signs setup.exe and
+# the uninstaller stub (site/src/content/docs/reference/code-signing.md).
 #
 # The setup.exe puts both executables in C:\Program Files\SofCat and runs
 # `sofcat.exe -serviceinstall`, which registers and starts the SofCat service

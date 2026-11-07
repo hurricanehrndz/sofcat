@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -133,5 +134,42 @@ func TestWindowsTargetIgnoresExecBit(t *testing.T) {
 		if f.exec {
 			t.Errorf("%s recorded as executable", f.path)
 		}
+	}
+}
+
+// Templates names the .tmpl files of a tree and refuses the shapes a render
+// could not place: a bare .tmpl and a template of a template; for a tree as
+// shipped, ShippedTemplates also refuses a template beside the file it would
+// overwrite, which a placed tree holds by design.
+func TestTemplates(t *testing.T) {
+	shipped := []string{".claude-plugin/plugin.json.tmpl", "NOTE.md.tmpl", "SKILL.md", "sub/x.tmpl"}
+	got, err := ShippedTemplates(shipped)
+	if err != nil || len(got) != 3 || got[0] != ".claude-plugin/plugin.json.tmpl" || got[2] != "sub/x.tmpl" {
+		t.Fatalf("ShippedTemplates = %v, %v", got, err)
+	}
+	for name, paths := range map[string][]string{
+		"bare .tmpl":          {"SKILL.md", ".tmpl"},
+		"bare .tmpl in a dir": {"sub/.tmpl"},
+		"x.tmpl.tmpl":         {"x.tmpl.tmpl"},
+	} {
+		if got, err := Templates(paths); err == nil {
+			t.Errorf("%s: Templates(%v) = %v, want an error", name, paths, got)
+		}
+	}
+	placed := []string{"a/x", "a/x.tmpl"}
+	if got, err := ShippedTemplates(placed); err == nil {
+		t.Errorf("ShippedTemplates(%v) = %v, want an error", placed, got)
+	}
+	// A directory x beside x.tmpl: the render could not write x at all.
+	for _, paths := range [][]string{{"a/x/y", "a/x.tmpl"}, {"x/sub/y", "x.tmpl", "z"}} {
+		if got, err := ShippedTemplates(paths); err == nil || !strings.Contains(err.Error(), "ships a directory") {
+			t.Errorf("ShippedTemplates(%v) = %v, %v; want a directory refusal", paths, got, err)
+		}
+		if got, err := Templates(paths); err != nil || len(got) != 1 {
+			t.Errorf("Templates(%v) = %v, %v; want the template alone", paths, got, err)
+		}
+	}
+	if got, err := Templates(placed); err != nil || len(got) != 1 {
+		t.Errorf("Templates(%v) = %v, %v; want the template beside its output", placed, got, err)
 	}
 }

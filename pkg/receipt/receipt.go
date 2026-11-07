@@ -23,11 +23,32 @@ type Receipt struct {
 	Placement string `json:"placement"`
 	// Path is the tree's directory: <placement root>/<item>, or
 	// <placement root>/plugins/<item> in a marketplace.
-	Path     string `json:"path"`
+	Path string `json:"path"`
+	// TreeHash is the catalog's hash of the archive's contents.
 	TreeHash string `json:"tree_hash"`
+	// PlacedHash is the hash of the tree as sofcat wrote it, rendered files
+	// included: TreeHash when nothing was rendered. Read fills it from
+	// TreeHash for a receipt written before it existed.
+	PlacedHash string `json:"placed_hash"`
+	// Rendered records each file sofcat rendered inside the tree, in path
+	// order. Write saves it as [] when there is none, never omits it.
+	Rendered []Rendered `json:"rendered"`
 	// Managed is true when a manifest lists the item in managed_installs.
 	Managed        bool      `json:"managed"`
 	InstalledAtUTC time.Time `json:"installed_at_utc"`
+}
+
+// Rendered records one file sofcat rendered inside a tree from a template
+// the tree ships.
+type Rendered struct {
+	// File and Template are slash-separated paths relative to the tree.
+	File     string `json:"file"`
+	Template string `json:"template"`
+	// Inputs is what the render used: os, scope, user, item (name, version,
+	// managed) and the facts the template read. It is kept as written, so a
+	// number compares as written when the next run asks whether the inputs
+	// changed.
+	Inputs json.RawMessage `json:"inputs"`
 }
 
 // MachineDir is the service's receipt directory inside its data directory.
@@ -63,6 +84,14 @@ func Read(dir, placement, item string) (r Receipt, ok bool, err error) {
 	if err := json.Unmarshal(data, &r); err != nil {
 		return Receipt{}, false, fmt.Errorf("%s: %w", path, err)
 	}
+	// A receipt from before rendering existed records a tree placed as
+	// shipped.
+	if r.PlacedHash == "" {
+		r.PlacedHash = r.TreeHash
+	}
+	if r.Rendered == nil {
+		r.Rendered = []Rendered{}
+	}
 	return r, true, nil
 }
 
@@ -73,6 +102,9 @@ func Write(dir string, r Receipt) error {
 	path, err := file(dir, r.Placement, r.Item)
 	if err != nil {
 		return err
+	}
+	if r.Rendered == nil {
+		r.Rendered = []Rendered{}
 	}
 	data, err := json.MarshalIndent(r, "", "  ")
 	if err != nil {

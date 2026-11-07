@@ -1,0 +1,15 @@
+# A manifest template that is not JSON on a .json path.
+placements:
+  market:
+    kind: marketplace
+    paths:
+      darwin: /Library/Application Support/Demo/marketplace
+      windows: ${ProgramData}\Demo\marketplace
+    marketplace:
+      name: demo
+      owner: {name: Demo}
+      manifest_files:
+        - .claude-plugin/marketplace.json
+        - path: .agents/plugins/marketplace.json
+          template: |
+            {"plugins": [{{ range .Items }}{{ json .Name }},{{ end }}]}

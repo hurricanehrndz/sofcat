@@ -105,3 +105,16 @@ func TestMacMachineType(t *testing.T) {
 		}
 	}
 }
+
+// Every macOS fact has a sample for makecatalogs (TestBuiltinFactsSampled
+// covers the host's OS; this covers macOS from any host).
+func TestMacFactsSampled(t *testing.T) {
+	facts := conditions.Facts{}
+	macFacts(facts, cannedRun(macBookAir()))
+	samples := conditions.SampleFacts("darwin")
+	for name := range facts {
+		if _, ok := samples[name]; !ok {
+			t.Errorf("macOS fact %s has no sample in conditions.SampleFacts(\"darwin\")", name)
+		}
+	}
+}

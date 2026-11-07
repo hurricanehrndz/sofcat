@@ -79,26 +79,27 @@ func Evaluate(condition string, facts Facts) (_ Result, missing []string, _ erro
 }
 
 // missingFacts returns, sorted, the identifiers in node that facts lacks.
-// Called functions (version and the version operators) and let-bound names
-// are not facts; expr builtins such as now() and any() are not identifiers.
 func missingFacts(node ast.Node, facts Facts) []string {
-	v := identifiers{used: map[string]bool{}, local: map[string]bool{}}
+	return slices.DeleteFunc(walk(node).facts(), func(name string) bool {
+		_, ok := facts[name]
+		return ok
+	})
+}
+
+// walk collects the identifiers and calls in node.
+func walk(node ast.Node) *identifiers {
+	v := &identifiers{used: map[string]bool{}, local: map[string]bool{}}
 	ast.Walk(&node, v)
-	var missing []string
-	for name := range v.used {
-		if _, ok := facts[name]; !ok && !v.local[name] {
-			missing = append(missing, name)
-		}
-	}
-	slices.Sort(missing)
-	return missing
+	return v
 }
 
 type identifiers struct {
 	used, local map[string]bool
+	// calls holds the name of every called function or builtin.
+	calls []string
 }
 
-func (v identifiers) Visit(node *ast.Node) {
+func (v *identifiers) Visit(node *ast.Node) {
 	switch n := (*node).(type) {
 	case *ast.IdentifierNode:
 		// $env is expr's built-in handle on the whole environment, not a fact.
@@ -108,10 +109,53 @@ func (v identifiers) Visit(node *ast.Node) {
 	case *ast.CallNode:
 		if callee, ok := n.Callee.(*ast.IdentifierNode); ok {
 			v.local[callee.Value] = true
+			v.calls = append(v.calls, callee.Value)
 		}
+	case *ast.BuiltinNode:
+		v.calls = append(v.calls, n.Name)
 	case *ast.VariableDeclaratorNode:
 		v.local[n.Name] = true
 	}
+}
+
+// facts returns, sorted, the identifiers that name facts. Called functions
+// (version and the version operators) and let-bound names are not facts;
+// expr builtins such as now() and any() are not identifiers.
+func (v *identifiers) facts() []string {
+	var names []string
+	for name := range v.used {
+		if !v.local[name] {
+			names = append(names, name)
+		}
+	}
+	slices.Sort(names)
+	return names
+}
+
+// timeDependent lists the expr builtins whose result is not a function of the
+// facts. A template condition may not call them (zip-items guide,
+// "Templates for placement files"): its output could never settle.
+var timeDependent = []string{"now"}
+
+// Inputs returns, sorted, the facts condition reads, for a template render.
+// A syntax error is an error, and so is a call to a time-dependent builtin
+// such as now(), since the result would then depend on the clock rather than
+// the facts. An empty condition reads nothing: Evaluate holds it True.
+func Inputs(condition string) ([]string, error) {
+	if strings.TrimSpace(condition) == "" {
+		return nil, nil
+	}
+	parsed, err := expr.Compile(condition, append(versionOptions(), expr.AllowUndefinedVariables())...)
+	if err != nil {
+		return nil, err
+	}
+	v := walk(parsed.Node())
+	for _, name := range v.calls {
+		if slices.Contains(timeDependent, name) {
+			return nil, fmt.Errorf("calls %s(), whose result does not depend on the facts", name)
+		}
+	}
+	return v.facts(), nil
 }
 
 // Apply evaluates every item's installable_condition against facts and sets

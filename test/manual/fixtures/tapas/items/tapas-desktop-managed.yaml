@@ -1,0 +1,10 @@
+# Input to makecatalogs zip-item; just bootstrap-tapas packs rendered/tapas-desktop-managed.
+# Its tree ships two templates (site/src/content/docs/guides/zip-items.md, "Tree templates"):
+# plugin.json.tmpl, which the managed flag renders to auto_install, and
+# .mcp.json.tmpl, which reads the assigned_user admin fact and branches on os.
+item_name: tapas-desktop-managed
+display_name: Tapas Desktop Managed
+section: Desktop plugins
+description: A managed Claude Desktop plugin with rendered plugin.json and .mcp.json
+catalog: tapas
+version: 1.0.0

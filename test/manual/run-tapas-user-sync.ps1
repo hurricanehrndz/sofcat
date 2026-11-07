@@ -4,10 +4,12 @@ User-scope placement check for the Tapas Test fixture brand.
 
 .DESCRIPTION
 Runs the per-user helper, `tapas-test-ui.exe --user-sync`, and asserts that
-it placed the Codex skill in this user's profile: the tree under
-%USERPROFILE%\.agents\skills, its receipt under
-%LOCALAPPDATA%\Tapas Test\receipts, and nothing under %USERPROFILE%\.agents
-owned by SYSTEM (the service must never write there).
+it placed the Codex skills in this user's profile: the trees under
+%USERPROFILE%\.agents\skills, their receipts under
+%LOCALAPPDATA%\Tapas Test\receipts with the plan's managed flag,
+tapas-user-skill's NOTE.md rendered with this account's login name, and
+nothing under %USERPROFILE%\.agents owned by SYSTEM (the service must never
+write there).
 
 Run AFTER run-tapas-smoke.ps1 has passed (a service run has staged the
 archive and stored the plan), in the logged-on user's desktop session with a
@@ -24,6 +26,9 @@ param(
     [string]$UI          = "$env:ProgramFiles\Tapas Test\tapas-test-ui.exe",
     [string]$ProductName = "Tapas Test",
     [string]$Item        = "tapas-managed-skill",
+    # The managed skill whose NOTE.md.tmpl the helper renders with this
+    # account's login name and the plan's managed flag.
+    [string]$UserItem    = "tapas-user-skill",
     [string]$Placement   = "codex-skills",
     [string]$Version     = "1.0.0",
     [string]$LogPath     = "C:\sofcat-test\tapas-user-sync.log",
@@ -60,7 +65,9 @@ try {
     $agents = Join-Path $env:USERPROFILE ".agents"
     $tree = Join-Path $agents "skills\$Item"
     $receiptPath = Join-Path $env:LOCALAPPDATA "$ProductName\receipts\$Placement\$Item.json"
-    foreach ($stale in @($tree, $receiptPath)) {
+    $userTree = Join-Path $agents "skills\$UserItem"
+    $userReceiptPath = Join-Path $env:LOCALAPPDATA "$ProductName\receipts\$Placement\$UserItem.json"
+    foreach ($stale in @($tree, $receiptPath, $userTree, $userReceiptPath)) {
         if (Test-Path -LiteralPath $stale) {
             Remove-Item -LiteralPath $stale -Recurse -Force
             Log "Removed pre-existing $stale"
@@ -90,8 +97,35 @@ try {
     }
     if ($rc.path -ne $tree) { Fail "receipt path '$($rc.path)' is not $tree" }
     if ($rc.tree_hash -notmatch '^sha256:[0-9a-f]{64}$') { Fail "receipt tree_hash '$($rc.tree_hash)'" }
+    if ($rc.placed_hash -notmatch '^sha256:[0-9a-f]{64}$') { Fail "receipt placed_hash '$($rc.placed_hash)'" }
+    # tapas-managed-skill ships no template, so it is placed as shipped.
+    if ($rc.placed_hash -ne $rc.tree_hash) { Fail "receipt placed_hash '$($rc.placed_hash)' differs from tree_hash '$($rc.tree_hash)'" }
+    if (-not $rc.PSObject.Properties['rendered']) { Fail "receipt $receiptPath has no rendered list" }
+    if (@($rc.rendered).Count -ne 0) { Fail "receipt rendered is not empty: $($rc.rendered | ConvertTo-Json -Compress)" }
     if (-not $rc.installed_at_utc) { Fail "receipt has no installed_at_utc" }
-    Log "Receipt $receiptPath matches"
+    if (-not $rc.managed) { Fail "receipt $receiptPath says managed=false; the plan lists $Item in managed_installs" }
+    Log "Receipt $receiptPath matches, managed=true"
+
+    # tapas-user-skill ships NOTE.md.tmpl: the helper renders it beside the
+    # template with this account's login name (no domain), the plan's managed
+    # flag and the scope, and records the render in the receipt.
+    $note = Join-Path $userTree "NOTE.md"
+    if (-not (Test-Path -LiteralPath $note)) { Fail "$note is missing" }
+    if (-not (Test-Path -LiteralPath "$note.tmpl")) { Fail "$note.tmpl left the tree" }
+    $noteText = Get-Content -LiteralPath $note -Raw
+    $wantNote = "user: $env:USERNAME`nmanaged: true`nscope: user`n"
+    if ($noteText -ne $wantNote) { Fail "NOTE.md reads '$noteText', want '$wantNote'" }
+    if (-not (Test-Path -LiteralPath $userReceiptPath)) { Fail "receipt $userReceiptPath is missing" }
+    $urc = Get-Content -LiteralPath $userReceiptPath -Raw | ConvertFrom-Json
+    if ($urc.item -ne $UserItem -or $urc.path -ne $userTree -or -not $urc.managed) { Fail "receipt $userReceiptPath does not match: $($urc | ConvertTo-Json -Compress)" }
+    if ($urc.placed_hash -notmatch '^sha256:[0-9a-f]{64}$' -or $urc.placed_hash -eq $urc.tree_hash) { Fail "receipt placed_hash '$($urc.placed_hash)' should differ from tree_hash '$($urc.tree_hash)'" }
+    $recs = @($urc.rendered)
+    if ($recs.Count -ne 1 -or $recs[0].file -ne "NOTE.md" -or $recs[0].template -ne "NOTE.md.tmpl") { Fail "receipt rendered: $($urc.rendered | ConvertTo-Json -Compress -Depth 5)" }
+    $in = $recs[0].inputs
+    if ($in.user -ne $env:USERNAME -or $in.scope -ne "user" -or $in.os -ne "windows" -or -not $in.item.managed -or @($in.facts.PSObject.Properties).Count -ne 0) {
+        Fail "rendered inputs: $($in | ConvertTo-Json -Compress -Depth 5)"
+    }
+    Log "$note names $env:USERNAME; receipt $userReceiptPath managed=true with one rendered record"
 
     $paths = @($agents) + @(Get-ChildItem -LiteralPath $agents -Recurse -Force | ForEach-Object { $_.FullName })
     foreach ($path in $paths) {

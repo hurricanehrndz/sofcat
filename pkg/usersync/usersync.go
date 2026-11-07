@@ -11,6 +11,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os/user"
+	"strings"
 	"time"
 
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
@@ -24,7 +26,7 @@ import (
 
 // Client is the part of the service client the helper uses.
 type Client interface {
-	ListUserPlacements(context.Context) ([]service.UserPlacement, error)
+	ListUserPlacements(context.Context) (service.UserPlacements, error)
 	ReportUserPlacements(context.Context, []service.UserPlacementResult) error
 }
 
@@ -32,14 +34,22 @@ type Client interface {
 // the OS (harness.Windows), the compiled write roots, whose user-scope roots
 // apply, the refused data and binary directories, and Vars["USERPROFILE"].
 // Receipts live in receiptDir. Held entries are neither placed nor removed.
+// The trees' templates render with the plan's facts, each entry's managed
+// flag and this account's login name; the helper runs no script of its own.
 // Every result is logged and reported; the returned error is set only when
-// no plan could be fetched, after retrying a service that cannot be reached
-// yet for up to a minute, in which case nothing is removed.
+// the login name cannot be read or no plan could be fetched, after retrying
+// a service that cannot be reached yet for up to a minute, in which case
+// nothing is placed or removed.
 //
 // Two syncs for one user at once (a logon and a storefront start) can trip
 // over each other's staging directory; the loser logs a failed result and
 // the next sync converges. A per-user lock is the upgrade if that shows up.
 func Sync(ctx context.Context, client Client, guard placement.Guard, receiptDir string, logger *slog.Logger) ([]service.UserPlacementResult, error) {
+	login, err := loginName()
+	if err != nil {
+		logger.Warn("user sync: unable to read the current user; nothing placed", "err", err)
+		return nil, err
+	}
 	plan, err := listPlan(ctx, client, logger)
 	if err != nil {
 		logger.Warn("user sync: unable to fetch the user-placement plan", "err", err)
@@ -51,7 +61,18 @@ func Sync(ctx context.Context, client Client, guard placement.Guard, receiptDir 
 		// still follows R14, which reads each receipt itself.
 		logger.Warn("user sync: unable to read receipts; skipping scope exit", "dir", receiptDir, "err", err)
 	}
-	z := &installer.ZipInstaller{Guard: guard, Harnesses: userTable(plan, receipts, guard.GOOS), ReceiptDir: receiptDir}
+	managed := map[string]bool{}
+	for _, e := range plan.Entries {
+		managed[e.Item] = managed[e.Item] || e.Managed
+	}
+	z := &installer.ZipInstaller{
+		Guard:      guard,
+		Harnesses:  userTable(plan.Entries, receipts, guard.GOOS),
+		ReceiptDir: receiptDir,
+		Managed:    func(item string) bool { return managed[item] },
+		Facts:      plan.Facts,
+		User:       login,
+	}
 
 	var results []service.UserPlacementResult
 	record := func(item, placementName string, res installer.Result) {
@@ -67,7 +88,7 @@ func Sync(ctx context.Context, client Client, guard placement.Guard, receiptDir 
 
 	inPlan := map[[2]string]bool{}
 	held := map[string]bool{}
-	for _, e := range plan {
+	for _, e := range plan.Entries {
 		inPlan[[2]string{e.Item, e.Placement}] = true
 		if e.Held {
 			held[e.Item] = true
@@ -112,7 +133,7 @@ var (
 // listPlan fetches the plan, retrying only while the service cannot be
 // reached; any other error, such as one the service answered, is returned
 // at once.
-func listPlan(ctx context.Context, client Client, logger *slog.Logger) ([]service.UserPlacement, error) {
+func listPlan(ctx context.Context, client Client, logger *slog.Logger) (service.UserPlacements, error) {
 	for waited := time.Duration(0); ; waited += planRetryInterval {
 		plan, err := client.ListUserPlacements(ctx)
 		if err == nil || !errors.Is(err, service.ErrConnect) || waited >= planRetryFor {
@@ -120,9 +141,31 @@ func listPlan(ctx context.Context, client Client, logger *slog.Logger) ([]servic
 		}
 		logger.Info("user sync: service not reachable yet; retrying", "in", planRetryInterval, "err", err)
 		if err := wait(ctx, planRetryInterval); err != nil {
-			return nil, err
+			return service.UserPlacements{}, err
 		}
 	}
+}
+
+// currentUser is user.Current; tests replace it.
+var currentUser = user.Current
+
+// loginName is the login name of the account the helper runs as, for the
+// tree templates' .User: user.Current's name without a DOMAIN\ prefix or an
+// @domain suffix. When it cannot be read the sync fails before placing
+// anything, rather than recording an empty user, and the next logon retries.
+func loginName() (string, error) {
+	u, err := currentUser()
+	if err != nil {
+		return "", fmt.Errorf("user sync: unable to read the current user: %w", err)
+	}
+	name := u.Username
+	if i := strings.LastIndex(name, `\`); i >= 0 {
+		name = name[i+1:]
+	}
+	if i := strings.Index(name, "@"); i >= 0 {
+		name = name[:i]
+	}
+	return name, nil
 }
 
 // apply places one plan entry, verifying the staged archive first whenever

@@ -163,6 +163,8 @@ func CollectCatalogs(repoPath string) (CatalogSet, error) { //nolint:gocognit //
 		return CatalogSet{}, fmt.Errorf("no catalogs to write: no package-info file under %s names a valid catalog", packagesInfoPath)
 	}
 
+	set.Problems = append(set.Problems, checkPlacementTemplates(harnesses, set.Catalogs)...)
+	set.Problems = append(set.Problems, checkZipTemplates(repoPath, harnesses, set.Catalogs)...)
 	set.Problems = append(set.Problems, checkManifests(repoPath)...)
 	return set, nil
 }
@@ -202,6 +204,7 @@ func WriteCatalogs(repoPath string, set CatalogSet) error {
 
 // repoHarnesses is what CollectCatalogs read from <repo>/harnesses.yaml.
 type repoHarnesses struct {
+	path    string // the file, for problems
 	table   harness.Table
 	present bool   // the file exists
 	problem string // why it cannot be used; empty when it is valid or absent
@@ -216,13 +219,13 @@ func readHarnesses(repoPath string) repoHarnesses {
 		return repoHarnesses{}
 	}
 	if err != nil {
-		return repoHarnesses{present: true, problem: fmt.Sprintf("%s: %v", path, err)}
+		return repoHarnesses{path: path, present: true, problem: fmt.Sprintf("%s: %v", path, err)}
 	}
 	table, err := harness.Parse(body)
 	if err != nil {
-		return repoHarnesses{present: true, problem: fmt.Sprintf("%s: %v", path, err)}
+		return repoHarnesses{path: path, present: true, problem: fmt.Sprintf("%s: %v", path, err)}
 	}
-	return repoHarnesses{table: table, present: true}
+	return repoHarnesses{path: path, table: table, present: true}
 }
 
 // checkRequiresSoftware reports requires_software entries without a

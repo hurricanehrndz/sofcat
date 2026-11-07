@@ -59,8 +59,8 @@ type CommandResponse struct {
 	RequestedBy   string                `json:"requestedBy,omitempty"`
 	Branding      *branding.Branding    `json:"branding,omitempty"`
 
-	// UserPlacements is ListUserPlacements' plan.
-	UserPlacements []UserPlacement `json:"userPlacements,omitempty"`
+	// UserPlan is ListUserPlacements' plan.
+	UserPlan *UserPlacements `json:"userPlan,omitempty"`
 
 	// displayName is the catalog display name InstallItem resolved while
 	// authorizing, for the operation's first record. Unexported like report.
@@ -314,11 +314,11 @@ func executeCommand(cfg config.Configuration, cmd Command, managedRun func(confi
 		b := branding.Resolve(cfg.Branding)
 		return CommandResponse{Status: "ok", Branding: &b}, nil
 	case actionListUserPlacements:
-		entries, err := LoadUserPlan(cfg.AppDataPath)
+		plan, err := LoadUserPlan(cfg.AppDataPath)
 		if err != nil {
 			return CommandResponse{}, err
 		}
-		return CommandResponse{Status: "ok", UserPlacements: entries}, nil
+		return CommandResponse{Status: "ok", UserPlan: &plan}, nil
 	default:
 		return CommandResponse{}, fmt.Errorf("unsupported service action %q", cmd.Action)
 	}
@@ -590,6 +590,7 @@ func getOptionalItems(cfg config.Configuration) ([]OptionalInstallItem, error) {
 
 	// One shared checker so the registry snapshot amortizes across items.
 	zip := newZipInstaller(cfg, table)
+	zip.Facts = machineFacts
 	checker := &status.Checker{Zip: zip.Installed, Nupkg: func(id string) (string, bool) { return installer.KeptNupkgVersion(cfg.NupkgPath, id) }}
 	now := nowRFC3339UTC()
 

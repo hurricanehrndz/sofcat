@@ -144,16 +144,16 @@ func (c *Client) CancelOperation(ctx context.Context, operationID string) error 
 }
 
 // ListUserPlacements returns the user-placement plan the per-user helper
-// applies: the same for every caller in v1.
-func (c *Client) ListUserPlacements(ctx context.Context) ([]UserPlacement, error) {
-	var result listUserPlacementsResponse
+// applies, with the facts it renders with: the same for every caller in v1.
+func (c *Client) ListUserPlacements(ctx context.Context) (UserPlacements, error) {
+	var result UserPlacements
 	if err := c.call(ctx, methodListUserPlacements, nil, &result, nil); err != nil {
-		return nil, err
+		return UserPlacements{}, err
 	}
 	if result.Entries == nil {
-		return nil, errors.New("malformed listUserPlacements result")
+		return UserPlacements{}, errors.New("malformed listUserPlacements result")
 	}
-	return result.Entries, nil
+	return result, nil
 }
 
 // ReportUserPlacements sends the helper's results, which the service logs.

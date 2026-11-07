@@ -16,6 +16,7 @@ import (
 
 	"github.com/hurricanehrndz/sofcat/pkg/artifact"
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
+	"github.com/hurricanehrndz/sofcat/pkg/conditions"
 	"github.com/hurricanehrndz/sofcat/pkg/config"
 	"github.com/hurricanehrndz/sofcat/pkg/download"
 	"github.com/hurricanehrndz/sofcat/pkg/harness"
@@ -49,8 +50,26 @@ type ZipInstaller struct {
 	// item's managed flag is never rewritten: the run cannot tell whether it
 	// is managed. Nil means nothing is held.
 	Held func(item string) bool
+	// Facts are the run's facts (pkg/facts), which placement file and tree
+	// templates read through fact and cond. Nil means the machine has no
+	// facts, so a template that reads one fails.
+	Facts conditions.Facts
+	// User is the login name, without domain, of the account this installer
+	// runs as: the tree templates' .User in user scope. The service leaves
+	// it empty; the per-user helper sets it.
+	User string
 
-	now func() time.Time
+	// renderer decides what sofcat renders inside a tree; the tree's own
+	// templates (treeTemplates) when nil.
+	renderer treeRenderer
+	now      func() time.Time
+}
+
+func (z *ZipInstaller) templates() treeRenderer {
+	if z.renderer != nil {
+		return z.renderer
+	}
+	return treeTemplates{z}
 }
 
 // NewMachineZip returns the service's zip installer for cfg and the
@@ -72,20 +91,26 @@ type Outcome string
 const (
 	// OutcomeMissing (inspect): no tree yet; apply installs it.
 	OutcomeMissing Outcome = "missing"
-	// OutcomeUnchanged (inspect): the tree equals its receipt but not the
-	// catalog; apply replaces it with the catalog version.
+	// OutcomeUnchanged (inspect): the tree equals its receipt's placed_hash
+	// but the receipt's tree_hash is not the catalog's; apply replaces it
+	// with the catalog version.
 	OutcomeUnchanged Outcome = "unchanged"
-	// OutcomeCurrent: the tree equals the catalog and its receipt is up to date.
+	// OutcomeCurrent: the tree equals its receipt's placed_hash, the receipt
+	// matches the catalog and its rendered inputs are what this run would
+	// render with.
 	OutcomeCurrent Outcome = "current"
-	// OutcomeAdopted: the tree equals the catalog; its receipt is (inspect: is
-	// to be) written for the current version.
+	// OutcomeAdopted: the tree equals its receipt's placed_hash with a stale
+	// receipt or stale inputs, or equals the catalog's tree_hash as shipped;
+	// its receipt is (inspect: is to be) written for the current version,
+	// after a render in place where inputs or templates call for one.
 	OutcomeAdopted Outcome = "adopted"
 	// OutcomeInstalled (apply): the catalog tree was placed.
 	OutcomeInstalled Outcome = "installed"
 	// OutcomeRemoved (remove): the tree and its receipt are gone.
 	OutcomeRemoved Outcome = "removed"
-	// OutcomeConflict: the tree differs from the catalog and from its receipt,
-	// or has none; it is left alone.
+	// OutcomeConflict: the tree matches neither its receipt's placed_hash nor
+	// the catalog's tree_hash, or has no receipt and differs from the
+	// catalog; it is left alone.
 	OutcomeConflict Outcome = "conflict"
 	// OutcomeRefused: the placement may not be written.
 	OutcomeRefused Outcome = "refused"
@@ -273,75 +298,115 @@ func fail(t Target, tree string, err error) Result {
 }
 
 // Inspect decides, without writing, what Apply would do for item at t (R14):
-// missing, then catalog-equal (current or adopted), then receipt-equal
-// (unchanged), then conflict.
+// missing; then a tree equal to its receipt's placed_hash, sofcat's own
+// (current, adopted when the receipt or the rendered inputs are stale, or
+// unchanged when the catalog moved on); then one equal to the catalog's
+// tree_hash that sofcat did not place (adopted); then conflict.
 func (z *ZipInstaller) Inspect(item catalog.Item, t Target) Result {
-	res, _ := z.inspect(item, t)
-	return res
+	return z.inspect(item, t).Result
 }
 
-// inspect is Inspect, also returning the placement root once resolved.
-func (z *ZipInstaller) inspect(item catalog.Item, t Target) (Result, string) {
+// finding is inspectTree's decision with what Apply needs to act on it.
+type finding struct {
+	Result
+	// root is the placement root once resolved.
+	root string
+	// render is set for an adopted tree whose files must be rendered in
+	// place: one sofcat did not place, or whose rendered inputs changed. An
+	// adopted tree with current outputs only gets its receipt rewritten.
+	render bool
+	// shipped is set for an adopted tree that equals the catalog's tree as
+	// shipped, so it must pass the shipped checks before it is rendered.
+	shipped bool
+}
+
+// inspect is Inspect with the placement root once resolved.
+func (z *ZipInstaller) inspect(item catalog.Item, t Target) finding {
 	if err := checkItemName(item.Name); err != nil {
-		return fail(t, "", err), ""
+		return finding{Result: fail(t, "", err)}
 	}
 	root, err := z.root(t)
 	if err != nil {
-		return fail(t, "", err), ""
+		return finding{Result: fail(t, "", err)}
 	}
-	return z.inspectTree(item, t, root), root
+	f := z.inspectTree(item, t, root)
+	f.root = root
+	return f
 }
 
-func (z *ZipInstaller) inspectTree(item catalog.Item, t Target, root string) Result {
+func (z *ZipInstaller) inspectTree(item catalog.Item, t Target, root string) finding {
 	tree := treeIn(t.Spec, root, item.Name)
 	if err := z.checkExclusive(t, root); err != nil {
-		return fail(t, tree, err)
+		return finding{Result: fail(t, tree, err)}
 	}
-	res := Result{Placement: t.Placement, Path: tree}
+	f := finding{Result: Result{Placement: t.Placement, Path: tree}}
 
 	info, err := os.Lstat(tree)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
-		res.Outcome = OutcomeMissing
-		return res
+		f.Outcome = OutcomeMissing
+		return f
 	case err != nil:
-		return fail(t, tree, err)
+		return finding{Result: fail(t, tree, err)}
 	case !info.IsDir():
-		res.Outcome, res.Err = OutcomeConflict, fmt.Errorf("placement %q: %s is not a directory sofcat placed", t.Placement, tree)
-		return res
+		f.Outcome, f.Err = OutcomeConflict, fmt.Errorf("placement %q: %s is not a directory sofcat placed", t.Placement, tree)
+		return f
 	}
 	if empty, _ := dirEmpty(tree); empty {
-		res.Outcome = OutcomeMissing
-		return res
+		f.Outcome = OutcomeMissing
+		return f
 	}
 
 	rc, hasReceipt, err := receipt.Read(z.ReceiptDir, t.Placement, item.Name)
 	if err != nil {
-		return fail(t, tree, err)
+		return finding{Result: fail(t, tree, err)}
 	}
 	// A tree that cannot be hashed (a symlink, a special file) is a user edit.
 	hash, hashErr := artifact.TreeHash(tree, z.Guard.GOOS)
 	switch {
-	case hashErr == nil && hash == t.Variant.TreeHash:
-		res.Outcome = OutcomeCurrent
-		if !hasReceipt || rc.Version != item.Version || rc.TreeHash != hash || rc.Path != tree || z.managedChanged(rc) {
-			res.Outcome = OutcomeAdopted
+	case hashErr == nil && hasReceipt && hash == rc.PlacedHash:
+		// Sofcat's own tree, intact.
+		if rc.TreeHash != t.Variant.TreeHash {
+			f.Outcome = OutcomeUnchanged
+			return f
 		}
-	case hashErr == nil && hasReceipt && hash == rc.TreeHash:
-		res.Outcome = OutcomeUnchanged
+		match, err := z.templates().inputsMatch(item, t, root, tree, rc, z.managedNow(rc))
+		if err != nil {
+			return finding{Result: fail(t, tree, err)}
+		}
+		switch {
+		case !match:
+			f.Outcome, f.render = OutcomeAdopted, true
+		case rc.Version != item.Version || rc.Path != tree || z.managedChanged(rc):
+			f.Outcome = OutcomeAdopted
+		default:
+			f.Outcome = OutcomeCurrent
+		}
+	case hashErr == nil && hash == t.Variant.TreeHash:
+		// The catalog's tree as shipped, which sofcat did not place: put
+		// there by hand, or before sofcat rendered anything.
+		f.Outcome, f.render, f.shipped = OutcomeAdopted, true, true
 	default:
-		res.Outcome = OutcomeConflict
-		res.Err = fmt.Errorf("placement %q: %s was changed outside sofcat; leaving it alone", t.Placement, tree)
+		f.Outcome = OutcomeConflict
+		f.Err = fmt.Errorf("placement %q: %s was changed outside sofcat; leaving it alone", t.Placement, tree)
 	}
-	return res
+	return f
 }
 
 // managedChanged reports whether rc's managed flag is stale, as when a run
-// moves the item between optional and managed installs. An installer without
-// a Managed func (the service's list call) cannot tell and reports false, as
-// it does for a held item.
+// moves the item between optional and managed installs.
 func (z *ZipInstaller) managedChanged(rc receipt.Receipt) bool {
-	return z.Managed != nil && !z.held(rc.Item) && rc.Managed != z.Managed(rc.Item)
+	return rc.Managed != z.managedNow(rc)
+}
+
+// managedNow is rc's item's managed flag as this run sees it. An installer
+// without a Managed func (the service's list call) cannot tell and keeps the
+// receipt's, as it does for a held item.
+func (z *ZipInstaller) managedNow(rc receipt.Receipt) bool {
+	if z.Managed == nil || z.held(rc.Item) {
+		return rc.Managed
+	}
+	return z.Managed(rc.Item)
 }
 
 func (z *ZipInstaller) held(item string) bool {
@@ -368,27 +433,36 @@ func (z *ZipInstaller) Fetch(ctx context.Context, t Target, progress download.Pr
 
 // Apply brings item's tree at t to the catalog version from archive, a
 // verified copy of t's variant (see Fetch), following Inspect's decision.
-// archive is read only when a tree is written.
+// archive is read only when a tree is written: an adopted tree is rendered
+// in place from the templates it holds, without the archive.
 //
 // After it changes a marketplace placement (an install, an upgrade, or a
 // receipt adopted or refreshed, as when only the managed flag changed) it
 // regenerates the marketplace's generated files; a failure there fails the
 // result.
 func (z *ZipInstaller) Apply(item catalog.Item, t Target, archive string) Result {
-	res, root := z.inspect(item, t)
+	f := z.inspect(item, t)
+	res := f.Result
 	switch res.Outcome {
 	case OutcomeMissing, OutcomeUnchanged:
 	case OutcomeAdopted:
-		if err := z.writeReceipt(item, t, res.Path); err != nil {
+		// A tree as shipped is held to the same rules as a staged one; a
+		// placed tree legitimately holds each template beside its output.
+		if f.shipped {
+			if err := checkShipped(res.Path, z.Guard.GOOS); err != nil {
+				return fail(t, res.Path, fmt.Errorf("placement %q: %w", t.Placement, err))
+			}
+		}
+		if err := z.adopt(item, t, f.root, res.Path, f.render); err != nil {
 			return fail(t, res.Path, err)
 		}
-		slog.Info("Adopted placed tree", "item", item.Name, "placement", t.Placement, "path", res.Path)
+		slog.Info("Adopted placed tree", "item", item.Name, "placement", t.Placement, "path", res.Path, "rendered", f.render)
 		return z.regenerated(t, res)
 	default:
 		return res
 	}
 
-	if err := z.prepareRoot(t, root); err != nil {
+	if err := z.prepareRoot(t, f.root); err != nil {
 		return fail(t, res.Path, err)
 	}
 	// The tree's directory: the root, or a marketplace's plugins directory.
@@ -404,15 +478,75 @@ func (z *ZipInstaller) Apply(item catalog.Item, t Target, archive string) Result
 	if err := extractArchive(archive, t.Variant.Hash, t.Variant.TreeHash, stage, z.Guard.GOOS); err != nil {
 		return fail(t, res.Path, fmt.Errorf("placement %q: %w", t.Placement, err))
 	}
+	// The archive's hashes are checked; now the tree becomes this device's.
+	// Staging is discarded on failure, so its undo is not needed.
+	if err := checkShipped(stage, z.Guard.GOOS); err != nil {
+		return fail(t, res.Path, fmt.Errorf("placement %q: %w", t.Placement, err))
+	}
+	placed, recs, _, err := z.renderTree(item, t, f.root, stage)
+	if err != nil {
+		return fail(t, res.Path, fmt.Errorf("placement %q: %w", t.Placement, err))
+	}
 	if err := z.swap(item.Name, stage, res.Path, res.Outcome == OutcomeUnchanged); err != nil {
 		return fail(t, res.Path, err)
 	}
-	if err := z.writeReceipt(item, t, res.Path); err != nil {
+	if err := z.writeReceipt(item, t, res.Path, placed, recs); err != nil {
 		return fail(t, res.Path, err)
 	}
-	slog.Info("Placed tree", "item", item.Name, "version", item.Version, "placement", t.Placement, "path", res.Path)
+	slog.Info("Placed tree", "item", item.Name, "version", item.Version, "placement", t.Placement, "path", res.Path, "rendered", len(recs))
 	res.Outcome = OutcomeInstalled
 	return z.regenerated(t, res)
+}
+
+// adopt writes the receipt for a tree Inspect found adopted under root. With
+// render it first renders the tree's templates in place, all or nothing, and
+// records the hash of the result; otherwise the receipt keeps what it
+// recorded of the tree, which is unchanged.
+func (z *ZipInstaller) adopt(item catalog.Item, t Target, root, tree string, render bool) error {
+	if !render {
+		rc, ok, err := receipt.Read(z.ReceiptDir, t.Placement, item.Name)
+		if err != nil {
+			return err
+		}
+		if ok {
+			return z.writeReceipt(item, t, tree, rc.PlacedHash, rc.Rendered)
+		}
+	}
+	placed, recs, undo, err := z.renderTree(item, t, root, tree)
+	if err != nil {
+		return fmt.Errorf("placement %q: %w", t.Placement, err)
+	}
+	// Without the receipt the tree would match neither hash: put the
+	// previous bytes back, so the next run retries.
+	if err := z.writeReceipt(item, t, tree, placed, recs); err != nil {
+		return fmt.Errorf("placement %q: %w", t.Placement, errors.Join(err, undo()))
+	}
+	return nil
+}
+
+// renderTree renders item's templates in dir, its tree under root staged or
+// in place, through writeRendered, and returns the tree's hash as written
+// with the records for its receipt and an undo that puts the tree's previous
+// bytes back. A tree that cannot be rehashed is put back before the error
+// returns.
+func (z *ZipInstaller) renderTree(item catalog.Item, t Target, root, dir string) (string, []receipt.Rendered, func() error, error) {
+	managed, err := z.receiptManaged(item.Name, t.Placement)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	outs, err := z.templates().render(item, t, root, dir, managed)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	undo, err := writeRendered(dir, outs)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	placed, err := artifact.TreeHash(dir, z.Guard.GOOS)
+	if err != nil {
+		return "", nil, nil, errors.Join(err, undo())
+	}
+	return placed, records(outs), undo, nil
 }
 
 // regenerated regenerates the generated files of t's placement after res
@@ -469,18 +603,12 @@ func (z *ZipInstaller) swap(item, stage, tree string, replace bool) error {
 	return nil
 }
 
-// writeReceipt records item's tree at t. A held item keeps the managed flag
-// its existing receipt records.
-func (z *ZipInstaller) writeReceipt(item catalog.Item, t Target, tree string) error {
-	managed := z.Managed != nil && z.Managed(item.Name)
-	if z.held(item.Name) {
-		rc, ok, err := receipt.Read(z.ReceiptDir, t.Placement, item.Name)
-		if err != nil {
-			return err
-		}
-		if ok {
-			managed = rc.Managed
-		}
+// writeReceipt records item's tree at t: the catalog's tree hash, placed as
+// the hash of the tree as written and rendered as its rendered files.
+func (z *ZipInstaller) writeReceipt(item catalog.Item, t Target, tree, placed string, rendered []receipt.Rendered) error {
+	managed, err := z.receiptManaged(item.Name, t.Placement)
+	if err != nil {
+		return err
 	}
 	return receipt.Write(z.ReceiptDir, receipt.Receipt{
 		Item:           item.Name,
@@ -488,14 +616,32 @@ func (z *ZipInstaller) writeReceipt(item catalog.Item, t Target, tree string) er
 		Placement:      t.Placement,
 		Path:           tree,
 		TreeHash:       t.Variant.TreeHash,
+		PlacedHash:     placed,
+		Rendered:       rendered,
 		Managed:        managed,
 		InstalledAtUTC: z.clock(),
 	})
 }
 
+// receiptManaged is the managed flag item's receipt in placement records
+// now. A held item keeps the flag its existing receipt records.
+func (z *ZipInstaller) receiptManaged(item, placement string) (bool, error) {
+	if z.held(item) {
+		rc, ok, err := receipt.Read(z.ReceiptDir, placement, item)
+		if err != nil {
+			return false, err
+		}
+		if ok {
+			return rc.Managed, nil
+		}
+	}
+	return z.Managed != nil && z.Managed(item), nil
+}
+
 // Remove removes the tree rc records, under R15: only when the tree still
-// matches the receipt. A tree already gone just drops the receipt. Like
-// Apply, removing a marketplace plugin regenerates the generated files.
+// matches the receipt's placed_hash. A tree already gone just drops the
+// receipt. Like Apply, removing a marketplace plugin regenerates the
+// generated files.
 func (z *ZipInstaller) Remove(rc receipt.Receipt) Result {
 	t := Target{Placement: rc.Placement}
 	res := Result{Placement: rc.Placement, Path: rc.Path}
@@ -522,7 +668,7 @@ func (z *ZipInstaller) Remove(rc receipt.Receipt) Result {
 		return fail(t, rc.Path, err)
 	default:
 		hash, hashErr := artifact.TreeHash(tree, z.Guard.GOOS)
-		if hashErr != nil || hash != rc.TreeHash {
+		if hashErr != nil || hash != rc.PlacedHash {
 			res.Outcome = OutcomeConflict
 			res.Err = fmt.Errorf("placement %q: %s was changed outside sofcat; leaving it alone", rc.Placement, rc.Path)
 			return res

@@ -3,9 +3,10 @@ catalogs:
   - tapas
 managed_installs:
   - tapas-managed-skill
-  - tapas-exclusive-skill
   - tapas-managed-plugin
   - tapas-exe-item
+  - tapas-desktop-managed
+  - tapas-user-skill
 optional_installs:
   - tapas-optional-skill
   - tapas-adopt-skill
@@ -15,6 +16,13 @@ optional_installs:
   - tapas-second-plugin
   - tapas-scripted-skill
   - tapas-choco-skill
+  - tapas-exclusive-skill
+  - tapas-desktop-optional
+# Placed by the startup run like a managed install, but a default the smokes'
+# last step can deselect: a required item is never removable, and emptying
+# exclusive-skills is what removes tapas-exclusive-index.
+default_installs:
+  - tapas-exclusive-skill
 conditional_items:
   # run-tapas-smoke.ps1 sets these facts with an admin condition script. Until
   # it does, both facts are missing, so both blocks are held.
@@ -24,3 +32,11 @@ conditional_items:
   - condition: tapas_smoke_held == "yes"
     managed_installs:
       - tapas-held-skill
+  # The smokes' Desktop script sets tapas_desktop_managed to "no" and later
+  # to "yes": the optional Desktop plugin, already placed by self-service,
+  # moves into managed_installs and its plugin.json re-renders in place. The
+  # admin manifest is served from the host, so the smokes cannot edit it; the
+  # fact is how they move an item between the two lists.
+  - condition: tapas_desktop_managed == "yes"
+    managed_installs:
+      - tapas-desktop-optional

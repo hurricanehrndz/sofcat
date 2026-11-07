@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -262,7 +263,7 @@ func TestMarketplaceHeldPluginKeepsFlag(t *testing.T) {
 	manifest, settings := m.manifest(t), readFile(t, m.settings)
 	item, _ := plugin(t, "held", "market")
 	wantOutcome(t, "apply held", m.z.Apply(item, target(t, m.z, item, "market"), ""), OutcomeCurrent)
-	if after, _, _ := receipt.Read(m.z.ReceiptDir, "market", "held"); after != before {
+	if after, _, _ := receipt.Read(m.z.ReceiptDir, "market", "held"); !reflect.DeepEqual(after, before) {
 		t.Errorf("held receipt rewritten: %+v, was %+v", after, before)
 	}
 	if m.manifest(t) != manifest || readFile(t, m.settings) != settings {

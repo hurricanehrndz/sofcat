@@ -133,3 +133,46 @@ func TestCheck(t *testing.T) {
 		}
 	}
 }
+
+// A template records the facts a cond expression read, so Inputs lists every
+// fact an expression names and nothing else; now() is rejected because its
+// result would not follow from the facts.
+func TestInputs(t *testing.T) {
+	for cond, want := range map[string][]string{
+		`os == "windows"`: {"os"},
+		`version(os_version) >= "10.0" && "lab" in groups`: {"groups", "os_version"},
+		`any(ipv4_address, # startsWith "10.")`:            {"ipv4_address"},
+		`let x = arch; x == "amd64"`:                       {"arch"},
+		`$env["os"] == "windows"`:                          nil,
+	} {
+		got, err := Inputs(cond)
+		if err != nil || !slices.Equal(got, want) {
+			t.Errorf("Inputs(%q) = %q, %v; want %q", cond, got, err, want)
+		}
+	}
+	for _, cond := range []string{`now() > date("2020-01-01")`, `os ==`} {
+		if _, err := Inputs(cond); err == nil {
+			t.Errorf("Inputs(%q) passed", cond)
+		}
+	}
+	if _, err := Inputs(`now() > date("2020-01-01")`); err == nil || !strings.Contains(err.Error(), "now()") {
+		t.Errorf("now(): err = %v, want it named", err)
+	}
+}
+
+// The samples stand in for a machine when makecatalogs checks templates, so
+// each OS has the os fact and the Windows-only facts stay Windows-only.
+func TestSampleFacts(t *testing.T) {
+	for _, goos := range []string{"windows", "darwin", "linux"} {
+		facts := SampleFacts(goos)
+		if facts["os"] != goos {
+			t.Errorf("%s: os = %v", goos, facts["os"])
+		}
+		if _, ok := facts["os_build"]; ok != (goos == "windows") {
+			t.Errorf("%s: os_build present = %v", goos, ok)
+		}
+	}
+	if got, _, err := Evaluate(`machine_type == "laptop" && os_build >= 22000 && version(os_version) >= "10.0.22000"`, SampleFacts("windows")); got != True || err != nil {
+		t.Errorf("sample Windows facts: %v, %v", got, err)
+	}
+}
