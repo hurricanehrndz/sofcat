@@ -20,7 +20,7 @@ func TestGetPlacements(t *testing.T) {
 		wantErr    bool
 		placements int
 	}{
-		{name: "parsed", body: []byte("placements:\n  skills:\n    kind: directory\n    paths: {darwin: /x}\n"), placements: 1},
+		{name: "parsed", body: []byte("placements:\n  skills:\n    paths: {darwin: /x}\n"), placements: 1},
 		{name: "404 is an empty table", err: &download.StatusError{URL: url, Code: 404}},
 		{name: "500 fails", err: &download.StatusError{URL: url, Code: 500}, wantErr: true},
 		{name: "network error fails", err: errors.New("connection refused"), wantErr: true},

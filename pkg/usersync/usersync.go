@@ -198,7 +198,7 @@ func userTable(plan []service.UserPlacement, receipts []receipt.Receipt, goos st
 		if _, ok := table.Placements[name]; ok {
 			return
 		}
-		p := placement.Spec{Kind: placement.KindDirectory, Scope: map[string]string{goos: placement.ScopeUser}}
+		p := placement.Spec{Scope: map[string]string{goos: placement.ScopeUser}}
 		if path != "" {
 			p.Paths = map[string]string{goos: path}
 		}

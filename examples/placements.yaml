@@ -12,9 +12,8 @@ check_facts:
   site: east
 placements:
   # The key is the placement name. Catalog variants and rendered trees use it.
+  # Every placement is a directory: one tree per item at <path>/<item_name>.
   claude-code-skills:
-    # directory: one tree per item at <path>/<item_name>.
-    kind: directory
     # The placement root per OS. Only darwin and windows. Windows paths may use
     # ${ProgramFiles} and ${ProgramData}; ${USERPROFILE} only where the scope
     # for that OS is user.
@@ -29,22 +28,35 @@ placements:
     action_labels:
       install: Add
       installed: Added
+    # Files sofcat renders from the placement's receipts (.Items) after every
+    # change to it; see the guide, "Placement files". An entry has a template
+    # and either path, relative to the placement root, or paths, one per OS.
+    # An empty output removes the file, so {{ if .Items }} decides whether it
+    # stays with nothing placed. fact and cond read the machine's facts. A
+    # .json file is rewritten in canonical form, so only the values matter.
+    files:
+      - paths:
+          darwin: /Library/Application Support/ClaudeCode/skills-index.json
+          windows: ${ProgramData}\ClaudeCode\skills-index.json
+        template: |
+          {{- if .Items }}
+          {
+            "os": {{ json (fact "os") }},
+            "root": {{ json .Placement.Root }},
+            "skills": {{ json .Items }}
+          }
+          {{- end }}
   codex-skills:
-    kind: directory
     paths:
       darwin: /etc/codex/skills
       windows: ${USERPROFILE}\.agents\skills
     # machine or user per OS. An OS left out is machine. darwin: user is not
     # supported. This one is machine scope on macOS and per user on Windows.
+    # A placement with items_dir or files must be machine scope everywhere.
     scope:
       windows: user
     works_in: [Codex]
   acme-marketplace:
-    # marketplace: plugins at <path>/plugins/<item_name>, plus manifests that
-    # sofcat regenerates from the receipts after every change (one entry per
-    # plugin, defaultEnabled when a manifest lists it in managed_installs).
-    # Machine scope only.
-    kind: marketplace
     paths:
       darwin: /Library/Application Support/Acme/marketplace
       windows: ${ProgramData}\Acme\marketplace
@@ -52,78 +64,76 @@ placements:
     # Refuse to write into this directory if it already exists, is not empty
     # and sofcat did not create it.
     exclusive: true
-    # Only on kind marketplace; name and owner are required. owner, renames
-    # and allowCrossMarketplaceDependenciesOn are copied into the manifest
-    # unchanged.
-    marketplace:
+    # Item trees go to <path>/plugins/<item_name> rather than <path>/<item_name>.
+    items_dir: plugins
+    # Free data for the templates, as .Placement.Vars.
+    vars:
       name: acme
-      owner:
-        name: Acme IT
+      owner: {name: Acme IT}
       # renames: {old-plugin: new-plugin}
       # allowCrossMarketplaceDependenciesOn: [other-marketplace]
-      # Files to write, relative to the placement root. A string is rendered
-      # from the default template, the Claude Code marketplace catalog (the
-      # zip-items guide, "Marketplace and settings placements", shows it; to
-      # change it, copy it here as {path, template}); the default when left
-      # out is [.claude-plugin/marketplace.json]. An object {path, template}
-      # gets the template rendered with the marketplace's receipts as .Items
-      # (see the guide, "Templates for placement files"). A .json path is
-      # rewritten in canonical form, so only the values matter. This one is
-      # Codex's catalog format; the version carries the placed hash, so Codex
-      # sees a new version whenever a rendered file in the plugin changes.
-      manifest_files:
-        - .claude-plugin/marketplace.json
-        - path: .agents/plugins/marketplace.json
-          template: |
-            {
-              "name": {{ json .Placement.Marketplace.Name }},
-              "interface": {"displayName": {{ json .Placement.Marketplace.Owner.name }}},
-              "plugins": [
-                {{- range $i, $p := .Items }}{{ if $i }},{{ end }}
-                {
-                  "name": {{ json $p.Name }},
-                  "version": "{{ $p.Version }}+{{ slice $p.PlacedHash 7 19 }}",
-                  "source": {"source": "local", "path": "./plugins/{{ $p.Name }}"},
-                  "policy": {
-                    "installation": {{ if $p.Managed }}"INSTALLED_BY_DEFAULT"{{ else }}"AVAILABLE"{{ end }},
-                    "authentication": "ON_INSTALL"
-                  }
+    # A Claude Code marketplace: its catalog, Codex's catalog (the version
+    # carries the placed hash, so Codex sees a new version whenever a
+    # rendered file in the plugin changes), and the Claude Code drop-in that
+    # registers the marketplace and enables its managed plugins, keyed
+    # <plugin>@<name>, removed when no plugin is left. A relative path must
+    # not reach into item trees: its first segment differs from items_dir's.
+    files:
+      - path: .claude-plugin/marketplace.json
+        template: |
+          {
+            "name": {{ json .Placement.Vars.name }},
+            "owner": {{ json .Placement.Vars.owner }},
+            {{- if ne (index .Placement.Vars "renames") nil }}
+            "renames": {{ json .Placement.Vars.renames }},
+            {{- end }}
+            {{- if ne (index .Placement.Vars "allowCrossMarketplaceDependenciesOn") nil }}
+            "allowCrossMarketplaceDependenciesOn": {{ json .Placement.Vars.allowCrossMarketplaceDependenciesOn }},
+            {{- end }}
+            "plugins": [
+              {{- range $i, $p := .Items }}{{ if $i }},{{ end }}
+              {
+                "name": {{ json $p.Name }},
+                "source": {{ json (printf "./plugins/%s" $p.Name) }},
+                "version": {{ json $p.Version }},
+                "defaultEnabled": {{ $p.Managed }}
+              }
+              {{- end }}
+            ]
+          }
+      - path: .agents/plugins/marketplace.json
+        template: |
+          {
+            "name": {{ json .Placement.Vars.name }},
+            "interface": {"displayName": {{ json .Placement.Vars.owner.name }}},
+            "plugins": [
+              {{- range $i, $p := .Items }}{{ if $i }},{{ end }}
+              {
+                "name": {{ json $p.Name }},
+                "version": "{{ $p.Version }}+{{ slice $p.PlacedHash 7 19 }}",
+                "source": {"source": "local", "path": "./plugins/{{ $p.Name }}"},
+                "policy": {
+                  "installation": {{ if $p.Managed }}"INSTALLED_BY_DEFAULT"{{ else }}"AVAILABLE"{{ end }},
+                  "authentication": "ON_INSTALL"
                 }
-                {{- end }}
-              ]
+              }
+              {{- end }}
+            ]
+          }
+      - paths:
+          darwin: /Library/Application Support/ClaudeCode/managed-settings.d/50-acme.json
+          windows: ${ProgramData}\ClaudeCode\managed-settings.d\50-acme.json
+        template: |
+          {{- if .Items }}
+          {
+            "extraKnownMarketplaces": {
+              {{ json .Placement.Vars.name }}: {"source": {"source": "directory", "path": {{ json .Placement.Root }}}}
+            },
+            "enabledPlugins": {
+              {{- $first := true }}
+              {{- range .Items }}{{ if .Managed }}{{ if not $first }},{{ end }}{{ $first = false }}
+              {{ json (printf "%s@%s" .Name $.Placement.Vars.name) }}: true
+              {{- end }}{{ end }}
             }
-  claude-code-settings:
-    # settings: one file, never an item's target. Without a template it is
-    # rendered from the default template, the Claude Code drop-in that
-    # registers a marketplace and enables its managed plugins, keyed
-    # <plugin>@<marketplace name>; sofcat rewrites it with the marketplace
-    # and removes it when no plugin is left. The guide shows the default; to
-    # change it, copy it here as template. Machine scope only.
-    kind: settings
-    paths:
-      darwin: /Library/Application Support/ClaudeCode/managed-settings.d/50-acme.json
-      windows: ${ProgramData}\ClaudeCode\managed-settings.d\50-acme.json
-    works_in: [Claude Code]
-    # Only on kind settings: the placement this file registers. Without a
-    # template it must be a marketplace.
-    registers: acme-marketplace
-  claude-code-skills-index:
-    # With a template, a settings placement may register a directory
-    # placement too. The template is rendered with the registered
-    # placement's receipts as .Items after every change there; an empty
-    # output removes the file, so {{ if .Items }} decides whether it stays
-    # with nothing placed. fact and cond read the machine's facts.
-    kind: settings
-    paths:
-      darwin: /Library/Application Support/ClaudeCode/skills-index.json
-      windows: ${ProgramData}\ClaudeCode\skills-index.json
-    works_in: [Claude Code]
-    registers: claude-code-skills
-    template: |
-      {{- if .Items }}
-      {
-        "os": {{ json (fact "os") }},
-        "root": {{ json .Registers.Root }},
-        "skills": {{ json .Items }}
-      }
-      {{- end }}
+          }
+          {{- end }}

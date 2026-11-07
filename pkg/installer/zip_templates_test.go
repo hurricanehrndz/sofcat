@@ -193,7 +193,7 @@ func TestZipTreeUser(t *testing.T) {
 	dir := writeTree(t, map[string]string{"NOTE.md.tmpl": "user={{ .User }}"})
 	root := t.TempDir()
 	for scope, want := range map[string]string{placement.ScopeUser: "alice", placement.ScopeMachine: ""} {
-		tg := Target{Placement: "codex", Spec: placement.Spec{Kind: placement.KindDirectory, Scope: map[string]string{testOS(): scope}}, Known: true}
+		tg := Target{Placement: "codex", Spec: placement.Spec{Scope: map[string]string{testOS(): scope}}, Known: true}
 		outs, err := treeTemplates{z}.render(item, tg, root, dir, true)
 		if err != nil || len(outs) != 1 {
 			t.Fatalf("%s: render = %+v, %v", scope, outs, err)

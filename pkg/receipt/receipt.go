@@ -22,7 +22,7 @@ type Receipt struct {
 	Version   string `json:"version"`
 	Placement string `json:"placement"`
 	// Path is the tree's directory: <placement root>/<item>, or
-	// <placement root>/plugins/<item> in a marketplace.
+	// <placement root>/<items_dir>/<item>.
 	Path string `json:"path"`
 	// TreeHash is the catalog's hash of the archive's contents.
 	TreeHash string `json:"tree_hash"`

@@ -1,20 +1,13 @@
-# A settings template whose cond names an admin fact check_facts does not seed.
+# A file template whose cond names an admin fact check_facts does not seed.
 placements:
   market:
-    kind: marketplace
     paths:
       darwin: /Library/Application Support/Demo/marketplace
       windows: ${ProgramData}\Demo\marketplace
-    marketplace:
-      name: demo
-      owner: {name: Demo}
-      manifest_files:
-        - .claude-plugin/marketplace.json
-  codex-settings:
-    kind: settings
-    paths:
-      darwin: /Library/Application Support/Demo/codex.json
-      windows: ${ProgramData}\Demo\codex.json
-    registers: market
-    template: |
-      {"managed": {{ if cond "assigned_user == \"admin\"" }}true{{ else }}false{{ end }}}
+    items_dir: plugins
+    files:
+      - paths:
+          darwin: /Library/Application Support/Demo/codex.json
+          windows: ${ProgramData}\Demo\codex.json
+        template: |
+          {"managed": {{ if cond "assigned_user == \"admin\"" }}true{{ else }}false{{ end }}}

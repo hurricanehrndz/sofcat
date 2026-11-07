@@ -18,8 +18,8 @@ import (
 // codexTemplate is a Codex-format catalog, versions stamped with the placed
 // hash, as the Tapas fixture writes it.
 const codexTemplate = `{
-  "name": {{ json .Placement.Marketplace.Name }},
-  "interface": {"displayName": {{ json .Placement.Marketplace.Owner.name }}},
+  "name": {{ json .Placement.Vars.name }},
+  "interface": {"displayName": {{ json .Placement.Vars.owner.name }}},
   "plugins": [
     {{- range $i, $p := .Items }}{{ if $i }},{{ end }}
     {
@@ -33,16 +33,16 @@ const codexTemplate = `{
 }
 `
 
-// indexTemplate registers a directory placement: a JSON index of its items,
-// gone when there is none.
+// indexTemplate is a file of a directory placement: a JSON index of its
+// items, gone when there is none.
 const indexTemplate = `{{- if .Items }}
-{"os": {{ json (fact "os") }}, "root": {{ json .Registers.Root }}, "skills": {{ json .Items }}}
+{"os": {{ json (fact "os") }}, "root": {{ json .Placement.Root }}, "skills": {{ json .Items }}}
 {{- end }}
 `
 
-// templateTest is an installer with a marketplace "market" whose second
-// manifest file is templated, a directory "skills" registered by the
-// templated settings placement "index", and the built-in drop-in.
+// templateTest is an installer with a marketplace "market" holding the
+// Claude catalog and a Codex catalog, and a directory "skills" whose file is
+// an index at its own path.
 type templateTest struct {
 	z            *ZipInstaller
 	market, root string // the marketplace root and the skills root
@@ -56,28 +56,28 @@ func newTemplateTest(t *testing.T, index string) templateTest {
 	market := filepath.Join(roots, "market")
 	skills := filepath.Join(roots, "skills")
 	indexPath := filepath.Join(roots, "skills-index.json")
+	catalog, _ := claudeTemplates(t)
 	table, err := placement.Parse(fmt.Appendf(nil, `placements:
   skills:
-    kind: directory
     paths: {%[1]s: '%[2]s'}
+    files:
+      - paths: {%[1]s: '%[4]s'}
+        template: |
+%[6]s
   market:
-    kind: marketplace
     paths: {%[1]s: '%[3]s'}
-    marketplace:
+    items_dir: plugins
+    vars:
       name: acme
       owner: {name: Acme IT}
-      manifest_files:
-        - .claude-plugin/marketplace.json
-        - path: .agents/plugins/marketplace.json
-          template: |
+    files:
+      - path: .claude-plugin/marketplace.json
+        template: |
+%[7]s
+      - path: .agents/plugins/marketplace.json
+        template: |
 %[5]s
-  index:
-    kind: settings
-    paths: {%[1]s: '%[4]s'}
-    registers: skills
-    template: |
-%[6]s
-`, testOS(), skills, market, indexPath, indent(codexTemplate), indent(index)))
+`, testOS(), skills, market, indexPath, indent(codexTemplate), indent(index), indent(catalog)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,11 +100,11 @@ func newTemplateTest(t *testing.T, index string) templateTest {
 	}
 }
 
-// indent puts s in a YAML block scalar nested under manifest_files.
+// indent puts s in a YAML block scalar nested under files.
 func indent(s string) string {
 	lines := strings.Split(strings.TrimSuffix(s, "\n"), "\n")
 	for i, l := range lines {
-		lines[i] = "            " + l
+		lines[i] = "          " + l
 	}
 	return strings.Join(lines, "\n")
 }
@@ -129,10 +129,10 @@ func readJSON(t *testing.T, path string) map[string]any {
 	return v
 }
 
-// TestManifestTemplate: a templated manifest entry is rendered from the
-// same receipts as the built-in catalog, canonical, with the version stamped
-// from the placed hash and the policy from the managed flag; the built-in
-// file beside it is unchanged.
+// TestManifestTemplate: a second catalog is rendered from the same
+// receipts as the Claude catalog, canonical, with the version stamped
+// from the placed hash and the policy from the managed flag; the Claude
+// catalog beside it is unchanged.
 func TestManifestTemplate(t *testing.T) {
 	tt := newTemplateTest(t, indexTemplate)
 	wantOutcome(t, "install zeta", tt.install(t, "zeta", "market", true), OutcomeInstalled)
@@ -168,10 +168,10 @@ func TestManifestTemplate(t *testing.T) {
 	}
 }
 
-// TestSettingsTemplateRegistersDirectory: a templated settings placement
-// follows a directory placement's receipts, reads facts, is removed when the
-// template renders nothing, and is restored by the per-run pass.
-func TestSettingsTemplateRegistersDirectory(t *testing.T) {
+// TestDirectoryPlacementFile: a directory placement's file at its own path
+// follows the receipts, reads facts, is removed when the template renders
+// nothing, and is restored by the per-run pass.
+func TestDirectoryPlacementFile(t *testing.T) {
 	tt := newTemplateTest(t, indexTemplate)
 	if failed := tt.z.RegenerateAll(); len(failed) != 0 || exists(tt.index) {
 		t.Fatalf("before any tree: %+v, index exists %v", failed, exists(tt.index))
@@ -201,13 +201,13 @@ func TestSettingsTemplateRegistersDirectory(t *testing.T) {
 }
 
 // TestTemplateRenderFailureRefuses: a template that cannot render (a fact
-// this machine lacks, or a manifest that renders nothing) refuses the
-// placement with placement_refused; the tree is placed and nothing is
-// written for the file, nor for the built-in manifest beside it.
+// this machine lacks) refuses the placement with placement_refused; the tree
+// is placed and nothing is written for the file, nor for any file listed
+// before it.
 func TestTemplateRenderFailureRefuses(t *testing.T) {
 	tt := newTemplateTest(t, `{{ json (fact "assigned_user") }}`)
 	res := tt.install(t, "hello", "skills", true)
-	if res.Outcome != OutcomeRefused || res.Code() != report.CodePlacementRefused || !strings.Contains(res.Err.Error(), `"index"`) || !strings.Contains(res.Err.Error(), `fact "assigned_user"`) {
+	if res.Outcome != OutcomeRefused || res.Code() != report.CodePlacementRefused || !strings.Contains(res.Err.Error(), `"skills"`) || !strings.Contains(res.Err.Error(), `fact "assigned_user"`) {
 		t.Errorf("render failure = %s %q (%v)", res.Outcome, res.Code(), res.Err)
 	}
 	if !exists(filepath.Join(tt.root, "hello", "README.md")) || exists(tt.index) {
@@ -226,15 +226,15 @@ func TestTemplateRenderFailureRefuses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	empty.z.Table.Placements["market"].Marketplace.ManifestFiles[1].Template = "{{ if .Registers }}never{{ end }}"
+	empty.z.Table.Placements["market"].Files[1].Template = `{{ fact "assigned_user" }}`
 	res = empty.install(t, "two", "market", true)
-	if res.Outcome != OutcomeRefused || !strings.Contains(res.Err.Error(), "rendered nothing") {
-		t.Errorf("empty manifest = %s (%v)", res.Outcome, res.Err)
+	if res.Outcome != OutcomeRefused || !strings.Contains(res.Err.Error(), `fact "assigned_user"`) {
+		t.Errorf("failing second file = %s (%v)", res.Outcome, res.Err)
 	}
-	// The built-in file is listed first, yet the failing template kept it
+	// The Claude catalog is listed first, yet the failing template kept it
 	// from being rewritten with the new plugin.
 	if after, _ := os.ReadFile(builtinPath); string(after) != string(before) {
-		t.Errorf("built-in manifest rewritten before the refusal:\n%s", after)
+		t.Errorf("Claude catalog rewritten before the refusal:\n%s", after)
 	}
 }
 

@@ -26,8 +26,8 @@ hello-world:
   `tree_hash` the tree hash of its contents.
 - The zip's root holds the item's files directly, such as `SKILL.md`, with
   no `<item>/` folder around them. The tree is placed at
-  `<placement path>/<item_name>`, or `<placement path>/plugins/<item_name>`
-  in a marketplace.
+  `<placement path>/<item_name>`, or `<placement path>/<items_dir>/<item_name>`
+  when the placement sets `items_dir`.
 - A zip item needs no `check` block and no `uninstaller`.
 
 Do not write the `installer` block by hand. `makecatalogs zip-item` writes it.
@@ -100,110 +100,124 @@ removed.
 A zip item's installed status comes from its receipts and trees, never from a
 `check` block.
 
-### Marketplace and settings placements
+### Placement files
 
-A `marketplace` placement is a directory that Claude Code and Codex read as a
-local marketplace. Each plugin's tree goes to `<placement path>/plugins/<item_name>`,
-under the same rules as a `directory` placement: the check order above,
-receipts, the exclusive marker at the placement path, and the refusals.
+A placement may list `files`: files sofcat renders from the placement's
+receipts, such as a marketplace catalog or a settings drop-in that tells a
+harness where the trees are. After every change to the placement (an
+install, an upgrade, an adoption, a removal, or a receipt whose `managed`
+flag changed), sofcat rewrites them from that placement's receipts, not from
+the run, so a held or failed item keeps its entry. Every run also rewrites
+them, so a deleted or refused file is restored on the next run. The files
+have no receipts: sofcat owns them, and status and scope exit ignore them.
 
-After every change to a marketplace (an install, an upgrade, an adoption, a
-removal, or a receipt whose `managed` flag changed), sofcat rewrites its
-generated files from that placement's receipts, not from the run. A held or
-failed plugin keeps its entry. The files have no receipts: sofcat owns them,
-and status and scope exit ignore them. Every run also rewrites the generated
-files from the receipts, so a deleted or refused file is restored on the next
-run. Every generated file is rendered from a template (see Templates for
-placement files). Each string entry in the block's `manifest_files` (default
-`.claude-plugin/marketplace.json`), relative to the placement path, is
-rendered from the default catalog template, the Claude Code marketplace
-catalog; an object entry gets its own template instead. The default is:
+Each entry has a `template` (see Templates for placement files) and exactly
+one of:
 
+- `path`, relative to the placement root and slash-separated, written on
+  every OS the placement has a path on. It must not reach into an item tree:
+  with `items_dir` its first segment differs from `items_dir`'s, and without
+  it the path starts with a `.` segment, which no item name has.
+- `paths`, one path per OS, like the placement's own `paths`, for a file
+  outside the root. Its OSes must be among the placement's; an OS left out
+  gets no file.
+
+sofcat renders every entry with a path on this OS before it writes any, so a
+failed render leaves all of them as they were. It then writes each through a
+temporary file in the same directory, creating the directory if needed, or
+removes the file when the output is empty. Each path passes the same
+write-root and data and binary directory checks as a placement path. A
+refused path or a failed render fails the item that triggered the rewrite
+with `placement_refused`, and nothing is written; the per-run rewrite reports
+it under the placement's name, action `generate`.
+
+Files are written by the service only, so a placement with `files` or
+`items_dir` must be `machine` scope on every OS.
+
+#### A Claude Code marketplace
+
+Claude Code reads a local marketplace from a directory: a catalog at
+`.claude-plugin/marketplace.json` and one tree per plugin, here under
+`plugins/`. A managed-settings drop-in registers the marketplace and enables
+its managed plugins. This placement writes both; copy it and change the
+names and paths:
+
+```yaml
+placements:
+  acme-marketplace:
+    paths:
+      darwin: /Library/Application Support/Acme/marketplace
+      windows: ${ProgramData}\Acme\marketplace
+    works_in: [Claude Code]
+    exclusive: true
+    items_dir: plugins
+    vars:
+      name: acme
+      owner: {name: Acme IT}
+      # renames: {old-plugin: new-plugin}
+      # allowCrossMarketplaceDependenciesOn: [other-marketplace]
+    files:
+      - path: .claude-plugin/marketplace.json
+        template: |
+          {
+            "name": {{ json .Placement.Vars.name }},
+            "owner": {{ json .Placement.Vars.owner }},
+            {{- if ne (index .Placement.Vars "renames") nil }}
+            "renames": {{ json .Placement.Vars.renames }},
+            {{- end }}
+            {{- if ne (index .Placement.Vars "allowCrossMarketplaceDependenciesOn") nil }}
+            "allowCrossMarketplaceDependenciesOn": {{ json .Placement.Vars.allowCrossMarketplaceDependenciesOn }},
+            {{- end }}
+            "plugins": [
+              {{- range $i, $p := .Items }}{{ if $i }},{{ end }}
+              {
+                "name": {{ json $p.Name }},
+                "source": {{ json (printf "./plugins/%s" $p.Name) }},
+                "version": {{ json $p.Version }},
+                "defaultEnabled": {{ $p.Managed }}
+              }
+              {{- end }}
+            ]
+          }
+      - paths:
+          darwin: /Library/Application Support/ClaudeCode/managed-settings.d/50-acme.json
+          windows: ${ProgramData}\ClaudeCode\managed-settings.d\50-acme.json
+        template: |
+          {{- if .Items }}
+          {
+            "extraKnownMarketplaces": {
+              {{ json .Placement.Vars.name }}: {"source": {"source": "directory", "path": {{ json .Placement.Root }}}}
+            },
+            "enabledPlugins": {
+              {{- $first := true }}
+              {{- range .Items }}{{ if .Managed }}{{ if not $first }},{{ end }}{{ $first = false }}
+              {{ json (printf "%s@%s" .Name $.Placement.Vars.name) }}: true
+              {{- end }}{{ end }}
+            }
+          }
+          {{- end }}
 ```
-{
-  "name": {{ json .Placement.Marketplace.Name }},
-  "owner": {{ json .Placement.Marketplace.Owner }},
-  {{- if ne .Placement.Marketplace.Renames nil }}
-  "renames": {{ json .Placement.Marketplace.Renames }},
-  {{- end }}
-  {{- if ne .Placement.Marketplace.AllowCrossMarketplaceDependenciesOn nil }}
-  "allowCrossMarketplaceDependenciesOn": {{ json .Placement.Marketplace.AllowCrossMarketplaceDependenciesOn }},
-  {{- end }}
-  "plugins": [
-    {{- range $i, $p := .Items }}{{ if $i }},{{ end }}
-    {
-      "name": {{ json $p.Name }},
-      "source": {{ json (printf "./plugins/%s" $p.Name) }},
-      "version": {{ json $p.Version }},
-      "defaultEnabled": {{ $p.Managed }}
-    }
-    {{- end }}
-  ]
-}
-```
 
-`owner`, `renames` and `allowCrossMarketplaceDependenciesOn` are copied from
-the `marketplace` block; the last two are left out when the block does not
-set them. The output is canonical JSON, so map keys come out sorted. Plugins
-are sorted by name. `version` is the catalog version the receipt records.
-Bump it when a plugin's files change, because Codex may not reload them
-otherwise. `defaultEnabled` is the receipt's `managed` flag: true when a
-manifest lists the item in `managed_installs`. A run updates the flag only
-for items it decides. An item held by an unknown `conditional_items`
-condition keeps its recorded flag. With no plugin left, the manifest still
-lists `"plugins": []`.
+`vars` is free data the templates read as `.Placement.Vars`. The catalog
+copies `owner`, and `renames` and `allowCrossMarketplaceDependenciesOn` when
+`vars` sets them. The output is canonical JSON, so map keys come out sorted.
+Plugins are sorted by name. `version` is the catalog version the receipt
+records. Bump it when a plugin's files change, because a harness may not
+reload them otherwise. `defaultEnabled` is the receipt's `managed` flag:
+true when a manifest lists the item in `managed_installs`. A run updates the
+flag only for items it decides. An item held by an unknown
+`conditional_items` condition keeps its recorded flag. With no plugin left,
+the catalog still lists `"plugins": []`.
 
-A `settings` placement is one JSON file, never an item's target. A variant
-that names one fails with `placement_refused`. Whenever sofcat regenerates the
-placement that the file `registers`, it renders the file from the settings
-placement's own `template`, or without one from the default settings template,
-the Claude Code drop-in that registers a marketplace, and rewrites it through
-a temporary file in the same directory, creating the directory if needed. The
-default is:
-
-```
-{{- if .Items }}
-{
-  "extraKnownMarketplaces": {
-    {{ json .Registers.Marketplace.Name }}: {"source": {"source": "directory", "path": {{ json .Registers.Root }}}}
-  },
-  "enabledPlugins": {
-    {{- $first := true }}
-    {{- range .Items }}{{ if .Managed }}{{ if not $first }},{{ end }}{{ $first = false }}
-    {{ json (printf "%s@%s" .Name $.Registers.Marketplace.Name) }}: true
-    {{- end }}{{ end }}
-  }
-}
-{{- end }}
-```
-
-`path` is the marketplace's resolved path. `enabledPlugins` lists only the
-managed plugins, keyed `<plugin>@<marketplace name>`. When the marketplace
-holds no plugin, the template renders nothing and sofcat removes the file.
-The file's path passes the same write-root and data and binary directory
-checks as a placement path. A refused path fails the item that triggered the
-rewrite with `placement_refused`; the per-run rewrite reports it under the
-marketplace placement's name, action `generate`.
-A `settings` placement with a `template` writes that instead, and may
-register a `directory` placement; without one it must register a
-marketplace, which the default reads. See Templates for placement files.
-Generated files are written by the service only: marketplace and settings
-placements cannot be `user` scope.
-
-To change either file, copy the default into `placements.yaml`, as a
-`manifest_files` entry `{path, template}` or as the `settings` placement's
-`template`, and edit it there. sofcat then renders the copy and nothing
-else, so the repository owns the file's shape. A file rendered from either
-default must have a path ending in `.json`, because only a `.json` render is
-canonical and any other path would carry the template's whitespace; a
-template of your own may name any path.
+In the drop-in, `path` is `.Placement.Root`, the marketplace's resolved
+path. `enabledPlugins` lists only the managed plugins, keyed
+`<plugin>@<name>`. When the marketplace holds no plugin, the template
+renders nothing and sofcat removes the file.
 
 ### Templates for placement files
 
-Every file a placement generates is rendered from a template in
-`placements.yaml`: a `manifest_files` entry written as `{path, template}`, a
-`template` on a `settings` placement, or the two defaults above where none
-is given. Each is rendered from the placement's receipts after every change
+Every file a placement lists is rendered from its template in
+`placements.yaml`. Each is rendered from the placement's receipts after every change
 there and once per run, and removed when the output is empty. Templates are
 Go [`text/template`](https://pkg.go.dev/text/template) with
 `missingkey=error`, so a field the context lacks fails the render instead of
@@ -216,10 +230,9 @@ The context is:
 | Field | Meaning |
 |---|---|
 | `.OS` | `windows` or `darwin`. |
-| `.Scope` | `machine` or `user` (today always `machine`: generated files are written by the service). |
-| `.Placement` | The placement the file belongs to: `.Name`, `.Root` (the expanded placement root; for a `settings` placement, the file's own path), `.Kind`, and for a marketplace `.Marketplace` with `.Name`, `.Owner`, `.Renames` and `.AllowCrossMarketplaceDependenciesOn` as written in `placements.yaml` (`.Owner.name` reads a key of the owner map). |
-| `.Registers` | For a `settings` placement, the registered placement: `.Name`, `.Root`, `.Kind` and, when it is a marketplace, `.Marketplace` as under `.Placement` (nil otherwise). Absent in a manifest template. |
-| `.Items` | The receipts of the placement the file describes (the registered one for a `settings` placement), sorted by item: `.Name`, `.Version`, `.Managed`, `.Path`, `.TreeHash`, `.PlacedHash`. `{{ json .Items }}` emits them with the receipt's field names (`name`, `version`, `managed`, `path`, `tree_hash`, `placed_hash`). |
+| `.Scope` | `machine` or `user` (today always `machine`: files are written by the service). |
+| `.Placement` | The placement the file belongs to: `.Name`, `.Root` (the expanded placement root, whichever path the file has) and `.Vars`, the placement's `vars` as written in `placements.yaml` (`.Vars.owner.name` reads a key of a map; `index .Placement.Vars "key"` reads a key that may be missing). |
+| `.Items` | The receipts of the placement, sorted by item: `.Name`, `.Version`, `.Managed`, `.Path`, `.TreeHash`, `.PlacedHash`. `{{ json .Items }}` emits them with the receipt's field names (`name`, `version`, `managed`, `path`, `tree_hash`, `placed_hash`). |
 | `.User` | Empty in machine scope. |
 
 `.PlacedHash` is the hash of the tree as placed, rendered files included, so
@@ -231,7 +244,7 @@ Facts are reached through functions, not a field. Three functions join
 variables and the rest):
 
 - `json v` encodes any value as a JSON literal: `{{ json .Items }}`,
-  `{{ json (fact "ipv4_address") }}`, `{{ json .Placement.Marketplace.Owner }}`.
+  `{{ json (fact "ipv4_address") }}`, `{{ json .Placement.Vars.owner }}`.
 - `fact "name"` returns that fact's value, of whatever type the fact has:
   a string, a number, a bool, a list, or the JSON value an admin script
   printed. `{{ fact "os" }}` prints `windows`; `{{ if fact "laptop" }}`
@@ -268,43 +281,38 @@ value and sofcat writes it in canonical form: object keys sorted, two-space
 indent, numbers kept as written, a trailing newline and no HTML escaping, so
 the bytes do not depend on the template's whitespace. Any other path is
 written as rendered. An output that is empty or only whitespace counts as
-empty: a `settings` placement then removes its file, and a manifest entry
-fails, since no harness reads an empty catalog.
+empty, and sofcat removes the file.
 
 #### A Codex-format catalog
 
 Codex reads `.agents/plugins/marketplace.json` from a local marketplace in
-its own format. This entry writes it beside the default Claude catalog,
+its own format. This entry writes it beside the Claude catalog above,
 with each plugin's version stamped from its placed hash so Codex reloads a
 plugin whose rendered files changed (the fixture in
 `test/manual/fixtures/tapas/placements.yaml` and `examples/placements.yaml`
 carry the same template):
 
 ```yaml
-    marketplace:
-      name: acme
-      owner: {name: Acme IT}
-      manifest_files:
-        - .claude-plugin/marketplace.json
-        - path: .agents/plugins/marketplace.json
-          template: |
-            {
-              "name": {{ json .Placement.Marketplace.Name }},
-              "interface": {"displayName": {{ json .Placement.Marketplace.Owner.name }}},
-              "plugins": [
-                {{- range $i, $p := .Items }}{{ if $i }},{{ end }}
-                {
-                  "name": {{ json $p.Name }},
-                  "version": "{{ $p.Version }}+{{ slice $p.PlacedHash 7 19 }}",
-                  "source": {"source": "local", "path": "./plugins/{{ $p.Name }}"},
-                  "policy": {
-                    "installation": {{ if $p.Managed }}"INSTALLED_BY_DEFAULT"{{ else }}"AVAILABLE"{{ end }},
-                    "authentication": "ON_INSTALL"
-                  }
+    files:
+      - path: .agents/plugins/marketplace.json
+        template: |
+          {
+            "name": {{ json .Placement.Vars.name }},
+            "interface": {"displayName": {{ json .Placement.Vars.owner.name }}},
+            "plugins": [
+              {{- range $i, $p := .Items }}{{ if $i }},{{ end }}
+              {
+                "name": {{ json $p.Name }},
+                "version": "{{ $p.Version }}+{{ slice $p.PlacedHash 7 19 }}",
+                "source": {"source": "local", "path": "./plugins/{{ $p.Name }}"},
+                "policy": {
+                  "installation": {{ if $p.Managed }}"INSTALLED_BY_DEFAULT"{{ else }}"AVAILABLE"{{ end }},
+                  "authentication": "ON_INSTALL"
                 }
-                {{- end }}
-              ]
-            }
+              }
+              {{- end }}
+            ]
+          }
 ```
 
 `slice $p.PlacedHash 7 19` takes twelve hex digits after the `sha256:`
@@ -336,28 +344,29 @@ prefix. With two plugins placed, one managed, the file comes out as:
 `codex plugin marketplace add <placement root>` then lists the plugins with
 those policies and versions.
 
-#### Registering a directory placement
+#### An index of a directory placement
 
-With a `template`, a `settings` placement may register a `directory`
-placement, not only a marketplace. The template decides with
+A file can describe any placement. The template decides with
 `{{ if .Items }}` whether the file persists with nothing placed; here the
 file is an index of the skills in `claude-code-skills`, with the OS fact:
 
 ```yaml
-  claude-code-skills-index:
-    kind: settings
+  claude-code-skills:
     paths:
-      darwin: /Library/Application Support/ClaudeCode/skills-index.json
-      windows: ${ProgramData}\ClaudeCode\skills-index.json
-    registers: claude-code-skills
-    template: |
-      {{- if .Items }}
-      {
-        "os": {{ json (fact "os") }},
-        "root": {{ json .Registers.Root }},
-        "skills": {{ json .Items }}
-      }
-      {{- end }}
+      darwin: /Library/Application Support/ClaudeCode/.claude/skills
+      windows: ${ProgramData}\ClaudeCode\.claude\skills
+    files:
+      - paths:
+          darwin: /Library/Application Support/ClaudeCode/skills-index.json
+          windows: ${ProgramData}\ClaudeCode\skills-index.json
+        template: |
+          {{- if .Items }}
+          {
+            "os": {{ json (fact "os") }},
+            "root": {{ json .Placement.Root }},
+            "skills": {{ json .Items }}
+          }
+          {{- end }}
 ```
 
 With one skill placed the file reads
@@ -409,11 +418,11 @@ The context is:
 |---|---|
 | `.OS` | `windows` or `darwin`. |
 | `.Scope` | `machine` or `user`. |
-| `.Placement` | The tree's placement: `.Name`, `.Root` (the expanded placement root), `.Kind`, and for a marketplace `.Marketplace`, as for placement files. |
+| `.Placement` | The tree's placement: `.Name`, `.Root` (the expanded placement root) and `.Vars`, as for placement files. |
 | `.Item` | The item whose tree this is: `.Name`, `.Version`, `.Managed` (true when a manifest lists it in `managed_installs`), `.Path` (the tree's directory) and `.TreeHash` (the catalog's hash). There is no `.PlacedHash`: it is the hash of the output. |
 | `.User` | In user scope, the login name of the account the helper runs as, without domain (`alice`, not `CORP\alice` or `alice@corp.example.com`); empty in machine scope. |
 
-`.Items` and `.Registers` are absent. Facts come through `fact` and `cond`,
+`.Items` is absent. Facts come through `fact` and `cond`,
 with the run's facts: the service renders machine-scope trees with the facts
 it collected for the run, and hands the helper the same map with the
 user-placement plan, so a user-scope tree renders with the same values and
@@ -705,7 +714,6 @@ makecatalogs zip-item --placements examples/placements.yaml \
 ```yaml
 placements:
   codex-skills:
-    kind: directory
     paths:
       darwin: /etc/codex/skills
       windows: ${USERPROFILE}\.agents\skills
@@ -716,15 +724,14 @@ placements:
 | Field | Meaning |
 |---|---|
 | key | The placement name. Variants and rendered trees use it. |
-| `kind` | `directory`, `marketplace` or `settings`. |
-| `paths` | The placement root, keyed by `darwin` and `windows`. |
-| `scope` | `machine` or `user`, keyed like `paths`. An OS left out is `machine`. `darwin: user` is not supported, and `user` only on kind `directory`. |
+| `paths` | The placement root, keyed by `darwin` and `windows`. Every placement is a directory: one tree per item at `<root>/<item_name>`. |
+| `scope` | `machine` or `user`, keyed like `paths`. An OS left out is `machine`. `darwin: user` is not supported, and `user` not with `items_dir` or `files`. |
 | `works_in` | Harness display names, such as `[Claude Code]`. The storefront shows "Works in: …" for an item (see Storefront labels). |
 | `action_labels` | Optional storefront label overrides for the placement's items. Keys: `install`, `installing`, `installed`, `remove`, `removing`, `update`, `cancel`, `pending_install`, `pending_remove`. |
 | `exclusive` | Optional. When true, sofcat does not write into an existing, non-empty root it did not create. |
-| `marketplace` | `marketplace` kind only, and required there: `name`, `owner`, optional `renames`, `allowCrossMarketplaceDependenciesOn` and `manifest_files` (default `[.claude-plugin/marketplace.json]`). `owner`, `renames` and `allowCrossMarketplaceDependenciesOn` are copied into the manifest unchanged. A `manifest_files` entry is a path ending in `.json`, rendered from the default Claude Code catalog template, or `{path, template}`, rendered from that template (Templates for placement files). |
-| `registers` | `settings` kind only, and required there: the placement the file registers. Without `template` it must be a marketplace, the file is rendered from the default Claude Code drop-in template and its `paths` must end in `.json`; with `template` it may be a `directory` or `marketplace` placement. |
-| `template` | `settings` kind only: the template rendered as the file in place of the default, with the registered placement's receipts as `.Items`. An empty output removes the file. |
+| `items_dir` | Optional. Item trees go to `<root>/<items_dir>/<item_name>` instead. A clean relative path, slash-separated, whose first segment does not start with `.`. |
+| `vars` | Optional. Any mapping, read by the placement's templates as `.Placement.Vars`. |
+| `files` | Optional. Files rendered from the placement's receipts, each a `template` with a relative `path` or per-OS `paths` (Placement files). |
 | `check_facts` | Top level, beside `placements`: facts for `makecatalogs -check` over the built-in samples, for the admin facts templates read. |
 
 Windows paths may use `${ProgramFiles}` and `${ProgramData}`. A path may use
@@ -745,10 +752,9 @@ Only placements with a variant for the machine's OS count, for labels and for
 # placements.yaml
 placements:
   tapas-marketplace:
-    kind: marketplace
     works_in: [Claude Code]
     action_labels: {install: Make available, remove: Withdraw}
-    # paths and marketplace block as above
+    # paths, items_dir, vars and files as above
 
 # packages-info/tapas-optional-plugin.yaml
 custom_action_labels: {install: Enable for me}
@@ -774,15 +780,13 @@ checks every zip item. It reports:
 - a variant placement that `placements.yaml` does not define
 - a zip item in a repository with no `placements.yaml`
 - a `custom_action_labels` key other than the nine above, on any item
-- a placement template (a `manifest_files` entry, a `settings` placement's
-  `template`, or the default where none is given) that fails to render: for
-  each OS the placement has a path on,
-  the template is rendered with `.Items` built from the catalog items that
-  target the placement, managed both ways, against a sample of every
+- a `files` template that fails to render: for each OS the entry has a
+  path on, the template is rendered with `.Items` built from the catalog
+  items that target the placement, managed both ways, against a sample of every
   built-in fact of that OS overlaid with `check_facts` (see Templates for
   placement files). A missing fact, a `cond` naming a fact no sample
-  provides, a `cond` calling `now()`, output that is not JSON on a `.json`
-  path, and `registers` naming a `settings` placement all fail.
+  provides, a `cond` calling `now()`, and output that is not JSON on a
+  `.json` path all fail.
 - a tree template in a zip that fails to render: every zip a zip item names
   that the repository holds is opened, and each `.tmpl` entry is rendered
   per variant as `zip-item` renders it (Tree templates, Validation); a zip

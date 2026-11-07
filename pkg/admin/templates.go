@@ -31,11 +31,10 @@ func checkFacts(table placement.Table, goos string) conditions.Facts {
 	return facts
 }
 
-// checkPlacementTemplates renders every placement file template in the
-// table, the defaults included, for each OS the placement has a path on,
-// with .Items built from the catalog items that target the placement,
-// managed both ways. A template that fails is a problem; a repository
-// without a usable table has none to check.
+// checkPlacementTemplates renders every files entry in the table for each
+// OS it has a path on, with .Items built from the catalog items that target
+// the placement, managed both ways. A template that fails is a problem; a
+// repository without a usable table has none to check.
 func checkPlacementTemplates(h repoPlacements, catalogs map[string]map[string]catalog.Item) []string {
 	if !h.present || h.problem != "" {
 		return nil
@@ -49,18 +48,18 @@ func checkPlacementTemplates(h repoPlacements, catalogs map[string]map[string]ca
 				continue
 			}
 			facts := checkFacts(h.table, goos)
-			switch {
-			case p.Kind == placement.KindMarketplace && p.Marketplace != nil:
-				ctx := render.FileContext{OS: goos, Scope: p.ScopeFor(goos), Placement: p.View(name, root)}
-				items := targetingItems(catalogs, name, p, goos, root)
-				for _, f := range p.Marketplace.Manifests() {
-					for _, err := range renderBothWays(f, ctx, items, facts) {
-						problems = append(problems, fmt.Sprintf("%s: placement %q: manifest_files %q on %s: %v", h.path, name, f.Path, goos, err))
+			ctx := render.FileContext{OS: goos, Scope: p.ScopeFor(goos), Placement: p.View(name, root)}
+			items := targetingItems(catalogs, name, p, goos, root)
+			for i, f := range p.Files {
+				out := f.Path
+				if out == "" {
+					if out, ok = f.Paths[goos]; !ok {
+						continue
 					}
 				}
-			case p.Kind == placement.KindSettings:
-				for _, err := range h.renderSettings(name, p, goos, root, facts, catalogs) {
-					problems = append(problems, fmt.Sprintf("%s: placement %q: template on %s: %v", h.path, name, goos, err))
+				field := fmt.Sprintf("files[%d]", i)
+				for _, err := range renderBothWays(field, f.Template, out, ctx, items, facts) {
+					problems = append(problems, fmt.Sprintf("%s: placement %q: %s %q on %s: %v", h.path, name, field, out, goos, err))
 				}
 			}
 		}
@@ -68,30 +67,10 @@ func checkPlacementTemplates(h repoPlacements, catalogs map[string]map[string]ca
 	return problems
 }
 
-// renderSettings renders settings placement name's template on goos with the
-// registered placement's items.
-func (h repoPlacements) renderSettings(name string, p placement.Spec, goos, root string, facts conditions.Facts, catalogs map[string]map[string]catalog.Item) []error {
-	regSpec := h.table.Placements[p.Registers]
-	regRoot, _ := regSpec.Path(goos)
-	ctx := render.FileContext{
-		OS:        goos,
-		Scope:     p.ScopeFor(goos),
-		Placement: p.View(name, root),
-		Registers: regSpec.Registered(p.Registers, regRoot),
-	}
-	items := targetingItems(catalogs, p.Registers, regSpec, goos, regRoot)
-	return renderBothWays(placement.ManifestFile{Path: root, Template: p.SettingsTemplate()}, ctx, items, facts)
-}
-
-// renderBothWays renders f's template, named after f.Path (a settings
-// template is named "template"), for an output at f.Path, with items all
-// managed and all optional, and returns the distinct errors.
-func renderBothWays(f placement.ManifestFile, ctx render.FileContext, items []render.Item, facts conditions.Facts) []error {
-	name := f.Path
-	if ctx.Registers != nil {
-		name = "template"
-	}
-	t, err := render.Parse(name, f.Template)
+// renderBothWays renders template source, named name, for an output at out,
+// with items all managed and all optional, and returns the distinct errors.
+func renderBothWays(name, source, out string, ctx render.FileContext, items []render.Item, facts conditions.Facts) []error {
+	t, err := render.Parse(name, source)
 	if err != nil {
 		return []error{err}
 	}
@@ -102,7 +81,7 @@ func renderBothWays(f placement.ManifestFile, ctx render.FileContext, items []re
 		for i := range ctx.Items {
 			ctx.Items[i].Managed = managed
 		}
-		if _, _, err := t.Render(ctx, facts, f.Path); err != nil && !seen[err.Error()] {
+		if _, _, err := t.Render(ctx, facts, out); err != nil && !seen[err.Error()] {
 			seen[err.Error()] = true
 			errs = append(errs, fmt.Errorf("managed %v: %w", managed, err))
 		}
@@ -264,13 +243,10 @@ func zipTemplates(path string) (map[string]string, error) {
 	return sources, nil
 }
 
-// treePath is item's tree relative to its placement root: plugins/<item> in
-// a marketplace, <item> elsewhere.
+// treePath is item's tree relative to its placement root: <item>, or
+// <items_dir>/<item>.
 func treePath(p placement.Spec, item string) string {
-	if p.Kind == placement.KindMarketplace {
-		return path.Join("plugins", item)
-	}
-	return item
+	return path.Join(p.ItemsDir, item)
 }
 
 // placedPath joins root and tree with goos's separator, as a receipt on

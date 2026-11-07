@@ -240,9 +240,9 @@ receipt_times() {
 	done
 }
 
-# assert_skills_index SKILL... checks the templated registration of
-# claude-skills (tapas-skills-index in placements.yaml): JSON with the os
-# fact, the registered root and exactly the skills placed there.
+# assert_skills_index SKILL... checks the templated index of
+# claude-skills (its files entry in placements.yaml): JSON with the os
+# fact, the placement root and exactly the skills placed there.
 assert_skills_index() {
 	local want
 	[ -f "$SKILLS_INDEX" ] || fail "$SKILLS_INDEX is missing"

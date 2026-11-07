@@ -268,11 +268,10 @@ func TestCheckFlagsBadConditionalItems(t *testing.T) {
 // what is wrong.
 func TestCheckRejectsBadTemplates(t *testing.T) {
 	for name, want := range map[string][]string{
-		"fact-missing":       {`placement "market"`, `.agents/plugins/marketplace.json`, `fact "missing": no such fact`},
-		"cond-unseeded":      {`placement "codex-settings"`, `template on darwin`, `no fact named assigned_user`},
-		"cond-now":           {`placement "market"`, `.agents/plugins/marketplace.json`, `calls now()`},
-		"bad-json":           {`placement "market"`, `.agents/plugins/marketplace.json`, `not JSON`},
-		"registers-settings": {`placement "index"`, `registers "drop-in", which is a settings placement`},
+		"fact-missing":  {`placement "market"`, `.agents/plugins/marketplace.json`, `fact "missing": no such fact`},
+		"cond-unseeded": {`placement "market"`, `files[0] "/Library/Application Support/Demo/codex.json" on darwin`, `no fact named assigned_user`},
+		"cond-now":      {`placement "market"`, `.agents/plugins/marketplace.json`, `calls now()`},
+		"bad-json":      {`placement "market"`, `.agents/plugins/marketplace.json`, `not JSON`},
 	} {
 		t.Run(name, func(t *testing.T) {
 			var stdout, stderr bytes.Buffer

@@ -33,7 +33,7 @@ func TestListZipItemStatus(t *testing.T) {
 	cfg := config.Configuration{AppDataPath: appData, CachePath: t.TempDir(), Catalogs: []string{"production"}}
 	root := filepath.Join(roots, "skills")
 	table := placement.Table{
-		Placements: map[string]placement.Spec{"skills": {Kind: placement.KindDirectory, Paths: map[string]string{goos: root}}},
+		Placements: map[string]placement.Spec{"skills": {Paths: map[string]string{goos: root}}},
 		Order:      []string{"skills"},
 	}
 
@@ -129,8 +129,8 @@ func TestListStorefrontFields(t *testing.T) {
 	const goos = placement.Windows
 	table := placement.Table{
 		Placements: map[string]placement.Spec{
-			"skills": {Kind: placement.KindDirectory, WorksIn: []string{"Claude Code"}, ActionLabels: map[string]string{"install": "Add", "installed": "Added"}},
-			"codex":  {Kind: placement.KindDirectory, WorksIn: []string{"Codex", "Claude Code"}, ActionLabels: map[string]string{"install": "Place"}},
+			"skills": {WorksIn: []string{"Claude Code"}, ActionLabels: map[string]string{"install": "Add", "installed": "Added"}},
+			"codex":  {WorksIn: []string{"Codex", "Claude Code"}, ActionLabels: map[string]string{"install": "Place"}},
 		},
 		Order: []string{"skills", "codex"},
 	}

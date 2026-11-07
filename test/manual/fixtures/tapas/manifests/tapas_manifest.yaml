@@ -20,7 +20,7 @@ optional_installs:
   - tapas-desktop-optional
 # Placed by the startup run like a managed install, but a default the smokes'
 # last step can deselect: a required item is never removable, and emptying
-# exclusive-skills is what removes tapas-exclusive-index.
+# exclusive-skills is what removes its exclusive-index.json.
 default_installs:
   - tapas-exclusive-skill
 conditional_items:

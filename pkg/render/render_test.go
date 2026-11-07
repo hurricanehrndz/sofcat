@@ -41,21 +41,21 @@ func mustRender(t *testing.T, source string, data any, path string) string {
 // index or test it; a fact the machine lacks fails the render naming it.
 func TestFact(t *testing.T) {
 	for source, want := range map[string]string{
-		`{{ fact "os" }}`:                         "windows",
-		`{{ fact "os_build" }}`:                   "22631",
-		`{{ if fact "laptop" }}yes{{ end }}`:      "yes",
-		`{{ index (fact "ipv4_address") 0 }}`:     "10.1.2.3",
-		`{{ (fact "site").name }}`:                "east",
-		`{{ json (fact "site") }}`:                `{"floor":3,"name":"east"}`,
-		`{{ json (fact "ipv4_address") }}`:        `["10.1.2.3"]`,
-		`{{ json (fact "laptop") }}`:              "true",
-		`{{ json "<a&b>" }}`:                      `"<a&b>"`,
-		`{{ json .Items }}`:                       `[{"name":"a","version":"1","managed":true,"path":"p","tree_hash":"sha256:t","placed_hash":"sha256:p"}]`,
-		`{{ .Placement.Marketplace.Name }}`:       "acme",
-		`{{ json .Placement.Marketplace.Owner }}`: `{"1":"x","name":"Acme"}`,
+		`{{ fact "os" }}`:                     "windows",
+		`{{ fact "os_build" }}`:               "22631",
+		`{{ if fact "laptop" }}yes{{ end }}`:  "yes",
+		`{{ index (fact "ipv4_address") 0 }}`: "10.1.2.3",
+		`{{ (fact "site").name }}`:            "east",
+		`{{ json (fact "site") }}`:            `{"floor":3,"name":"east"}`,
+		`{{ json (fact "ipv4_address") }}`:    `["10.1.2.3"]`,
+		`{{ json (fact "laptop") }}`:          "true",
+		`{{ json "<a&b>" }}`:                  `"<a&b>"`,
+		`{{ json .Items }}`:                   `[{"name":"a","version":"1","managed":true,"path":"p","tree_hash":"sha256:t","placed_hash":"sha256:p"}]`,
+		`{{ .Placement.Vars.name }}`:          "acme",
+		`{{ json .Placement.Vars.owner }}`:    `{"1":"x","name":"Acme"}`,
 	} {
 		ctx := FileContext{
-			Placement: Placement{Name: "m", Marketplace: &Marketplace{Name: "acme", Owner: map[any]any{"name": "Acme", 1: "x"}}},
+			Placement: Placement{Name: "m", Vars: JSONValue(map[string]any{"name": "acme", "owner": map[any]any{"name": "Acme", 1: "x"}})},
 			Items:     []Item{{Name: "a", Version: "1", Managed: true, Path: "p", TreeHash: "sha256:t", PlacedHash: "sha256:p"}},
 		}
 		if got := mustRender(t, source, ctx, "out.txt"); got != want {

@@ -121,8 +121,8 @@ const (
 // OutcomeRefused and OutcomeFailed.
 type Result struct {
 	Placement string
-	// Path is the tree's directory, <placement root>/<item> (in a
-	// marketplace, <placement root>/plugins/<item>), when known.
+	// Path is the tree's directory, <placement root>/<item> (with
+	// items_dir, <placement root>/<items_dir>/<item>), when known.
 	Path    string
 	Outcome Outcome
 	Err     error
@@ -212,10 +212,6 @@ func (z *ZipInstaller) root(t Target) (string, error) {
 	if !t.Known {
 		return "", fmt.Errorf("%w: placement %q is not in placements.yaml", placement.ErrRefused, t.Placement)
 	}
-	if t.Spec.Kind != placement.KindDirectory && t.Spec.Kind != placement.KindMarketplace {
-		// A settings placement is one generated file, never an item's target.
-		return "", fmt.Errorf("%w: placement %q is kind %s, which takes no item trees", placement.ErrRefused, t.Placement, t.Spec.Kind)
-	}
 	return z.resolve(t.Placement, t.Spec)
 }
 
@@ -233,12 +229,9 @@ func (z *ZipInstaller) resolve(name string, spec placement.Spec) (string, error)
 }
 
 // treeIn is item's tree under its placement root: <root>/<item>, or
-// <root>/plugins/<item> in a marketplace.
+// <root>/<items_dir>/<item>.
 func treeIn(spec placement.Spec, root, item string) string {
-	if spec.Kind == placement.KindMarketplace {
-		return filepath.Join(root, pluginsDir, item)
-	}
-	return filepath.Join(root, item)
+	return filepath.Join(root, filepath.FromSlash(spec.ItemsDir), item)
 }
 
 // checkItemName refuses an item name that cannot be one directory under a
@@ -435,10 +428,9 @@ func (z *ZipInstaller) Fetch(ctx context.Context, t Target, progress download.Pr
 // archive is read only when a tree is written: an adopted tree is rendered
 // in place from the templates it holds, without the archive.
 //
-// After it changes a marketplace placement (an install, an upgrade, or a
-// receipt adopted or refreshed, as when only the managed flag changed) it
-// regenerates the marketplace's generated files; a failure there fails the
-// result.
+// After it changes a placement (an install, an upgrade, or a receipt
+// adopted or refreshed, as when only the managed flag changed) it
+// regenerates the placement's files; a failure there fails the result.
 func (z *ZipInstaller) Apply(item catalog.Item, t Target, archive string) Result {
 	f := z.inspect(item, t)
 	res := f.Result
@@ -464,7 +456,7 @@ func (z *ZipInstaller) Apply(item catalog.Item, t Target, archive string) Result
 	if err := z.prepareRoot(t, f.root); err != nil {
 		return fail(t, res.Path, err)
 	}
-	// The tree's directory: the root, or a marketplace's plugins directory.
+	// The tree's directory: the root, or its items_dir.
 	parent := filepath.Dir(res.Path)
 	if err := os.MkdirAll(parent, 0o755); err != nil {
 		return fail(t, res.Path, err)
@@ -548,7 +540,7 @@ func (z *ZipInstaller) renderTree(item catalog.Item, t Target, root, dir string)
 	return placed, records(outs), undo, nil
 }
 
-// regenerated regenerates the generated files of t's placement after res
+// regenerated regenerates the files of t's placement after res
 // changed it, failing res when that fails.
 func (z *ZipInstaller) regenerated(t Target, res Result) Result {
 	if err := z.regenerate(t.Placement); err != nil {
@@ -639,8 +631,8 @@ func (z *ZipInstaller) receiptManaged(item, placement string) (bool, error) {
 
 // Remove removes the tree rc records, under R15: only when the tree still
 // matches the receipt's placed_hash. A tree already gone just drops the
-// receipt. Like Apply, removing a marketplace plugin regenerates the
-// generated files.
+// receipt. Like Apply, removing a tree regenerates the placement's
+// files.
 func (z *ZipInstaller) Remove(rc receipt.Receipt) Result {
 	t := Target{Placement: rc.Placement}
 	res := Result{Placement: rc.Placement, Path: rc.Path}

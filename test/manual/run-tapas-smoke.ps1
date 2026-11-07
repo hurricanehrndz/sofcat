@@ -317,9 +317,9 @@ function Assert-LoggedRejection {
     return $hits[0].Line
 }
 
-# Assert-SkillsIndex checks the templated registration of claude-skills
-# (tapas-skills-index in placements.yaml): JSON with the os fact, the
-# registered root and exactly the skills placed there.
+# Assert-SkillsIndex checks claude-skills's templated index
+# (its files entry in placements.yaml): JSON with the os fact, the
+# placement root and exactly the skills placed there.
 function Assert-SkillsIndex {
     param([string[]]$Skills)
     if (-not (Test-Path -LiteralPath $skillsIndex)) { Fail "$skillsIndex is missing" }

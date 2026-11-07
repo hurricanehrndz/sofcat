@@ -89,8 +89,8 @@ func newTestZip(t *testing.T) (*ZipInstaller, string) {
 	}
 	table := placement.Table{
 		Placements: map[string]placement.Spec{
-			"skills":    {Kind: placement.KindDirectory, Paths: paths("skills")},
-			"exclusive": {Kind: placement.KindDirectory, Paths: paths("exclusive"), Exclusive: true},
+			"skills":    {Paths: paths("skills")},
+			"exclusive": {Paths: paths("exclusive"), Exclusive: true},
 		},
 		Order: []string{"skills", "exclusive"},
 	}
@@ -252,7 +252,7 @@ func TestZipExclusive(t *testing.T) {
 // refused rather than guessed.
 func TestZipTargets(t *testing.T) {
 	z, _ := newTestZip(t)
-	userSpec := placement.Spec{Kind: placement.KindDirectory, Paths: map[string]string{testOS(): "/u"}, Scope: map[string]string{testOS(): placement.ScopeUser}}
+	userSpec := placement.Spec{Paths: map[string]string{testOS(): "/u"}, Scope: map[string]string{testOS(): placement.ScopeUser}}
 	z.Table.Placements["user"] = userSpec
 	z.Table.Order = append([]string{"user"}, z.Table.Order...)
 	item, _ := packVersion(t, "1.0", map[string]string{"a": "b"})

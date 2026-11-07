@@ -3,16 +3,12 @@ check_facts:
   assigned_user: admin
 placements:
   market:
-    kind: marketplace
     paths:
       darwin: /Library/Application Support/Demo/marketplace
       windows: ${ProgramData}\Demo\marketplace
-    marketplace:
-      name: demo
-      owner: {name: Demo}
-      manifest_files:
-        - .claude-plugin/marketplace.json
-        - path: .agents/plugins/marketplace.json
-          template: |
-            {"user": {{ json (fact "assigned_user") }}, "windows": {{ cond "os == \"windows\"" }},
-             "plugins": [{{ range $i, $p := .Items }}{{ if $i }},{{ end }}{{ json $p }}{{ end }}]}
+    items_dir: plugins
+    files:
+      - path: .agents/plugins/marketplace.json
+        template: |
+          {"user": {{ json (fact "assigned_user") }}, "windows": {{ cond "os == \"windows\"" }},
+           "plugins": [{{ range $i, $p := .Items }}{{ if $i }},{{ end }}{{ json $p }}{{ end }}]}

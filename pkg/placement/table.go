@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"path"
 	"path/filepath"
 	"slices"
@@ -14,13 +15,6 @@ import (
 
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
 	"github.com/hurricanehrndz/sofcat/pkg/render"
-)
-
-// Placement kinds.
-const (
-	KindDirectory   = "directory"
-	KindMarketplace = "marketplace"
-	KindSettings    = "settings"
 )
 
 // Scopes. An OS without a scope is ScopeMachine.
@@ -35,55 +29,6 @@ const (
 	Windows = "windows"
 )
 
-// DefaultManifestFiles is where a marketplace's manifest is written when its
-// block lists no manifest_files.
-var DefaultManifestFiles = []string{".claude-plugin/marketplace.json"}
-
-// DefaultCatalogTemplate renders a manifest_files entry written as a bare
-// path: the Claude Code marketplace catalog (zip-items guide, "Marketplace
-// and settings placements"). It is a template like any a brand writes, so a
-// brand overrides it by copying it under {path, template}.
-const DefaultCatalogTemplate = `{
-  "name": {{ json .Placement.Marketplace.Name }},
-  "owner": {{ json .Placement.Marketplace.Owner }},
-  {{- if ne .Placement.Marketplace.Renames nil }}
-  "renames": {{ json .Placement.Marketplace.Renames }},
-  {{- end }}
-  {{- if ne .Placement.Marketplace.AllowCrossMarketplaceDependenciesOn nil }}
-  "allowCrossMarketplaceDependenciesOn": {{ json .Placement.Marketplace.AllowCrossMarketplaceDependenciesOn }},
-  {{- end }}
-  "plugins": [
-    {{- range $i, $p := .Items }}{{ if $i }},{{ end }}
-    {
-      "name": {{ json $p.Name }},
-      "source": {{ json (printf "./plugins/%s" $p.Name) }},
-      "version": {{ json $p.Version }},
-      "defaultEnabled": {{ $p.Managed }}
-    }
-    {{- end }}
-  ]
-}
-`
-
-// DefaultSettingsTemplate renders a settings placement that has no
-// template: the Claude Code drop-in that registers the marketplace and
-// enables its managed plugins, or nothing, which removes the file, when the
-// marketplace holds no plugin.
-const DefaultSettingsTemplate = `{{- if .Items }}
-{
-  "extraKnownMarketplaces": {
-    {{ json .Registers.Marketplace.Name }}: {"source": {"source": "directory", "path": {{ json .Registers.Root }}}}
-  },
-  "enabledPlugins": {
-    {{- $first := true }}
-    {{- range .Items }}{{ if .Managed }}{{ if not $first }},{{ end }}{{ $first = false }}
-    {{ json (printf "%s@%s" .Name $.Registers.Marketplace.Name) }}: true
-    {{- end }}{{ end }}
-  }
-}
-{{- end }}
-`
-
 // Table is a parsed placements.yaml.
 type Table struct {
 	Placements map[string]Spec `yaml:"placements"`
@@ -95,9 +40,9 @@ type Table struct {
 	Order []string `yaml:"-"`
 }
 
-// Spec is a named destination for zip items.
+// Spec is a named destination for zip items: a directory that holds their
+// trees and, optionally, files rendered from the trees it holds.
 type Spec struct {
-	Kind string `yaml:"kind"`
 	// Paths maps an OS (darwin, windows) to the placement root on it.
 	Paths map[string]string `yaml:"paths,omitempty"`
 	// Scope maps an OS to machine or user. An OS left out is machine.
@@ -105,111 +50,28 @@ type Spec struct {
 	WorksIn      []string          `yaml:"works_in,omitempty"`
 	ActionLabels map[string]string `yaml:"action_labels,omitempty"`
 	Exclusive    bool              `yaml:"exclusive,omitempty"`
-	// Marketplace is set for KindMarketplace only.
-	Marketplace *Marketplace `yaml:"marketplace,omitempty"`
-	// Registers names the placement a KindSettings file registers: a
-	// marketplace, or with Template any directory or marketplace.
-	Registers string `yaml:"registers,omitempty"`
-	// Template renders a KindSettings file in place of
-	// DefaultSettingsTemplate (render.FileContext). An empty output removes
-	// the file.
-	Template string `yaml:"template,omitempty"`
+	// ItemsDir puts item trees in <root>/<ItemsDir>/<item> rather than
+	// <root>/<item>.
+	ItemsDir string `yaml:"items_dir,omitempty"`
+	// Vars is free data for the placement's templates (.Placement.Vars).
+	Vars map[string]any `yaml:"vars,omitempty"`
+	// Files are rendered from the placement's receipts after every change
+	// to it.
+	Files []File `yaml:"files,omitempty"`
 }
 
-// Marketplace configures a marketplace placement's manifest. Owner, Renames
-// and AllowCrossMarketplaceDependenciesOn are written to the manifest
-// unchanged, so they stay untyped.
-type Marketplace struct {
-	Name                                string         `yaml:"name"`
-	Owner                               any            `yaml:"owner"`
-	Renames                             any            `yaml:"renames,omitempty"`
-	AllowCrossMarketplaceDependenciesOn any            `yaml:"allowCrossMarketplaceDependenciesOn,omitempty"`
-	ManifestFiles                       []ManifestFile `yaml:"manifest_files,omitempty"`
-}
-
-// ManifestFile is one manifest_files entry: a path, which gets
-// DefaultCatalogTemplate, or {path, template}, which gets that template
-// (render.FileContext). In YAML a bare string is a path.
-type ManifestFile struct {
-	Path     string `yaml:"path"`
-	Template string `yaml:"template,omitempty"`
-}
-
-// UnmarshalYAML accepts a string or a {path, template} mapping.
-func (f *ManifestFile) UnmarshalYAML(node *yaml.Node) error {
-	if node.Kind == yaml.ScalarNode {
-		return node.Decode(&f.Path)
-	}
-	if node.Kind != yaml.MappingNode {
-		return fmt.Errorf("line %d: manifest_files entry must be a path or {path, template}", node.Line)
-	}
-	for i := 0; i+1 < len(node.Content); i += 2 {
-		if key := node.Content[i].Value; key != "path" && key != "template" {
-			return fmt.Errorf("line %d: manifest_files entry: unknown field %q", node.Content[i].Line, key)
-		}
-	}
-	type plain ManifestFile
-	return node.Decode((*plain)(f))
-}
-
-// Manifests returns the manifest files to write, relative to the placement
-// root, each with its template: DefaultCatalogTemplate for an entry written
-// as a path, and DefaultManifestFiles when the block lists none.
-func (m Marketplace) Manifests() []ManifestFile {
-	files := m.ManifestFiles
-	if len(files) == 0 {
-		for _, p := range DefaultManifestFiles {
-			files = append(files, ManifestFile{Path: p})
-		}
-	}
-	out := make([]ManifestFile, len(files))
-	for i, f := range files {
-		if f.Template == "" {
-			f.Template = DefaultCatalogTemplate
-		}
-		out[i] = f
-	}
-	return out
-}
-
-// SettingsTemplate returns the template a settings placement's file is
-// rendered from: its own, or DefaultSettingsTemplate.
-func (p Spec) SettingsTemplate() string {
-	if p.Template != "" {
-		return p.Template
-	}
-	return DefaultSettingsTemplate
-}
-
-// Files returns the paths of Manifests.
-func (m Marketplace) Files() []string {
-	manifests := m.Manifests()
-	files := make([]string, len(manifests))
-	for i, f := range manifests {
-		files[i] = f.Path
-	}
-	return files
+// File is a file a placement renders (render.FileContext): at Path,
+// relative to the placement root, or at Paths, one absolute path per OS.
+// An empty render removes the file.
+type File struct {
+	Path     string            `yaml:"path,omitempty"`
+	Paths    map[string]string `yaml:"paths,omitempty"`
+	Template string            `yaml:"template"`
 }
 
 // View describes placement name, rooted at root, to a template.
 func (p Spec) View(name, root string) render.Placement {
-	v := render.Placement{Name: name, Root: root, Kind: p.Kind}
-	if p.Kind == KindMarketplace && p.Marketplace != nil {
-		v.Marketplace = &render.Marketplace{
-			Name:                                p.Marketplace.Name,
-			Owner:                               render.JSONValue(p.Marketplace.Owner),
-			Renames:                             render.JSONValue(p.Marketplace.Renames),
-			AllowCrossMarketplaceDependenciesOn: render.JSONValue(p.Marketplace.AllowCrossMarketplaceDependenciesOn),
-		}
-	}
-	return v
-}
-
-// Registered describes placement name, rooted at root, to the template of a
-// settings placement that registers it.
-func (p Spec) Registered(name, root string) *render.Registered {
-	v := p.View(name, root)
-	return &render.Registered{Name: v.Name, Root: v.Root, Kind: v.Kind, Marketplace: v.Marketplace}
+	return render.Placement{Name: name, Root: root, Vars: render.JSONValue(p.Vars)}
 }
 
 // Path returns the placement root for goos and whether it has one.
@@ -325,15 +187,14 @@ func placementOrder(data []byte) ([]string, error) {
 func (t Table) Validate() error {
 	var errs []error
 	for _, name := range t.Names() {
-		for _, err := range t.validatePlacement(name) {
+		for _, err := range validatePlacement(name, t.Placements[name]) {
 			errs = append(errs, fmt.Errorf("placement %q: %w", name, err))
 		}
 	}
 	return errors.Join(errs...)
 }
 
-func (t Table) validatePlacement(name string) []error {
-	p := t.Placements[name]
+func validatePlacement(name string, p Spec) []error {
 	var errs []error
 	fail := func(format string, args ...any) { errs = append(errs, fmt.Errorf(format, args...)) }
 
@@ -341,25 +202,10 @@ func (t Table) validatePlacement(name string) []error {
 	if name == "" || name == "." || name == ".." || strings.ContainsAny(name, `/\:`) {
 		fail("invalid name")
 	}
-	switch p.Kind {
-	case KindDirectory, KindMarketplace, KindSettings:
-	default:
-		fail("unknown kind %q", p.Kind)
-	}
 	if len(p.Paths) == 0 {
 		fail("no paths")
 	}
-	for goos, path := range p.Paths {
-		if goos != Darwin && goos != Windows {
-			fail("paths: unknown OS %q", goos)
-		}
-		if path == "" {
-			fail("paths: empty path for %s", goos)
-		}
-		if strings.Contains(path, "${USERPROFILE}") && p.ScopeFor(goos) != ScopeUser {
-			fail("paths: ${USERPROFILE} in %s path, which is not user scope", goos)
-		}
-	}
+	errs = append(errs, validatePaths("paths", p.Paths, p)...)
 	for goos, scope := range p.Scope {
 		if goos != Darwin && goos != Windows {
 			fail("scope: unknown OS %q", goos)
@@ -376,103 +222,101 @@ func (t Table) validatePlacement(name string) []error {
 			fail("action_labels: unknown key %q", key)
 		}
 	}
-
-	return append(errs, t.validateKindBlocks(p)...)
+	if p.ItemsDir != "" && (!isCleanRelative(p.ItemsDir) || strings.HasPrefix(p.ItemsDir, ".")) {
+		fail("items_dir: %q is not a clean relative path whose first segment does not start with .", p.ItemsDir)
+	}
+	// Deliberately machine scope only: the per-user helper rebuilds a
+	// user-scope spec from name and path alone (usersync.userTable), so it
+	// would place trees at <root>/<item> and render no files. Lifting this
+	// means carrying the spec in the user plan
+	// (.tmp/user-scope-spec/plan.md).
+	if (p.ItemsDir != "" || len(p.Files) > 0) && (p.ScopeFor(Darwin) == ScopeUser || p.ScopeFor(Windows) == ScopeUser) {
+		fail("scope: items_dir and files need machine scope on every OS")
+	}
+	return append(errs, validateFiles(p)...)
 }
 
-// validateKindBlocks checks the fields that belong to one kind only.
-func (t Table) validateKindBlocks(p Spec) []error {
+// validatePaths checks an OS-to-path map: the placement's paths, or a
+// files entry's.
+func validatePaths(field string, paths map[string]string, p Spec) []error {
 	var errs []error
-	fail := func(format string, args ...any) { errs = append(errs, fmt.Errorf(format, args...)) }
-	if p.Kind != KindDirectory && (p.ScopeFor(Darwin) == ScopeUser || p.ScopeFor(Windows) == ScopeUser) {
-		// Generated files are written by the service only.
-		fail("scope: user is supported on kind directory only")
-	}
-	if p.Kind == KindMarketplace {
-		errs = append(errs, validateMarketplace(p.Marketplace)...)
-	} else if p.Marketplace != nil {
-		fail("marketplace block on kind %q", p.Kind)
-	}
-	if p.Kind == KindSettings {
-		errs = append(errs, t.validateSettings(p)...)
-	} else {
-		if p.Registers != "" {
-			fail("registers on kind %q", p.Kind)
+	for goos, path := range paths {
+		if goos != Darwin && goos != Windows {
+			errs = append(errs, fmt.Errorf("%s: unknown OS %q", field, goos))
 		}
-		if p.Template != "" {
-			fail("template on kind %q", p.Kind)
+		if path == "" {
+			errs = append(errs, fmt.Errorf("%s: empty path for %s", field, goos))
+		}
+		if strings.Contains(path, "${USERPROFILE}") && p.ScopeFor(goos) != ScopeUser {
+			errs = append(errs, fmt.Errorf("%s: ${USERPROFILE} in %s path, which is not user scope", field, goos))
 		}
 	}
 	return errs
 }
 
-// validateMarketplace checks a marketplace placement's block: name and
-// owner, clean manifest paths, and templates that parse.
-func validateMarketplace(m *Marketplace) []error {
-	if m == nil {
-		return []error{errors.New("kind marketplace needs a marketplace block")}
-	}
+// validateFiles checks the files entries: a template that parses, and
+// either a relative path that cannot land in an item tree or per-OS paths
+// on the placement's OSes.
+func validateFiles(p Spec) []error {
 	var errs []error
-	if m.Name == "" || m.Owner == nil {
-		errs = append(errs, errors.New("marketplace: name and owner are required"))
-	}
 	seen := map[string]bool{}
-	for _, f := range m.ManifestFiles {
-		// Slash-separated on every OS, like the default.
-		if !filepath.IsLocal(f.Path) || strings.Contains(f.Path, `\`) || f.Path != path.Clean(f.Path) {
-			errs = append(errs, fmt.Errorf("marketplace: manifest_files: %q is not a clean relative path", f.Path))
+	for i, f := range p.Files {
+		field := fmt.Sprintf("files[%d]", i)
+		fail := func(format string, args ...any) {
+			errs = append(errs, fmt.Errorf(field+": "+format, args...))
 		}
-		if seen[f.Path] {
-			errs = append(errs, fmt.Errorf("marketplace: manifest_files: %q is listed twice", f.Path))
-		}
-		seen[f.Path] = true
-		if f.Template != "" {
-			if _, err := render.Parse(f.Path, f.Template); err != nil {
-				errs = append(errs, fmt.Errorf("marketplace: manifest_files %q: %w", f.Path, err))
+		switch {
+		case f.Path != "" && f.Paths != nil:
+			fail("set path or paths, not both")
+		case f.Path != "":
+			if !isCleanRelative(f.Path) {
+				fail("path %q is not a clean relative path", f.Path)
+			} else if err := itemTreeCollision(f.Path, p.ItemsDir); err != "" {
+				fail("path %q %s", f.Path, err)
 			}
-		} else if !isJSONPath(f.Path) {
-			// Only a .json render is canonical; any other path is written as
-			// rendered, template whitespace and all.
-			errs = append(errs, fmt.Errorf("marketplace: manifest_files %q without a template must end in .json: the default template is the Claude catalog", f.Path))
+			if seen[f.Path] {
+				fail("path %q is listed twice", f.Path)
+			}
+			seen[f.Path] = true
+		case len(f.Paths) > 0:
+			errs = append(errs, validatePaths(field+": paths", f.Paths, p)...)
+			for goos := range f.Paths {
+				if _, ok := p.Paths[goos]; !ok {
+					fail("paths: %s, which the placement has no path for", goos)
+				}
+			}
+		default:
+			fail("needs path or paths")
+		}
+		if f.Template == "" {
+			fail("needs a template")
+		} else if _, err := render.Parse(field, f.Template); err != nil {
+			fail("%q: %w", f.Path+strings.Join(slices.Sorted(maps.Values(f.Paths)), ", "), err)
 		}
 	}
 	return errs
 }
 
-// isJSONPath reports whether render.Render canonicalizes path's output.
-func isJSONPath(path string) bool {
-	return strings.HasSuffix(strings.ToLower(path), ".json")
+// itemTreeCollision explains why file, relative to the placement root,
+// could be inside an item tree, or returns "". Trees live under itemsDir,
+// or at the root when it is empty, where item names never start with "."
+// (checkItemName in pkg/installer).
+func itemTreeCollision(file, itemsDir string) string {
+	first, _, _ := strings.Cut(file, "/")
+	if itemsDir == "" {
+		if !strings.HasPrefix(first, ".") {
+			return "must start with a . segment, which no item name has, or the placement must set items_dir"
+		}
+		return ""
+	}
+	if dir, _, _ := strings.Cut(itemsDir, "/"); first == dir {
+		return fmt.Sprintf("is under items_dir %q", dir)
+	}
+	return ""
 }
 
-// validateSettings checks what a settings placement registers and its
-// template: a marketplace, or with a template any directory or marketplace.
-func (t Table) validateSettings(p Spec) []error {
-	var errs []error
-	target, ok := t.Placements[p.Registers]
-	switch {
-	case !ok:
-		errs = append(errs, fmt.Errorf("registers %q, which is not a placement", p.Registers))
-	case target.Kind == KindSettings:
-		errs = append(errs, fmt.Errorf("registers %q, which is a settings placement", p.Registers))
-	case target.Kind != KindMarketplace && p.Template == "":
-		// Only a template knows how to describe a directory placement.
-		errs = append(errs, fmt.Errorf("registers %q, which is not a marketplace placement, without a template: the default template is the Claude Code drop-in", p.Registers))
-	case target.ScopeFor(Darwin) == ScopeUser || target.ScopeFor(Windows) == ScopeUser:
-		// The service writes generated files; it cannot expand a user path.
-		errs = append(errs, fmt.Errorf("registers %q, which has user scope: generated files are machine scope only", p.Registers))
-	}
-	if p.Template != "" {
-		if _, err := render.Parse("template", p.Template); err != nil {
-			errs = append(errs, err)
-		}
-	} else {
-		// Only a .json render is canonical; any other path is written as
-		// rendered, template whitespace and all.
-		for goos, path := range p.Paths {
-			if !isJSONPath(path) {
-				errs = append(errs, fmt.Errorf("paths: %s path %q without a template must end in .json: the default template is the Claude Code drop-in", goos, path))
-			}
-		}
-	}
-	return errs
+// isCleanRelative reports whether p is clean, relative, slash-separated on
+// every OS and stays under the directory it is relative to.
+func isCleanRelative(p string) bool {
+	return filepath.IsLocal(p) && !strings.Contains(p, `\`) && p == path.Clean(p)
 }

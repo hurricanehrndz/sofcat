@@ -25,9 +25,8 @@ import (
 // one is machine scope on macOS, so a darwin plan is empty.
 var userPlanTable = placement.Table{
 	Placements: map[string]placement.Spec{
-		"claude": {Kind: placement.KindDirectory, Paths: map[string]string{placement.Windows: `C:\skills`}},
+		"claude": {Paths: map[string]string{placement.Windows: `C:\skills`}},
 		"codex": {
-			Kind:  placement.KindDirectory,
 			Paths: map[string]string{placement.Windows: `${USERPROFILE}\.agents\skills`, placement.Darwin: "/Library/codex"},
 			Scope: map[string]string{placement.Windows: placement.ScopeUser},
 		},

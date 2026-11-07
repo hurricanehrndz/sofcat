@@ -121,7 +121,7 @@ func (r *tapasRepo) servePlacements(paths map[string]string, exclusive, user []s
 	var b strings.Builder
 	b.WriteString("placements:\n")
 	for _, name := range slices.Sorted(maps.Keys(paths)) {
-		fmt.Fprintf(&b, "  %s:\n    kind: directory\n    paths: {%s: '%s'}\n", name, tapasOS, paths[name])
+		fmt.Fprintf(&b, "  %s:\n    paths: {%s: '%s'}\n", name, tapasOS, paths[name])
 		if slices.Contains(exclusive, name) {
 			b.WriteString("    exclusive: true\n")
 		}
@@ -713,8 +713,8 @@ func readJSON(t *testing.T, path string, v any) {
 	}
 }
 
-// TestTapasMarketplace: plugins placed into a marketplace placement, the
-// marketplace manifest and settings drop-in regenerated from the receipts
+// TestTapasMarketplace: plugins placed under a placement's items_dir, the
+// Claude catalog and settings drop-in it lists in files regenerated from the receipts
 // after each run that changes them. Harnesses enable what the drop-in lists,
 // so a managed plugin is enabled, a self-service one only offered, a held
 // one keeps the flag its receipt records even when another list desires it,
@@ -725,21 +725,25 @@ func TestTapasMarketplace(t *testing.T) {
 	e := newTapasEnv(t)
 	market := filepath.Join(e.roots, "market")
 	dropIn := filepath.Join(e.roots, "claude", "managed-settings.d", "50-tapas-test.json")
+	catalog, dropInTemplate := fixtureClaudeTemplates(t)
 	setPlacements := func(dropIn string) {
 		e.put("placements.yaml", []byte(`placements:
   market:
-    kind: marketplace
     paths: {`+tapasOS+`: '`+market+`'}
     exclusive: true
-    marketplace:
+    items_dir: plugins
+    vars:
       name: tapas-test
       owner: {name: Tapas Test}
       renames: {old-plugin: managed-plugin}
       allowCrossMarketplaceDependenciesOn: [other]
-  drop-in:
-    kind: settings
-    paths: {`+tapasOS+`: '`+dropIn+`'}
-    registers: market
+    files:
+      - path: .claude-plugin/marketplace.json
+        template: |
+`+blockScalar(catalog)+`
+      - paths: {`+tapasOS+`: '`+dropIn+`'}
+        template: |
+`+blockScalar(dropInTemplate)+`
 `))
 	}
 	// The first run's drop-in path is outside the write roots.
@@ -1023,4 +1027,25 @@ func tempDir(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return dir
+}
+
+// fixtureClaudeTemplates returns the Tapas fixture's Claude catalog and
+// drop-in templates, the ones the zip-items guide shows.
+func fixtureClaudeTemplates(t *testing.T) (catalog, dropIn string) {
+	t.Helper()
+	table, err := placement.Parse([]byte(readFile(t, filepath.Join("..", "..", "test", "manual", "fixtures", "tapas", "placements.yaml"))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := table.Placements["tapas-marketplace"].Files
+	return files[0].Template, files[2].Template
+}
+
+// blockScalar indents s for a YAML block scalar under a files entry.
+func blockScalar(s string) string {
+	lines := strings.Split(strings.TrimSuffix(s, "\n"), "\n")
+	for i, l := range lines {
+		lines[i] = "          " + l
+	}
+	return strings.Join(lines, "\n")
 }

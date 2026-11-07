@@ -20,12 +20,10 @@ import (
 const testPlacements = `
 placements:
   claude-code-skills:
-    kind: directory
     paths:
       darwin: /Library/Application Support/ClaudeCode/.claude/skills
       windows: ${ProgramFiles}\ClaudeCode\.claude\skills
   codex-skills:
-    kind: directory
     paths:
       windows: ${USERPROFILE}\.agents\skills
     scope: {windows: user}
@@ -362,7 +360,7 @@ func TestCheckZipItems(t *testing.T) {
 			"no placements.yaml",
 		},
 		"invalid placements.yaml without zip items": {
-			"placements:\n  p: {kind: folder, paths: {darwin: /p}}\n", chromeInfo, "unknown kind",
+			"placements:\n  p: {kind: directory, paths: {darwin: /p}}\n", chromeInfo, "field kind not found",
 		},
 	}
 	t.Run("normal run warns", func(t *testing.T) {
