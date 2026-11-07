@@ -355,7 +355,7 @@ nothing and sofcat removes the file.
 
 `makecatalogs -check` renders every placement template, and every tree
 template in the repository's zips, without a machine (see
-[makecatalogs -check](#makecatalogs-check)); `makecatalogs zip-item` renders
+[makecatalogs -check](#makecatalogs--check)); `makecatalogs zip-item` renders
 the tree templates it packs the same way. Their facts are a sample value for
 every built-in fact of the OS, the example values of the
 [conditions guide's table](/guides/conditions/#built-in-facts), overlaid with the
