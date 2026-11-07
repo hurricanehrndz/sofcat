@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -611,7 +612,7 @@ conditional_items:
 	if err != nil {
 		t.Fatal(err)
 	}
-	heldRc := receipt.Receipt{Item: "held", Version: "0.9", Placement: "codex", Path: heldTree, TreeHash: heldHash, InstalledAtUTC: time.Now().UTC().Truncate(time.Second)}
+	heldRc := receipt.Receipt{Item: "held", Version: "0.9", Placement: "codex", Path: heldTree, TreeHash: heldHash, PlacedHash: heldHash, Rendered: []receipt.Rendered{}, InstalledAtUTC: time.Now().UTC().Truncate(time.Second)}
 	if err := receipt.Write(userReceipts, heldRc); err != nil {
 		t.Fatal(err)
 	}
@@ -650,7 +651,7 @@ conditional_items:
 	if outcomeOf(results, "stray", "stray") != string(installer.OutcomeRefused) || exists(filepath.Join(profile, "elsewhere")) {
 		t.Errorf("stray outside the user roots: %+v", results)
 	}
-	if rc, _, _ := receipt.Read(userReceipts, "codex", "held"); rc != heldRc || readFile(t, filepath.Join(heldTree, "SKILL.md")) != "held, older" {
+	if rc, _, _ := receipt.Read(userReceipts, "codex", "held"); !reflect.DeepEqual(rc, heldRc) || readFile(t, filepath.Join(heldTree, "SKILL.md")) != "held, older" {
 		t.Errorf("held item touched: receipt %+v", rc)
 	}
 	if outcomeOf(results, "held", "codex") != "" {
@@ -776,7 +777,7 @@ conditional_items:
 		t.Fatal(err)
 	}
 	writeFiles(t, market, map[string]string{".tapas-test-owned": ""})
-	heldRc := receipt.Receipt{Item: "held-plugin", Version: "1.0.0", Placement: "market", Path: heldTree, TreeHash: heldHash, Managed: true, InstalledAtUTC: time.Now().UTC().Truncate(time.Second)}
+	heldRc := receipt.Receipt{Item: "held-plugin", Version: "1.0.0", Placement: "market", Path: heldTree, TreeHash: heldHash, PlacedHash: heldHash, Rendered: []receipt.Rendered{}, Managed: true, InstalledAtUTC: time.Now().UTC().Truncate(time.Second)}
 	if err := receipt.Write(e.receiptDir(), heldRc); err != nil {
 		t.Fatal(err)
 	}
@@ -843,7 +844,7 @@ conditional_items:
 	check("startup run",
 		map[string]entry{"managed-plugin": {"1.0.0", true}, "held-plugin": {"1.0.0", true}},
 		[]string{"held-plugin@tapas-test", "managed-plugin@tapas-test"})
-	if rc, _, _ := receipt.Read(e.receiptDir(), "market", "held-plugin"); rc != heldRc {
+	if rc, _, _ := receipt.Read(e.receiptDir(), "market", "held-plugin"); !reflect.DeepEqual(rc, heldRc) {
 		t.Errorf("held receipt changed: %+v", rc)
 	}
 

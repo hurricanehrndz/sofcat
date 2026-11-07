@@ -223,6 +223,11 @@ function Assert-Placed {
     }
     if ($rc.path -ne $tree) { Fail "receipt path '$($rc.path)' is not $tree" }
     if ($rc.tree_hash -notmatch '^sha256:[0-9a-f]{64}$') { Fail "receipt tree_hash '$($rc.tree_hash)'" }
+    if ($rc.placed_hash -notmatch '^sha256:[0-9a-f]{64}$') { Fail "receipt placed_hash '$($rc.placed_hash)'" }
+    # No fixture item ships a template yet, so every tree is placed as shipped.
+    if ($rc.placed_hash -ne $rc.tree_hash) { Fail "receipt placed_hash '$($rc.placed_hash)' differs from tree_hash '$($rc.tree_hash)'" }
+    if (-not $rc.PSObject.Properties['rendered']) { Fail "receipt $rcPath has no rendered list" }
+    if (@($rc.rendered).Count -ne 0) { Fail "receipt rendered is not empty: $($rc.rendered | ConvertTo-Json -Compress)" }
     return $rc
 }
 

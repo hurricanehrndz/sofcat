@@ -151,7 +151,7 @@ func (z *ZipInstaller) writeManifests(name string, m harness.Marketplace, root s
 		if err != nil {
 			return fmt.Errorf("placement %q: %w", name, err)
 		}
-		if err := writeFileAtomic(path, data); err != nil {
+		if err := writeFileAtomic(path, data, 0o644); err != nil {
 			return fmt.Errorf("placement %q: %w", name, err)
 		}
 		slog.Info("Wrote marketplace manifest", "placement", name, "path", path, "plugins", len(manifest.Plugins))
@@ -192,7 +192,7 @@ func (z *ZipInstaller) writeSettings(name string, spec harness.Placement, market
 	if err != nil {
 		return fmt.Errorf("settings placement %q: %w", name, err)
 	}
-	if err := writeFileAtomic(path, data); err != nil {
+	if err := writeFileAtomic(path, data, 0o644); err != nil {
 		return fmt.Errorf("settings placement %q: %w", name, err)
 	}
 	slog.Info("Wrote settings drop-in", "placement", name, "path", path, "enabled", len(dropIn.EnabledPlugins))
@@ -239,10 +239,10 @@ func jsonValue(v any) any {
 	}
 }
 
-// writeFileAtomic writes data to path through a temporary file in the same
-// directory, renamed into place, so a harness never reads a partial file.
-// The directory is created if missing.
-func writeFileAtomic(path string, data []byte) error {
+// writeFileAtomic writes data to path with mode through a temporary file in
+// the same directory, renamed into place, so a harness never reads a partial
+// file. The directory is created if missing.
+func writeFileAtomic(path string, data []byte, mode fs.FileMode) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
@@ -253,7 +253,7 @@ func writeFileAtomic(path string, data []byte) error {
 	}
 	// Harnesses run as users; CreateTemp's 0600 would hide the file off
 	// Windows, where no inherited ACL applies.
-	err = tmp.Chmod(0o644)
+	err = tmp.Chmod(mode)
 	if err == nil {
 		_, err = tmp.Write(data)
 	}

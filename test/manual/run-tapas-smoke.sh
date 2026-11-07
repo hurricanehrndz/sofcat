@@ -196,9 +196,21 @@ assert_placed() {
 	rc=$(receipt_path "$2" "$3")
 	[ -f "$tree/$file" ] || fail "$tree/$file is missing"
 	[ -f "$rc" ] || fail "receipt $rc is missing"
+	# No fixture item ships a template yet, so every tree is placed as
+	# shipped: placed_hash equals tree_hash and nothing is rendered.
 	jq -e --arg i "$3" --arg p "$2" --arg path "$tree" \
-		'.item == $i and .placement == $p and .version == "1.0.0" and .path == $path and (.tree_hash | test("^sha256:[0-9a-f]{64}$"))' \
+		'.item == $i and .placement == $p and .version == "1.0.0" and .path == $path
+		and (.tree_hash | test("^sha256:[0-9a-f]{64}$"))
+		and (.placed_hash | test("^sha256:[0-9a-f]{64}$")) and .placed_hash == .tree_hash
+		and .rendered == []' \
 		"$rc" >/dev/null || fail "receipt $rc does not match: $(cat "$rc")"
+}
+
+# receipt_times lists every receipt with its modification time.
+receipt_times() {
+	find "$RECEIPT_DIR" -type f -name '*.json' | sort | while read -r f; do
+		printf '%s %s\n' "$(stat -f %m "$f")" "$f"
+	done
 }
 
 assert_not_placed() {
@@ -528,6 +540,19 @@ assert_not_placed "$CLAUDE_ROOT" claude-skills tapas-scoped-skill
 grep -F "skipping file in the conditions directory" "$LOG_PATH" | grep -qF "10-tapas-smoke" ||
 	fail "$LOG_PATH does not say the world-writable script was skipped"
 pass "world-writable $CONDITION_SCRIPT skipped; tapas-scoped-skill not placed"
+
+# --- No-op run --------------------------------------------------------------------
+
+step "A run with nothing changed rewrites no receipt"
+before=$(receipt_times)
+[ -n "$before" ] || fail "no receipts under $RECEIPT_DIR"
+invoke_run
+after=$(receipt_times)
+[ "$after" = "$before" ] || fail "the run changed a receipt: before
+$before
+after
+$after"
+pass "$(printf '%s\n' "$before" | wc -l | tr -d ' ') receipts untouched"
 
 step "Take SOFCAT_TEST_MUNKI_REPORT out of the daemon's plist again"
 /usr/libexec/PlistBuddy -c "Delete :EnvironmentVariables:SOFCAT_TEST_MUNKI_REPORT" "$PLIST" ||

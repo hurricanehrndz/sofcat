@@ -242,7 +242,21 @@ function Assert-Placed {
     }
     if ($rc.path -ne $tree) { Fail "receipt path '$($rc.path)' is not $tree" }
     if ($rc.tree_hash -notmatch '^sha256:[0-9a-f]{64}$') { Fail "receipt tree_hash '$($rc.tree_hash)'" }
+    if ($rc.placed_hash -notmatch '^sha256:[0-9a-f]{64}$') { Fail "receipt placed_hash '$($rc.placed_hash)'" }
+    # No fixture item ships a template yet, so every tree is placed as shipped.
+    if ($rc.placed_hash -ne $rc.tree_hash) { Fail "receipt placed_hash '$($rc.placed_hash)' differs from tree_hash '$($rc.tree_hash)'" }
+    if (-not $rc.PSObject.Properties['rendered']) { Fail "receipt $rcPath has no rendered list" }
+    if (@($rc.rendered).Count -ne 0) { Fail "receipt rendered is not empty: $($rc.rendered | ConvertTo-Json -Compress)" }
     return $rc
+}
+
+# Get-ReceiptTimes maps every receipt's path to its modification time.
+function Get-ReceiptTimes {
+    $times = @{}
+    foreach ($f in @(Get-ChildItem -LiteralPath $receiptDir -Recurse -File -Filter *.json)) {
+        $times[$f.FullName] = $f.LastWriteTimeUtc.Ticks
+    }
+    return $times
 }
 
 function Assert-NotPlaced {
@@ -573,6 +587,20 @@ Assert-Placed $claudeRoot "claude-skills" "tapas-managed-skill" | Out-Null
 Assert-NotPlaced $claudeRoot "claude-skills" "tapas-scripted-skill"
 if (Test-Path -LiteralPath $scriptedMarker) { Fail "tapas-scripted-skill's postinstall_script ran: $scriptedMarker exists" }
 Pass "tapas-scoped-skill removed; tapas-held-skill and tapas-managed-skill kept; tapas-scripted-skill never placed"
+
+# --- No-op run --------------------------------------------------------------------
+
+Write-Step "A run with nothing changed rewrites no receipt"
+$before = Get-ReceiptTimes
+if ($before.Count -eq 0) { Fail "no receipts under $receiptDir" }
+Invoke-Run
+$after = Get-ReceiptTimes
+foreach ($path in $before.Keys) {
+    if (-not $after.ContainsKey($path)) { Fail "the run removed $path" }
+    if ($after[$path] -ne $before[$path]) { Fail "the run rewrote $path" }
+}
+if ($after.Count -ne $before.Count) { Fail "the run wrote a new receipt: $($after.Keys -join ', ')" }
+Pass "$($before.Count) receipts untouched"
 
 Write-Host ""
 Write-Host "TAPAS SMOKE PASSED" -ForegroundColor Green

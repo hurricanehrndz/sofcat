@@ -50,27 +50,52 @@ repository access, and places the trees in each user's profile under the
 machine-scope placement does; a failed placement leaves the others alone and
 is reported on its own.
 
-For each placement, sofcat checks the item's tree in this order:
+A tree has two hashes. The catalog's `tree_hash` is the hash of the archive's
+contents, as CI packed them. The receipt's `placed_hash` is the hash of the
+tree as sofcat wrote it, files sofcat rendered on the device included; with
+nothing rendered, the two are equal. For each placement, sofcat hashes the
+item's tree on disk and checks it in this order:
 
 1. No tree: install it.
-2. The tree equals the catalog's `tree_hash`: nothing to do. If it has no
-   receipt, or one for another version, sofcat writes one (adoption).
-3. The tree equals its receipt: replace it with the catalog version.
-4. Anything else, including a tree with no receipt: a user edit. sofcat writes
-   nothing and fails the item with `placement_conflict`.
+2. The tree equals its receipt's `placed_hash`: it is sofcat's and intact.
+   When the receipt's `tree_hash` and version match the catalog and the
+   inputs of every rendered file are what this run would render with,
+   nothing to do (a receipt whose `managed` flag moved is rewritten). When
+   only the inputs differ, sofcat re-renders those files in place from the
+   templates still in the tree, without fetching the archive, rehashes and
+   updates the receipt. When the catalog moved on to a different `tree_hash`,
+   sofcat replaces the tree with the catalog version; a version bump that
+   keeps the same `tree_hash` only rewrites the receipt.
+3. The tree equals the catalog's `tree_hash` but not the receipt's
+   `placed_hash`: the tree as shipped, placed by hand or before sofcat
+   rendered anything. sofcat adopts it: renders in place and writes the
+   receipt.
+4. Anything else, including a tree with no receipt and an edit to a rendered
+   file: a user edit. sofcat writes nothing and fails the item with
+   `placement_conflict`.
 
 To install, sofcat downloads the zip to its cache, checks its sha256 against
 `hash`, and refuses an archive with an absolute path or `..`, a non-regular
 entry, a duplicate or case-only duplicate path, a Windows reserved name or
 forbidden character (on every OS), more than 10,000 entries, a file over
 256 MiB, more than 1 GiB in total, or a compression ratio over 100:1. It
-extracts into `.<slug>-staging-<item>` beside the tree, checks the tree hash,
-and only then renames the tree into place.
+extracts into `.<slug>-staging-<item>` beside the tree, checks the tree hash
+against `tree_hash`, then renders the tree's templates there, hashes the
+result for `placed_hash`, and only then renames the tree into place.
+
+An in-place re-render is all or nothing: every output is rendered to memory
+first, then each file is written to a temporary file beside its target and
+renamed over it, and a failure part way puts back the files already replaced,
+so the tree still matches `placed_hash`. The one window left is a crash
+between two renames, which leaves a tree matching neither hash; the next run
+reports it as `placement_conflict`, and restoring the file by hand or
+removing the tree clears it.
 
 A removal (`managed_uninstalls`, a self-service removal, or an item that left
-every manifest) deletes a tree only while it equals its receipt; otherwise it
-fails with `placement_conflict` and the tree stays. Items held by an unknown
-`conditional_items` condition are never removed.
+every manifest) deletes a tree only while it equals its receipt's
+`placed_hash`; otherwise it fails with `placement_conflict` and the tree
+stays. Items held by an unknown `conditional_items` condition are never
+removed.
 
 A zip item's installed status comes from its receipts and trees, never from a
 `check` block.
@@ -159,9 +184,35 @@ placements cannot be `user` scope.
 ### Receipts
 
 Each placed tree has a JSON receipt at
-`<data dir>/receipts/<placement>/<item_name>.json` with `item`, `version`,
-`placement`, `path`, `tree_hash`, `managed` (a manifest lists the item in
-`managed_installs`) and `installed_at_utc`.
+`<data dir>/receipts/<placement>/<item_name>.json`:
+
+```json
+{
+  "item": "hello",
+  "version": "1.0.0",
+  "placement": "claude-skills",
+  "path": "C:\\ProgramData\\Acme\\skills\\hello",
+  "tree_hash": "sha256:ffaa66a8…",
+  "placed_hash": "sha256:ffaa66a8…",
+  "rendered": [],
+  "managed": true,
+  "installed_at_utc": "2026-11-06T12:00:00Z"
+}
+```
+
+`tree_hash` is the catalog's hash of the archive's contents; `placed_hash`
+is the hash of the tree as sofcat wrote it, rendered files included, and the
+hash sofcat compares the tree against before it touches or removes it.
+`rendered` lists every file sofcat rendered in the tree, one
+`{"file", "template", "inputs"}` record each: the rendered file's path and
+the template's, slash-separated and relative to the tree, and the inputs the
+render used. With nothing rendered, `placed_hash` equals `tree_hash` and
+`rendered` is `[]`, present rather than omitted. `managed` is true when a
+manifest lists the item in `managed_installs`. A receipt written before
+`placed_hash` existed is read as if `placed_hash` were its `tree_hash`. A
+run that finds nothing to do leaves the receipt untouched, while a `managed`
+flip or a catalog version bump with the same contents rewrites only the
+receipt.
 
 ### Write roots
 
