@@ -48,6 +48,9 @@ type Registered struct {
 	Name string
 	Root string
 	Kind string
+	// Marketplace is the registered placement's marketplace block; nil
+	// unless it is a marketplace placement.
+	Marketplace *Marketplace
 }
 
 // Item is one placed tree, from its receipt. The JSON names are the

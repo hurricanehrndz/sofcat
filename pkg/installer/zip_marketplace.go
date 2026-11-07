@@ -1,8 +1,6 @@
 package installer
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -24,39 +22,9 @@ const pluginsDir = "plugins"
 
 // The generated files have no receipts: sofcat owns them outright and
 // rewrites them from the receipts after every change to the placement and
-// once per run (RegenerateAll).
-
-// marketplaceManifest is the generated marketplace.json. Field order is the
-// key order in the file.
-type marketplaceManifest struct {
-	Name                                string              `json:"name"`
-	Owner                               any                 `json:"owner"`
-	Renames                             any                 `json:"renames,omitempty"`
-	AllowCrossMarketplaceDependenciesOn any                 `json:"allowCrossMarketplaceDependenciesOn,omitempty"`
-	Plugins                             []marketplacePlugin `json:"plugins"`
-}
-
-type marketplacePlugin struct {
-	Name           string `json:"name"`
-	Source         string `json:"source"`
-	Version        string `json:"version"`
-	DefaultEnabled bool   `json:"defaultEnabled"`
-}
-
-// settingsDropIn is the generated settings file of a settings placement.
-type settingsDropIn struct {
-	ExtraKnownMarketplaces map[string]knownMarketplace `json:"extraKnownMarketplaces"`
-	EnabledPlugins         map[string]bool             `json:"enabledPlugins"`
-}
-
-type knownMarketplace struct {
-	Source marketplaceSource `json:"source"`
-}
-
-type marketplaceSource struct {
-	Source string `json:"source"`
-	Path   string `json:"path"`
-}
+// once per run (RegenerateAll). Each is rendered from a template: the
+// entry's or the placement's own, else harness.DefaultCatalogTemplate and
+// harness.DefaultSettingsTemplate.
 
 // RegenerateAll regenerates every placement in the harness table that has
 // generated files (generates) and a path on this OS, and returns a failed
@@ -142,39 +110,18 @@ func (z *ZipInstaller) regenerate(name string) error {
 }
 
 // writeManifests writes each of the marketplace's manifest files under
-// root: the built-in Claude-format catalog listing every plugin rcs
-// records, or the entry's template rendered with those plugins as .Items.
-// Every entry is rendered before any is written, so a failed render leaves
-// all of them as they were.
+// root: the entry's template rendered with the plugins rcs records as
+// .Items. Every entry is rendered before any is written, so a failed render
+// leaves all of them as they were.
 func (z *ZipInstaller) writeManifests(name string, spec harness.Placement, root string, rcs []receipt.Receipt) error {
-	m := *spec.Marketplace
-	manifest := marketplaceManifest{
-		Name:                                m.Name,
-		Owner:                               render.JSONValue(m.Owner),
-		Renames:                             render.JSONValue(m.Renames),
-		AllowCrossMarketplaceDependenciesOn: render.JSONValue(m.AllowCrossMarketplaceDependenciesOn),
-		Plugins:                             []marketplacePlugin{},
-	}
-	for _, rc := range rcs { // receipt.List sorts by item
-		manifest.Plugins = append(manifest.Plugins, marketplacePlugin{
-			Name:           rc.Item,
-			Source:         "./" + pluginsDir + "/" + rc.Item,
-			Version:        rc.Version,
-			DefaultEnabled: rc.Managed,
-		})
-	}
-	builtin, err := encodeJSON(manifest)
-	if err != nil {
-		return fmt.Errorf("placement %q: %w", name, err)
-	}
 	ctx := z.fileContext(name, spec, root, rcs)
 	type file struct {
-		path      string
-		data      []byte
-		templated bool
+		path string
+		data []byte
 	}
-	files := make([]file, 0, len(m.Manifests()))
-	for _, f := range m.Manifests() {
+	manifests := spec.Marketplace.Manifests()
+	files := make([]file, 0, len(manifests))
+	for _, f := range manifests {
 		local := filepath.FromSlash(f.Path)
 		if !filepath.IsLocal(local) {
 			return fmt.Errorf("%w: placement %q: manifest file %q is not a path inside the placement", placement.ErrRefused, name, f.Path)
@@ -183,22 +130,20 @@ func (z *ZipInstaller) writeManifests(name string, spec harness.Placement, root 
 		if err != nil {
 			return fmt.Errorf("placement %q: %w", name, err)
 		}
-		data := builtin
-		if f.Template != "" {
-			if data, err = renderFile(f.Path, f.Template, ctx, z.Facts, f.Path); err != nil {
-				return fmt.Errorf("%w: placement %q: %w", placement.ErrRefused, name, err)
-			}
-			if data == nil {
-				return fmt.Errorf("%w: placement %q: manifest_files %q: the template rendered nothing", placement.ErrRefused, name, f.Path)
-			}
+		data, err := renderFile(f.Path, f.Template, ctx, z.Facts, f.Path)
+		if err != nil {
+			return fmt.Errorf("%w: placement %q: %w", placement.ErrRefused, name, err)
 		}
-		files = append(files, file{path, data, f.Template != ""})
+		if data == nil {
+			return fmt.Errorf("%w: placement %q: manifest_files %q: the template rendered nothing", placement.ErrRefused, name, f.Path)
+		}
+		files = append(files, file{path, data})
 	}
 	for _, f := range files {
 		if err := writeFileAtomic(f.path, f.data, 0o644); err != nil {
 			return fmt.Errorf("placement %q: %w", name, err)
 		}
-		slog.Info("Wrote marketplace manifest", "placement", name, "path", f.path, "plugins", len(manifest.Plugins), "template", f.templated)
+		slog.Info("Wrote marketplace manifest", "placement", name, "path", f.path, "plugins", len(rcs))
 	}
 	return nil
 }
@@ -206,9 +151,8 @@ func (z *ZipInstaller) writeManifests(name string, spec harness.Placement, root 
 // writeSettings writes settings placement name's file for the placement
 // registered (spec, at root, with receipts rcs): its template rendered with
 // the registered placement's receipts as .Items, removed when the output is
-// empty, or without a template the built-in Claude Code drop-in registering
-// the marketplace and enabling its managed plugins, removed with no plugin
-// left.
+// empty. The default template is the Claude Code drop-in registering the
+// marketplace and enabling its managed plugins, empty with no plugin left.
 func (z *ZipInstaller) writeSettings(name string, spec harness.Placement, registered string, regSpec harness.Placement, root string, rcs []receipt.Receipt) error {
 	if _, ok := spec.Path(z.Guard.GOOS); !ok {
 		return nil
@@ -217,17 +161,11 @@ func (z *ZipInstaller) writeSettings(name string, spec harness.Placement, regist
 	if err != nil {
 		return err
 	}
-	var data []byte
-	if spec.Template != "" {
-		ctx := z.fileContext(name, spec, path, rcs)
-		ctx.Registers = &render.Registered{Name: registered, Root: root, Kind: regSpec.Kind}
-		if data, err = renderFile("template", spec.Template, ctx, z.Facts, path); err != nil {
-			return fmt.Errorf("%w: settings placement %q: %w", placement.ErrRefused, name, err)
-		}
-	} else if len(rcs) > 0 {
-		if data, err = dropIn(regSpec.Marketplace.Name, root, rcs); err != nil {
-			return fmt.Errorf("settings placement %q: %w", name, err)
-		}
+	ctx := z.fileContext(name, spec, path, rcs)
+	ctx.Registers = regSpec.Registered(registered, root)
+	data, err := renderFile("template", spec.SettingsTemplate(), ctx, z.Facts, path)
+	if err != nil {
+		return fmt.Errorf("%w: settings placement %q: %w", placement.ErrRefused, name, err)
 	}
 	if data == nil {
 		if err = os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
@@ -239,25 +177,8 @@ func (z *ZipInstaller) writeSettings(name string, spec harness.Placement, regist
 	if err := writeFileAtomic(path, data, 0o644); err != nil {
 		return fmt.Errorf("settings placement %q: %w", name, err)
 	}
-	slog.Info("Wrote settings file", "placement", name, "path", path, "items", len(rcs), "template", spec.Template != "")
+	slog.Info("Wrote settings file", "placement", name, "path", path, "items", len(rcs))
 	return nil
-}
-
-// dropIn is the built-in Claude Code drop-in registering the marketplace at
-// root under market and enabling its managed plugins.
-func dropIn(market, root string, rcs []receipt.Receipt) ([]byte, error) {
-	d := settingsDropIn{
-		ExtraKnownMarketplaces: map[string]knownMarketplace{
-			market: {Source: marketplaceSource{Source: "directory", Path: root}},
-		},
-		EnabledPlugins: map[string]bool{},
-	}
-	for _, rc := range rcs {
-		if rc.Managed {
-			d.EnabledPlugins[rc.Item+"@"+market] = true
-		}
-	}
-	return encodeJSON(d)
 }
 
 // fileContext is what a placement file template of placement name sees:
@@ -284,19 +205,6 @@ func renderFile(name, source string, ctx render.FileContext, facts conditions.Fa
 	}
 	data, _, err := t.Render(ctx, facts, path)
 	return data, err
-}
-
-// encodeJSON is v as indented JSON with a trailing newline. HTML characters
-// stay as they are: harnesses read the file, not browsers.
-func encodeJSON(v any) ([]byte, error) {
-	var b bytes.Buffer
-	enc := json.NewEncoder(&b)
-	enc.SetEscapeHTML(false)
-	enc.SetIndent("", "  ")
-	if err := enc.Encode(v); err != nil {
-		return nil, err
-	}
-	return b.Bytes(), nil
 }
 
 // writeFileAtomic writes data to path with mode through a temporary file in

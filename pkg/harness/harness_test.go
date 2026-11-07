@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
+	"github.com/hurricanehrndz/sofcat/pkg/render"
 )
 
 // The sample table under examples/ is documentation; it must stay valid.
@@ -213,9 +214,9 @@ placements:
 	}
 }
 
-// A manifest_files entry is a path, for the built-in catalog, or
-// {path, template}; a settings placement may carry a template and then
-// register a directory; check_facts is a free map.
+// A manifest_files entry is a path, which gets the default catalog
+// template, or {path, template}; a settings placement may carry a template
+// and then register a directory; check_facts is a free map.
 func TestParseTemplates(t *testing.T) {
 	table, err := Parse([]byte(`
 check_facts: {site: east, floors: [1, 2]}
@@ -244,17 +245,29 @@ placements:
 	}
 	m := table.Placements["market"].Marketplace
 	want := []ManifestFile{
-		{Path: ".claude-plugin/marketplace.json"},
+		{Path: ".claude-plugin/marketplace.json", Template: DefaultCatalogTemplate},
 		{Path: ".agents/plugins/marketplace.json", Template: "{\"name\": {{ json .Placement.Marketplace.Name }}}\n"},
 	}
 	if !reflect.DeepEqual(m.Manifests(), want) {
 		t.Errorf("manifests = %+v", m.Manifests())
 	}
+	if m.ManifestFiles[0].Template != "" {
+		t.Errorf("Manifests filled the parsed entry in: %+v", m.ManifestFiles[0])
+	}
 	if got := m.Files(); !reflect.DeepEqual(got, []string{".claude-plugin/marketplace.json", ".agents/plugins/marketplace.json"}) {
 		t.Errorf("files = %v", got)
 	}
-	if got := table.Placements["index"].Template; got != "{{ if .Items }}{{ json .Items }}{{ end }}" {
+	if got := table.Placements["index"].SettingsTemplate(); got != "{{ if .Items }}{{ json .Items }}{{ end }}" {
 		t.Errorf("settings template = %q", got)
+	}
+	if got := table.Placements["drop-in"].SettingsTemplate(); got != DefaultSettingsTemplate {
+		t.Errorf("default settings template = %q", got)
+	}
+	if reg := table.Placements["market"].Registered("market", "/m"); reg.Kind != KindMarketplace || reg.Root != "/m" || reg.Marketplace == nil || reg.Marketplace.Name != "acme" {
+		t.Errorf("registered = %+v", reg)
+	}
+	if reg := table.Placements["skills"].Registered("skills", "/s"); reg.Marketplace != nil {
+		t.Errorf("registered directory has a marketplace: %+v", reg)
 	}
 	if table.CheckFacts["site"] != "east" || len(table.CheckFacts) != 2 {
 		t.Errorf("check_facts = %v", table.CheckFacts)
@@ -306,12 +319,173 @@ placements:
 		"template on a marketplace": {`
 placements:
   m: {kind: marketplace, paths: {darwin: /m}, marketplace: {name: a, owner: b}, template: x}`, "template on kind"},
+		"manifest path without a template that is not .json": {`
+placements:
+  m: {kind: marketplace, paths: {darwin: /m}, marketplace: {name: a, owner: b, manifest_files: [catalog]}}`, `manifest_files "catalog" without a template must end in .json: the default template is the Claude catalog`},
+		"settings path without a template that is not .json": {`
+placements:
+  m: {kind: marketplace, paths: {darwin: /m}, marketplace: {name: a, owner: b}}
+  s: {kind: settings, paths: {darwin: /s.json, windows: 'C:\s.txt'}, registers: m}`, `placement "s": paths: windows path "C:\\s.txt" without a template must end in .json: the default template is the Claude Code drop-in`},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			_, err := Parse([]byte(tc.yaml))
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Errorf("error %v, want %q", err, tc.want)
+			}
+		})
+	}
+}
+
+// Only the defaults need a .json path: a template of the brand's own is
+// written as rendered, to whatever path it names.
+func TestParseAcceptsTemplatedNonJSONPaths(t *testing.T) {
+	tests := map[string]string{
+		"manifest entry": `
+placements:
+  m: {kind: marketplace, paths: {darwin: /m}, marketplace: {name: a, owner: b, manifest_files: [{path: catalog.toml, template: x}]}}`,
+		"settings placement": `
+placements:
+  m: {kind: marketplace, paths: {darwin: /m}, marketplace: {name: a, owner: b}}
+  s: {kind: settings, paths: {darwin: /s.toml, windows: 'C:\s.toml'}, registers: m, template: x}`,
+	}
+	for name, yaml := range tests {
+		t.Run(name, func(t *testing.T) {
+			if _, err := Parse([]byte(yaml)); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+}
+
+// The guide shows each default template verbatim as the text a brand copies
+// to override it, so an edit to a constant must reach the guide too. Each
+// constant ends in a newline and the guide's fenced block closes on the line
+// after it, so the match includes that newline.
+func TestGuideShowsDefaultTemplates(t *testing.T) {
+	const guide = "../../site/src/content/docs/guides/zip-items.md"
+	data, err := os.ReadFile(guide)
+	if os.IsNotExist(err) {
+		t.Skipf("%s is not in this checkout", guide)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, template := range map[string]string{
+		"DefaultCatalogTemplate":  DefaultCatalogTemplate,
+		"DefaultSettingsTemplate": DefaultSettingsTemplate,
+	} {
+		if !strings.Contains(string(data), "```\n"+template+"```") {
+			t.Errorf("%s does not show %s verbatim in a fenced block", guide, name)
+		}
+	}
+}
+
+// The default templates render what the Go encoders they replaced wrote,
+// as canonical JSON: the optional marketplace keys only when the block sets
+// them (an empty map or list counts as set), "plugins": [] with nothing
+// placed, and a drop-in that enables only the managed plugins and renders
+// nothing, so the file is removed, when the marketplace holds no plugin. A
+// change to the default text shows up here.
+func TestDefaultTemplates(t *testing.T) {
+	full := Placement{Kind: KindMarketplace, Marketplace: &Marketplace{
+		Name:                                "acme",
+		Owner:                               map[string]any{"name": "Acme IT"},
+		Renames:                             map[string]any{"old-plugin": "new-plugin"},
+		AllowCrossMarketplaceDependenciesOn: []any{"other-marketplace"},
+	}}
+	minimal := Placement{Kind: KindMarketplace, Marketplace: &Marketplace{Name: "acme", Owner: "Acme IT"}}
+	empties := Placement{Kind: KindMarketplace, Marketplace: &Marketplace{Name: "acme", Owner: "Acme IT", Renames: map[string]any{}, AllowCrossMarketplaceDependenciesOn: []any{}}}
+	items := []render.Item{
+		{Name: "alpha", Version: "1.0.0", Path: `C:\m\plugins\alpha`},
+		{Name: "zeta", Version: "2.0.0", Managed: true, Path: `C:\m\plugins\zeta`},
+	}
+	tests := map[string]struct {
+		template string
+		ctx      render.FileContext
+		want     string
+	}{
+		"catalog": {DefaultCatalogTemplate, render.FileContext{OS: Windows, Scope: ScopeMachine, Placement: full.View("market", `C:\m`), Items: items}, `{
+  "allowCrossMarketplaceDependenciesOn": [
+    "other-marketplace"
+  ],
+  "name": "acme",
+  "owner": {
+    "name": "Acme IT"
+  },
+  "plugins": [
+    {
+      "defaultEnabled": false,
+      "name": "alpha",
+      "source": "./plugins/alpha",
+      "version": "1.0.0"
+    },
+    {
+      "defaultEnabled": true,
+      "name": "zeta",
+      "source": "./plugins/zeta",
+      "version": "2.0.0"
+    }
+  ],
+  "renames": {
+    "old-plugin": "new-plugin"
+  }
+}
+`},
+		"catalog without the optional keys or plugins": {DefaultCatalogTemplate, render.FileContext{OS: Darwin, Scope: ScopeMachine, Placement: minimal.View("market", "/m")}, `{
+  "name": "acme",
+  "owner": "Acme IT",
+  "plugins": []
+}
+`},
+		"catalog with the optional keys empty": {DefaultCatalogTemplate, render.FileContext{OS: Darwin, Scope: ScopeMachine, Placement: empties.View("market", "/m")}, `{
+  "allowCrossMarketplaceDependenciesOn": [],
+  "name": "acme",
+  "owner": "Acme IT",
+  "plugins": [],
+  "renames": {}
+}
+`},
+		"drop-in": {DefaultSettingsTemplate, render.FileContext{OS: Windows, Scope: ScopeMachine, Placement: Placement{Kind: KindSettings}.View("drop-in", `C:\s.json`), Registers: full.Registered("market", `C:\ProgramData\Acme\marketplace`), Items: items}, `{
+  "enabledPlugins": {
+    "zeta@acme": true
+  },
+  "extraKnownMarketplaces": {
+    "acme": {
+      "source": {
+        "path": "C:\\ProgramData\\Acme\\marketplace",
+        "source": "directory"
+      }
+    }
+  }
+}
+`},
+		"drop-in with no managed plugin": {DefaultSettingsTemplate, render.FileContext{OS: Darwin, Scope: ScopeMachine, Placement: Placement{Kind: KindSettings}.View("drop-in", "/s.json"), Registers: minimal.Registered("market", "/Library/Application Support/Acme/marketplace"), Items: items[:1]}, `{
+  "enabledPlugins": {},
+  "extraKnownMarketplaces": {
+    "acme": {
+      "source": {
+        "path": "/Library/Application Support/Acme/marketplace",
+        "source": "directory"
+      }
+    }
+  }
+}
+`},
+		"drop-in with no plugin": {DefaultSettingsTemplate, render.FileContext{OS: Darwin, Scope: ScopeMachine, Placement: Placement{Kind: KindSettings}.View("drop-in", "/s.json"), Registers: minimal.Registered("market", "/m")}, ""},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			tmpl, err := render.Parse(name, tc.template)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, _, err := tmpl.Render(tc.ctx, nil, "x.json")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(got) != tc.want {
+				t.Errorf("rendered\n%s\nwant\n%s", got, tc.want)
 			}
 		})
 	}

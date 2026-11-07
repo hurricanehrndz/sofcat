@@ -146,12 +146,36 @@ func TestMarketplaceGolden(t *testing.T) {
 	if !exists(filepath.Join(m.root, "plugins", "zeta", "README.md")) || !exists(filepath.Join(m.root, ".sofcat-test-owned")) {
 		t.Fatal("plugin not placed at <root>/plugins/<item>, or the root has no marker")
 	}
+	// Canonical JSON: keys sorted at every level.
 	wantManifest := `{
+  "allowCrossMarketplaceDependenciesOn": [
+    "other",
+    {
+      "name": "third",
+      "only": [
+        "x"
+      ]
+    }
+  ],
   "name": "acme",
   "owner": {
     "email": "it@acme.test",
     "name": "Acme IT"
   },
+  "plugins": [
+    {
+      "defaultEnabled": false,
+      "name": "alpha",
+      "source": "./plugins/alpha",
+      "version": "1.0.0"
+    },
+    {
+      "defaultEnabled": true,
+      "name": "zeta",
+      "source": "./plugins/zeta",
+      "version": "1.0.0"
+    }
+  ],
   "renames": {
     "old-plugin": "new-plugin",
     "older": {
@@ -163,30 +187,7 @@ func TestMarketplaceGolden(t *testing.T) {
       "since": 2,
       "to": "new-plugin"
     }
-  },
-  "allowCrossMarketplaceDependenciesOn": [
-    "other",
-    {
-      "name": "third",
-      "only": [
-        "x"
-      ]
-    }
-  ],
-  "plugins": [
-    {
-      "name": "alpha",
-      "source": "./plugins/alpha",
-      "version": "1.0.0",
-      "defaultEnabled": false
-    },
-    {
-      "name": "zeta",
-      "source": "./plugins/zeta",
-      "version": "1.0.0",
-      "defaultEnabled": true
-    }
-  ]
+  }
 }
 `
 	if got := m.manifest(t); got != wantManifest {
@@ -197,16 +198,16 @@ func TestMarketplaceGolden(t *testing.T) {
 	}
 
 	wantSettings := `{
+  "enabledPlugins": {
+    "zeta@acme": true
+  },
   "extraKnownMarketplaces": {
     "acme": {
       "source": {
-        "source": "directory",
-        "path": ` + jsonString(t, m.root) + `
+        "path": ` + jsonString(t, m.root) + `,
+        "source": "directory"
       }
     }
-  },
-  "enabledPlugins": {
-    "zeta@acme": true
   }
 }
 `
@@ -269,10 +270,10 @@ func TestMarketplaceHeldPluginKeepsFlag(t *testing.T) {
 	if m.manifest(t) != manifest || readFile(t, m.settings) != settings {
 		t.Errorf("generated files changed:\n%s\n%s", m.manifest(t), readFile(t, m.settings))
 	}
-	if !strings.Contains(manifest, `"name": "held",
+	if !strings.Contains(manifest, `"defaultEnabled": true,
+      "name": "held",
       "source": "./plugins/held",
-      "version": "1.0.0",
-      "defaultEnabled": true`) {
+      "version": "1.0.0"`) {
 		t.Errorf("held plugin's entry changed:\n%s", manifest)
 	}
 	if got := m.enabled(t); !got["held@acme"] || len(got) != 1 {

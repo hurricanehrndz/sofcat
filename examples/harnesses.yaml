@@ -61,15 +61,16 @@ placements:
         name: Acme IT
       # renames: {old-plugin: new-plugin}
       # allowCrossMarketplaceDependenciesOn: [other-marketplace]
-      # Files to write, relative to the placement root. A string gets the
-      # built-in Claude-format catalog; the default when left out is
-      # [.claude-plugin/marketplace.json]. An object {path, template} gets
-      # the template rendered with the marketplace's receipts as .Items (see
-      # the zip-items guide, "Templates for placement files"). A .json path
-      # is rewritten in canonical form, so only the values matter. This one
-      # is Codex's catalog format; the version carries the placed hash, so
-      # Codex sees a new version whenever a rendered file in the plugin
-      # changes.
+      # Files to write, relative to the placement root. A string is rendered
+      # from the default template, the Claude Code marketplace catalog (the
+      # zip-items guide, "Marketplace and settings placements", shows it; to
+      # change it, copy it here as {path, template}); the default when left
+      # out is [.claude-plugin/marketplace.json]. An object {path, template}
+      # gets the template rendered with the marketplace's receipts as .Items
+      # (see the guide, "Templates for placement files"). A .json path is
+      # rewritten in canonical form, so only the values matter. This one is
+      # Codex's catalog format; the version carries the placed hash, so Codex
+      # sees a new version whenever a rendered file in the plugin changes.
       manifest_files:
         - .claude-plugin/marketplace.json
         - path: .agents/plugins/marketplace.json
@@ -93,10 +94,11 @@ placements:
             }
   claude-code-settings:
     # settings: one file, never an item's target. Without a template it is
-    # the Claude Code drop-in that registers a marketplace and enables its
-    # managed plugins, keyed <plugin>@<marketplace name>; sofcat rewrites it
-    # with the marketplace and removes it when no plugin is left. Machine
-    # scope only.
+    # rendered from the default template, the Claude Code drop-in that
+    # registers a marketplace and enables its managed plugins, keyed
+    # <plugin>@<marketplace name>; sofcat rewrites it with the marketplace
+    # and removes it when no plugin is left. The guide shows the default; to
+    # change it, copy it here as template. Machine scope only.
     kind: settings
     paths:
       darwin: /Library/Application Support/ClaudeCode/managed-settings.d/50-acme.json
