@@ -1,0 +1,15 @@
+# A manifest template reading a fact no OS has.
+placements:
+  market:
+    kind: marketplace
+    paths:
+      darwin: /Library/Application Support/Demo/marketplace
+      windows: ${ProgramData}\Demo\marketplace
+    marketplace:
+      name: demo
+      owner: {name: Demo}
+      manifest_files:
+        - .claude-plugin/marketplace.json
+        - path: .agents/plugins/marketplace.json
+          template: |
+            {"host": {{ json (fact "missing") }}}

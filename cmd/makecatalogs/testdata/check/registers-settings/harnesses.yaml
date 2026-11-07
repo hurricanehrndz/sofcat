@@ -1,0 +1,25 @@
+# A settings placement registering another settings placement.
+placements:
+  market:
+    kind: marketplace
+    paths:
+      darwin: /Library/Application Support/Demo/marketplace
+      windows: ${ProgramData}\Demo\marketplace
+    marketplace:
+      name: demo
+      owner: {name: Demo}
+      manifest_files:
+        - .claude-plugin/marketplace.json
+  drop-in:
+    kind: settings
+    paths:
+      darwin: /Library/Application Support/Demo/drop-in.json
+      windows: ${ProgramData}\Demo\drop-in.json
+    registers: market
+  index:
+    kind: settings
+    paths:
+      darwin: /Library/Application Support/Demo/index.json
+      windows: ${ProgramData}\Demo\index.json
+    registers: drop-in
+    template: "{{ json .Items }}"

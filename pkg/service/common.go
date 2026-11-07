@@ -590,6 +590,7 @@ func getOptionalItems(cfg config.Configuration) ([]OptionalInstallItem, error) {
 
 	// One shared checker so the registry snapshot amortizes across items.
 	zip := newZipInstaller(cfg, table)
+	zip.Facts = machineFacts
 	checker := &status.Checker{Zip: zip.Installed, Nupkg: func(id string) (string, bool) { return installer.KeptNupkgVersion(cfg.NupkgPath, id) }}
 	now := nowRFC3339UTC()
 

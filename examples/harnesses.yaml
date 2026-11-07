@@ -4,6 +4,12 @@
 #
 # The paths below are illustrative. Check each harness's documentation for
 # the directories it reads, and keep every path inside the build's write roots.
+#
+# Facts makecatalogs -check renders templates with, over a sample of every
+# built-in fact (see the conditions guide): the admin facts the templates
+# read, with the values to check them against.
+check_facts:
+  site: east
 placements:
   # The key is the placement name. Catalog variants and rendered trees use it.
   claude-code-skills:
@@ -55,13 +61,40 @@ placements:
         name: Acme IT
       # renames: {old-plugin: new-plugin}
       # allowCrossMarketplaceDependenciesOn: [other-marketplace]
-      # Manifests to write, relative to the placement root. This is the
-      # default when left out.
+      # Files to write, relative to the placement root. A string gets the
+      # built-in Claude-format catalog; the default when left out is
+      # [.claude-plugin/marketplace.json]. An object {path, template} gets
+      # the template rendered with the marketplace's receipts as .Items (see
+      # the zip-items guide, "Templates for placement files"). A .json path
+      # is rewritten in canonical form, so only the values matter. This one
+      # is Codex's catalog format; the version carries the placed hash, so
+      # Codex sees a new version whenever a rendered file in the plugin
+      # changes.
       manifest_files:
         - .claude-plugin/marketplace.json
+        - path: .agents/plugins/marketplace.json
+          template: |
+            {
+              "name": {{ json .Placement.Marketplace.Name }},
+              "interface": {"displayName": {{ json .Placement.Marketplace.Owner.name }}},
+              "plugins": [
+                {{- range $i, $p := .Items }}{{ if $i }},{{ end }}
+                {
+                  "name": {{ json $p.Name }},
+                  "version": "{{ $p.Version }}+{{ slice $p.PlacedHash 7 19 }}",
+                  "source": {"source": "local", "path": "./plugins/{{ $p.Name }}"},
+                  "policy": {
+                    "installation": {{ if $p.Managed }}"INSTALLED_BY_DEFAULT"{{ else }}"AVAILABLE"{{ end }},
+                    "authentication": "ON_INSTALL"
+                  }
+                }
+                {{- end }}
+              ]
+            }
   claude-code-settings:
-    # settings: one JSON drop-in that registers a marketplace and enables its
-    # managed plugins, keyed <plugin>@<marketplace name>. sofcat rewrites it
+    # settings: one file, never an item's target. Without a template it is
+    # the Claude Code drop-in that registers a marketplace and enables its
+    # managed plugins, keyed <plugin>@<marketplace name>; sofcat rewrites it
     # with the marketplace and removes it when no plugin is left. Machine
     # scope only.
     kind: settings
@@ -69,5 +102,26 @@ placements:
       darwin: /Library/Application Support/ClaudeCode/managed-settings.d/50-acme.json
       windows: ${ProgramData}\ClaudeCode\managed-settings.d\50-acme.json
     works_in: [Claude Code]
-    # Only on kind settings: the marketplace placement this file registers.
+    # Only on kind settings: the placement this file registers. Without a
+    # template it must be a marketplace.
     registers: acme-marketplace
+  claude-code-skills-index:
+    # With a template, a settings placement may register a directory
+    # placement too. The template is rendered with the registered
+    # placement's receipts as .Items after every change there; an empty
+    # output removes the file, so {{ if .Items }} decides whether it stays
+    # with nothing placed. fact and cond read the machine's facts.
+    kind: settings
+    paths:
+      darwin: /Library/Application Support/ClaudeCode/skills-index.json
+      windows: ${ProgramData}\ClaudeCode\skills-index.json
+    works_in: [Claude Code]
+    registers: claude-code-skills
+    template: |
+      {{- if .Items }}
+      {
+        "os": {{ json (fact "os") }},
+        "root": {{ json .Registers.Root }},
+        "skills": {{ json .Items }}
+      }
+      {{- end }}

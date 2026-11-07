@@ -10,8 +10,9 @@
 # root-only data directory, managed and self-service placement, removal,
 # adoption of a hand-placed tree, conflict reporting for a user edit, the
 # exclusive-root marker and refusal, a placement outside the write roots, the
-# marketplace plugins with the generated marketplace.json and settings drop-in,
-# a skill deferred until a Munki report lists its required software, a held
+# marketplace plugins with the generated marketplace.json, the templated Codex
+# catalog and skills index and the settings drop-in, a skill deferred until a
+# Munki report lists its required software, a held
 # conditional item, scope exit, and the zip-only build's rejection of an exe
 # item and a skill with a postinstall_script.
 #
@@ -62,6 +63,10 @@ MARKET_ROOT="$SMOKE_ROOT/marketplace"
 PLUGINS_ROOT="$MARKET_ROOT/plugins"
 MARKETPLACE_JSON="$MARKET_ROOT/.claude-plugin/marketplace.json"
 DROP_IN="$SMOKE_ROOT/claude/managed-settings.d/50-tapas-test.json"
+# Rendered from the templates in harnesses.yaml, without receipts.
+CODEX_JSON="$MARKET_ROOT/.agents/plugins/marketplace.json"
+SKILLS_INDEX="$SMOKE_ROOT/claude/skills-index.json"
+EXCLUSIVE_INDEX="$SMOKE_ROOT/claude/exclusive-index.json"
 SCRIPTED_MARKER="$SMOKE_ROOT/scripted-skill-ran.txt"
 
 step_num=0
@@ -213,6 +218,18 @@ receipt_times() {
 	done
 }
 
+# assert_skills_index SKILL... checks the templated registration of
+# claude-skills (tapas-skills-index in harnesses.yaml): JSON with the os
+# fact, the registered root and exactly the skills placed there.
+assert_skills_index() {
+	local want
+	[ -f "$SKILLS_INDEX" ] || fail "$SKILLS_INDEX is missing"
+	want=$(printf '%s\n' "$@" | sort | jq -R . | jq -sc .)
+	jq -e --arg root "$CLAUDE_ROOT" --argjson want "$want" \
+		'.os == "darwin" and .root == $root and ([.skills[].name] | sort) == $want' \
+		"$SKILLS_INDEX" >/dev/null || fail "skills index does not list $*: $(cat "$SKILLS_INDEX")"
+}
+
 assert_not_placed() {
 	[ ! -e "$1/$3" ] || fail "$1/$3 exists"
 	[ ! -e "$(receipt_path "$2" "$3")" ] || fail "receipt $(receipt_path "$2" "$3") exists"
@@ -289,7 +306,8 @@ startup_done() { [ -f "$managed_rc" ] && [ -f "$INVENTORY" ]; }
 wait_for "the managed skill's receipt and inventory.json" startup_done
 assert_placed "$CLAUDE_ROOT" claude-skills tapas-managed-skill
 jq -e '.managed == true' "$managed_rc" >/dev/null || fail "the managed skill's receipt has managed=false"
-pass "tapas-managed-skill placed under $CLAUDE_ROOT, receipt managed=true"
+assert_skills_index tapas-managed-skill
+pass "tapas-managed-skill placed under $CLAUDE_ROOT, receipt managed=true; skills index lists it"
 
 step "The Codex placement is per machine on macOS"
 assert_placed "$CODEX_ROOT" codex-skills tapas-managed-skill
@@ -305,7 +323,10 @@ pass "$(jq -c '.Conditions | {os, os_version, machine_model, machine_type, machi
 step "The exclusive placement root sofcat created carries the .$SLUG-owned marker"
 assert_placed "$EXCLUSIVE_ROOT" exclusive-skills tapas-exclusive-skill
 [ -f "$EXCLUSIVE_ROOT/.$SLUG-owned" ] || fail "marker $EXCLUSIVE_ROOT/.$SLUG-owned is missing"
-pass "tapas-exclusive-skill placed and $EXCLUSIVE_ROOT/.$SLUG-owned present"
+[ -f "$EXCLUSIVE_INDEX" ] || fail "$EXCLUSIVE_INDEX is missing"
+jq -e '.skills == ["tapas-exclusive-skill"]' "$EXCLUSIVE_INDEX" >/dev/null ||
+	fail "exclusive index does not list tapas-exclusive-skill: $(cat "$EXCLUSIVE_INDEX")"
+pass "tapas-exclusive-skill placed and $EXCLUSIVE_ROOT/.$SLUG-owned present; exclusive index lists it"
 
 step "Held conditional items are not placed while their facts are missing"
 [ ! -e "$CONDITION_SCRIPT" ] || fail "$CONDITION_SCRIPT exists before the smoke wrote it (not a clean Mac?)"
@@ -351,18 +372,34 @@ step "InstallItem places the optional skill with a receipt"
 assert_succeeded InstallItem:tapas-optional-skill
 assert_placed "$CLAUDE_ROOT" claude-skills tapas-optional-skill
 [ "$(optional_item tapas-optional-skill | jq -r .status)" = Installed ] || fail "tapas-optional-skill is not Installed after install"
-pass "tapas-optional-skill placed, status=Installed"
+assert_skills_index tapas-managed-skill tapas-optional-skill
+pass "tapas-optional-skill placed, status=Installed, in the skills index"
 
 step "RemoveItem removes the optional skill and its receipt"
 assert_succeeded RemoveItem:tapas-optional-skill
 wait_removed "$CLAUDE_ROOT" claude-skills tapas-optional-skill
 wait_pruned
-pass "tree and receipt gone, managed_uninstalls pruned"
+assert_skills_index tapas-managed-skill
+pass "tree and receipt gone, managed_uninstalls pruned, skills index back to the managed skill"
 
 # --- Marketplace and settings drop-in -----------------------------------------------
 
 plugin_entries() { jq -c --arg n "$1" '[.plugins[] | select(.name == $n)]' "$MARKETPLACE_JSON"; }
 enabled() { jq -e --arg k "$1" '.enabledPlugins[$k] == true' "$DROP_IN" >/dev/null; }
+
+codex_entries() { jq -c --arg n "$1" '[.plugins[] | select(.name == $n)]' "$CODEX_JSON"; }
+
+# assert_codex_entry NAME POLICY RECEIPT checks one Codex catalog entry: a
+# local source under plugins/, the installation policy from the managed flag,
+# and the version stamped with the receipt's placed hash.
+assert_codex_entry() {
+	local want
+	want="1.0.0+$(jq -r '.placed_hash[7:19]' "$3")"
+	codex_entries "$1" | jq -e --arg n "$1" --arg p "$2" --arg v "$want" \
+		'length == 1 and .[0].source == {source: "local", path: ("./plugins/" + $n)} and .[0].policy.installation == $p
+		and (.[0].version | test("^1\\.0\\.0\\+[0-9a-f]{12}$")) and .[0].version == $v' >/dev/null ||
+		fail "$1 Codex entry: $(codex_entries "$1"), want local ./plugins/$1, $2, version $want"
+}
 
 step "The startup run places the managed plugin and generates marketplace.json"
 assert_placed "$PLUGINS_ROOT" tapas-marketplace tapas-managed-plugin .claude-plugin/plugin.json
@@ -373,7 +410,11 @@ jq -e '.name == "tapas-test" and .owner.name == "Tapas Test" and .renames["old-p
 plugin_entries tapas-managed-plugin | jq -e 'length == 1 and .[0].source == "./plugins/tapas-managed-plugin" and .[0].version == "1.0.0" and .[0].defaultEnabled == true' >/dev/null ||
 	fail "tapas-managed-plugin entry: $(plugin_entries tapas-managed-plugin)"
 [ "$(plugin_entries tapas-optional-plugin)" = "[]" ] || fail "the unselected optional plugin is listed"
-pass "plugins/tapas-managed-plugin placed; listed with defaultEnabled=true; renames and allowCrossMarketplaceDependenciesOn as configured"
+[ -f "$CODEX_JSON" ] || fail "$CODEX_JSON is missing"
+jq -e '.name == "tapas-test" and .interface.displayName == "Tapas Test"' "$CODEX_JSON" >/dev/null || fail "Codex catalog: $(jq -c . "$CODEX_JSON")"
+assert_codex_entry tapas-managed-plugin INSTALLED_BY_DEFAULT "$(receipt_path tapas-marketplace tapas-managed-plugin)"
+[ "$(codex_entries tapas-optional-plugin)" = "[]" ] || fail "the unselected optional plugin is in the Codex catalog"
+pass "plugins/tapas-managed-plugin placed; listed with defaultEnabled=true; renames and allowCrossMarketplaceDependenciesOn as configured; Codex catalog stamped INSTALLED_BY_DEFAULT"
 
 step "The drop-in registers the marketplace and enables the managed plugin"
 [ -f "$DROP_IN" ] || fail "$DROP_IN is missing"
@@ -391,7 +432,9 @@ plugin_entries tapas-optional-plugin | jq -e 'length == 1 and .[0].defaultEnable
 	fail "tapas-optional-plugin entry: $(plugin_entries tapas-optional-plugin)"
 ! enabled tapas-optional-plugin@tapas-test || fail "the optional plugin is in enabledPlugins"
 enabled tapas-managed-plugin@tapas-test || fail "the managed plugin left enabledPlugins"
-pass "tapas-optional-plugin listed with defaultEnabled=false, not in enabledPlugins"
+assert_codex_entry tapas-optional-plugin AVAILABLE "$(receipt_path tapas-marketplace tapas-optional-plugin)"
+assert_codex_entry tapas-managed-plugin INSTALLED_BY_DEFAULT "$(receipt_path tapas-marketplace tapas-managed-plugin)"
+pass "tapas-optional-plugin listed with defaultEnabled=false, not in enabledPlugins; Codex catalog AVAILABLE"
 
 step "RemoveItem drops the optional plugin's entry"
 assert_succeeded RemoveItem:tapas-optional-plugin
@@ -400,7 +443,9 @@ wait_pruned
 [ "$(plugin_entries tapas-optional-plugin)" = "[]" ] || fail "tapas-optional-plugin still listed in marketplace.json"
 [ "$(plugin_entries tapas-managed-plugin | jq length)" = 1 ] || fail "tapas-managed-plugin no longer listed"
 enabled tapas-managed-plugin@tapas-test || fail "the managed plugin left enabledPlugins"
-pass "tree, receipt and entry gone; the managed plugin stays enabled"
+[ "$(codex_entries tapas-optional-plugin)" = "[]" ] || fail "tapas-optional-plugin still in the Codex catalog"
+assert_codex_entry tapas-managed-plugin INSTALLED_BY_DEFAULT "$(receipt_path tapas-marketplace tapas-managed-plugin)"
+pass "tree, receipt and both catalog entries gone; the managed plugin stays enabled"
 
 # --- Required software -------------------------------------------------------------
 
@@ -518,7 +563,8 @@ write_condition_script '{"tapas_smoke_scope": "in", "tapas_smoke_held": "yes"}'
 invoke_run
 assert_placed "$CLAUDE_ROOT" claude-skills tapas-scoped-skill
 assert_placed "$CLAUDE_ROOT" claude-skills tapas-held-skill
-pass "tapas-scoped-skill and tapas-held-skill placed"
+assert_skills_index tapas-managed-skill tapas-adopt-skill tapas-scoped-skill tapas-held-skill
+pass "tapas-scoped-skill and tapas-held-skill placed and in the skills index"
 
 step "Scope exit removes the item that left the desired set and keeps the held one"
 # tapas_smoke_scope turns false; tapas_smoke_held goes missing, so its block is held.
@@ -530,7 +576,10 @@ warned_held tapas_smoke_held || fail "inventory does not warn that the tapas_smo
 assert_placed "$CLAUDE_ROOT" claude-skills tapas-managed-skill
 assert_not_placed "$CLAUDE_ROOT" claude-skills tapas-scripted-skill
 [ ! -e "$SCRIPTED_MARKER" ] || fail "tapas-scripted-skill's postinstall_script ran: $SCRIPTED_MARKER exists"
-pass "tapas-scoped-skill removed; tapas-held-skill and tapas-managed-skill kept; tapas-scripted-skill never placed"
+# claude-skills never empties: tapas-managed-skill stays, so the index stays
+# and follows the receipts. Its removal with the last skill is a unit test.
+assert_skills_index tapas-managed-skill tapas-adopt-skill tapas-held-skill
+pass "tapas-scoped-skill removed, from the skills index too; tapas-held-skill and tapas-managed-skill kept; tapas-scripted-skill never placed"
 
 step "A condition script a user could change is skipped"
 write_condition_script '{"tapas_smoke_scope": "in", "tapas_smoke_held": "yes"}'
@@ -553,6 +602,18 @@ $before
 after
 $after"
 pass "$(printf '%s\n' "$before" | wc -l | tr -d ' ') receipts untouched"
+
+# --- Last item out ----------------------------------------------------------------
+
+step "Removing the last exclusive skill removes its index"
+# tapas-exclusive-skill is a default install (tapas_manifest.yaml), so it is
+# removable; the root keeps its marker, the index has nothing left to list.
+assert_succeeded RemoveItem:tapas-exclusive-skill
+wait_removed "$EXCLUSIVE_ROOT" exclusive-skills tapas-exclusive-skill
+wait_pruned
+assert_not_placed "$EXCLUSIVE_ROOT" exclusive-skills tapas-exclusive-skill
+[ ! -e "$EXCLUSIVE_INDEX" ] || fail "$EXCLUSIVE_INDEX still exists with nothing placed"
+pass "tree, receipt and $EXCLUSIVE_INDEX gone"
 
 step "Take SOFCAT_TEST_MUNKI_REPORT out of the daemon's plist again"
 /usr/libexec/PlistBuddy -c "Delete :EnvironmentVariables:SOFCAT_TEST_MUNKI_REPORT" "$PLIST" ||

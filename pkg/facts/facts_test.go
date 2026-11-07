@@ -3,6 +3,7 @@ package facts
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -115,5 +116,22 @@ func stub(t *testing.T, run func(string) ([]byte, error), builtins func() condit
 func TestBuiltinOSFact(t *testing.T) {
 	if got := collectBuiltinFacts()["os"]; got != runtime.GOOS {
 		t.Fatalf("os fact = %v, want %s", got, runtime.GOOS)
+	}
+}
+
+// makecatalogs renders templates against conditions.SampleFacts, so every
+// built-in fact this OS collects must have a sample there: a template that
+// reads one the samples lack would pass -check and fail on every device.
+func TestBuiltinFactsSampled(t *testing.T) {
+	samples := conditions.SampleFacts(runtime.GOOS)
+	for name, value := range collectBuiltinFacts() {
+		sample, ok := samples[name]
+		if !ok {
+			t.Errorf("built-in fact %s has no sample in conditions.SampleFacts(%q)", name, runtime.GOOS)
+			continue
+		}
+		if fmt.Sprintf("%T", sample) != fmt.Sprintf("%T", value) {
+			t.Errorf("sample %s is a %T, the fact a %T", name, sample, value)
+		}
 	}
 }

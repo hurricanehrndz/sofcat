@@ -1,0 +1,15 @@
+# A manifest template whose cond calls now(), which could never settle.
+placements:
+  market:
+    kind: marketplace
+    paths:
+      darwin: /Library/Application Support/Demo/marketplace
+      windows: ${ProgramData}\Demo\marketplace
+    marketplace:
+      name: demo
+      owner: {name: Demo}
+      manifest_files:
+        - .claude-plugin/marketplace.json
+        - path: .agents/plugins/marketplace.json
+          template: |
+            {"fresh": {{ if cond "now() > date(\"2020-01-01\")" }}true{{ else }}false{{ end }}}

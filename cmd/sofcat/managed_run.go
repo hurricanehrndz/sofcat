@@ -146,6 +146,7 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 	// self-service removal, or scope exit), nor its managed flag rewritten.
 	heldSet := heldItems(held)
 	zip := newZipInstaller(cfg, harnesses)
+	zip.Facts = machineFacts
 	managed := managedInstalls(manifests)
 	zip.Managed = func(item string) bool { return managed[item] }
 	zip.Held = func(item string) bool { return heldSet[item] }

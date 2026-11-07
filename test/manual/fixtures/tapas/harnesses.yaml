@@ -43,7 +43,9 @@ placements:
       windows: ${ProgramData}\tapas-test-outside\skills
     works_in: [Claude Code]
   # A marketplace sofcat creates, so it gets the marker: plugins under
-  # plugins\<item>, and a generated .claude-plugin\marketplace.json.
+  # plugins\<item>, a generated .claude-plugin\marketplace.json, and a
+  # Codex-format catalog rendered from a template, its versions stamped with
+  # each plugin's placed hash.
   tapas-marketplace:
     kind: marketplace
     paths:
@@ -63,6 +65,27 @@ placements:
       owner: {name: Tapas Test}
       renames: {old-plugin: tapas-managed-plugin}
       allowCrossMarketplaceDependenciesOn: [other]
+      manifest_files:
+        - .claude-plugin/marketplace.json
+        - path: .agents/plugins/marketplace.json
+          template: |
+            {
+              "name": {{ json .Placement.Marketplace.Name }},
+              "interface": {"displayName": {{ json .Placement.Marketplace.Owner.name }}},
+              "plugins": [
+                {{- range $i, $p := .Items }}{{ if $i }},{{ end }}
+                {
+                  "name": {{ json $p.Name }},
+                  "version": "{{ $p.Version }}+{{ slice $p.PlacedHash 7 19 }}",
+                  "source": {"source": "local", "path": "./plugins/{{ $p.Name }}"},
+                  "policy": {
+                    "installation": {{ if $p.Managed }}"INSTALLED_BY_DEFAULT"{{ else }}"AVAILABLE"{{ end }},
+                    "authentication": "ON_INSTALL"
+                  }
+                }
+                {{- end }}
+              ]
+            }
   # The drop-in that registers tapas-marketplace and enables its managed
   # plugins.
   tapas-settings:
@@ -72,3 +95,33 @@ placements:
       windows: ${ProgramData}\tapas-test-smoke\claude\managed-settings.d\50-tapas-test.json
     works_in: [Claude Code]
     registers: tapas-marketplace
+  # A templated registration of the claude-skills directory: a JSON index of
+  # the skills placed there, with the OS fact, removed when none is left.
+  tapas-skills-index:
+    kind: settings
+    paths:
+      darwin: /Library/Application Support/Tapas Test/claude/skills-index.json
+      windows: ${ProgramData}\tapas-test-smoke\claude\skills-index.json
+    works_in: [Claude Code]
+    registers: claude-skills
+    template: |
+      {{- if .Items }}
+      {
+        "os": {{ json (fact "os") }},
+        "root": {{ json .Registers.Root }},
+        "skills": {{ json .Items }}
+      }
+      {{- end }}
+  # The same for exclusive-skills, whose only item the smokes remove last: it
+  # exists to show the file disappears once nothing is registered.
+  tapas-exclusive-index:
+    kind: settings
+    paths:
+      darwin: /Library/Application Support/Tapas Test/claude/exclusive-index.json
+      windows: ${ProgramData}\tapas-test-smoke\claude\exclusive-index.json
+    works_in: [Claude Code]
+    registers: exclusive-skills
+    template: |
+      {{- if .Items }}
+      {"skills": [{{ range $i, $p := .Items }}{{ if $i }}, {{ end }}{{ json $p.Name }}{{ end }}]}
+      {{- end }}

@@ -260,3 +260,62 @@ func TestCheckFlagsBadConditionalItems(t *testing.T) {
 		})
 	}
 }
+
+// -check renders every placement template in harnesses.yaml against the
+// catalog's items and the sample facts, so a template that would fail on
+// every device fails the PR instead. Each fixture under testdata/check is a
+// repository with one broken template; the error names the placement and
+// what is wrong.
+func TestCheckRejectsBadTemplates(t *testing.T) {
+	for name, want := range map[string][]string{
+		"fact-missing":       {`placement "market"`, `.agents/plugins/marketplace.json`, `fact "missing": no such fact`},
+		"cond-unseeded":      {`placement "codex-settings"`, `template on darwin`, `no fact named assigned_user`},
+		"cond-now":           {`placement "market"`, `.agents/plugins/marketplace.json`, `calls now()`},
+		"bad-json":           {`placement "market"`, `.agents/plugins/marketplace.json`, `not JSON`},
+		"registers-settings": {`placement "index"`, `registers "drop-in", which is a settings placement`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			if code := run([]string{"-check", filepath.Join("testdata", "check", name)}, &stdout, &stderr); code != 1 {
+				t.Fatalf("exit %d, want 1; stderr: %s", code, stderr.String())
+			}
+			for _, w := range want {
+				if !strings.Contains(stderr.String(), w) {
+					t.Errorf("stderr lacks %q:\n%s", w, stderr.String())
+				}
+			}
+		})
+	}
+	// check_facts seeds the admin facts a template reads.
+	var stdout, stderr bytes.Buffer
+	if code := run([]string{"-check", filepath.Join("testdata", "check", "check-facts-ok")}, &stdout, &stderr); code != 0 {
+		t.Errorf("check-facts-ok: exit %d; stderr: %s", code, stderr.String())
+	}
+}
+
+// examples/harnesses.yaml carries the guide's templates; they must pass the
+// check they document, against the example zip item.
+func TestCheckExamples(t *testing.T) {
+	examples := filepath.Join("..", "..", "examples")
+	repo := t.TempDir()
+	for src, dst := range map[string]string{
+		filepath.Join(examples, "harnesses.yaml"):                             "harnesses.yaml",
+		filepath.Join(examples, "zip-items", "generated", "hello-world.yaml"): filepath.Join("packages-info", "hello-world.yaml"),
+	} {
+		body, err := os.ReadFile(src)
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(repo, dst)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, body, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var stdout, stderr bytes.Buffer
+	if code := run([]string{"-check", repo}, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit %d; stderr: %s", code, stderr.String())
+	}
+}

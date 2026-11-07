@@ -16,6 +16,7 @@ import (
 
 	"github.com/hurricanehrndz/sofcat/pkg/artifact"
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
+	"github.com/hurricanehrndz/sofcat/pkg/conditions"
 	"github.com/hurricanehrndz/sofcat/pkg/config"
 	"github.com/hurricanehrndz/sofcat/pkg/download"
 	"github.com/hurricanehrndz/sofcat/pkg/harness"
@@ -49,6 +50,10 @@ type ZipInstaller struct {
 	// item's managed flag is never rewritten: the run cannot tell whether it
 	// is managed. Nil means nothing is held.
 	Held func(item string) bool
+	// Facts are the run's facts (pkg/facts), which placement file templates
+	// read through fact and cond. Nil means the machine has no facts, so a
+	// template that reads one fails.
+	Facts conditions.Facts
 
 	// renderer decides what sofcat renders inside a tree; noTemplates when
 	// nil.
