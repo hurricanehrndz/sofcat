@@ -36,6 +36,11 @@ _ui_tags := "production" + _ui_icon_tag + (if write_roots == "" { "" } else { ",
 _subst := "-e 's|@APP@|" + app + "|g' -e 's|@PRODUCT@|" + product + "|g' -e 's|@PUBLISHER@|" + publisher + "|g' -e 's|@IDENTIFIER@|" + identifier + "|g' -e 's|@DESCRIPTION@|" + description + "|g' -e 's|@HOMEPAGE@|" + homepage + "|g'"
 _identity := "-X github.com/hurricanehrndz/sofcat/pkg/identity.Slug=" + app + " -X 'github.com/hurricanehrndz/sofcat/pkg/identity.Name=" + product + "' -X github.com/hurricanehrndz/sofcat/pkg/identity.Identifier=" + identifier
 version := `git describe --tags --always --dirty 2>/dev/null || echo dev`
+# Signing hook (site/src/content/docs/reference/code-signing.md): a shell
+# command line that `build` runs with both executables appended and `setup`
+# hands to embala as [sign.windows] for setup.exe and the uninstaller stub.
+# Unset, nothing is signed.
+SIGN_CMD := env("SIGN_CMD", "")
 pkg_version := replace_regex(replace_regex(version, "^v", ""), "[-+].*$", "")
 manual_test_dir := "build/manual-test"
 server_root := manual_test_dir / "server-root"
@@ -141,12 +146,15 @@ build arch="amd64": ui-assets (winres arch)
     GOOS=windows GOARCH={{arch}} CGO_ENABLED=0 \
         go build -tags {{_ui_tags}} -ldflags "-H windowsgui {{_identity}}" \
         -o build/{{app}}-ui.exe ./ui
+    {{ if SIGN_CMD == "" { "true" } else { SIGN_CMD + " build/" + app + ".exe build/" + app + "-ui.exe" } }}
 
 # Windows installer -> build/<app>-<pkg_version>-x86_64-setup.exe (embala's
 # setup format; it builds on any OS, since the stub is prebuilt and embala
 # only appends the payload). pkg_version is the numeric part of version:
 # v1.5.0-3-gabc-dirty -> 1.5.0. installer/install.lua and uninstall.lua are
-# rendered beside embala.toml with the same placeholders.
+# rendered beside embala.toml with the same placeholders. With SIGN_CMD set, a
+# [sign.windows] section is appended to the rendered embala.toml (the command
+# as a TOML basic string, so \ and " in it are escaped, with embala's $f).
 setup: build
     rm -rf build/setup
     mkdir -p build/setup
@@ -154,6 +162,9 @@ setup: build
     for f in embala.toml install.lua uninstall.lua; do \
       sed -e "s/@VERSION@/{{pkg_version}}/" {{_subst}} installer/$f > build/setup/$f || exit 1; \
     done
+    sign_cmd={{quote(SIGN_CMD)}}; if [ -n "$sign_cmd" ]; then \
+      sign_cmd=${sign_cmd//\\/\\\\}; sign_cmd=${sign_cmd//\"/\\\"}; \
+      printf '\n[sign.windows]\ncommand = "%s $f"\n' "$sign_cmd" >> build/setup/embala.toml; fi
     embala build --config build/setup/embala.toml --formats setup --out-dir build
 
 # The oldest macOS the app and the cgo objects in it are built for.

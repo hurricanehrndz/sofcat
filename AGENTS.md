@@ -62,6 +62,10 @@ helper, `<slug>-ui.exe --user-sync`, at logon. Its `uninstall.exe` runs
 the value, then reverses the copies. sofcat owns both on every platform, so
 the installer scripts only call it. `setup.exe /S` and `uninstall.exe /S` are
 the unattended forms; `setup.exe` refuses to install over an existing service.
+With `SIGN_CMD` set (environment or `just SIGN_CMD=... setup`), `build` runs
+it on both executables and `setup` has embala run it on `setup.exe` and the
+uninstaller stub (`site/src/content/docs/reference/code-signing.md`); unset,
+nothing is signed.
 Everything the service writes lives under `C:\ProgramData\SofCat`, as under
 `/Library/Application Support/<Name>` on a Mac: `config.yaml`, the `Data`
 directory (the default `app_data_path`, SYSTEM and Administrators only
