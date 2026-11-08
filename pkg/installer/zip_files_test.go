@@ -482,21 +482,34 @@ func TestItemsDirLinkRefused(t *testing.T) {
 
 // TestSettingsPathOutsideRootsRefused: the drop-in's path passes the same
 // guard as any placement. The plugin is placed, but the item fails with
-// placement_refused naming the placement, and since every file of a
-// placement is checked and rendered before any is written, none is.
+// placement_refused naming the placement. The catalogs are still written,
+// so one bad file does not hold back the rest, unless files_atomic asks
+// for all or none.
 func TestSettingsPathOutsideRootsRefused(t *testing.T) {
-	outside := filepath.Join(tempDir(t), "settings.d", "50-acme.json")
-	m := newMarketTest(t, outside)
-	item, archive := plugin(t, "one", "market")
-	res := m.z.Apply(item, target(t, m.z, item, "market"), archive)
-	if res.Outcome != OutcomeRefused || res.Code() != report.CodePlacementRefused || !strings.Contains(res.Err.Error(), `"market"`) {
-		t.Errorf("result = %s %q (%v), want refused naming market", res.Outcome, res.Code(), res.Err)
-	}
-	if exists(filepath.Dir(outside)) {
-		t.Error("wrote outside the write roots")
-	}
-	if !exists(filepath.Join(m.root, "plugins", "one")) || exists(filepath.Join(m.root, ".claude-plugin")) {
-		t.Error("want the plugin placed and no catalog written beside the refusal")
+	for _, atomic := range []bool{false, true} {
+		t.Run(fmt.Sprintf("files_atomic=%t", atomic), func(t *testing.T) {
+			outside := filepath.Join(tempDir(t), "settings.d", "50-acme.json")
+			m := newMarketTest(t, outside)
+			spec := m.z.Table.Placements["market"]
+			spec.FilesAtomic = atomic
+			m.z.Table.Placements["market"] = spec
+			item, archive := plugin(t, "one", "market")
+			res := m.z.Apply(item, target(t, m.z, item, "market"), archive)
+			if res.Outcome != OutcomeRefused || res.Code() != report.CodePlacementRefused || !strings.Contains(res.Err.Error(), `"market"`) {
+				t.Errorf("result = %s %q (%v), want refused naming market", res.Outcome, res.Code(), res.Err)
+			}
+			if exists(filepath.Dir(outside)) {
+				t.Error("wrote outside the write roots")
+			}
+			if !exists(filepath.Join(m.root, "plugins", "one")) {
+				t.Error("plugin not placed")
+			}
+			for _, catalog := range []string{".claude-plugin", filepath.Join(".agents", "plugins")} {
+				if got := exists(filepath.Join(m.root, catalog, "marketplace.json")); got == atomic {
+					t.Errorf("%s catalog written = %t, want %t", catalog, got, !atomic)
+				}
+			}
+		})
 	}
 }
 

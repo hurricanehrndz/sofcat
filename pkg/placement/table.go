@@ -59,6 +59,9 @@ type Spec struct {
 	// Files are rendered from the placement's receipts after every change
 	// to it.
 	Files []File `yaml:"files,omitempty"`
+	// FilesAtomic writes none of Files unless every one renders and passes
+	// its checks. Without it, each is written on its own.
+	FilesAtomic bool `yaml:"files_atomic,omitempty"`
 }
 
 // File is a file a placement renders (render.FileContext): at Path,
@@ -239,6 +242,9 @@ func validatePlacement(name string, p Spec) []error {
 	// (.tmp/user-scope-spec/plan.md).
 	if (p.ItemsDir != "" || len(p.Files) > 0 || len(p.Vars) > 0) && (p.ScopeFor(Darwin) == ScopeUser || p.ScopeFor(Windows) == ScopeUser) {
 		fail("scope: items_dir, vars and files need machine scope on every OS")
+	}
+	if p.FilesAtomic && len(p.Files) == 0 {
+		fail("files_atomic: set without files")
 	}
 	return append(errs, validateFiles(p)...)
 }

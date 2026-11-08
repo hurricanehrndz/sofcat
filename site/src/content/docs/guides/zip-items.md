@@ -125,14 +125,16 @@ one of:
   gets no file. A path that resolves inside the root is held to the rules
   for `path`. Two entries may not name the same file.
 
-sofcat renders every entry with a path on this OS before it writes any, so a
-failed render leaves all of them as they were. It then writes each through a
-temporary file in the same directory, creating the directory if needed, or
-removes the file when the output is empty. Each path passes the same
-write-root and data and binary directory checks as a placement path. A
-refused path or a failed render fails the item that triggered the rewrite
-with `placement_refused`, and nothing is written; the per-run rewrite reports
-it under the placement's name, action `generate`.
+sofcat checks and renders every entry with a path on this OS, then writes
+each through a temporary file in the same directory, creating the directory
+if needed, or removes the file when the output is empty. Each path passes the
+same write-root and data and binary directory checks as a placement path. An
+entry whose path is refused or whose template fails to render keeps its file
+as it was, and the other entries are still written. Set `files_atomic: true`
+to write none of them unless every entry succeeds. Either way the item that
+triggered the rewrite fails with `placement_refused`, and the per-run rewrite
+reports it under the placement's name, action `generate`, until it is fixed.
+Two entries naming the same file write none.
 
 Files are written by the service only, and the per-user helper places trees
 without `items_dir` or `vars`, so a placement with `files`, `items_dir` or
@@ -737,6 +739,7 @@ placements:
 | `items_dir` | Optional. Item trees go to `<root>/<items_dir>/<item_name>` instead. A clean relative path, slash-separated, each segment one Windows can hold, whose first segment does not start with `.`. |
 | `vars` | Optional. Any mapping, read by the placement's templates as `.Placement.Vars`. |
 | `files` | Optional. Files rendered from the placement's receipts, each a `template` with a relative `path` or per-OS `paths` (Placement files). |
+| `files_atomic` | Optional, with `files`. When true, no file is written unless every one renders and passes its checks; otherwise each is written on its own. |
 | `check_facts` | Top level, beside `placements`: facts for `makecatalogs -check` over the built-in samples, for the admin facts templates read. |
 
 Windows paths may use `${ProgramFiles}` and `${ProgramData}`. A path may use

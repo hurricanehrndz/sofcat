@@ -234,6 +234,9 @@ func TestParseRejectsFiles(t *testing.T) {
 		"no template": {
 			`{paths: {darwin: /p}, files: [{path: .x}]}`, "files[0]: needs a template",
 		},
+		"files_atomic without files": {
+			`{paths: {darwin: /p}, files_atomic: true}`, "files_atomic: set without files",
+		},
 		"template that does not parse": {
 			`{paths: {darwin: /p}, files: [{path: .x, template: '{{ .Items'}]}`, "files[0]",
 		},

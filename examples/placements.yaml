@@ -79,6 +79,9 @@ placements:
     # registers the marketplace and enables its managed plugins, keyed
     # <plugin>@<name>, removed when no plugin is left. A relative path must
     # not reach into item trees: its first segment differs from items_dir's.
+    # A file that is refused or fails to render keeps its old contents and
+    # the others are still written; files_atomic: true writes none instead.
+    # files_atomic: true
     files:
       - path: .claude-plugin/marketplace.json
         template: |
