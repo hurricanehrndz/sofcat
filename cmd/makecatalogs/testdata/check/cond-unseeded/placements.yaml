@@ -1,0 +1,13 @@
+# A file template whose cond names an admin fact check_facts does not seed.
+placements:
+  market:
+    paths:
+      darwin: /Library/Application Support/Demo/marketplace
+      windows: ${ProgramData}\Demo\marketplace
+    items_dir: plugins
+    files:
+      - paths:
+          darwin: /Library/Application Support/Demo/codex.json
+          windows: ${ProgramData}\Demo\codex.json
+        template: |
+          {"managed": {{ if cond "assigned_user == \"admin\"" }}true{{ else }}false{{ end }}}

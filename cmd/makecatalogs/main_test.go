@@ -261,18 +261,17 @@ func TestCheckFlagsBadConditionalItems(t *testing.T) {
 	}
 }
 
-// -check renders every placement template in harnesses.yaml against the
+// -check renders every placement template in placements.yaml against the
 // catalog's items and the sample facts, so a template that would fail on
 // every device fails the PR instead. Each fixture under testdata/check is a
 // repository with one broken template; the error names the placement and
 // what is wrong.
 func TestCheckRejectsBadTemplates(t *testing.T) {
 	for name, want := range map[string][]string{
-		"fact-missing":       {`placement "market"`, `.agents/plugins/marketplace.json`, `fact "missing": no such fact`},
-		"cond-unseeded":      {`placement "codex-settings"`, `template on darwin`, `no fact named assigned_user`},
-		"cond-now":           {`placement "market"`, `.agents/plugins/marketplace.json`, `calls now()`},
-		"bad-json":           {`placement "market"`, `.agents/plugins/marketplace.json`, `not JSON`},
-		"registers-settings": {`placement "index"`, `registers "drop-in", which is a settings placement`},
+		"fact-missing":  {`placement "market"`, `.agents/plugins/marketplace.json`, `fact "missing": no such fact`},
+		"cond-unseeded": {`placement "market"`, `files[0] "/Library/Application Support/Demo/codex.json" on darwin`, `no fact named assigned_user`},
+		"cond-now":      {`placement "market"`, `.agents/plugins/marketplace.json`, `calls now()`},
+		"bad-json":      {`placement "market"`, `.agents/plugins/marketplace.json`, `not JSON`},
 	} {
 		t.Run(name, func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
@@ -293,13 +292,13 @@ func TestCheckRejectsBadTemplates(t *testing.T) {
 	}
 }
 
-// examples/harnesses.yaml carries the guide's templates; they must pass the
+// examples/placements.yaml carries the guide's templates; they must pass the
 // check they document, against the example zip item.
 func TestCheckExamples(t *testing.T) {
 	examples := filepath.Join("..", "..", "examples")
 	repo := t.TempDir()
 	for src, dst := range map[string]string{
-		filepath.Join(examples, "harnesses.yaml"):                             "harnesses.yaml",
+		filepath.Join(examples, "placements.yaml"):                            "placements.yaml",
 		filepath.Join(examples, "zip-items", "generated", "hello-world.yaml"): filepath.Join("packages-info", "hello-world.yaml"),
 	} {
 		body, err := os.ReadFile(src)

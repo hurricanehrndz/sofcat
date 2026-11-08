@@ -8,14 +8,9 @@ type FileContext struct {
 	OS string
 	// Scope is machine or user.
 	Scope string
-	// Placement is the placement the file belongs to: for a settings
-	// placement, the settings placement itself.
+	// Placement is the placement the file belongs to.
 	Placement Placement
-	// Registers is the registered placement of a settings placement; nil
-	// for a marketplace manifest.
-	Registers *Registered
-	// Items are the receipts of the placement the file describes (the
-	// registered one for a settings placement), sorted by item.
+	// Items are the receipts of the placement, sorted by item.
 	Items []Item
 	// User is the login name in user scope; empty in machine scope.
 	User string
@@ -24,33 +19,10 @@ type FileContext struct {
 // Placement describes a placement to a template.
 type Placement struct {
 	Name string
-	// Root is the expanded placement root: the file's path for a settings
-	// placement.
+	// Root is the expanded placement root, whatever file renders.
 	Root string
-	// Kind is directory, marketplace or settings.
-	Kind string
-	// Marketplace is the marketplace block, for a marketplace placement
-	// only; nil otherwise.
-	Marketplace *Marketplace
-}
-
-// Marketplace is a marketplace block as harnesses.yaml holds it. Owner,
-// Renames and AllowCrossMarketplaceDependenciesOn are the YAML values.
-type Marketplace struct {
-	Name                                string
-	Owner                               any
-	Renames                             any
-	AllowCrossMarketplaceDependenciesOn any
-}
-
-// Registered is the placement a settings placement registers.
-type Registered struct {
-	Name string
-	Root string
-	Kind string
-	// Marketplace is the registered placement's marketplace block; nil
-	// unless it is a marketplace placement.
-	Marketplace *Marketplace
+	// Vars is the placement's vars, as JSON values.
+	Vars any
 }
 
 // Item is one placed tree, from its receipt. The JSON names are the
@@ -70,7 +42,7 @@ type Item struct {
 }
 
 // TreeContext is what a template inside a placed tree renders with. It has
-// no Items or Registers, and the item has no PlacedHash, which is the hash
+// no Items, and the item has no PlacedHash, which is the hash
 // of the output.
 type TreeContext struct {
 	OS        string

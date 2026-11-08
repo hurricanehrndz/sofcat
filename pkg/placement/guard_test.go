@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hurricanehrndz/sofcat/pkg/harness"
 	"github.com/hurricanehrndz/sofcat/pkg/identity"
 )
 
@@ -36,7 +35,7 @@ func TestGuard(t *testing.T) {
 	}
 
 	g := Guard{
-		GOOS:       harness.Darwin,
+		GOOS:       Darwin,
 		Roots:      Roots{Darwin: []string{root, root2}},
 		DataDir:    data,
 		BinaryDirs: []string{bin},
@@ -61,7 +60,7 @@ func TestGuard(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := g.Resolve(tc.path, harness.ScopeMachine)
+			_, err := g.Resolve(tc.path, ScopeMachine)
 			if tc.refused != (err != nil) {
 				t.Fatalf("Resolve(%s) err = %v, want refused %v", tc.path, err, tc.refused)
 			}
@@ -72,7 +71,7 @@ func TestGuard(t *testing.T) {
 	}
 
 	// User scope has no roots unless the build gives some.
-	if _, err := g.Resolve(filepath.Join(root, "skills"), harness.ScopeUser); err == nil {
+	if _, err := g.Resolve(filepath.Join(root, "skills"), ScopeUser); err == nil {
 		t.Error("user scope accepted with no user roots")
 	}
 }
@@ -82,7 +81,7 @@ func TestGuard(t *testing.T) {
 // changing case.
 func TestGuardCase(t *testing.T) {
 	base := t.TempDir()
-	for _, goos := range []string{harness.Windows, harness.Darwin} {
+	for _, goos := range []string{Windows, Darwin} {
 		g := Guard{GOOS: goos}
 		if !g.within(filepath.Join(base, "ROOT", "x"), filepath.Join(base, "root")) {
 			t.Errorf("%s comparison is case-sensitive", goos)
@@ -94,8 +93,8 @@ func TestGuardCase(t *testing.T) {
 	if err := os.MkdirAll(bin, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	g := Guard{GOOS: harness.Darwin, Roots: Roots{Darwin: []string{root}}, BinaryDirs: []string{bin}}
-	if _, err := g.Resolve(filepath.Join(root, "BIN", "skills"), harness.ScopeMachine); !errors.Is(err, ErrRefused) {
+	g := Guard{GOOS: Darwin, Roots: Roots{Darwin: []string{root}}, BinaryDirs: []string{bin}}
+	if _, err := g.Resolve(filepath.Join(root, "BIN", "skills"), ScopeMachine); !errors.Is(err, ErrRefused) {
 		t.Errorf("placement in the binary directory under another case accepted: %v", err)
 	}
 }
@@ -105,19 +104,19 @@ func TestGuardCase(t *testing.T) {
 func TestGuardUserProfile(t *testing.T) {
 	profile := t.TempDir()
 	g := Guard{
-		GOOS:  harness.Darwin, // POSIX paths on the test host; scope logic is the same
+		GOOS:  Darwin, // POSIX paths on the test host; scope logic is the same
 		Roots: Roots{Darwin: []string{profile}},
 		Vars:  map[string]string{"USERPROFILE": profile},
 	}
-	if _, err := g.Resolve("${USERPROFILE}/skills", harness.ScopeMachine); err == nil {
+	if _, err := g.Resolve("${USERPROFILE}/skills", ScopeMachine); err == nil {
 		t.Error("${USERPROFILE} expanded in machine scope")
 	}
-	g.GOOS = harness.Windows
+	g.GOOS = Windows
 	g.Roots = Roots{WindowsUser: []string{".agents"}}
-	if _, err := g.Resolve(filepath.Join("${USERPROFILE}", ".agents", "skills"), harness.ScopeUser); err != nil {
+	if _, err := g.Resolve(filepath.Join("${USERPROFILE}", ".agents", "skills"), ScopeUser); err != nil {
 		t.Errorf("user placement under a profile-relative root refused: %v", err)
 	}
-	if _, err := g.Resolve(filepath.Join("${USERPROFILE}", "Documents"), harness.ScopeUser); err == nil {
+	if _, err := g.Resolve(filepath.Join("${USERPROFILE}", "Documents"), ScopeUser); err == nil {
 		t.Error("user placement outside the user roots accepted")
 	}
 }
@@ -143,12 +142,12 @@ func TestStockRootsWindows(t *testing.T) {
 	}
 	// The test host's separator: the guard cleans and resolves real paths.
 	root = strings.ReplaceAll(root, `\`, string(filepath.Separator))
-	g := Guard{GOOS: harness.Windows, Roots: StockRoots(), DataDir: identity.DataDirFor(harness.Windows)}
+	g := Guard{GOOS: Windows, Roots: StockRoots(), DataDir: identity.DataDirFor(Windows)}
 	g.Roots.Windows = []string{root}
-	if _, err := g.Resolve(filepath.Join(root, "marketplace"), harness.ScopeMachine); err != nil {
+	if _, err := g.Resolve(filepath.Join(root, "marketplace"), ScopeMachine); err != nil {
 		t.Errorf("a placement beside Data refused: %v", err)
 	}
-	if _, err := g.Resolve(filepath.Join(root, "Data", "x"), harness.ScopeMachine); !errors.Is(err, ErrRefused) || !strings.Contains(err.Error(), "inside the data directory") {
+	if _, err := g.Resolve(filepath.Join(root, "Data", "x"), ScopeMachine); !errors.Is(err, ErrRefused) || !strings.Contains(err.Error(), "inside the data directory") {
 		t.Errorf("a placement inside Data not refused as such: %v", err)
 	}
 }

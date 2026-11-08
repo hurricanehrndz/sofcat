@@ -19,8 +19,8 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
 	"github.com/hurricanehrndz/sofcat/pkg/conditions"
 	"github.com/hurricanehrndz/sofcat/pkg/download"
-	"github.com/hurricanehrndz/sofcat/pkg/harness"
 	"github.com/hurricanehrndz/sofcat/pkg/installer"
+	"github.com/hurricanehrndz/sofcat/pkg/placement"
 )
 
 // UserPlacement is one entry of the user-placement plan, listUserPlacements'
@@ -31,7 +31,7 @@ type UserPlacement struct {
 	Item      string `json:"item"`
 	Version   string `json:"version"`
 	Placement string `json:"placement"`
-	// Path is the placement root from harnesses.yaml, unexpanded: the helper
+	// Path is the placement root from placements.yaml, unexpanded: the helper
 	// expands ${USERPROFILE} for its own user.
 	Path string `json:"path"`
 	// Archive is the absolute path of the staged copy under
@@ -98,10 +98,10 @@ var UserArtifactsDir = func(dataDir string) string {
 // <hash>.zip inside dir, so two variants share a file only when they are the
 // same archive and a catalog location never shapes a path; a variant whose
 // hash is not a sha256 is left out.
-func UserPlan(desired, held, managed map[string]bool, catalogs map[int]map[string]catalog.Item, table harness.Table, goos, dir string) []UserPlacement {
+func UserPlan(desired, held, managed map[string]bool, catalogs map[int]map[string]catalog.Item, table placement.Table, goos, dir string) []UserPlacement {
 	var userPlacements []string
 	for _, name := range table.Names() {
-		if table.Placements[name].ScopeFor(goos) == harness.ScopeUser {
+		if table.Placements[name].ScopeFor(goos) == placement.ScopeUser {
 			userPlacements = append(userPlacements, name)
 		}
 	}

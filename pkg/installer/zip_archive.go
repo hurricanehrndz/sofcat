@@ -12,6 +12,7 @@ import (
 
 	"github.com/hurricanehrndz/sofcat/pkg/artifact"
 	"github.com/hurricanehrndz/sofcat/pkg/download"
+	"github.com/hurricanehrndz/sofcat/pkg/placement"
 )
 
 // Archive limits. Variables so tests can lower them instead of writing
@@ -25,40 +26,6 @@ var (
 
 // errUnsafeArchive wraps every archive rejection.
 var errUnsafeArchive = errors.New("unsafe archive")
-
-// windowsReserved are device names Windows will not use as a file name, with
-// or without an extension. The port names include digit 0 and the
-// superscript digits ¹ ² ³, which Windows also treats as devices.
-var windowsReserved = map[string]bool{
-	"CON": true, "PRN": true, "AUX": true, "NUL": true, "CONIN$": true, "CONOUT$": true,
-	"COM0": true, "COM1": true, "COM2": true, "COM3": true, "COM4": true,
-	"COM5": true, "COM6": true, "COM7": true, "COM8": true, "COM9": true,
-	"COM¹": true, "COM²": true, "COM³": true,
-	"LPT0": true, "LPT1": true, "LPT2": true, "LPT3": true, "LPT4": true,
-	"LPT5": true, "LPT6": true, "LPT7": true, "LPT8": true, "LPT9": true,
-	"LPT¹": true, "LPT²": true, "LPT³": true,
-}
-
-// checkSegment refuses a path segment Windows cannot hold, on every OS, so an
-// archive behaves the same everywhere.
-func checkSegment(seg string) error {
-	switch {
-	case seg == "" || seg == "." || seg == "..":
-		return fmt.Errorf("empty, . or .. segment")
-	case strings.HasSuffix(seg, ".") || strings.HasSuffix(seg, " "):
-		return fmt.Errorf("segment %q ends in a dot or a space", seg)
-	}
-	for _, c := range []byte(seg) {
-		if c < 0x20 || strings.IndexByte(`<>:"|?*\`, c) >= 0 {
-			return fmt.Errorf("segment %q has a character Windows forbids", seg)
-		}
-	}
-	stem, _, _ := strings.Cut(seg, ".")
-	if windowsReserved[strings.ToUpper(strings.TrimRight(stem, " "))] {
-		return fmt.Errorf("segment %q is a Windows reserved name", seg)
-	}
-	return nil
-}
 
 // archiveEntry is a zip entry and the relative, slash-separated path it
 // extracts to: a zip item's raw entry name, a nupkg's decoded one.
@@ -95,7 +62,7 @@ func checkEntries(entries []archiveEntry) error {
 		}
 		segs := strings.Split(name, "/")
 		for _, seg := range segs {
-			if err := checkSegment(seg); err != nil {
+			if err := placement.CheckSegment(seg); err != nil {
 				return fmt.Errorf("%w: %q: %w", errUnsafeArchive, name, err)
 			}
 		}

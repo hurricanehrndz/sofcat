@@ -1,0 +1,11 @@
+# A catalog template whose cond calls now(), which could never settle.
+placements:
+  market:
+    paths:
+      darwin: /Library/Application Support/Demo/marketplace
+      windows: ${ProgramData}\Demo\marketplace
+    items_dir: plugins
+    files:
+      - path: .agents/plugins/marketplace.json
+        template: |
+          {"fresh": {{ if cond "now() > date(\"2020-01-01\")" }}true{{ else }}false{{ end }}}

@@ -10,18 +10,17 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/artifact"
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
 	"github.com/hurricanehrndz/sofcat/pkg/config"
-	"github.com/hurricanehrndz/sofcat/pkg/harness"
 	"github.com/hurricanehrndz/sofcat/pkg/installer"
 	"github.com/hurricanehrndz/sofcat/pkg/manifest"
 	"github.com/hurricanehrndz/sofcat/pkg/placement"
 	"github.com/hurricanehrndz/sofcat/pkg/receipt"
 )
 
-// TestMain stubs the harness table: every list call fetches it, and the tests
+// TestMain stubs the placement table: every list call fetches it, and the tests
 // must not reach for a network repository. Tests that need a table set their
 // own.
 func TestMain(m *testing.M) {
-	harnessGet = func(config.Configuration) (harness.Table, error) { return harness.Table{}, nil }
+	placementsGet = func(config.Configuration) (placement.Table, error) { return placement.Table{}, nil }
 	os.Exit(m.Run())
 }
 
@@ -29,12 +28,12 @@ func TestMain(m *testing.M) {
 // must read its receipts and placed tree rather than report Unknown. A tree
 // the user edited is still installed: sofcat tracks it and can remove it.
 func TestListZipItemStatus(t *testing.T) {
-	const goos = harness.Windows // works on any host; see cmd/sofcat/tapas_test.go
+	const goos = placement.Windows // works on any host; see cmd/sofcat/tapas_test.go
 	appData, roots := t.TempDir(), t.TempDir()
 	cfg := config.Configuration{AppDataPath: appData, CachePath: t.TempDir(), Catalogs: []string{"production"}}
 	root := filepath.Join(roots, "skills")
-	table := harness.Table{
-		Placements: map[string]harness.Placement{"skills": {Kind: harness.KindDirectory, Paths: map[string]string{goos: root}}},
+	table := placement.Table{
+		Placements: map[string]placement.Spec{"skills": {Paths: map[string]string{goos: root}}},
 		Order:      []string{"skills"},
 	}
 
@@ -69,8 +68,8 @@ func TestListZipItemStatus(t *testing.T) {
 	}
 	catalogs := map[int]map[string]catalog.Item{1: {"Placed": zipItem("Placed"), "Edited": zipItem("Edited"), "Absent": zipItem("Absent")}}
 
-	stubZipList(t, catalogs, func(config.Configuration) (harness.Table, error) { return table, nil })
-	newZipInstaller = func(cfg config.Configuration, table harness.Table) *installer.ZipInstaller {
+	stubZipList(t, catalogs, func(config.Configuration) (placement.Table, error) { return table, nil })
+	newZipInstaller = func(cfg config.Configuration, table placement.Table) *installer.ZipInstaller {
 		z := installer.NewMachineZip(cfg, table)
 		z.Guard = placement.Guard{GOOS: goos, Roots: placement.Roots{Windows: []string{roots}}, DataDir: appData}
 		return z
@@ -89,25 +88,25 @@ func TestListZipItemStatus(t *testing.T) {
 	}
 }
 
-// TestListHarnessError: the list call always fetches the harness table, and a
+// TestListPlacementsError: the list call always fetches the placement table, and a
 // failure fails the call like a catalog failure rather than guessing statuses.
-func TestListHarnessError(t *testing.T) {
+func TestListPlacementsError(t *testing.T) {
 	catalogs := map[int]map[string]catalog.Item{1: {"Tool": {Name: "Tool", Installer: catalog.InstallerItem{Type: "ps1"}}}}
-	wantErr := errors.New("harnesses.yaml unreachable")
-	stubZipList(t, catalogs, func(config.Configuration) (harness.Table, error) { return harness.Table{}, wantErr })
+	wantErr := errors.New("placements.yaml unreachable")
+	stubZipList(t, catalogs, func(config.Configuration) (placement.Table, error) { return placement.Table{}, wantErr })
 	cfg := config.Configuration{AppDataPath: t.TempDir(), Catalogs: []string{"production"}}
 	if _, err := getOptionalItems(cfg); !errors.Is(err, wantErr) {
-		t.Errorf("getOptionalItems err = %v, want the harness error", err)
+		t.Errorf("getOptionalItems err = %v, want the placements error", err)
 	}
 }
 
 // stubZipList serves one manifest offering every catalog item, the catalogs,
-// and the harness table from get, restoring the hooks afterwards.
-func stubZipList(t *testing.T, catalogs map[int]map[string]catalog.Item, get func(config.Configuration) (harness.Table, error)) {
+// and the placement table from get, restoring the hooks afterwards.
+func stubZipList(t *testing.T, catalogs map[int]map[string]catalog.Item, get func(config.Configuration) (placement.Table, error)) {
 	t.Helper()
-	origManifest, origCatalog, origHarness, origZip := manifestGet, catalogGet, harnessGet, newZipInstaller
+	origManifest, origCatalog, origPlacements, origZip := manifestGet, catalogGet, placementsGet, newZipInstaller
 	t.Cleanup(func() {
-		manifestGet, catalogGet, harnessGet, newZipInstaller = origManifest, origCatalog, origHarness, origZip
+		manifestGet, catalogGet, placementsGet, newZipInstaller = origManifest, origCatalog, origPlacements, origZip
 	})
 	var offered []string
 	for _, items := range catalogs {
@@ -119,19 +118,19 @@ func stubZipList(t *testing.T, catalogs map[int]map[string]catalog.Item, get fun
 		return []manifest.Item{{Name: "site", OptionalInstalls: offered}}, nil, nil
 	}
 	catalogGet = func(config.Configuration) (map[int]map[string]catalog.Item, error) { return catalogs, nil }
-	harnessGet = get
+	placementsGet = get
 }
 
 // TestListStorefrontFields: the list call carries each item's section (its
-// storefront tab), resolved labels and works-in harnesses, and an item with
+// storefront tab), resolved labels and applies_to names, and an item with
 // none of them on this OS sends none of the keys, so the UI falls back to its
 // built-in tab and labels.
 func TestListStorefrontFields(t *testing.T) {
-	const goos = harness.Windows
-	table := harness.Table{
-		Placements: map[string]harness.Placement{
-			"skills": {Kind: harness.KindDirectory, WorksIn: []string{"Claude Code"}, ActionLabels: map[string]string{"install": "Add", "installed": "Added"}},
-			"codex":  {Kind: harness.KindDirectory, WorksIn: []string{"Codex", "Claude Code"}, ActionLabels: map[string]string{"install": "Place"}},
+	const goos = placement.Windows
+	table := placement.Table{
+		Placements: map[string]placement.Spec{
+			"skills": {AppliesTo: []string{"Claude Code"}, ActionLabels: map[string]string{"install": "Add", "installed": "Added"}},
+			"codex":  {AppliesTo: []string{"Codex", "Claude Code"}, ActionLabels: map[string]string{"install": "Place"}},
 		},
 		Order: []string{"skills", "codex"},
 	}
@@ -139,10 +138,10 @@ func TestListStorefrontFields(t *testing.T) {
 	catalogs := map[int]map[string]catalog.Item{1: {
 		"Skill": {Name: "Skill", Section: "Skills", CustomActionLabels: map[string]string{"installed": "Ready"}, Installer: catalog.InstallerItem{Type: "zip", Variants: variants}},
 		// Its only variant is for another OS, so none of its placements count.
-		"Tool": {Name: "Tool", Installer: catalog.InstallerItem{Type: "zip", Variants: map[string]map[string]catalog.Variant{"skills": {harness.Darwin: {}}}}},
+		"Tool": {Name: "Tool", Installer: catalog.InstallerItem{Type: "zip", Variants: map[string]map[string]catalog.Variant{"skills": {placement.Darwin: {}}}}},
 	}}
-	stubZipList(t, catalogs, func(config.Configuration) (harness.Table, error) { return table, nil })
-	newZipInstaller = func(cfg config.Configuration, table harness.Table) *installer.ZipInstaller {
+	stubZipList(t, catalogs, func(config.Configuration) (placement.Table, error) { return table, nil })
+	newZipInstaller = func(cfg config.Configuration, table placement.Table) *installer.ZipInstaller {
 		z := installer.NewMachineZip(cfg, table)
 		z.Guard = placement.Guard{GOOS: goos, DataDir: cfg.AppDataPath}
 		return z
@@ -160,12 +159,12 @@ func TestListStorefrontFields(t *testing.T) {
 		}
 		var fields map[string]json.RawMessage
 		_ = json.Unmarshal(line, &fields)
-		got[it.ItemName] = string(fields["section"]) + " " + string(fields["actionLabels"]) + " " + string(fields["worksIn"])
+		got[it.ItemName] = string(fields["section"]) + " " + string(fields["actionLabels"]) + " " + string(fields["appliesTo"])
 	}
 	if want := `"Skills" {"install":"Add","installed":"Ready"} ["Claude Code","Codex"]`; got["Skill"] != want {
 		t.Errorf("Skill = %s, want %s", got["Skill"], want)
 	}
 	if got["Tool"] != "  " {
-		t.Errorf("Tool = %q, want no section, actionLabels or worksIn keys", got["Tool"])
+		t.Errorf("Tool = %q, want no section, actionLabels or appliesTo keys", got["Tool"])
 	}
 }
