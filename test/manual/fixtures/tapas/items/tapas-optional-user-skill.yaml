@@ -1,0 +1,10 @@
+# Input to makecatalogs zip-item; just bootstrap-tapas packs rendered/tapas-optional-user-skill.
+# The optional twin of tapas-user-skill: installed and removed from the
+# storefront, then placed per user on Windows by the helper; per machine on
+# macOS.
+item_name: tapas-optional-user-skill
+display_name: Tapas Optional User Skill
+section: Skills
+description: An optional Codex skill the per-user helper places in the user's profile
+catalog: tapas
+version: 1.0.0
