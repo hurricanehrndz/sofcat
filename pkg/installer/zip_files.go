@@ -54,10 +54,12 @@ func generates(spec placement.Spec) bool {
 
 // regenerate rewrites the files of placement name from its receipts. It
 // does nothing for a placement without files. Every entry with a path on
-// this OS is rendered before any is written, so a failed render leaves all
-// of them as they were; an empty render removes the file. Every write
-// passes the guard; a refused path or a failed render wraps
-// placement.ErrRefused. Apply and Remove call it after each change, so the
+// this OS is resolved and rendered first. One that is refused or fails to
+// render keeps its file as it was and the rest are written, unless the
+// placement sets files_atomic, when none is. Two entries naming one file
+// stop them all. An empty render removes the file. Every write passes the
+// guard; a refused path or a failed render wraps placement.ErrRefused, and
+// the errors are joined. Apply and Remove call it after each change, so the
 // files are current at once, and RegenerateAll once per run, so a file
 // deleted or refused on one run is restored on the next.
 func (z *ZipInstaller) regenerate(name string) error {
@@ -81,11 +83,13 @@ func (z *ZipInstaller) regenerate(name string) error {
 		data []byte
 	}
 	outputs := make([]output, 0, len(spec.Files))
+	var errs []error
 	seen := map[string]bool{}
 	for i, f := range spec.Files {
 		path, ok, err := z.filePath(name, spec, f, root)
 		if err != nil {
-			return err
+			errs = append(errs, err)
+			continue
 		}
 		if !ok {
 			continue
@@ -98,24 +102,30 @@ func (z *ZipInstaller) regenerate(name string) error {
 		seen[key] = true
 		data, err := renderFile(fmt.Sprintf("files[%d]", i), f.Template, ctx, z.Facts, path)
 		if err != nil {
-			return fmt.Errorf("%w: placement %q: %w", placement.ErrRefused, name, err)
+			errs = append(errs, fmt.Errorf("%w: placement %q: %w", placement.ErrRefused, name, err))
+			continue
 		}
 		outputs = append(outputs, output{path, data})
+	}
+	if spec.FilesAtomic && len(errs) > 0 {
+		return errors.Join(errs...)
 	}
 	for _, o := range outputs {
 		if o.data == nil {
 			if err := os.Remove(o.path); err != nil && !errors.Is(err, fs.ErrNotExist) {
-				return fmt.Errorf("placement %q: %w", name, err)
+				errs = append(errs, fmt.Errorf("placement %q: %w", name, err))
+				continue
 			}
 			slog.Info("Removed placement file: the template rendered nothing", "placement", name, "path", o.path)
 			continue
 		}
 		if err := writeFileAtomic(o.path, o.data, 0o644); err != nil {
-			return fmt.Errorf("placement %q: %w", name, err)
+			errs = append(errs, fmt.Errorf("placement %q: %w", name, err))
+			continue
 		}
 		slog.Info("Wrote placement file", "placement", name, "path", o.path, "items", len(rcs))
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 // filePath resolves and checks where files entry f of placement name is

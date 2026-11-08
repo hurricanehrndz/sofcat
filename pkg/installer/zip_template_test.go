@@ -202,8 +202,8 @@ func TestDirectoryPlacementFile(t *testing.T) {
 
 // TestTemplateRenderFailureRefuses: a template that cannot render (a fact
 // this machine lacks) refuses the placement with placement_refused; the tree
-// is placed and nothing is written for the file, nor for any file listed
-// before it.
+// is placed and nothing is written for the file. The placement's other files
+// are still written, unless it sets files_atomic.
 func TestTemplateRenderFailureRefuses(t *testing.T) {
 	tt := newTemplateTest(t, `{{ json (fact "assigned_user") }}`)
 	res := tt.install(t, "hello", "skills", true)
@@ -221,20 +221,27 @@ func TestTemplateRenderFailureRefuses(t *testing.T) {
 
 	empty := newTemplateTest(t, indexTemplate)
 	wantOutcome(t, "install one", empty.install(t, "one", "market", true), OutcomeInstalled)
-	builtinPath := filepath.Join(empty.market, ".claude-plugin", "marketplace.json")
-	before, err := os.ReadFile(builtinPath)
-	if err != nil {
-		t.Fatal(err)
-	}
+	catalogPath := filepath.Join(empty.market, ".claude-plugin", "marketplace.json")
 	empty.z.Table.Placements["market"].Files[1].Template = `{{ fact "assigned_user" }}`
 	res = empty.install(t, "two", "market", true)
 	if res.Outcome != OutcomeRefused || !strings.Contains(res.Err.Error(), `fact "assigned_user"`) {
 		t.Errorf("failing second file = %s (%v)", res.Outcome, res.Err)
 	}
-	// The Claude catalog is listed first, yet the failing template kept it
-	// from being rewritten with the new plugin.
-	if after, _ := os.ReadFile(builtinPath); string(after) != string(before) {
-		t.Errorf("Claude catalog rewritten before the refusal:\n%s", after)
+	if got := readFile(t, catalogPath); !strings.Contains(got, `"two"`) {
+		t.Errorf("Claude catalog not rewritten beside the failing file:\n%s", got)
+	}
+
+	// With files_atomic the failing template keeps the catalog as it was.
+	spec := empty.z.Table.Placements["market"]
+	spec.FilesAtomic = true
+	empty.z.Table.Placements["market"] = spec
+	before := readFile(t, catalogPath)
+	res = empty.install(t, "three", "market", true)
+	if res.Outcome != OutcomeRefused {
+		t.Errorf("failing second file, atomic = %s (%v)", res.Outcome, res.Err)
+	}
+	if after := readFile(t, catalogPath); after != before {
+		t.Errorf("Claude catalog rewritten despite files_atomic:\n%s", after)
 	}
 }
 
