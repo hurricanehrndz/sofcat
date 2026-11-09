@@ -1,7 +1,8 @@
 #!/bin/bash
 # Zip-item end-to-end smoke test for the Tapas Test fixture brand on macOS:
-# the twin of run-tapas-smoke.ps1 without the Windows user-helper and
-# Chocolatey steps.
+# the twin of run-tapas-smoke.ps1 without the Chocolatey steps. The per-user
+# helper part checks the daemon starts it through its LaunchAgent for the user
+# signed in to the GUI; run-tapas-user-sync.sh checks what it places.
 #
 # It drives the running Tapas Test launchd daemon over its socket (through
 # `tapas-test -c <config> -S ...`) against the repository
@@ -18,7 +19,8 @@
 # re-rendered in place when either changes), and the zip-only build's
 # rejection of an exe item and a skill with a postinstall_script.
 #
-# Run once on a clean Mac as root, after installing the fixture brand's .pkg,
+# Run once on a clean Mac as root, with a user signed in to the GUI,
+# after installing the fixture brand's .pkg,
 # writing its config.yaml and kickstarting the daemon (AGENTS.md, "macOS
 # validation loop"):
 #   sudo test/manual/run-tapas-smoke.sh
@@ -75,6 +77,18 @@ CODEX_JSON="$MARKET_ROOT/.agents/plugins/marketplace.json"
 SKILLS_INDEX="$SMOKE_ROOT/claude/skills-index.json"
 EXCLUSIVE_INDEX="$SMOKE_ROOT/claude/exclusive-index.json"
 SCRIPTED_MARKER="$SMOKE_ROOT/scripted-skill-ran.txt"
+# The per-user helper's LaunchAgent and what it places for the user signed in
+# in a GUI session: tapas-user-plugins is the user-scope placement on macOS.
+USER_ARTIFACTS="$SUPPORT/user-artifacts"
+AGENT_LABEL="$LABEL.useragent"
+# /dev/console can read as root under Screen Sharing; the GUI session's
+# loginwindow runs as its user, as the daemon finds it.
+CONSOLE_UID=$(ps -axo uid=,comm= | awk '$2 ~ /\/loginwindow$/ && $1 >= 500 { print $1; exit }')
+CONSOLE_USER=$(id -un "$CONSOLE_UID" 2>/dev/null)
+CONSOLE_HOME=$(dscl . -read "/Users/$CONSOLE_USER" NFSHomeDirectory 2>/dev/null | awk '{print $2}')
+AGENT_TARGET="gui/$CONSOLE_UID/$AGENT_LABEL"
+USER_TREE="$CONSOLE_HOME/.agents/tapas-plugins/plugins/tapas-user-plugin"
+USER_RECEIPT="$CONSOLE_HOME/Library/Application Support/$PRODUCT/receipts/tapas-user-plugins/tapas-user-plugin.json"
 
 step_num=0
 OUT=""
@@ -283,6 +297,13 @@ warned_held() {
 
 sha() { shasum -a 256 "$1" | awk '{print $1}'; }
 
+user_placed() { [ -f "$USER_TREE/SKILL.md" ] && [ -f "$USER_RECEIPT" ]; }
+
+# agent_runs prints how many times launchd has run the console user's helper.
+agent_runs() {
+	launchctl print "$AGENT_TARGET" 2>/dev/null | awk -F' = ' '/^\truns = / {print $2; exit}'
+}
+
 # --- Preconditions and the daemon ---------------------------------------------
 
 [ "$(id -u)" = 0 ] || fail "run as root: sudo $0"
@@ -292,6 +313,8 @@ done
 [ -x "$SOFCAT" ] || fail "$SOFCAT is missing; install the fixture brand's .pkg first"
 [ -f "$CONFIG" ] || fail "$CONFIG is missing; write the smoke config first"
 [ -f "$PLIST" ] || fail "$PLIST is missing; install the fixture brand's .pkg first"
+[ -f "/Library/LaunchAgents/$AGENT_LABEL.plist" ] || fail "the helper's LaunchAgent plist is missing; install the fixture brand's .pkg first"
+[ "$CONSOLE_UID" -ge 500 ] 2>/dev/null || fail "sign a user in to the Mac's GUI first: no loginwindow runs as a user"
 
 step "The Desktop plugins' admin fact script is installed before the daemon restarts"
 [ ! -e "$DESKTOP_SCRIPT" ] || fail "$DESKTOP_SCRIPT exists before the smoke wrote it (not a clean Mac?)"
@@ -372,6 +395,27 @@ for fact in tapas_smoke_scope tapas_smoke_held; do
 	warned_held "$fact" || fail "inventory does not warn that the $fact block is held: $(jq -c '.Warnings' "$INVENTORY")"
 done
 pass "tapas-scoped-skill and tapas-held-skill held, not placed"
+
+# --- The per-user helper ----------------------------------------------------------
+
+step "The daemon staged tapas-user-plugin's archive and lists it for the helper"
+sofcat ListUserPlacements
+user_entry=$(json_lines | jq -c 'select(.item == "tapas-user-plugin" and .placement == "tapas-user-plugins")' 2>/dev/null | head -n1)
+[ -n "$user_entry" ] || fail "ListUserPlacements does not list tapas-user-plugin for tapas-user-plugins"
+printf '%s' "$user_entry" | jq -e --arg dir "$USER_ARTIFACTS" \
+	'.held == false and .managed == true and .path == "${HOME}/.agents/tapas-plugins" and (.archive | startswith($dir + "/"))' >/dev/null ||
+	fail "tapas-user-plugin entry: $user_entry"
+archive=$(printf '%s' "$user_entry" | jq -r .archive)
+[ "$(sha "$archive")" = "$(printf '%s' "$user_entry" | jq -r .hash)" ] || fail "staged archive $archive does not match its hash"
+pass "$archive staged; held=false, managed=true"
+
+step "The daemon started the helper in $CONSOLE_USER's GUI session"
+# On a clean Mac the user signed in before the install, so launchd had not
+# loaded the LaunchAgent for them: the daemon bootstrapped it, and RunAtLoad
+# ran it.
+wait_for "$CONSOLE_USER's helper to place tapas-user-plugin" user_placed
+launchctl print "$AGENT_TARGET" >/dev/null 2>&1 || fail "$AGENT_TARGET is not loaded"
+pass "$USER_TREE placed; $AGENT_TARGET loaded"
 
 # --- Zip-only build ---------------------------------------------------------------
 
@@ -775,6 +819,17 @@ wait_pruned
 assert_not_placed "$EXCLUSIVE_ROOT" exclusive-skills tapas-exclusive-skill
 [ ! -e "$EXCLUSIVE_INDEX" ] || fail "$EXCLUSIVE_INDEX still exists with nothing placed"
 pass "tree, receipt and $EXCLUSIVE_INDEX gone"
+
+step "A plan the helpers were not given kickstarts the loaded LaunchAgent"
+# Forgetting the plan the helpers were last started for makes the next run
+# start them again; the agent is loaded now, so that is a kickstart.
+runs_before=$(agent_runs)
+rm -f "$DATA_DIR/user-plan.json.started" "$USER_RECEIPT"
+rm -rf "$USER_TREE"
+invoke_run
+wait_for "$CONSOLE_USER's helper to place tapas-user-plugin again" user_placed
+[ "$(agent_runs)" -gt "$runs_before" ] || fail "$AGENT_TARGET ran $(agent_runs) times, as before"
+pass "$USER_TREE placed again; $AGENT_TARGET runs $runs_before -> $(agent_runs)"
 
 step "Take SOFCAT_TEST_MUNKI_REPORT out of the daemon's plist again"
 /usr/libexec/PlistBuddy -c "Delete :EnvironmentVariables:SOFCAT_TEST_MUNKI_REPORT" "$PLIST" ||

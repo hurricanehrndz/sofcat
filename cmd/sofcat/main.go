@@ -36,15 +36,23 @@ func main() {
 	}
 }
 
-// printLaunchdPlist handles the hidden -print-launchd-plist, for `just pkg`:
-// it writes the launchd plist the package installs, the same bytes
-// -serviceinstall writes for the installed layout. It needs no config, so
-// main runs it before config.Get.
+// printLaunchdPlist handles the hidden -print-launchd-plist and
+// -print-useragent-plist, for `just pkg`: each writes a launchd plist the
+// package installs, the daemon's or the per-user helper's LaunchAgent, the
+// same bytes -serviceinstall writes for the installed layout. They need no
+// config, so main runs them before config.Get.
 func printLaunchdPlist(args []string, w io.Writer) bool {
-	if len(args) != 2 || args[1] != "-print-launchd-plist" {
+	if len(args) != 2 {
 		return false
 	}
-	_, _ = w.Write(service.InstalledLaunchdPlist())
+	switch args[1] {
+	case "-print-launchd-plist":
+		_, _ = w.Write(service.InstalledLaunchdPlist())
+	case "-print-useragent-plist":
+		_, _ = w.Write(service.InstalledUserAgentPlist())
+	default:
+		return false
+	}
 	return true
 }
 

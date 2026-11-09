@@ -116,14 +116,17 @@ func assertCalls(t *testing.T, got *[]string, want ...string) {
 
 // install writes the plist -serviceinstall promises (this executable, the
 // absolute config path, the data dir), 0644 so launchd accepts it, and
-// bootstraps it into the system domain.
+// bootstraps it into the system domain. It also writes the helper's
+// LaunchAgent plist, naming the helper beside this executable, and loads
+// nothing for it: launchd does at the next logon.
 func TestLaunchdInstallWritesPlistAndBootstraps(t *testing.T) {
 	calls := fakeLaunchctl(t, false)
 	dir := t.TempDir()
 	plist := filepath.Join(dir, testLabel+".plist")
+	agentPlist := filepath.Join(dir, identity.UserAgentLabel()+".plist")
 	cfg := config.Configuration{ConfigPath: filepath.Join(dir, "config.yaml"), AppDataPath: filepath.Join(dir, "Data")}
 
-	if err := launchdAction(cfg, "install", plist); err != nil {
+	if err := launchdAction(cfg, "install", plist, agentPlist); err != nil {
 		t.Fatal(err)
 	}
 	exe, err := os.Executable()
@@ -137,23 +140,37 @@ func TestLaunchdInstallWritesPlistAndBootstraps(t *testing.T) {
 	if want := LaunchdPlist(filepath.Clean(exe), cfg.ConfigPath, cfg.AppDataPath); !bytes.Equal(got, want) {
 		t.Fatalf("plist:\n%s\nwant:\n%s", got, want)
 	}
+	got, err = os.ReadFile(agentPlist)
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent := filepath.Join(filepath.Dir(filepath.Clean(exe)), identity.Slug+"-useragent")
+	if want := UserAgentPlist(agent); !bytes.Equal(got, want) {
+		t.Fatalf("agent plist:\n%s\nwant:\n%s", got, want)
+	}
 	// Windows reports only the read-only bit; CI runs these tests there too.
-	if fi, err := os.Stat(plist); err != nil || (runtime.GOOS != "windows" && fi.Mode().Perm() != 0o644) {
-		t.Fatalf("plist mode = %v, %v; want 0644", fi.Mode().Perm(), err)
+	for _, p := range []string{plist, agentPlist} {
+		if fi, err := os.Stat(p); err != nil || (runtime.GOOS != "windows" && fi.Mode().Perm() != 0o644) {
+			t.Fatalf("%s mode = %v, %v; want 0644", p, fi.Mode().Perm(), err)
+		}
 	}
 	assertCalls(t, calls, "print system/"+testLabel, "bootstrap system "+plist)
 }
 
-// A second install must not overwrite the plist of a loaded daemon.
+// A second install must not overwrite the plists of a loaded daemon.
 func TestLaunchdInstallRefusesLoadedDaemon(t *testing.T) {
 	calls := fakeLaunchctl(t, true)
-	plist := filepath.Join(t.TempDir(), testLabel+".plist")
-	err := launchdAction(config.Configuration{ConfigPath: "config.yaml"}, "install", plist)
+	dir := t.TempDir()
+	plist := filepath.Join(dir, testLabel+".plist")
+	agentPlist := filepath.Join(dir, identity.UserAgentLabel()+".plist")
+	err := launchdAction(config.Configuration{ConfigPath: "config.yaml"}, "install", plist, agentPlist)
 	if err == nil || !strings.Contains(err.Error(), "already exists") {
 		t.Fatalf("err = %v, want already exists", err)
 	}
-	if _, err := os.Stat(plist); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("plist written for a loaded daemon: %v", err)
+	for _, p := range []string{plist, agentPlist} {
+		if _, err := os.Stat(p); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("%s written for a loaded daemon: %v", p, err)
+		}
 	}
 	assertCalls(t, calls, "print system/"+testLabel)
 }
@@ -162,28 +179,35 @@ func TestLaunchdInstallRefusesLoadedDaemon(t *testing.T) {
 func TestLaunchdStart(t *testing.T) {
 	plist := identity.LaunchdPlistPath()
 	calls := fakeLaunchctl(t, true)
-	if err := launchdAction(config.Configuration{}, "start", plist); err != nil {
+	if err := launchdAction(config.Configuration{}, "start", plist, ""); err != nil {
 		t.Fatal(err)
 	}
 	assertCalls(t, calls, "print system/"+testLabel, "kickstart -k system/"+testLabel)
 
 	calls = fakeLaunchctl(t, false)
-	if err := launchdAction(config.Configuration{}, "start", plist); err != nil {
+	if err := launchdAction(config.Configuration{}, "start", plist, ""); err != nil {
 		t.Fatal(err)
 	}
 	assertCalls(t, calls, "print system/"+testLabel, "bootstrap system "+plist)
 }
 
 // stop boots the daemon out but keeps the plist, so start can bootstrap it
-// again; remove also deletes the plist.
+// again; remove also deletes the plist and the helper's LaunchAgent plist
+// (TestRemoveUserAgents covers the helpers it boots out).
 func TestLaunchdStopKeepsPlistRemoveDeletesIt(t *testing.T) {
-	plist := filepath.Join(t.TempDir(), testLabel+".plist")
-	if err := os.WriteFile(plist, []byte("plist"), 0o644); err != nil {
-		t.Fatal(err)
+	fakeGUIUsers(t)
+	ended := fakeStorefront(t, 41)
+	dir := t.TempDir()
+	plist := filepath.Join(dir, testLabel+".plist")
+	agentPlist := filepath.Join(dir, identity.UserAgentLabel()+".plist")
+	for _, p := range []string{plist, agentPlist} {
+		if err := os.WriteFile(p, []byte("plist"), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	calls := fakeLaunchctl(t, true)
-	if err := launchdAction(config.Configuration{}, "stop", plist); err != nil {
+	if err := launchdAction(config.Configuration{}, "stop", plist, ""); err != nil {
 		t.Fatal(err)
 	}
 	assertCalls(t, calls, "print system/"+testLabel, "bootout system/"+testLabel)
@@ -192,12 +216,17 @@ func TestLaunchdStopKeepsPlistRemoveDeletesIt(t *testing.T) {
 	}
 
 	calls = fakeLaunchctl(t, true)
-	if err := launchdAction(config.Configuration{}, "remove", plist); err != nil {
+	if err := launchdAction(config.Configuration{}, "remove", plist, agentPlist); err != nil {
 		t.Fatal(err)
 	}
 	assertCalls(t, calls, "print system/"+testLabel, "bootout system/"+testLabel)
-	if _, err := os.Stat(plist); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("remove kept the plist: %v", err)
+	for _, p := range []string{plist, agentPlist} {
+		if _, err := os.Stat(p); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("remove kept %s: %v", p, err)
+		}
+	}
+	if !slices.Equal(*ended, []int{41}) {
+		t.Fatalf("remove ended %v, want the storefront, pid 41", *ended)
 	}
 }
 

@@ -126,13 +126,25 @@ the helpers were last started for: one helper per user SID, in each active or
 disconnected session, with the session's token (UAC-filtered, so unelevated)
 and that user's environment. A plan stored by an elevated administrator's
 `-config` run cannot start helpers (no SeTcbPrivilege), so it is recorded as
-not yet given and the next service run starts them. The storefront does not
-sync. One user's syncs run one at a time. Each fetches the plan, takes the
+not yet given and the next service run starts them. On macOS the helper,
+`<slug>-useragent` beside the CLI, is the LaunchAgent `<identifier>.useragent`
+(`/Library/LaunchAgents`, written by `-serviceinstall` and the package), which
+launchd runs once at each GUI login; on a new plan the root service runs
+`launchctl kickstart gui/<uid>/<label>`, or `bootstrap` where it is not
+loaded, for every uid owning a `loginwindow`, with the same record-on-success
+rule. A helper still running is not kickstarted (launchd runs one instance
+and it may have fetched its last plan), so the plan stays due and the next
+run starts it. Its arguments are fixed, so it runs without `--no-retry` there.
+`-serviceremove` boots it out of every such session, deletes the plist and
+ends (SIGTERM) every process running from `/Applications/<Name>.app`.
+The storefront does not sync. One user's syncs run one at a time. Each fetches the plan, takes the
 lock file `.sync.lock` in the receipt directory, waiting while another sync
 holds it, and fetches the plan again under the lock. The helper expands
-`${USERPROFILE}` itself, checks the path against
-the build's `windows_user` roots, re-verifies `hash`, places the tree with
-receipts in `%LOCALAPPDATA%\<Name>\receipts`, removes its own
+the home variable itself (`${USERPROFILE}` on Windows, `${HOME}` on macOS),
+checks the path against the build's `windows_user` or `darwin_user` roots,
+re-verifies `hash`, places the tree with receipts in
+`%LOCALAPPDATA%\<Name>\receipts` (`~/Library/Application Support/<Name>/receipts`
+on macOS), removes its own
 receipt-tracked trees that left the plan, regenerates the `files` of every
 placement it still holds a receipt in, and sends every result with
 `reportUserPlacements`; a failed regeneration is a result with the
@@ -390,7 +402,7 @@ The build order is `npm ci`, Vite production assets, then a pure-Go Windows buil
 
 ## Diagnostics
 
-Structured `slog` diagnostics are opt-in through `SOFCAT_UI_DEBUG=1` or `SOFCAT_DEBUG=1`. Enabled logs use the existing lumberjack dependency at `%LOCALAPPDATA%\sofcat\ui-client.log`, 10 MiB with one backup. The per-user helper always logs, at info level, to its own `%LOCALAPPDATA%\<Name>\useragent.log`, so the two never rotate each other's file; it rotates at 1 MiB with one backup, the same switches add its debug records, and a log it cannot open never stops the sync. Lifecycle and status-event records are debug-level and include available operation, operation ID, state, result, and duration fields. The storefront's disabled diagnostics create no directory or file, and logging failures do not affect UI operations. The running service logs to `sofcat.log` in its data directory. The management commands (`-serviceinstall`, `-serviceremove`, `-servicestart`, `-servicestop`) log each step and outcome to stderr and, on Windows, to the Application log under the source `<slug>`, with one event ID per kind of step (`pkg/sofcatlog/eventlog.go`; `site/src/content/docs/reference/event-log.md`), so a silent uninstall's sweep is still on record. `-serviceinstall` registers the source, the others register it when it is missing, and nothing removes it. A source that cannot be registered or opened leaves stderr only, and never fails the command.
+Structured `slog` diagnostics are opt-in through `SOFCAT_UI_DEBUG=1` or `SOFCAT_DEBUG=1`. Enabled logs use the existing lumberjack dependency at `%LOCALAPPDATA%\sofcat\ui-client.log`, 10 MiB with one backup. The per-user helper always logs, at info level, to its own `useragent.log` beside its receipts, so the two never rotate each other's file; it rotates at 1 MiB with one backup, the same switches add its debug records, and a log it cannot open never stops the sync. Lifecycle and status-event records are debug-level and include available operation, operation ID, state, result, and duration fields. The storefront's disabled diagnostics create no directory or file, and logging failures do not affect UI operations. The running service logs to `sofcat.log` in its data directory. The management commands (`-serviceinstall`, `-serviceremove`, `-servicestart`, `-servicestop`) log each step and outcome to stderr and, on Windows, to the Application log under the source `<slug>`, with one event ID per kind of step (`pkg/sofcatlog/eventlog.go`; `site/src/content/docs/reference/event-log.md`), so a silent uninstall's sweep is still on record. `-serviceinstall` registers the source, the others register it when it is missing, and nothing removes it. A source that cannot be registered or opened leaves stderr only, and never fails the command.
 
 ## Deliberate ceilings
 

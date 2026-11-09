@@ -1,7 +1,7 @@
-//go:build !windows
+//go:build !windows && !darwin
 
 package service
 
-// StartUserSync does nothing off Windows: user-scope placements are
-// Windows-only until macOS has a per-user agent.
+// StartUserSync does nothing off Windows and macOS, the only systems with a
+// per-user helper.
 func StartUserSync(string) {}

@@ -37,16 +37,18 @@ sofcat installs a zip item by placing one tree per placement for the OS it
 runs on, in `placements.yaml` order. The service skips placements whose scope
 on this OS is `user`; they neither fail nor succeed the item. Instead, after
 each run that is not check-only, it stages their verified archives in
-`user-artifacts` inside its data directory, the one entry there users may
-read ([Data directory](/reference/data-directory/)), each named `<hash>.zip` after
+`user-artifacts`, which users may read: inside its data directory on Windows,
+the one entry there users may read, and beside it on macOS, where `Data` is
+root-only ([Data directory](/reference/data-directory/)), each named `<hash>.zip` after
 its sha256 (never after its catalog `location`), removes archives no entry
 references, and then stores the plan, built from that run's desired set
 (dependencies and `update_for` riders included), as `user-plan.json` in its
 data directory. An entry whose archive fails to stage is stored held, so the
 helper leaves that item's trees as they are until the archive stages. The
-per-user helper, `<slug>-useragent.exe`, fetches that stored plan, so it
+per-user helper, `<slug>-useragent`, fetches that stored plan, so it
 needs no repository access, and places the trees in each user's profile under the
-`windows_user` roots, with receipts in `%LOCALAPPDATA%\<NAME>\receipts`, and
+`windows_user` or `darwin_user` roots, with receipts in
+`%LOCALAPPDATA%\<NAME>\receipts` or `~/Library/Application Support/<NAME>/receipts`, and
 writes the placements' `files` (Placement files)
 ([Protocol](https://github.com/hurricanehrndz/sofcat/blob/main/ui/ARCHITECTURE.md#protocol)). The item succeeds when every
 machine-scope placement does; a failed placement leaves the others alone and
@@ -63,6 +65,18 @@ file in that user's receipt directory, waiting while another sync holds it. `-se
 any helper still running and closes an open storefront, so the uninstaller
 can delete their executables. Each process it ends, and each it could not,
 is recorded in the [event log](/reference/event-log/).
+
+On macOS the helper is a LaunchAgent,
+`/Library/LaunchAgents/<IDENTIFIER>.useragent.plist`, which the package
+installs and `-serviceinstall` writes: launchd runs it once at every GUI
+login, as that user. On a new plan the service runs it again for each user
+signed in to a GUI session, fast-user-switched ones included, with
+`launchctl kickstart`, or with `launchctl bootstrap` for a user who signed in
+before the install. A helper still running then is started again at the
+next service run. `-serviceremove` boots it out of every user's session,
+which ends a running helper, deletes the plist and quits an open storefront
+without asking. The helper logs to
+`~/Library/Application Support/<NAME>/useragent.log`.
 
 Each helper run logs what it placed, held and failed to
 `%LOCALAPPDATA%\<NAME>\useragent.log`. The file rotates at 1 MiB to a single
@@ -162,8 +176,8 @@ placement and on every sync for each placement the user holds a receipt in,
 so a deleted file is back at the next sync. A
 placement this user has no item in gets no file, even when its root exists.
 A failure is reported under the placement's name with no item, in the
-service log. A `paths` entry may use `${USERPROFILE}` only on an OS where
-the placement's scope is `user`.
+service log. A `paths` entry may use the user's home, `${USERPROFILE}` on Windows or
+`${HOME}` on macOS, only on an OS where the placement's scope is `user`.
 
 `exclusive` in a profile directory is strict: once the user puts a file of
 their own in the root before the helper has created and marked it, the
@@ -607,6 +621,7 @@ A build writes only under its write roots. A brand sets them in
 darwin: [/Library/Application Support/Acme]
 windows: ['${ProgramData}\Acme']
 windows_user: ['${USERPROFILE}\.agents']
+darwin_user: ['${HOME}/.agents']
 ```
 
 Without the file, a build uses `${ProgramData}\<NAME>` on Windows and
@@ -765,7 +780,7 @@ placements:
 |---|---|
 | key | The placement name. Variants and rendered trees use it. |
 | `paths` | The placement root, keyed by `darwin` and `windows`. Every placement is a directory: one tree per item at `<root>/<item_name>`. |
-| `scope` | `machine` or `user`, keyed like `paths`. An OS left out is `machine`. `darwin: user` is not supported. In `user` scope the per-user helper places the trees and writes the `files`. |
+| `scope` | `machine` or `user`, keyed like `paths`. An OS left out is `machine`. In `user` scope the per-user helper places the trees and writes the `files`. |
 | `applies_to` | Display names, such as `[Claude Code]`. The storefront shows a line such as "Applies to: Claude Code" for an item (see Storefront labels). Display only: it does not limit where an item is placed. |
 | `action_labels` | Optional storefront label overrides for the placement's items. Keys: `install`, `installing`, `installed`, `remove`, `removing`, `update`, `cancel`, `pending_install`, `pending_remove`, `applies_to`. |
 | `exclusive` | Optional. When true, sofcat does not write into an existing, non-empty root it did not create. |
@@ -776,7 +791,8 @@ placements:
 | `check_facts` | Top level, beside `placements`: facts for `makecatalogs -check` over the built-in samples, for the admin facts templates read. |
 
 Windows paths may use `${ProgramFiles}` and `${ProgramData}`. A path may use
-`${USERPROFILE}` only when its OS has `user` scope.
+the user's home, `${USERPROFILE}` on Windows or `${HOME}` on macOS, only
+when its OS has `user` scope.
 
 Where order matters, placements are taken in file order.
 

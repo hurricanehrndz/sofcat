@@ -1,9 +1,12 @@
 # Where the Tapas Test build may place zip items (site/src/content/docs/guides/zip-items.md). Each
 # OS's machine root covers every placement in ../placements.yaml except
-# outside-skills, which lies outside it on purpose.
+# outside-skills, which lies outside it on purpose; its user root covers the
+# user-scope ones.
 darwin:
   - /Library/Application Support/Tapas Test
 windows:
   - ${ProgramData}\tapas-test-smoke
 windows_user:
   - ${USERPROFILE}\.agents
+darwin_user:
+  - ${HOME}/.agents

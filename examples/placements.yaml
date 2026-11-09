@@ -15,8 +15,8 @@ placements:
   # Every placement is a directory: one tree per item at <path>/<item_name>.
   claude-code-skills:
     # The placement root per OS. Only darwin and windows. Windows paths may use
-    # ${ProgramFiles} and ${ProgramData}; ${USERPROFILE} only where the scope
-    # for that OS is user.
+    # ${ProgramFiles} and ${ProgramData}. The user's home, ${USERPROFILE} on
+    # Windows and ${HOME} on macOS, only where the scope for that OS is user.
     paths:
       darwin: /Library/Application Support/ClaudeCode/.claude/skills
       windows: ${ProgramData}\ClaudeCode\.claude\skills
@@ -51,9 +51,9 @@ placements:
     paths:
       darwin: /etc/codex/skills
       windows: ${USERPROFILE}\.agents\skills
-    # machine or user per OS. An OS left out is machine. darwin: user is not
-    # supported. This one is machine scope on macOS and per user on Windows.
-    # In user scope the per-user helper places the trees and writes any files.
+    # machine or user per OS. An OS left out is machine. This one is machine
+    # scope on macOS and per user on Windows. In user scope the per-user helper
+    # places the trees and writes any files.
     scope:
       windows: user
     applies_to: [Codex]

@@ -33,8 +33,9 @@ type Client interface {
 }
 
 // Sync applies the service's user-placement plan for one user. guard holds
-// the OS (placement.Windows), the compiled write roots, whose user-scope roots
-// apply, the refused data and binary directories, and Vars["USERPROFILE"].
+// the OS (placement.Windows or placement.Darwin), the compiled write roots,
+// whose user-scope roots apply, the refused data and binary directories, and
+// the user's home in Vars (placement.ProfileVar).
 // Receipts live in receiptDir. Held entries are neither placed nor removed.
 // The trees' templates render with the plan's facts, each entry's managed
 // flag and this account's login name; the helper runs no script of its own.

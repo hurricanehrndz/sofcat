@@ -53,6 +53,9 @@ func BinDir() string { return SupportDir() + "/bin" }
 // CLIPath is the installed macOS CLI.
 func CLIPath() string { return BinDir() + "/" + Slug }
 
+// UserAgentPath is the installed macOS per-user helper, beside the CLI.
+func UserAgentPath() string { return BinDir() + "/" + Slug + "-useragent" }
+
 // AppPath is the installed macOS app bundle.
 func AppPath() string { return "/Applications/" + Name + ".app" }
 
@@ -62,10 +65,31 @@ func LaunchdLabel() string { return Identifier }
 // LaunchdPlistPath is the macOS daemon's property list.
 func LaunchdPlistPath() string { return "/Library/LaunchDaemons/" + Identifier + ".plist" }
 
+// UserAgentLabel is the launchd label of the macOS per-user helper's
+// LaunchAgent.
+func UserAgentLabel() string { return Identifier + ".useragent" }
+
+// UserAgentPlistPath is the per-user helper's LaunchAgent property list.
+func UserAgentPlistPath() string { return "/Library/LaunchAgents/" + UserAgentLabel() + ".plist" }
+
 // ProgramDataDir is the Windows twin of SupportDir, %ProgramData%\<Name>:
 // the config, Data and sofcat's own placements live in it. The executables
 // stay under Program Files, which sofcat never writes.
 func ProgramDataDir() string { return filepath.Join(os.Getenv("ProgramData"), Name) }
+
+// UserArtifactsDirFor is where the service stages the archives per-user
+// helpers read, for the data directory dataDir on goos: user-artifacts
+// inside it, whose own ACL lets Users in on Windows. On macOS a <Name>/Data
+// directory is root-only 0700 and Unix has no inherited ACL to open one
+// entry of it, so the archives sit beside it, in the 0755 <Name> directory
+// that already holds the CLI. Any other macOS data directory is not made
+// 0700, so its archives stay inside it.
+func UserArtifactsDirFor(goos, dataDir string) string {
+	if goos == "darwin" && filepath.Base(dataDir) == "Data" && filepath.Base(filepath.Dir(dataDir)) == Name {
+		return filepath.Join(filepath.Dir(dataDir), "user-artifacts")
+	}
+	return filepath.Join(dataDir, "user-artifacts")
+}
 
 // DataDirFor is DataDir on goos.
 func DataDirFor(goos string) string {

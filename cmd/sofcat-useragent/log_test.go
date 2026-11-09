@@ -14,11 +14,10 @@ import (
 // info level, and without the debug detail.
 func TestLogWrittenWithoutDebug(t *testing.T) {
 	root := t.TempDir()
-	t.Setenv("LOCALAPPDATA", root)
 	t.Setenv("SOFCAT_DEBUG", "")
 	t.Setenv("SOFCAT_UI_DEBUG", "")
 
-	logger, writer, err := setupLogger()
+	logger, writer, err := setupLogger(filepath.Join(root, identity.Name))
 	if err != nil || writer == nil {
 		t.Fatalf("writer=%v err=%v", writer, err)
 	}
@@ -40,10 +39,9 @@ func TestLogWrittenWithoutDebug(t *testing.T) {
 // not the storefront's ui-client.log, whose rotation it would otherwise race.
 func TestLogDebugWithSwitch(t *testing.T) {
 	root := t.TempDir()
-	t.Setenv("LOCALAPPDATA", root)
 	t.Setenv("SOFCAT_DEBUG", "1")
 
-	logger, writer, err := setupLogger()
+	logger, writer, err := setupLogger(filepath.Join(root, identity.Name))
 	if err != nil || writer == nil {
 		t.Fatalf("writer=%v err=%v", writer, err)
 	}
@@ -61,9 +59,8 @@ func TestLogDebugWithSwitch(t *testing.T) {
 // so it must stay small: past the cap it rotates to a single backup.
 func TestLogSizeCapped(t *testing.T) {
 	root := t.TempDir()
-	t.Setenv("LOCALAPPDATA", root)
 
-	logger, writer, err := setupLogger()
+	logger, writer, err := setupLogger(filepath.Join(root, identity.Name))
 	if err != nil || writer == nil {
 		t.Fatalf("writer=%v err=%v", writer, err)
 	}
@@ -109,9 +106,7 @@ func TestLogFallsBackWhenUnwritable(t *testing.T) {
 	if err := os.WriteFile(blocker, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("LOCALAPPDATA", blocker)
-
-	logger, writer, err := setupLogger()
+	logger, writer, err := setupLogger(filepath.Join(blocker, identity.Name))
 	if err == nil || writer != nil || logger == nil {
 		t.Fatalf("logger=%v writer=%v err=%v; want a discarding logger and an error", logger, writer, err)
 	}
