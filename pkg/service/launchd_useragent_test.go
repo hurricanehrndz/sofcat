@@ -230,3 +230,35 @@ func TestRemoveUserAgents(t *testing.T) {
 		t.Fatal("user 501's agent is still loaded")
 	}
 }
+
+// fakeStorefront replaces storefrontPIDs and terminate for one test: the
+// storefront runs as pids, and the pids asked to exit are recorded.
+func fakeStorefront(t *testing.T, pids ...int) *[]int {
+	t.Helper()
+	origPIDs, origTerminate := storefrontPIDs, terminate
+	t.Cleanup(func() { storefrontPIDs, terminate = origPIDs, origTerminate })
+	storefrontPIDs = func(string) ([]int, error) { return pids, nil }
+	var ended []int
+	terminate = func(pid int) error {
+		ended = append(ended, pid)
+		return nil
+	}
+	return &ended
+}
+
+// -serviceremove must end only what runs from the storefront's bundle: a
+// product name with a space, but not the daemon, the helper beside it, or
+// another bundle whose path merely starts with the same name.
+func TestBundlePIDs(t *testing.T) {
+	ps := `    1 /sbin/launchd
+  412 /Library/Application Support/Tapas Test/bin/tapas-test
+  733 /Applications/Tapas Test.app/Contents/MacOS/Tapas Test
+  734 /Applications/Tapas Test Two.app/Contents/MacOS/Tapas Test
+  801 /Users/a/Applications/Tapas Test.app/Contents/MacOS/Tapas Test
+ 1002 /Applications/Tapas Test.app/Contents/MacOS/Tapas Test
+`
+	got := bundlePIDs([]byte(ps), "/Applications/Tapas Test.app")
+	if want := []int{733, 1002}; !slices.Equal(got, want) {
+		t.Fatalf("bundlePIDs = %v, want %v", got, want)
+	}
+}

@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"syscall"
 )
 
 // guiUsers lists the uids signed in to a macOS GUI session; tests replace it.
@@ -130,4 +131,59 @@ func removeUserAgents(label, plist string) error {
 		slog.Info("booted the helper out", "uid", uid)
 	}
 	return rmErr
+}
+
+// storefrontPIDs lists the processes running from the storefront's app
+// bundle; tests replace it.
+var storefrontPIDs = func(app string) ([]int, error) {
+	out, err := exec.Command("/bin/ps", "-axo", "pid=,comm=").Output()
+	if err != nil {
+		return nil, fmt.Errorf("ps: %w", err)
+	}
+	return bundlePIDs(out, app), nil
+}
+
+// bundlePIDs reads `ps -axo pid=,comm=`, where comm is the executable's
+// full path, and returns the processes whose executable is in app's
+// Contents/MacOS. The same executable name anywhere else is left alone.
+func bundlePIDs(ps []byte, app string) []int {
+	var pids []int
+	for line := range strings.SplitSeq(string(ps), "\n") {
+		field, comm, ok := strings.Cut(strings.TrimSpace(line), " ")
+		if !ok || !strings.HasPrefix(strings.TrimSpace(comm), app+"/Contents/MacOS/") {
+			continue
+		}
+		if pid, err := strconv.Atoi(field); err == nil {
+			pids = append(pids, pid)
+		}
+	}
+	return pids
+}
+
+// terminate asks process pid to exit; tests replace it.
+var terminate = func(pid int) error {
+	p, err := os.FindProcess(pid)
+	if err != nil {
+		return err
+	}
+	return p.Signal(syscall.SIGTERM)
+}
+
+// quitStorefront ends every running storefront, the app bundle at app, in
+// any user's session: with the service gone it can do nothing. As on
+// Windows (endAgents) the window closes without asking, and nothing here
+// fails the remove: each failure is logged and the sweep goes on.
+func quitStorefront(app string) {
+	pids, err := storefrontPIDs(app)
+	if err != nil {
+		slog.Warn("unable to list processes; a running storefront is left open", "err", err)
+		return
+	}
+	for _, pid := range pids {
+		if err := terminate(pid); err != nil {
+			slog.Warn("unable to end the storefront", "pid", pid, "err", err)
+			continue
+		}
+		slog.Info("ended the storefront", "pid", pid)
+	}
 }

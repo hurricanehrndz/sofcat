@@ -105,7 +105,8 @@ and the helper's LaunchAgent, `<IDENTIFIER>.useragent`, in
 `/Library/LaunchAgents`; its postinstall script bootstraps the daemon.
 launchd runs the helper at each GUI login, and the daemon kickstarts it (or
 bootstraps it) in every signed-in user's session when the user-placement plan
-changes; `-serviceremove` boots it out of them and deletes its plist. The daemon reads
+changes; `-serviceremove` boots it out of them, deletes its plist and quits
+an open storefront app. The daemon reads
 `/Library/Application Support/<Name>/config.yaml`, keeps its state in the
 root-only `.../<Name>/Data` (0700) and serves
 `/var/run/<slug>/<slug>-service.sock`. The service and `-serviceinstall` make
@@ -298,7 +299,8 @@ passwordless sudo.
    screenshot it (`mac show`, or VNC if the capture shows only wallpaper).
 7. Clean up: stop the test server, then
    `sudo "/Library/Application Support/Tapas Test/bin/tapas-test" -serviceremove`
-   (it also boots the helper's LaunchAgent out and deletes its plist)
+   (it also boots the helper's LaunchAgent out, deletes its plist and quits
+   the open app)
    and remove `/Applications/Tapas Test.app`,
    `/Library/Application Support/Tapas Test` and
    `/Library/Application Support/tapas-test-*`, and, as the user,

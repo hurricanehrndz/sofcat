@@ -196,6 +196,7 @@ func TestLaunchdStart(t *testing.T) {
 // (TestRemoveUserAgents covers the helpers it boots out).
 func TestLaunchdStopKeepsPlistRemoveDeletesIt(t *testing.T) {
 	fakeGUIUsers(t)
+	ended := fakeStorefront(t, 41)
 	dir := t.TempDir()
 	plist := filepath.Join(dir, testLabel+".plist")
 	agentPlist := filepath.Join(dir, identity.UserAgentLabel()+".plist")
@@ -223,6 +224,9 @@ func TestLaunchdStopKeepsPlistRemoveDeletesIt(t *testing.T) {
 		if _, err := os.Stat(p); !errors.Is(err, os.ErrNotExist) {
 			t.Fatalf("remove kept %s: %v", p, err)
 		}
+	}
+	if !slices.Equal(*ended, []int{41}) {
+		t.Fatalf("remove ended %v, want the storefront, pid 41", *ended)
 	}
 }
 

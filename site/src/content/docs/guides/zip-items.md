@@ -74,7 +74,8 @@ signed in to a GUI session, fast-user-switched ones included, with
 `launchctl kickstart`, or with `launchctl bootstrap` for a user who signed in
 before the install. A helper still running then is started again at the
 next service run. `-serviceremove` boots it out of every user's session,
-which ends a running helper, and deletes the plist. The helper logs to
+which ends a running helper, deletes the plist and quits an open storefront
+without asking. The helper logs to
 `~/Library/Application Support/<NAME>/useragent.log`.
 
 Each helper run logs what it placed, held and failed to

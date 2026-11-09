@@ -135,7 +135,8 @@ loaded, for every uid owning a `loginwindow`, with the same record-on-success
 rule. A helper still running is not kickstarted (launchd runs one instance
 and it may have fetched its last plan), so the plan stays due and the next
 run starts it. Its arguments are fixed, so it runs without `--no-retry` there.
-`-serviceremove` boots it out of every such session and deletes the plist.
+`-serviceremove` boots it out of every such session, deletes the plist and
+ends (SIGTERM) every process running from `/Applications/<Name>.app`.
 The storefront does not sync. One user's syncs run one at a time. Each fetches the plan, takes the
 lock file `.sync.lock` in the receipt directory, waiting while another sync
 holds it, and fetches the plan again under the lock. The helper expands

@@ -130,7 +130,8 @@ var launchctl = func(args ...string) ([]byte, error) {
 // where the daemon's plist lives (identity.LaunchdPlistPath()). Like the
 // Windows Run value, the per-user helper's LaunchAgent plist, agentPlist
 // (identity.UserAgentPlistPath()), is written by install and removed, with
-// every running helper, by remove (removeUserAgents).
+// every running helper, by remove (removeUserAgents), which also ends a
+// running storefront (quitStorefront).
 func launchdAction(cfg config.Configuration, action, plist, agentPlist string) error {
 	label := identity.LaunchdLabel()
 	switch action {
@@ -151,7 +152,9 @@ func launchdAction(cfg config.Configuration, action, plist, agentPlist string) e
 			return fmt.Errorf("remove %s: %w", plist, err)
 		}
 		// After the daemon, so it cannot start a helper behind the sweep.
-		return removeUserAgents(identity.UserAgentLabel(), agentPlist)
+		err := removeUserAgents(identity.UserAgentLabel(), agentPlist)
+		quitStorefront(identity.AppPath())
+		return err
 	default:
 		return fmt.Errorf("unsupported service action %q", action)
 	}
