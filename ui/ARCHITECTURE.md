@@ -136,8 +136,15 @@ receipts in `%LOCALAPPDATA%\<Name>\receipts`, removes its own
 receipt-tracked trees that left the plan, regenerates the `files` of every
 placement it still holds a receipt in, and sends every result with
 `reportUserPlacements`; a failed regeneration is a result with the
-placement and an empty `item`. The service only logs them (failures at warn, with
-the caller from the connection). A signed-in user gets new content as soon as
+placement and an empty `item`. The service logs them (failures at warn, with
+the caller from the connection) and merges each caller's results for items the
+stored plan lists into `user-placement-status.json` in its data directory
+(SYSTEM only), by the caller's SID. `ListOptionalInstalls` reads a user-scope
+item as installed for that caller when its machine-scope placements are and
+their agent last reported every user-scope one placed (`installed`,
+`current`, `adopted` or `unchanged`); a `conflict` keeps the earlier outcome,
+and an item the caller has no outcome for reads from the machine's receipts.
+The service never opens a user's receipts. A signed-in user gets new content as soon as
 the run that changed the plan ends. `-serviceremove` ends any helper still
 running beside it, after it removes the `Run` value.
 
