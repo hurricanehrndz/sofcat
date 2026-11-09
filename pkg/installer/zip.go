@@ -19,7 +19,6 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/conditions"
 	"github.com/hurricanehrndz/sofcat/pkg/config"
 	"github.com/hurricanehrndz/sofcat/pkg/download"
-	"github.com/hurricanehrndz/sofcat/pkg/harness"
 	"github.com/hurricanehrndz/sofcat/pkg/identity"
 	"github.com/hurricanehrndz/sofcat/pkg/placement"
 	"github.com/hurricanehrndz/sofcat/pkg/receipt"
@@ -32,8 +31,8 @@ import (
 // own receipt directory.
 type ZipInstaller struct {
 	// Guard holds the OS, the write roots and the refusals every path passes.
-	Guard     placement.Guard
-	Harnesses harness.Table
+	Guard placement.Guard
+	Table placement.Table
 	// ReceiptDir holds this installer's receipts.
 	ReceiptDir string
 	// Slug names the ownership marker and staging directories; identity.Slug
@@ -73,11 +72,11 @@ func (z *ZipInstaller) templates() treeRenderer {
 }
 
 // NewMachineZip returns the service's zip installer for cfg and the
-// repository's harness table: machine roots, receipts in the data directory.
-func NewMachineZip(cfg config.Configuration, table harness.Table) *ZipInstaller {
+// repository's placement table: machine roots, receipts in the data directory.
+func NewMachineZip(cfg config.Configuration, table placement.Table) *ZipInstaller {
 	return &ZipInstaller{
 		Guard:       placement.MachineGuard(cfg.AppDataPath),
-		Harnesses:   table,
+		Table:       table,
 		ReceiptDir:  receipt.MachineDir(cfg.AppDataPath),
 		CachePath:   cfg.CachePath,
 		URLPackages: cfg.URLPackages,
@@ -122,8 +121,8 @@ const (
 // OutcomeRefused and OutcomeFailed.
 type Result struct {
 	Placement string
-	// Path is the tree's directory, <placement root>/<item> (in a
-	// marketplace, <placement root>/plugins/<item>), when known.
+	// Path is the tree's directory, <placement root>/<item> (with
+	// items_dir, <placement root>/<items_dir>/<item>), when known.
 	Path    string
 	Outcome Outcome
 	Err     error
@@ -149,9 +148,9 @@ func (r Result) Failed() bool { return r.Err != nil }
 type Target struct {
 	Placement string
 	Variant   catalog.Variant
-	// Spec is the harness table's entry; Known is false when the table lacks
+	// Spec is the placement table's entry; Known is false when the table lacks
 	// the placement, which refuses it.
-	Spec  harness.Placement
+	Spec  placement.Spec
 	Known bool
 }
 
@@ -169,7 +168,7 @@ func (z *ZipInstaller) clock() time.Time {
 	return time.Now().UTC()
 }
 
-// Targets returns item's placements on this OS, in harness-table order, then
+// Targets returns item's placements on this OS, in table order, then
 // any the table lacks, by name. Placements whose scope here is user are
 // returned apart in user: a machine run skips them, neither failing nor
 // succeeding the item.
@@ -179,13 +178,13 @@ func (z *ZipInstaller) Targets(item catalog.Item) (machine []Target, user []stri
 		v, ok := item.Installer.Variants[name][goos]
 		return v, ok
 	}
-	for _, name := range z.Harnesses.Names() {
+	for _, name := range z.Table.Names() {
 		v, ok := variantFor(name)
 		if !ok {
 			continue
 		}
-		spec := z.Harnesses.Placements[name]
-		if spec.ScopeFor(goos) == harness.ScopeUser {
+		spec := z.Table.Placements[name]
+		if spec.ScopeFor(goos) == placement.ScopeUser {
 			user = append(user, name)
 			continue
 		}
@@ -193,7 +192,7 @@ func (z *ZipInstaller) Targets(item catalog.Item) (machine []Target, user []stri
 	}
 	var unknown []string
 	for name := range item.Installer.Variants {
-		if _, known := z.Harnesses.Placements[name]; known {
+		if _, known := z.Table.Placements[name]; known {
 			continue
 		}
 		if _, ok := variantFor(name); ok {
@@ -211,17 +210,13 @@ func (z *ZipInstaller) Targets(item catalog.Item) (machine []Target, user []stri
 // root resolves and checks the target's placement root.
 func (z *ZipInstaller) root(t Target) (string, error) {
 	if !t.Known {
-		return "", fmt.Errorf("%w: placement %q is not in harnesses.yaml", placement.ErrRefused, t.Placement)
-	}
-	if t.Spec.Kind != harness.KindDirectory && t.Spec.Kind != harness.KindMarketplace {
-		// A settings placement is one generated file, never an item's target.
-		return "", fmt.Errorf("%w: placement %q is kind %s, which takes no item trees", placement.ErrRefused, t.Placement, t.Spec.Kind)
+		return "", fmt.Errorf("%w: placement %q is not in placements.yaml", placement.ErrRefused, t.Placement)
 	}
 	return z.resolve(t.Placement, t.Spec)
 }
 
 // resolve expands, resolves and checks placement name's path on this OS.
-func (z *ZipInstaller) resolve(name string, spec harness.Placement) (string, error) {
+func (z *ZipInstaller) resolve(name string, spec placement.Spec) (string, error) {
 	raw, ok := spec.Path(z.Guard.GOOS)
 	if !ok {
 		return "", fmt.Errorf("%w: placement %q has no path on %s", placement.ErrRefused, name, z.Guard.GOOS)
@@ -234,18 +229,15 @@ func (z *ZipInstaller) resolve(name string, spec harness.Placement) (string, err
 }
 
 // treeIn is item's tree under its placement root: <root>/<item>, or
-// <root>/plugins/<item> in a marketplace.
-func treeIn(spec harness.Placement, root, item string) string {
-	if spec.Kind == harness.KindMarketplace {
-		return filepath.Join(root, pluginsDir, item)
-	}
-	return filepath.Join(root, item)
+// <root>/<items_dir>/<item>.
+func treeIn(spec placement.Spec, root, item string) string {
+	return filepath.Join(root, filepath.FromSlash(spec.ItemsDir), item)
 }
 
 // checkItemName refuses an item name that cannot be one directory under a
 // placement root, or that could collide with sofcat's own dot entries there.
 func checkItemName(name string) error {
-	if err := checkSegment(name); err != nil || name[0] == '.' || len(name) > 255 {
+	if err := placement.CheckSegment(name); err != nil || name[0] == '.' || len(name) > 255 {
 		return fmt.Errorf("%w: item name %q cannot name a directory", placement.ErrRefused, name)
 	}
 	return nil
@@ -420,7 +412,7 @@ func (z *ZipInstaller) Fetch(ctx context.Context, t Target, progress download.Pr
 	// the cache: every segment of the cleaned path must be a plain name.
 	rel := path.Clean(t.Variant.Location)
 	for _, seg := range strings.Split(rel, "/") {
-		if err := checkSegment(seg); err != nil {
+		if err := placement.CheckSegment(seg); err != nil {
 			return "", fmt.Errorf("placement %q: archive location %q refused: %w", t.Placement, t.Variant.Location, err)
 		}
 	}
@@ -436,10 +428,9 @@ func (z *ZipInstaller) Fetch(ctx context.Context, t Target, progress download.Pr
 // archive is read only when a tree is written: an adopted tree is rendered
 // in place from the templates it holds, without the archive.
 //
-// After it changes a marketplace placement (an install, an upgrade, or a
-// receipt adopted or refreshed, as when only the managed flag changed) it
-// regenerates the marketplace's generated files; a failure there fails the
-// result.
+// After it changes a placement (an install, an upgrade, or a receipt
+// adopted or refreshed, as when only the managed flag changed) it
+// regenerates the placement's files; a failure there fails the result.
 func (z *ZipInstaller) Apply(item catalog.Item, t Target, archive string) Result {
 	f := z.inspect(item, t)
 	res := f.Result
@@ -465,10 +456,15 @@ func (z *ZipInstaller) Apply(item catalog.Item, t Target, archive string) Result
 	if err := z.prepareRoot(t, f.root); err != nil {
 		return fail(t, res.Path, err)
 	}
-	// The tree's directory: the root, or a marketplace's plugins directory.
+	// The tree's directory: the root, or its items_dir.
 	parent := filepath.Dir(res.Path)
 	if err := os.MkdirAll(parent, 0o755); err != nil {
 		return fail(t, res.Path, err)
+	}
+	// items_dir may already exist as a link somewhere else; the tree goes
+	// only where the guard allows.
+	if _, err := z.Guard.Check(parent, t.Spec.ScopeFor(z.Guard.GOOS)); err != nil {
+		return fail(t, res.Path, fmt.Errorf("placement %q: %w", t.Placement, err))
 	}
 	stage := filepath.Join(parent, "."+z.slug()+"-staging-"+item.Name)
 	if err := os.RemoveAll(stage); err != nil {
@@ -549,7 +545,7 @@ func (z *ZipInstaller) renderTree(item catalog.Item, t Target, root, dir string)
 	return placed, records(outs), undo, nil
 }
 
-// regenerated regenerates the generated files of t's placement after res
+// regenerated regenerates the files of t's placement after res
 // changed it, failing res when that fails.
 func (z *ZipInstaller) regenerated(t Target, res Result) Result {
 	if err := z.regenerate(t.Placement); err != nil {
@@ -640,13 +636,13 @@ func (z *ZipInstaller) receiptManaged(item, placement string) (bool, error) {
 
 // Remove removes the tree rc records, under R15: only when the tree still
 // matches the receipt's placed_hash. A tree already gone just drops the
-// receipt. Like Apply, removing a marketplace plugin regenerates the
-// generated files.
+// receipt. Like Apply, removing a tree regenerates the placement's
+// files.
 func (z *ZipInstaller) Remove(rc receipt.Receipt) Result {
 	t := Target{Placement: rc.Placement}
 	res := Result{Placement: rc.Placement, Path: rc.Path}
-	scope := harness.ScopeMachine
-	if spec, ok := z.Harnesses.Placements[rc.Placement]; ok {
+	scope := placement.ScopeMachine
+	if spec, ok := z.Table.Placements[rc.Placement]; ok {
 		scope = spec.ScopeFor(z.Guard.GOOS)
 	}
 	if err := checkItemName(rc.Item); err != nil {

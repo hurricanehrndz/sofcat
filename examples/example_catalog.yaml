@@ -22,8 +22,9 @@ ColorPrinter:
     - Canon-Drivers
   display_name: Color Printer
   # custom_action_labels: storefront labels for this item, Munki's keys plus
-  # cancel and the pending statuses (install, installing, installed, remove,
-  # removing, update, cancel, pending_install, pending_remove).
+  # cancel, the pending statuses and the applies-to prefix (install,
+  # installing, installed, remove, removing, update, cancel, pending_install,
+  # pending_remove, applies_to).
   # A key left out falls back to the item's placements (zip items, see
   # site/src/content/docs/guides/zip-items.md), then the built-in label. Shown as plain text.
   custom_action_labels:
@@ -171,7 +172,7 @@ FirefoxLangPack:
 hello-world:
   display_name: Hello World
   # A zip item places a directory tree, such as an AI skill, instead of running
-  # an installer. variants maps a placement in harnesses.yaml to an OS (darwin
+  # an installer. variants maps a placement in placements.yaml to an OS (darwin
   # or windows) to one zip. makecatalogs zip-item writes this block; see
   # site/src/content/docs/guides/zip-items.md. A zip item needs no check block or uninstaller.
   installer:

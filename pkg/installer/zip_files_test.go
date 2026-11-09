@@ -11,19 +11,35 @@ import (
 
 	"github.com/hurricanehrndz/sofcat/pkg/artifact"
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
-	"github.com/hurricanehrndz/sofcat/pkg/harness"
 	"github.com/hurricanehrndz/sofcat/pkg/placement"
 	"github.com/hurricanehrndz/sofcat/pkg/receipt"
 	"github.com/hurricanehrndz/sofcat/pkg/report"
 )
 
-// marketTest is an installer with one write root holding a marketplace
-// placement "market" (two manifest files) and a settings placement "drop-in"
-// that registers it, parsed from YAML as a repository would serve it.
+// marketTest is an installer with one write root holding placement
+// "market": a Claude Code marketplace with plugins under plugins/, the Claude
+// catalog at two relative paths and the drop-in at its own path, all from
+// the Tapas fixture's templates, parsed as a repository would serve them.
 type marketTest struct {
 	z        *ZipInstaller
 	root     string // the marketplace root
 	settings string // the drop-in's path
+}
+
+// claudeTemplates returns the Tapas fixture's Claude catalog and drop-in
+// templates, which the zip-items guide shows for brands to copy.
+func claudeTemplates(t *testing.T) (catalog, dropIn string) {
+	t.Helper()
+	body, err := os.ReadFile(filepath.Join("..", "..", "test", "manual", "fixtures", "tapas", "placements.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	table, err := placement.Parse(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := table.Placements["tapas-marketplace"].Files
+	return files[0].Template, files[2].Template
 }
 
 func newMarketTest(t *testing.T, settings string) marketTest {
@@ -34,27 +50,29 @@ func newMarketTest(t *testing.T, settings string) marketTest {
 	if settings == "" {
 		settings = filepath.Join(roots, "settings.d", "50-acme.json")
 	}
-	table, err := harness.Parse(fmt.Appendf(nil, `placements:
+	table, err := placement.Parse(fmt.Appendf(nil, `placements:
   market:
-    kind: marketplace
     paths: {%[1]s: '%[2]s'}
     exclusive: true
-    marketplace:
+    items_dir: plugins
+    vars:
       name: acme
       owner: {name: Acme IT, email: it@acme.test}
       renames:
         old-plugin: new-plugin
         older: {to: new-plugin, since: 2, keep: true, aliases: [a, b]}
       allowCrossMarketplaceDependenciesOn: [other, {name: third, only: [x]}]
-      manifest_files: [.claude-plugin/marketplace.json, .agents/plugins/marketplace.json]
-  drop-in:
-    kind: settings
-    paths: {%[1]s: '%[3]s'}
-    registers: market
+    files:
+      - {path: .claude-plugin/marketplace.json, template: x}
+      - {path: .agents/plugins/marketplace.json, template: x}
+      - {paths: {%[1]s: '%[3]s'}, template: x}
 `, testOS(), root, settings))
 	if err != nil {
 		t.Fatal(err)
 	}
+	catalog, dropIn := claudeTemplates(t)
+	files := table.Placements["market"].Files
+	files[0].Template, files[1].Template, files[2].Template = catalog, catalog, dropIn
 	return marketTest{
 		z: &ZipInstaller{
 			Guard: placement.Guard{
@@ -62,7 +80,7 @@ func newMarketTest(t *testing.T, settings string) marketTest {
 				Roots:   placement.Roots{Darwin: []string{roots}, Windows: []string{roots}},
 				DataDir: filepath.Join(base, "data"),
 			},
-			Harnesses:  table,
+			Table:      table,
 			ReceiptDir: filepath.Join(base, "data", "receipts"),
 			Slug:       "sofcat-test",
 		},
@@ -292,7 +310,7 @@ func TestMarketplaceHeldPluginKeepsFlag(t *testing.T) {
 	}
 }
 
-// TestMarketplaceRegenerateRefusalHeals: a settings path refused on install
+// TestMarketplaceRegenerateRefusalHeals: a drop-in path refused on install
 // leaves a receipt, so the next Apply reports current; the per-run pass
 // reports the refusal against the marketplace placement on every run until
 // the path is allowed, and then writes the drop-in.
@@ -310,8 +328,8 @@ func TestMarketplaceRegenerateRefusalHeals(t *testing.T) {
 	if len(r.Report.FailedItems) != 1 {
 		t.Fatalf("failed items = %+v, want one", r.Report.FailedItems)
 	}
-	if f := r.Report.FailedItems[0]; f.Name != "market" || f.Action != "generate" || f.Code != report.CodePlacementRefused || !strings.Contains(f.Error, `"drop-in"`) {
-		t.Errorf("failed item = %+v, want market generate placement_refused naming drop-in", f)
+	if f := r.Report.FailedItems[0]; f.Name != "market" || f.Action != "generate" || f.Code != report.CodePlacementRefused || !strings.Contains(f.Error, filepath.Dir(outside)) {
+		t.Errorf("failed item = %+v, want market generate placement_refused naming the drop-in path", f)
 	}
 	if exists(filepath.Dir(outside)) {
 		t.Error("wrote outside the write roots")
@@ -349,6 +367,26 @@ func TestMarketplaceRegenerateRestoresDeleted(t *testing.T) {
 	}
 }
 
+// TestRegenerateAllSkipsUserScope: the service has no user to expand a
+// user-scope root for, so its per-run pass leaves those placements to the
+// per-user helper instead of reporting a failed generate on every run.
+// Regenerate, which the helper calls, still takes them.
+func TestRegenerateAllSkipsUserScope(t *testing.T) {
+	z, _ := newTestZip(t)
+	z.Table.Placements["user-plugins"] = placement.Spec{
+		Paths: map[string]string{testOS(): "${USERPROFILE}/plugins"},
+		Scope: map[string]string{testOS(): placement.ScopeUser},
+		Files: []placement.File{{Path: "index.json", Template: "{}"}},
+	}
+	z.Table.Order = append(z.Table.Order, "user-plugins")
+	if failed := z.RegenerateAll(); len(failed) != 0 {
+		t.Fatalf("RegenerateAll = %+v, want the user-scope placement skipped", failed)
+	}
+	if failed := z.Regenerate([]string{"user-plugins"}); len(failed) != 1 {
+		t.Errorf("Regenerate(user-plugins) without USERPROFILE = %+v, want one failure", failed)
+	}
+}
+
 // TestMarketplaceLastPluginRemoved: with no plugin left the drop-in goes, so
 // the harness stops loading an empty marketplace, and the manifest stays
 // valid with no plugins.
@@ -377,37 +415,121 @@ func TestMarketplaceLastPluginRemoved(t *testing.T) {
 	}
 }
 
-// TestSettingsPlacementRefusedAsTarget: a settings placement is a generated
-// file; a variant naming it would write a tree where the file goes.
-func TestSettingsPlacementRefusedAsTarget(t *testing.T) {
+// TestPlacementFileEmptyRender: an empty render removes a file at a
+// relative path as at its own path, and an entry with no path on this OS is
+// skipped.
+func TestPlacementFileEmptyRender(t *testing.T) {
 	m := newMarketTest(t, "")
-	item, archive := plugin(t, "sneaky", "drop-in")
-	res := m.z.Apply(item, target(t, m.z, item, "drop-in"), archive)
-	if res.Outcome != OutcomeRefused || res.Code() != report.CodePlacementRefused {
-		t.Errorf("settings variant = %s %q (%v), want refused", res.Outcome, res.Code(), res.Err)
+	other := placement.Darwin
+	if testOS() == placement.Darwin {
+		other = placement.Windows
 	}
-	if exists(filepath.Dir(m.settings)) {
-		t.Error("a refused settings variant wrote files")
+	spec := m.z.Table.Placements["market"]
+	spec.Files = append(spec.Files,
+		placement.File{Path: ".index.json", Template: `{{ if .Items }}{"n": {{ len .Items }}}{{ end }}`},
+		placement.File{Paths: map[string]string{other: "/elsewhere.json"}, Template: "{}"},
+	)
+	m.z.Table.Placements["market"] = spec
+	m.install(t, "one", true)
+	index := filepath.Join(m.root, ".index.json")
+	if got := readFile(t, index); got != "{\n  \"n\": 1\n}\n" {
+		t.Errorf(".index.json = %q", got)
+	}
+	rcs, err := receipt.List(m.z.ReceiptDir)
+	if err != nil || len(rcs) != 1 {
+		t.Fatalf("receipts = %v, %v", rcs, err)
+	}
+	wantOutcome(t, "remove", m.z.Remove(rcs[0]), OutcomeRemoved)
+	if exists(index) || exists(m.settings) {
+		t.Error("empty renders kept their files")
+	}
+}
+
+// TestFilePathIntoTreeRefused: an absolute files path is checked against the
+// placement too, once resolved: one inside an item tree is refused, and so is
+// one that two entries name, whatever their case.
+func TestFilePathIntoTreeRefused(t *testing.T) {
+	for name, tc := range map[string]struct {
+		path func(m marketTest) string
+		want string
+	}{
+		"inside an item tree": {func(m marketTest) string { return filepath.Join(m.root, "plugins", "one", "x.json") }, `is under items_dir "plugins"`},
+		"the drop-in again": {func(m marketTest) string {
+			return filepath.Join(filepath.Dir(m.settings), strings.ToUpper(filepath.Base(m.settings)))
+		}, "named by two files entries"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := newMarketTest(t, "")
+			spec := m.z.Table.Placements["market"]
+			spec.Files = append(spec.Files, placement.File{Paths: map[string]string{testOS(): tc.path(m)}, Template: "{}"})
+			m.z.Table.Placements["market"] = spec
+			item, archive := plugin(t, "one", "market")
+			res := m.z.Apply(item, target(t, m.z, item, "market"), archive)
+			if res.Outcome != OutcomeRefused || res.Code() != report.CodePlacementRefused || !strings.Contains(res.Err.Error(), tc.want) {
+				t.Errorf("result = %s %q (%v), want refused: %s", res.Outcome, res.Code(), res.Err, tc.want)
+			}
+			if exists(filepath.Join(m.root, "plugins", "one", "x.json")) {
+				t.Error("wrote into the item tree")
+			}
+		})
+	}
+}
+
+// TestItemsDirLinkRefused: an items_dir that already exists as a link out of
+// the write roots is refused before any tree is written through it.
+func TestItemsDirLinkRefused(t *testing.T) {
+	m := newMarketTest(t, "")
+	outside := tempDir(t)
+	if err := os.MkdirAll(m.root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(m.root, "plugins")); err != nil {
+		t.Skipf("no symlinks here: %v", err)
+	}
+	// Owned, so the exclusive check passes and the link is what is refused.
+	if err := os.WriteFile(filepath.Join(m.root, ".sofcat-test-owned"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	item, archive := plugin(t, "one", "market")
+	res := m.z.Apply(item, target(t, m.z, item, "market"), archive)
+	if res.Outcome != OutcomeRefused || res.Code() != report.CodePlacementRefused {
+		t.Errorf("result = %s %q (%v), want refused", res.Outcome, res.Code(), res.Err)
+	}
+	if entries, _ := os.ReadDir(outside); len(entries) != 0 {
+		t.Errorf("wrote through the link: %v", entries)
 	}
 }
 
 // TestSettingsPathOutsideRootsRefused: the drop-in's path passes the same
 // guard as any placement. The plugin is placed, but the item fails with
-// placement_refused naming the settings placement, and nothing is written
-// outside the roots.
+// placement_refused naming the placement. The catalogs are still written,
+// so one bad file does not hold back the rest, unless files_atomic asks
+// for all or none.
 func TestSettingsPathOutsideRootsRefused(t *testing.T) {
-	outside := filepath.Join(tempDir(t), "settings.d", "50-acme.json")
-	m := newMarketTest(t, outside)
-	item, archive := plugin(t, "one", "market")
-	res := m.z.Apply(item, target(t, m.z, item, "market"), archive)
-	if res.Outcome != OutcomeRefused || res.Code() != report.CodePlacementRefused || !strings.Contains(res.Err.Error(), `"drop-in"`) {
-		t.Errorf("result = %s %q (%v), want refused naming drop-in", res.Outcome, res.Code(), res.Err)
-	}
-	if exists(filepath.Dir(outside)) {
-		t.Error("wrote outside the write roots")
-	}
-	if !strings.Contains(m.manifest(t), `"./plugins/one"`) {
-		t.Error("manifest not written beside the refusal")
+	for _, atomic := range []bool{false, true} {
+		t.Run(fmt.Sprintf("files_atomic=%t", atomic), func(t *testing.T) {
+			outside := filepath.Join(tempDir(t), "settings.d", "50-acme.json")
+			m := newMarketTest(t, outside)
+			spec := m.z.Table.Placements["market"]
+			spec.FilesAtomic = atomic
+			m.z.Table.Placements["market"] = spec
+			item, archive := plugin(t, "one", "market")
+			res := m.z.Apply(item, target(t, m.z, item, "market"), archive)
+			if res.Outcome != OutcomeRefused || res.Code() != report.CodePlacementRefused || !strings.Contains(res.Err.Error(), `"market"`) {
+				t.Errorf("result = %s %q (%v), want refused naming market", res.Outcome, res.Code(), res.Err)
+			}
+			if exists(filepath.Dir(outside)) {
+				t.Error("wrote outside the write roots")
+			}
+			if !exists(filepath.Join(m.root, "plugins", "one")) {
+				t.Error("plugin not placed")
+			}
+			for _, catalog := range []string{".claude-plugin", filepath.Join(".agents", "plugins")} {
+				if got := exists(filepath.Join(m.root, catalog, "marketplace.json")); got == atomic {
+					t.Errorf("%s catalog written = %t, want %t", catalog, got, !atomic)
+				}
+			}
+		})
 	}
 }
 

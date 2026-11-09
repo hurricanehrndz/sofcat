@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/hurricanehrndz/sofcat/pkg/placement"
 )
 
 // A kept copy is the whole extracted package sofcat keeps after a successful
@@ -50,7 +52,7 @@ func checkPackageID(id string) error {
 	if !packageIDPattern.MatchString(id) {
 		return fmt.Errorf("package id %q is not a valid NuGet id", id)
 	}
-	if err := checkSegment(id); err != nil {
+	if err := placement.CheckSegment(id); err != nil {
 		return fmt.Errorf("package id %q: %w", id, err)
 	}
 	return nil

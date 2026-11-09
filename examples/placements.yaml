@@ -1,0 +1,143 @@
+# placements.yaml sits at the repository root, next to catalogs/ and
+# manifests/. It names the placements zip items are written to. See
+# site/src/content/docs/guides/zip-items.md. Unknown fields are rejected.
+#
+# The paths below are illustrative. Check each harness's documentation for
+# the directories it reads, and keep every path inside the build's write roots.
+#
+# Facts makecatalogs -check renders templates with, over a sample of every
+# built-in fact (see the conditions guide): the admin facts the templates
+# read, with the values to check them against.
+check_facts:
+  site: east
+placements:
+  # The key is the placement name. Catalog variants and rendered trees use it.
+  # Every placement is a directory: one tree per item at <path>/<item_name>.
+  claude-code-skills:
+    # The placement root per OS. Only darwin and windows. Windows paths may use
+    # ${ProgramFiles} and ${ProgramData}; ${USERPROFILE} only where the scope
+    # for that OS is user.
+    paths:
+      darwin: /Library/Application Support/ClaudeCode/.claude/skills
+      windows: ${ProgramData}\ClaudeCode\.claude\skills
+    # Display names for the self-service app's line "Applies to: Claude
+    # Code". Display only: it does not limit where the item goes.
+    applies_to: [Claude Code]
+    # Optional overrides for the app's labels. Keys: install, installing,
+    # installed, remove, removing, update, cancel, pending_install,
+    # pending_remove, and applies_to, the prefix of that line.
+    action_labels:
+      install: Add
+      installed: Added
+    # Files sofcat renders from the placement's receipts (.Items) after every
+    # change to it; see the guide, "Placement files". An entry has a template
+    # and either path, relative to the placement root, or paths, one per OS.
+    # An empty output removes the file, so {{ if .Items }} decides whether it
+    # stays with nothing placed. fact and cond read the machine's facts. A
+    # .json file is rewritten in canonical form, so only the values matter.
+    files:
+      - paths:
+          darwin: /Library/Application Support/ClaudeCode/skills-index.json
+          windows: ${ProgramData}\ClaudeCode\skills-index.json
+        template: |
+          {{- if .Items }}
+          {
+            "os": {{ json (fact "os") }},
+            "root": {{ json .Placement.Root }},
+            "skills": {{ json .Items }}
+          }
+          {{- end }}
+  codex-skills:
+    paths:
+      darwin: /etc/codex/skills
+      windows: ${USERPROFILE}\.agents\skills
+    # machine or user per OS. An OS left out is machine. darwin: user is not
+    # supported. This one is machine scope on macOS and per user on Windows.
+    # In user scope the per-user helper places the trees and writes any files.
+    scope:
+      windows: user
+    applies_to: [Codex]
+  acme-marketplace:
+    paths:
+      darwin: /Library/Application Support/Acme/marketplace
+      windows: ${ProgramData}\Acme\marketplace
+    applies_to: [Claude Code, Codex]
+    # Refuse to write into this directory if it already exists, is not empty
+    # and sofcat did not create it.
+    exclusive: true
+    # Item trees go to <path>/plugins/<item_name> rather than <path>/<item_name>.
+    items_dir: plugins
+    # Free data for the templates, as .Placement.Vars.
+    vars:
+      name: acme
+      owner: {name: Acme IT}
+      # renames: {old-plugin: new-plugin}
+      # allowCrossMarketplaceDependenciesOn: [other-marketplace]
+    # A Claude Code marketplace: its catalog, Codex's catalog (the version
+    # carries the placed hash, so Codex sees a new version whenever a
+    # rendered file in the plugin changes), and the Claude Code drop-in that
+    # registers the marketplace and enables its managed plugins, keyed
+    # <plugin>@<name>, removed when no plugin is left. A relative path must
+    # not reach into item trees: its first segment differs from items_dir's.
+    # A file that is refused or fails to render keeps its old contents and
+    # the others are still written; files_atomic: true writes none instead.
+    # files_atomic: true
+    files:
+      - path: .claude-plugin/marketplace.json
+        template: |
+          {
+            "name": {{ json .Placement.Vars.name }},
+            "owner": {{ json .Placement.Vars.owner }},
+            {{- if ne (index .Placement.Vars "renames") nil }}
+            "renames": {{ json .Placement.Vars.renames }},
+            {{- end }}
+            {{- if ne (index .Placement.Vars "allowCrossMarketplaceDependenciesOn") nil }}
+            "allowCrossMarketplaceDependenciesOn": {{ json .Placement.Vars.allowCrossMarketplaceDependenciesOn }},
+            {{- end }}
+            "plugins": [
+              {{- range $i, $p := .Items }}{{ if $i }},{{ end }}
+              {
+                "name": {{ json $p.Name }},
+                "source": {{ json (printf "./plugins/%s" $p.Name) }},
+                "version": {{ json $p.Version }},
+                "defaultEnabled": {{ $p.Managed }}
+              }
+              {{- end }}
+            ]
+          }
+      - path: .agents/plugins/marketplace.json
+        template: |
+          {
+            "name": {{ json .Placement.Vars.name }},
+            "interface": {"displayName": {{ json .Placement.Vars.owner.name }}},
+            "plugins": [
+              {{- range $i, $p := .Items }}{{ if $i }},{{ end }}
+              {
+                "name": {{ json $p.Name }},
+                "version": "{{ $p.Version }}+{{ slice $p.PlacedHash 7 19 }}",
+                "source": {"source": "local", "path": "./plugins/{{ $p.Name }}"},
+                "policy": {
+                  "installation": {{ if $p.Managed }}"INSTALLED_BY_DEFAULT"{{ else }}"AVAILABLE"{{ end }},
+                  "authentication": "ON_INSTALL"
+                }
+              }
+              {{- end }}
+            ]
+          }
+      - paths:
+          darwin: /Library/Application Support/ClaudeCode/managed-settings.d/50-acme.json
+          windows: ${ProgramData}\ClaudeCode\managed-settings.d\50-acme.json
+        template: |
+          {{- if .Items }}
+          {
+            "extraKnownMarketplaces": {
+              {{ json .Placement.Vars.name }}: {"source": {"source": "directory", "path": {{ json .Placement.Root }}}}
+            },
+            "enabledPlugins": {
+              {{- $first := true }}
+              {{- range .Items }}{{ if .Managed }}{{ if not $first }},{{ end }}{{ $first = false }}
+              {{ json (printf "%s@%s" .Name $.Placement.Vars.name) }}: true
+              {{- end }}{{ end }}
+            }
+          }
+          {{- end }}

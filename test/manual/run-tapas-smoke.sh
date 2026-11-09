@@ -43,7 +43,7 @@ DATA_DIR="${DATA_DIR:-$SUPPORT/Data}"
 PLIST="/Library/LaunchDaemons/$LABEL.plist"
 SOCKET="/var/run/$SLUG/$SLUG-service.sock"
 # The brand's write root and a sibling outside it; see
-# test/manual/fixtures/tapas/brand/write-roots.yaml and harnesses.yaml.
+# test/manual/fixtures/tapas/brand/write-roots.yaml and placements.yaml.
 SMOKE_ROOT="$SUPPORT"
 OUTSIDE_ROOT="/Library/Application Support/tapas-test-outside"
 MUNKI_DIR="/Library/Application Support/tapas-test-munki"
@@ -70,7 +70,7 @@ PLUGINS_ROOT="$MARKET_ROOT/plugins"
 DESKTOP_ROOT="$SMOKE_ROOT/desktop/org-plugins"
 MARKETPLACE_JSON="$MARKET_ROOT/.claude-plugin/marketplace.json"
 DROP_IN="$SMOKE_ROOT/claude/managed-settings.d/50-tapas-test.json"
-# Rendered from the templates in harnesses.yaml, without receipts.
+# Rendered from the templates in placements.yaml, without receipts.
 CODEX_JSON="$MARKET_ROOT/.agents/plugins/marketplace.json"
 SKILLS_INDEX="$SMOKE_ROOT/claude/skills-index.json"
 EXCLUSIVE_INDEX="$SMOKE_ROOT/claude/exclusive-index.json"
@@ -240,9 +240,9 @@ receipt_times() {
 	done
 }
 
-# assert_skills_index SKILL... checks the templated registration of
-# claude-skills (tapas-skills-index in harnesses.yaml): JSON with the os
-# fact, the registered root and exactly the skills placed there.
+# assert_skills_index SKILL... checks the templated index of
+# claude-skills (its files entry in placements.yaml): JSON with the os
+# fact, the placement root and exactly the skills placed there.
 assert_skills_index() {
 	local want
 	[ -f "$SKILLS_INDEX" ] || fail "$SKILLS_INDEX is missing"

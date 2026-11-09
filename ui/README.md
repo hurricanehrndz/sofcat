@@ -156,7 +156,7 @@ badges, a deferral, and Cancel during the download.
 - `?store=apps` (the default): Acme Software Center, Windows installers in
   Productivity, Developer tools and Utilities.
 - `?store=skills`: Acme AI Skills, cross-platform skills and plugins with
-  `worksIn` harnesses and placement labels.
+  `appliesTo` names and placement labels.
 - `?unbranded`: the same store's items with empty branding, the stock look.
 - `?offline`: the item list fails, showing the cached list or the offline state.
 

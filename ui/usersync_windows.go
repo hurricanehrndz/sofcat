@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/hurricanehrndz/sofcat/pkg/harness"
 	"github.com/hurricanehrndz/sofcat/pkg/identity"
 	"github.com/hurricanehrndz/sofcat/pkg/placement"
 	"github.com/hurricanehrndz/sofcat/pkg/usersync"
@@ -24,10 +23,10 @@ func runUserSync(ctx context.Context, client usersync.Client, logger *slog.Logge
 		return
 	}
 	guard := placement.Guard{
-		GOOS:       harness.Windows,
+		GOOS:       placement.Windows,
 		Roots:      placement.Compiled(),
 		DataDir:    identity.DataDir(),
-		BinaryDirs: placement.BinaryDirs(harness.Windows),
+		BinaryDirs: placement.BinaryDirs(placement.Windows),
 		Vars:       map[string]string{"USERPROFILE": profile},
 	}
 	receiptDir := filepath.Join(localAppData, identity.Name, "receipts")

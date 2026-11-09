@@ -13,7 +13,6 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/artifact"
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
 	"github.com/hurricanehrndz/sofcat/pkg/conditions"
-	"github.com/hurricanehrndz/sofcat/pkg/harness"
 	"github.com/hurricanehrndz/sofcat/pkg/placement"
 	"github.com/hurricanehrndz/sofcat/pkg/receipt"
 	"github.com/hurricanehrndz/sofcat/pkg/render"
@@ -56,10 +55,13 @@ type treeTemplates struct{ z *ZipInstaller }
 // a template can read and, of the facts, only those the render read, so a
 // change to any other fact leaves the file alone.
 type treeInputs struct {
-	OS    string           `json:"os"`
-	Scope string           `json:"scope"`
-	User  string           `json:"user"`
-	Item  treeInputsItem   `json:"item"`
+	OS    string         `json:"os"`
+	Scope string         `json:"scope"`
+	User  string         `json:"user"`
+	Item  treeInputsItem `json:"item"`
+	// Vars is the placement's vars, left out when it sets none, so a
+	// receipt from before vars existed still matches.
+	Vars  any              `json:"vars,omitempty"`
 	Facts conditions.Facts `json:"facts"`
 }
 
@@ -86,7 +88,7 @@ func (r treeTemplates) context(item catalog.Item, t Target, root string, managed
 			TreeHash: t.Variant.TreeHash,
 		},
 	}
-	if ctx.Scope == harness.ScopeUser {
+	if ctx.Scope == placement.ScopeUser {
 		ctx.User = r.z.User
 	}
 	return ctx
@@ -99,6 +101,7 @@ func inputs(ctx render.TreeContext, read conditions.Facts) treeInputs {
 		Scope: ctx.Scope,
 		User:  ctx.User,
 		Item:  treeInputsItem{Name: ctx.Item.Name, Version: ctx.Item.Version, Managed: ctx.Item.Managed},
+		Vars:  ctx.Placement.Vars,
 		Facts: read,
 	}
 }
@@ -277,7 +280,7 @@ func templatesRecorded(tree, goos string, rendered []receipt.Rendered) (bool, er
 func writeRendered(tree string, outs []rendered) (undo func() error, err error) {
 	for _, out := range outs {
 		for _, seg := range strings.Split(out.File, "/") {
-			if segErr := checkSegment(seg); segErr != nil {
+			if segErr := placement.CheckSegment(seg); segErr != nil {
 				return nil, fmt.Errorf("rendered file %q: %w", out.File, segErr)
 			}
 		}

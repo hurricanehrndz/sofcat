@@ -195,7 +195,7 @@ const skills: MockItem[] = [
     section: "Skills",
     developer: ACME_AI,
     actionLabels: { install: "Add", installing: "Adding…", installed: "Added", remove: "Remove" },
-    worksIn: ["Claude Code", "Codex"],
+    appliesTo: ["Claude Code", "Codex"],
   }),
   item({
     itemName: "AcmeBrandVoice",
@@ -208,7 +208,7 @@ const skills: MockItem[] = [
     isRequired: true,
     ...installed({ isManaged: false }),
     actionLabels: { installed: "Added" },
-    worksIn: ["Claude Code", "Codex"],
+    appliesTo: ["Claude Code", "Codex"],
   }),
   item({
     itemName: "ReviewChecklist",
@@ -221,7 +221,7 @@ const skills: MockItem[] = [
     isManaged: true,
     status: "WillBeInstalled",
     actionLabels: { install: "Add", installing: "Adding…", installed: "Added", pending_install: "Will be added" },
-    worksIn: ["Claude Code"],
+    appliesTo: ["Claude Code"],
   }),
   item({
     itemName: "PostmortemHelper",
@@ -232,7 +232,7 @@ const skills: MockItem[] = [
     section: "Skills",
     developer: ACME_AI,
     actionLabels: { install: "Add", installing: "Adding…", installed: "Added" },
-    worksIn: ["Codex"],
+    appliesTo: ["Codex"],
     mock: { outcome: "fail", reason: "archive checksum mismatch" },
   }),
   item({
@@ -244,7 +244,7 @@ const skills: MockItem[] = [
     section: "Skills",
     developer: "Acme Data",
     actionLabels: { install: "Add", installing: "Adding…", installed: "Added" },
-    worksIn: ["Claude Code", "Codex"],
+    appliesTo: ["Claude Code", "Codex"],
   }),
   item({
     itemName: "DocsSearch",
@@ -259,8 +259,9 @@ const skills: MockItem[] = [
       installing: "Making available…",
       installed: "Available",
       remove: "Withdraw",
+      applies_to: "Works in",
     },
-    worksIn: ["Claude Code"],
+    appliesTo: ["Claude Code"],
     mock: { dependency: { itemName: "DocsIndex", displayName: "Docs Index skill" } },
   }),
   item({
@@ -276,8 +277,9 @@ const skills: MockItem[] = [
       installing: "Making available…",
       installed: "Available",
       remove: "Withdraw",
+      applies_to: "Works in",
     },
-    worksIn: ["Claude Code", "Codex"],
+    appliesTo: ["Claude Code", "Codex"],
     mock: { outcome: "missing", reason: "Needs Python 3.11 or later. Install it first, then try again." },
   }),
   item({
@@ -293,8 +295,9 @@ const skills: MockItem[] = [
       installed: "Available",
       remove: "Withdraw",
       pending_remove: "Will be withdrawn",
+      applies_to: "Works in",
     },
-    worksIn: ["Claude Code"],
+    appliesTo: ["Claude Code"],
   }),
 ];
 

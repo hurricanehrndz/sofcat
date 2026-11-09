@@ -17,7 +17,7 @@ import (
 
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
 	"github.com/hurricanehrndz/sofcat/pkg/conditions"
-	"github.com/hurricanehrndz/sofcat/pkg/harness"
+	"github.com/hurricanehrndz/sofcat/pkg/placement"
 	"go.yaml.in/yaml/v4"
 )
 
@@ -35,7 +35,7 @@ type CatalogSet struct {
 	Catalogs map[string]map[string]catalog.Item
 	// Problems lists package-info files that were skipped or overridden, zip
 	// items with unusable variants, nupkg items the agent would refuse or
-	// cannot check, an invalid harnesses.yaml, and manifests
+	// cannot check, an invalid placements.yaml, and manifests
 	// whose conditional_items conditions do not compile.
 	// A normal makecatalogs run warns about them and carries on; --check fails on them.
 	Problems []string
@@ -89,9 +89,9 @@ func CollectCatalogs(repoPath string) (CatalogSet, error) { //nolint:gocognit //
 	}
 
 	set := CatalogSet{Catalogs: make(map[string]map[string]catalog.Item)}
-	harnesses := readHarnesses(repoPath)
-	if harnesses.problem != "" {
-		set.Problems = append(set.Problems, harnesses.problem)
+	placements := readPlacements(repoPath)
+	if placements.problem != "" {
+		set.Problems = append(set.Problems, placements.problem)
 	}
 	// source records which package-info file each catalog item came from.
 	source := make(map[string]map[string]string)
@@ -150,7 +150,7 @@ func CollectCatalogs(repoPath string) (CatalogSet, error) { //nolint:gocognit //
 		set.Problems = append(set.Problems, checkRequiresSoftware(packageInfoPath, parsed.Item.RequiresSoftware)...)
 		set.Problems = append(set.Problems, checkActionLabels(packageInfoPath, parsed.Item.CustomActionLabels)...)
 		if parsed.Item.Installer.Type == "zip" {
-			set.Problems = append(set.Problems, checkZipItem(packageInfoPath, parsed.Item.Installer, harnesses)...)
+			set.Problems = append(set.Problems, checkZipItem(packageInfoPath, parsed.Item.Installer, placements)...)
 		}
 		set.Problems = append(set.Problems, checkNupkgItem(packageInfoPath, parsed.Item)...)
 		set.Catalogs[parsed.Catalog][itemName] = parsed.Item
@@ -163,8 +163,8 @@ func CollectCatalogs(repoPath string) (CatalogSet, error) { //nolint:gocognit //
 		return CatalogSet{}, fmt.Errorf("no catalogs to write: no package-info file under %s names a valid catalog", packagesInfoPath)
 	}
 
-	set.Problems = append(set.Problems, checkPlacementTemplates(harnesses, set.Catalogs)...)
-	set.Problems = append(set.Problems, checkZipTemplates(repoPath, harnesses, set.Catalogs)...)
+	set.Problems = append(set.Problems, checkPlacementTemplates(placements, set.Catalogs)...)
+	set.Problems = append(set.Problems, checkZipTemplates(repoPath, placements, set.Catalogs)...)
 	set.Problems = append(set.Problems, checkManifests(repoPath)...)
 	return set, nil
 }
@@ -202,30 +202,30 @@ func WriteCatalogs(repoPath string, set CatalogSet) error {
 	return nil
 }
 
-// repoHarnesses is what CollectCatalogs read from <repo>/harnesses.yaml.
-type repoHarnesses struct {
+// repoPlacements is what CollectCatalogs read from <repo>/placements.yaml.
+type repoPlacements struct {
 	path    string // the file, for problems
-	table   harness.Table
+	table   placement.Table
 	present bool   // the file exists
 	problem string // why it cannot be used; empty when it is valid or absent
 }
 
-// readHarnesses reads and validates <repo>/harnesses.yaml. A repo without one
+// readPlacements reads and validates <repo>/placements.yaml. A repo without one
 // is fine until it has a zip item.
-func readHarnesses(repoPath string) repoHarnesses {
-	path := filepath.Join(repoPath, "harnesses.yaml")
+func readPlacements(repoPath string) repoPlacements {
+	path := filepath.Join(repoPath, "placements.yaml")
 	body, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return repoHarnesses{}
+		return repoPlacements{}
 	}
 	if err != nil {
-		return repoHarnesses{path: path, present: true, problem: fmt.Sprintf("%s: %v", path, err)}
+		return repoPlacements{path: path, present: true, problem: fmt.Sprintf("%s: %v", path, err)}
 	}
-	table, err := harness.Parse(body)
+	table, err := placement.Parse(body)
 	if err != nil {
-		return repoHarnesses{path: path, present: true, problem: fmt.Sprintf("%s: %v", path, err)}
+		return repoPlacements{path: path, present: true, problem: fmt.Sprintf("%s: %v", path, err)}
 	}
-	return repoHarnesses{path: path, table: table, present: true}
+	return repoPlacements{path: path, table: table, present: true}
 }
 
 // checkRequiresSoftware reports requires_software entries without a
@@ -258,32 +258,32 @@ func checkActionLabels(path string, labels map[string]string) []string {
 
 // checkZipItem reports what makes a zip installer unusable: no variants, a
 // variant without location, hash or tree_hash, an OS other than darwin or
-// windows, or a placement harnesses.yaml does not define.
-func checkZipItem(path string, inst catalog.InstallerItem, harnesses repoHarnesses) []string {
+// windows, or a placement that placements.yaml does not define.
+func checkZipItem(path string, inst catalog.InstallerItem, h repoPlacements) []string {
 	var problems []string
 	if len(inst.Variants) == 0 {
 		problems = append(problems, fmt.Sprintf("%s: zip installer has no variants", path))
 	}
-	if !harnesses.present {
-		problems = append(problems, fmt.Sprintf("%s: zip item, but the repo has no harnesses.yaml", path))
+	if !h.present {
+		problems = append(problems, fmt.Sprintf("%s: zip item, but the repo has no placements.yaml", path))
 	}
 	placements := make([]string, 0, len(inst.Variants))
-	for placement := range inst.Variants {
-		placements = append(placements, placement)
+	for name := range inst.Variants {
+		placements = append(placements, name)
 	}
 	sort.Strings(placements)
-	for _, placement := range placements {
+	for _, name := range placements {
 		// An invalid table is reported once on its own; checking names
 		// against it would only add noise.
-		if _, ok := harnesses.table.Placements[placement]; harnesses.present && harnesses.problem == "" && !ok {
-			problems = append(problems, fmt.Sprintf("%s: variant placement %q is not in harnesses.yaml", path, placement))
+		if _, ok := h.table.Placements[name]; h.present && h.problem == "" && !ok {
+			problems = append(problems, fmt.Sprintf("%s: variant placement %q is not in placements.yaml", path, name))
 		}
-		for goos, v := range inst.Variants[placement] {
-			if goos != harness.Darwin && goos != harness.Windows {
-				problems = append(problems, fmt.Sprintf("%s: variant %s.%s: OS must be darwin or windows", path, placement, goos))
+		for goos, v := range inst.Variants[name] {
+			if goos != placement.Darwin && goos != placement.Windows {
+				problems = append(problems, fmt.Sprintf("%s: variant %s.%s: OS must be darwin or windows", path, name, goos))
 			}
 			if v.Location == "" || v.Hash == "" || v.TreeHash == "" {
-				problems = append(problems, fmt.Sprintf("%s: variant %s.%s needs location, hash and tree_hash", path, placement, goos))
+				problems = append(problems, fmt.Sprintf("%s: variant %s.%s needs location, hash and tree_hash", path, name, goos))
 			}
 		}
 	}

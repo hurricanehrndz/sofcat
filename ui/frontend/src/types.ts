@@ -14,7 +14,7 @@ export type ActionKind = "do" | "undo" | "cancel";
 
 export type ItemAction = {
   kind: ActionKind;
-  /** Catalog or harness text, shown only through textContent. */
+  /** Catalog or placement text, shown only through textContent. */
   label: string;
   method: ActionMethod;
 };

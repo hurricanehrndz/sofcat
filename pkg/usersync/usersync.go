@@ -11,13 +11,14 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"os/user"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
 	"github.com/hurricanehrndz/sofcat/pkg/download"
-	"github.com/hurricanehrndz/sofcat/pkg/harness"
 	"github.com/hurricanehrndz/sofcat/pkg/installer"
 	"github.com/hurricanehrndz/sofcat/pkg/placement"
 	"github.com/hurricanehrndz/sofcat/pkg/receipt"
@@ -31,11 +32,13 @@ type Client interface {
 }
 
 // Sync applies the service's user-placement plan for one user. guard holds
-// the OS (harness.Windows), the compiled write roots, whose user-scope roots
+// the OS (placement.Windows), the compiled write roots, whose user-scope roots
 // apply, the refused data and binary directories, and Vars["USERPROFILE"].
 // Receipts live in receiptDir. Held entries are neither placed nor removed.
 // The trees' templates render with the plan's facts, each entry's managed
 // flag and this account's login name; the helper runs no script of its own.
+// After scope exit, the files of each placement the user holds receipts in
+// are regenerated; a failure is a result with no item.
 // Every result is logged and reported; the returned error is set only when
 // the login name cannot be read or no plan could be fetched, after retrying
 // a service that cannot be reached yet for up to a minute, in which case
@@ -67,7 +70,7 @@ func Sync(ctx context.Context, client Client, guard placement.Guard, receiptDir 
 	}
 	z := &installer.ZipInstaller{
 		Guard:      guard,
-		Harnesses:  userTable(plan.Entries, receipts, guard.GOOS),
+		Table:      userTable(plan, receipts, guard.GOOS, logger),
 		ReceiptDir: receiptDir,
 		Managed:    func(item string) bool { return managed[item] },
 		Facts:      plan.Facts,
@@ -104,6 +107,25 @@ func Sync(ctx context.Context, client Client, guard placement.Guard, receiptDir 
 			continue
 		}
 		record(rc.Item, rc.Placement, z.Remove(rc))
+	}
+
+	// Regenerate the files of every placement this user still has items in,
+	// so a file deleted or left stale is restored with no tree change. Not
+	// every user-scope placement: its root, a tool's profile directory, can
+	// exist with nothing of ours in it. Scope exit removed receipts, so they
+	// are read again.
+	if remaining, err := receipt.List(receiptDir); err != nil {
+		logger.Warn("user sync: unable to read receipts; skipping placement files", "dir", receiptDir, "err", err)
+	} else {
+		var names []string
+		for _, rc := range remaining {
+			if !slices.Contains(names, rc.Placement) {
+				names = append(names, rc.Placement)
+			}
+		}
+		for _, res := range z.Regenerate(names) {
+			record("", res.Placement, res)
+		}
 	}
 
 	if err := client.ReportUserPlacements(ctx, results); err != nil {
@@ -175,7 +197,7 @@ func apply(z *installer.ZipInstaller, e service.UserPlacement) installer.Result 
 	t := installer.Target{
 		Placement: e.Placement,
 		Variant:   catalog.Variant{Hash: e.Hash, TreeHash: e.TreeHash},
-		Spec:      z.Harnesses.Placements[e.Placement],
+		Spec:      z.Table.Placements[e.Placement],
 		Known:     true,
 	}
 	res := z.Inspect(item, t)
@@ -190,27 +212,44 @@ func apply(z *installer.ZipInstaller, e service.UserPlacement) installer.Result 
 	return z.Apply(item, t, e.Archive)
 }
 
-// userTable is the harness table the plan implies: one user-scope directory
-// placement per plan placement, plus the placements of receipts that left
-// the plan, so their removal is checked against the user roots too.
-func userTable(plan []service.UserPlacement, receipts []receipt.Receipt, goos string) harness.Table {
-	table := harness.Table{Placements: map[string]harness.Placement{}}
+// userTable is the placement table the plan implies: the plan's spec of each
+// user-scope placement, plus a synthesized user-scope directory placement,
+// from its name and path alone, for a plan placement the plan has no spec
+// for and for the placement of each receipt that left the plan, so their
+// removal is checked against the user roots too. A plan from an older
+// service carries no specs, so every placement is synthesized; exclusive,
+// items_dir, vars and files then go unenforced until the service updates.
+func userTable(plan service.UserPlacements, receipts []receipt.Receipt, goos string, logger *slog.Logger) placement.Table {
+	table := placement.Table{Placements: map[string]placement.Spec{}}
+	if plan.Placements == nil {
+		logger.Debug("user sync: the plan carries no placement specs (older service); using paths only")
+	}
+	for name, spec := range plan.Placements {
+		// The guard holds the machine roots too: a spec arriving with
+		// machine scope must not pass it against them.
+		spec.Scope = maps.Clone(spec.Scope)
+		if spec.Scope == nil {
+			spec.Scope = map[string]string{}
+		}
+		spec.Scope[goos] = placement.ScopeUser
+		table.Placements[name] = spec
+	}
 	add := func(name, path string) {
 		if _, ok := table.Placements[name]; ok {
 			return
 		}
-		p := harness.Placement{Kind: harness.KindDirectory, Scope: map[string]string{goos: harness.ScopeUser}}
+		p := placement.Spec{Scope: map[string]string{goos: placement.ScopeUser}}
 		if path != "" {
 			p.Paths = map[string]string{goos: path}
 		}
 		table.Placements[name] = p
-		table.Order = append(table.Order, name)
 	}
-	for _, e := range plan {
+	for _, e := range plan.Entries {
 		add(e.Placement, e.Path)
 	}
 	for _, rc := range receipts {
 		add(rc.Placement, "")
 	}
+	table.Order = slices.Sorted(maps.Keys(table.Placements))
 	return table
 }
