@@ -380,7 +380,14 @@ func TestSyncPlacementSpec(t *testing.T) {
 		t.Errorf("skill not under items_dir: %v", statErr)
 	}
 	index := filepath.Join(root, "index.txt")
-	if got, readErr := os.ReadFile(index); readErr != nil || string(got) != "alice "+root+" skill "+tree+" 2" {
+	// The guard renders resolved paths; a Windows runner's TempDir can be an
+	// 8.3 short name (RUNNER~1) that EvalSymlinks expands.
+	resolved, evalErr := filepath.EvalSymlinks(root)
+	if evalErr != nil {
+		t.Fatal(evalErr)
+	}
+	want := "alice " + resolved + " skill " + filepath.Join(resolved, "plugins", "skill") + " 2"
+	if got, readErr := os.ReadFile(index); readErr != nil || string(got) != want {
 		t.Errorf("index.txt = %q, %v", got, readErr)
 	}
 
