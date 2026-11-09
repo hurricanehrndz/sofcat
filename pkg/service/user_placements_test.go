@@ -394,13 +394,3 @@ func TestUserPlacementMethods(t *testing.T) {
 		}
 	}
 }
-
-// TestUserArtifactsDir: the staging directory sits inside the data directory
-// the config names, never beside the executable, so it moves with
-// app_data_path and the protection of the data directory covers it.
-func TestUserArtifactsDir(t *testing.T) {
-	data := filepath.Join("pd", "Acme", "Data")
-	if got, want := UserArtifactsDir(data), filepath.Join(data, "user-artifacts"); got != want {
-		t.Errorf("UserArtifactsDir = %s, want %s", got, want)
-	}
-}

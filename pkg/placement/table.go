@@ -247,9 +247,6 @@ func validatePlacement(name string, p Spec) []error {
 			fail("scope: %s is %q, want machine or user", goos, scope)
 		}
 	}
-	if p.ScopeFor(Darwin) == ScopeUser {
-		fail("scope: darwin: user is not supported")
-	}
 	for key := range p.ActionLabels {
 		if !slices.Contains(catalog.ActionLabelKeys, key) {
 			fail("action_labels: unknown key %q", key)
@@ -275,8 +272,8 @@ func validatePaths(field string, paths map[string]string, p Spec) []error {
 		if path == "" {
 			errs = append(errs, fmt.Errorf("%s: empty path for %s", field, goos))
 		}
-		if strings.Contains(path, "${USERPROFILE}") && p.ScopeFor(goos) != ScopeUser {
-			errs = append(errs, fmt.Errorf("%s: ${USERPROFILE} in %s path, which is not user scope", field, goos))
+		if v := "${" + ProfileVar(goos) + "}"; strings.Contains(path, v) && p.ScopeFor(goos) != ScopeUser {
+			errs = append(errs, fmt.Errorf("%s: %s in %s path, which is not user scope", field, v, goos))
 		}
 	}
 	return errs

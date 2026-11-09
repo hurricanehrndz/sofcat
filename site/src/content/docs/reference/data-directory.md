@@ -40,6 +40,10 @@ these its own ACL.
 
 `Data\user-artifacts\` is the one entry users read: the staged archives the
 per-user helper places into each profile ([Zip items](/guides/zip-items/#installing)).
+On macOS, where `Data` is root-only (0700) and no ACL can open one entry of
+it, the archives sit beside it instead, in
+`/Library/Application Support/SofCat/user-artifacts/` (root-owned, 0755).
+No placement may write into it.
 
 The executables are not here. `sofcat.exe`, `sofcat-ui.exe` and
 `sofcat-useragent.exe` install to `C:\Program Files\SofCat`, whose default ACL
@@ -48,7 +52,7 @@ writes there.
 
 The per-user helper writes outside both: each user's receipts and its
 `useragent.log` (capped at 1 MiB plus one backup) live in
-`%LOCALAPPDATA%\SofCat`. The uninstaller leaves them, as it leaves
+`%LOCALAPPDATA%\SofCat`, or `~/Library/Application Support/SofCat` on macOS. The uninstaller leaves them, as it leaves
 `C:\ProgramData\SofCat` and the `sofcat` source in the Application log
 ([Event log](/reference/event-log/)).
 

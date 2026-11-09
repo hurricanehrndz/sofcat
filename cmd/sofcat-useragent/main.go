@@ -24,7 +24,8 @@ func main() {
 	flag.Parse()
 
 	// Stderr is invisible in the -H windowsgui build; this is for a console run.
-	logger, logWriter, logErr := setupLogger()
+	stateDir, vars, stateErr := userState()
+	logger, logWriter, logErr := setupLogger(stateDir)
 	if logErr != nil {
 		fmt.Fprintf(os.Stderr, "%s user agent diagnostics unavailable: %v\n", identity.Name, logErr)
 	}
@@ -37,6 +38,10 @@ func main() {
 	if *noRetry {
 		usersync.PlanRetryFor = 0
 	}
+	if stateErr != nil {
+		logger.Warn("user sync: nothing placed", "err", stateErr)
+		return
+	}
 	// Exit 0 even when an item fails: every result is logged and reported.
-	runUserSync(context.Background(), service.NewClient(*pipeName), logger)
+	runUserSync(context.Background(), service.NewClient(*pipeName), stateDir, vars, logger)
 }

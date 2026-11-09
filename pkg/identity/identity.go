@@ -67,6 +67,20 @@ func LaunchdPlistPath() string { return "/Library/LaunchDaemons/" + Identifier +
 // stay under Program Files, which sofcat never writes.
 func ProgramDataDir() string { return filepath.Join(os.Getenv("ProgramData"), Name) }
 
+// UserArtifactsDirFor is where the service stages the archives per-user
+// helpers read, for the data directory dataDir on goos: user-artifacts
+// inside it, whose own ACL lets Users in on Windows. On macOS a <Name>/Data
+// directory is root-only 0700 and Unix has no inherited ACL to open one
+// entry of it, so the archives sit beside it, in the 0755 <Name> directory
+// that already holds the CLI. Any other macOS data directory is not made
+// 0700, so its archives stay inside it.
+func UserArtifactsDirFor(goos, dataDir string) string {
+	if goos == "darwin" && filepath.Base(dataDir) == "Data" && filepath.Base(filepath.Dir(dataDir)) == Name {
+		return filepath.Join(filepath.Dir(dataDir), "user-artifacts")
+	}
+	return filepath.Join(dataDir, "user-artifacts")
+}
+
 // DataDirFor is DataDir on goos.
 func DataDirFor(goos string) string {
 	if goos == "darwin" {

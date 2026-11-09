@@ -80,3 +80,22 @@ func assertNames(t *testing.T, want map[string]string) {
 		}
 	}
 }
+
+// TestUserArtifactsDir: the staging directory follows the data directory the
+// config names, never the executable, so it moves with app_data_path. On
+// Windows it sits inside Data, whose ACL opens it to Users. On macOS a
+// <Name>/Data is root-only 0700 with no ACL to open one entry, so users could
+// not reach archives inside it: they sit beside it. Any other macOS data
+// directory is not made 0700 and keeps them inside.
+func TestUserArtifactsDir(t *testing.T) {
+	support := filepath.Join("Library", "Application Support", Name)
+	for _, tc := range []struct{ goos, data, want string }{
+		{"windows", filepath.Join("pd", Name, "Data"), filepath.Join("pd", Name, "Data", "user-artifacts")},
+		{"darwin", filepath.Join(support, "Data"), filepath.Join(support, "user-artifacts")},
+		{"darwin", filepath.Join("srv", "Data"), filepath.Join("srv", "Data", "user-artifacts")},
+	} {
+		if got := UserArtifactsDirFor(tc.goos, tc.data); got != tc.want {
+			t.Errorf("UserArtifactsDirFor(%s, %s) = %s, want %s", tc.goos, tc.data, got, tc.want)
+		}
+	}
+}

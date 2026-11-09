@@ -28,9 +28,19 @@ type Guard struct {
 	// BinaryDirs hold sofcat's executables; no placement may be inside one,
 	// equal one, or contain one.
 	BinaryDirs []string
-	// Vars holds values only the caller knows, such as USERPROFILE for a
-	// user-scope placement. The service has no user and leaves it empty.
+	// Vars holds values only the caller knows, such as the user's home
+	// (ProfileVar) for a user-scope placement. The service has no user and
+	// leaves it empty.
 	Vars map[string]string
+}
+
+// ProfileVar is the variable a user-scope path on goos names the user's home
+// with: ${USERPROFILE} on Windows, ${HOME} on macOS.
+func ProfileVar(goos string) string {
+	if goos == Darwin {
+		return "HOME"
+	}
+	return "USERPROFILE"
 }
 
 // HostOS is the placement OS key of the running system, or runtime.GOOS when
@@ -68,7 +78,8 @@ func (g Guard) Resolve(raw, scope string) (string, error) {
 
 // Check resolves the symlinks of an absolute path and refuses it when the
 // result is outside every write root for scope on g.GOOS, inside the data
-// directory, or inside, equal to or containing a binary directory. It returns
+// directory or the user-artifacts staging directory, or inside, equal to or
+// containing a binary directory. It returns
 // the resolved path.
 func (g Guard) Check(path, scope string) (string, error) {
 	if !filepath.IsAbs(path) {
@@ -97,6 +108,10 @@ func (g Guard) Check(path, scope string) (string, error) {
 		if data, err := resolve(g.DataDir); err == nil && g.within(resolved, data) {
 			return "", fmt.Errorf("%w: %s is inside the data directory", ErrRefused, resolved)
 		}
+		// On macOS the staged archives sit beside Data, under the stock root.
+		if staged, err := resolve(identity.UserArtifactsDirFor(g.GOOS, g.DataDir)); err == nil && g.within(resolved, staged) {
+			return "", fmt.Errorf("%w: %s is inside the user-artifacts directory", ErrRefused, resolved)
+		}
 	}
 	for _, dir := range g.BinaryDirs {
 		bin, err := resolve(dir)
@@ -120,9 +135,9 @@ func (g Guard) root(raw, scope string) (string, error) {
 }
 
 // expand replaces the variables a path may use: ${ProgramFiles} and
-// ${ProgramData} on Windows, and ${USERPROFILE} in user scope when the caller
-// supplied it. A user-scope Windows path that is still relative is taken
-// relative to the profile. Anything left unexpanded is refused.
+// ${ProgramData} on Windows, and the user's home (ProfileVar) in user scope
+// when the caller supplied it. A user-scope path that is still relative is
+// taken relative to the home. Anything left unexpanded is refused.
 func (g Guard) expand(raw, scope string) (string, error) {
 	vars := map[string]string{}
 	if g.GOOS == Windows {
@@ -131,8 +146,9 @@ func (g Guard) expand(raw, scope string) (string, error) {
 	}
 	profile := ""
 	if scope == ScopeUser {
-		profile = g.Vars["USERPROFILE"]
-		vars["USERPROFILE"] = profile
+		name := ProfileVar(g.GOOS)
+		profile = g.Vars[name]
+		vars[name] = profile
 	}
 	path := raw
 	for name, value := range vars {

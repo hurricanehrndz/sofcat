@@ -180,9 +180,9 @@ placements:
 		"unknown path OS": {`
 placements:
   p: {paths: {linux: /p}}`, "unknown OS"},
-		"darwin user scope": {`
+		"HOME in darwin machine scope": {`
 placements:
-  p: {paths: {darwin: /p}, scope: {darwin: user}}`, "darwin: user"},
+  p: {paths: {darwin: '${HOME}/skills'}}`, "${HOME}"},
 		"bad scope value": {`
 placements:
   p: {paths: {windows: 'C:\p'}, scope: {windows: everyone}}`, "want machine or user"},
@@ -247,8 +247,8 @@ func TestParseItemsDir(t *testing.T) {
 }
 
 // User scope takes the whole spec, since the plan carries it to the per-user
-// helper; a files path may use ${USERPROFILE} only on an OS whose scope is
-// user, and darwin has no user scope at all.
+// helper; a files path may use the OS's home variable (${USERPROFILE},
+// ${HOME}) only on an OS whose scope is user.
 func TestParseUserScopeSpec(t *testing.T) {
 	for name, extra := range map[string]string{
 		"items_dir":   "items_dir: plugins",
@@ -268,8 +268,11 @@ func TestParseUserScopeSpec(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "not user scope") {
 		t.Errorf("${USERPROFILE} in a machine-scope files path: error %v", err)
 	}
-	_, err = Parse([]byte("placements:\n  p: {paths: {darwin: /p}, scope: {darwin: user}, items_dir: plugins}\n"))
-	if err == nil || !strings.Contains(err.Error(), "darwin: user is not supported") {
+	_, err = Parse([]byte(`placements:
+  p: {paths: {darwin: '${HOME}/.agents/skills'}, scope: {darwin: user}, items_dir: plugins,
+      files: [{paths: {darwin: '${HOME}/x.json'}, template: x}]}
+`))
+	if err != nil {
 		t.Errorf("darwin user scope: error %v", err)
 	}
 }
