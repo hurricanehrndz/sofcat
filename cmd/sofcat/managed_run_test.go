@@ -309,3 +309,33 @@ managed_installs:
 		t.Fatalf("check-only stdout is not JSON only: %v\n%s", err, stdout)
 	}
 }
+
+// TestUserPlanSetsHoldWithdrawnItems verifies an item the user canceled
+// mid-run is held in the user plan, not desired: the cancel reverted the
+// selection after desired was computed, and a saved plan reaches signed-in
+// users at once, so the helper must neither place nor remove it.
+func TestUserPlanSetsHoldWithdrawnItems(t *testing.T) {
+	desired := map[string]bool{"Kept": true, "Canceled": true, "Deferred": true}
+	held := map[string]bool{"Held": true}
+	deferred := []report.DeferredItem{{Name: "Deferred"}}
+
+	planDesired, planHeld := userPlanSets(desired, held, deferred, []string{"Canceled", "CanceledRemoval"})
+
+	for _, name := range []string{"Canceled", "Deferred"} {
+		if planDesired[name] {
+			t.Errorf("%s is desired in the user plan", name)
+		}
+	}
+	if !planDesired["Kept"] {
+		t.Error("Kept is missing from the desired set")
+	}
+	// A canceled removal (never desired) is held too, so it is not removed.
+	for _, name := range []string{"Held", "Canceled", "CanceledRemoval", "Deferred"} {
+		if !planHeld[name] {
+			t.Errorf("%s is not held in the user plan", name)
+		}
+	}
+	if len(desired) != 3 || len(held) != 1 {
+		t.Error("userPlanSets changed the run's own sets, which scope exit used")
+	}
+}
