@@ -111,7 +111,7 @@ func TestCheckWritesNothing(t *testing.T) {
 			"chrome.yaml":   chromeInfo,
 			"chrome-2.yaml": chromeInfo,
 		}, 1},
-		"invalid yaml": {map[string]string{"bad.yaml": ":\n- not valid yaml"}, 1},
+		"invalid yaml": {map[string]string{"bad.yaml": "key: [unclosed"}, 1},
 		// A catalog name becomes a file name; it must not escape catalogs/.
 		"path in catalog name": {map[string]string{
 			"chrome.yaml": chromeInfo,
