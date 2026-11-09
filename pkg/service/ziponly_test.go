@@ -25,7 +25,7 @@ func TestZipOnlyRejectedItemsNotOffered(t *testing.T) {
 	stubZipList(t, map[int]map[string]catalog.Item{1: {"Zip": zip, "Scripted": scripted, "Exe": exe}},
 		func(config.Configuration) (placement.Table, error) { return placement.Table{}, nil })
 
-	items, err := getOptionalItems(cfg)
+	items, err := getOptionalItems(cfg, peer{})
 	if err != nil {
 		t.Fatalf("getOptionalItems: %v", err)
 	}

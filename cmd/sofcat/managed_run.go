@@ -226,16 +226,16 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 	// of user-scope placements for the per-user helper (<slug>-useragent), then
 	// stores the plan listUserPlacements serves. The plan comes from the
 	// run's own desired and held sets, the ones scope exit used, with each
-	// item deferred this run held too: the helper neither places nor removes
-	// it, and its archive is not staged. An entry whose archive fails to
-	// stage is saved held as well (StageUserArtifacts sets it in userPlan).
+	// item deferred or canceled this run held too: the helper neither places
+	// nor removes it, and its archive is not staged. An entry whose archive
+	// fails to stage is saved held as well (StageUserArtifacts sets it in
+	// userPlan).
 	if !cfg.CheckOnly {
 		dir := service.UserArtifactsDir(cfg.AppDataPath)
-		planDesired, planHeld := maps.Clone(desired), maps.Clone(heldSet)
-		for _, d := range run.DeferredItems {
-			delete(planDesired, d.Name)
-			planHeld[d.Name] = true
-		}
+		// Items canceled up to here are held. A cancel accepted after this
+		// check but before the run ends is not: its item stays in this plan
+		// until the next scheduled run saves a fresh one.
+		planDesired, planHeld := userPlanSets(desired, heldSet, run.DeferredItems, cancels.Withdrawn())
 		userPlan := service.UserPlan(planDesired, planHeld, managed, catalogs, table, zip.Guard.GOOS, dir)
 		service.StageUserArtifacts(context.Background(), zip, userPlan, dir)
 		if err := service.SaveUserPlan(cfg.AppDataPath, service.UserPlacements{Entries: userPlan, Facts: machineFacts, Placements: service.UserSpecs(table, zip.Guard.GOOS)}); err != nil {
@@ -257,4 +257,22 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 
 	slog.Info("Done!")
 	return run, nil
+}
+
+// userPlanSets returns the desired and held sets the user plan is built from:
+// the run's own, with each item deferred or withdrawn this run held instead of
+// desired. A withdrawn item's selection was reverted after desired was
+// computed, so the helper neither places nor removes it; the next run settles
+// it from the reverted selection.
+func userPlanSets(desired, held map[string]bool, deferred []report.DeferredItem, withdrawn []string) (map[string]bool, map[string]bool) {
+	planDesired, planHeld := maps.Clone(desired), maps.Clone(held)
+	for _, d := range deferred {
+		delete(planDesired, d.Name)
+		planHeld[d.Name] = true
+	}
+	for _, name := range withdrawn {
+		delete(planDesired, name)
+		planHeld[name] = true
+	}
+	return planDesired, planHeld
 }

@@ -369,8 +369,24 @@ func TestUserPlacementMethods(t *testing.T) {
 		!strings.HasPrefix(listed.Items[2], `{"placements":{"codex":`) {
 		t.Errorf("-S ListUserPlacements = %+v, %v", listed.Items, err)
 	}
+	// The report is stored under the caller the connection resolved, for
+	// the storefront's status of user-scope items: the test's own user,
+	// whatever form its ID takes on this OS.
+	userPlacementStatusMu.Lock()
+	statuses := loadUserPlacementStatus(cfg.AppDataPath)
+	userPlacementStatusMu.Unlock()
+	var caller string
+	for id := range statuses {
+		caller = id
+	}
+	if len(statuses) != 1 || caller == "" || statuses[caller]["managed"]["codex"].Outcome != "installed" {
+		t.Errorf("stored status after the report = %+v, want installed for the caller alone", statuses)
+	}
 	if _, err := SendCommand(cfg, "ReportUserPlacements:managed,codex,failed,boom"); err != nil {
 		t.Errorf("-S ReportUserPlacements: %v", err)
+	}
+	if got := userPlacementStatusFor(cfg.AppDataPath, caller)["managed"]["codex"].Outcome; got != "failed" {
+		t.Errorf("stored outcome after the -S report = %q, want failed", got)
 	}
 	for _, spec := range []string{"ReportUserPlacements:managed,codex", "ListUserPlacements:extra"} {
 		if _, err := parseCommandSpec(spec); err == nil {

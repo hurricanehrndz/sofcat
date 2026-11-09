@@ -61,7 +61,7 @@ func TestGetOptionalItemsHonestStatus(t *testing.T) {
 		t.Fatalf("save self-serve: %v", err)
 	}
 
-	items, err := getOptionalItems(cfg)
+	items, err := getOptionalItems(cfg, peer{})
 	if err != nil {
 		t.Fatalf("getOptionalItems failed: %v", err)
 	}
@@ -123,7 +123,7 @@ func TestGetOptionalItemsNotInstallable(t *testing.T) {
 		}, nil
 	}
 
-	items, err := getOptionalItems(cfg)
+	items, err := getOptionalItems(cfg, peer{})
 	if err != nil {
 		t.Fatalf("getOptionalItems failed: %v", err)
 	}

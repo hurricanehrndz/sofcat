@@ -190,13 +190,13 @@ func (sr *serviceRunner) start(ctx context.Context) error {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 
-		_, _ = sr.submit(ctx, Command{Action: "run"})
+		sr.scheduledRun(ctx)
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				_, _ = sr.submit(ctx, Command{Action: "run"})
+				sr.scheduledRun(ctx)
 			}
 		}
 	}()
@@ -229,6 +229,14 @@ func (sr *serviceRunner) executeCommandSafe(cmd Command) (resp CommandResponse, 
 
 	cmd.cancels = sr.cancels
 	return executeCommand(sr.cfg, cmd, sr.managedRun)
+}
+
+// scheduledRun runs the managed run on the service's own schedule. No client
+// waits on it, so its failure goes to the log.
+func (sr *serviceRunner) scheduledRun(ctx context.Context) {
+	if _, err := sr.submit(ctx, Command{Action: actionRun}); err != nil && !errors.Is(err, context.Canceled) {
+		slog.Error("scheduled managed run failed", "err", err)
+	}
 }
 
 // stop closes the listener and waits for in-flight work until ctx is done.
@@ -552,7 +560,10 @@ func (sr *serviceRunner) dispatch(ctx context.Context, conn clientConn, req rpcR
 		}, nil
 
 	case methodListOptionalInstalls:
-		resp, err := sr.submit(ctx, Command{Action: actionListOptionalInstalls})
+		// What the caller's user agent last reported gives their user-scope
+		// items' status.
+		_, caller := requester(conn, logger)
+		resp, err := sr.submit(ctx, Command{Action: actionListOptionalInstalls, caller: caller})
 		if err != nil {
 			return nil, commandError(err, "")
 		}

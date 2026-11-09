@@ -192,7 +192,7 @@ func TestGetOptionalItems(t *testing.T) {
 		return map[int]map[string]catalog.Item{}, nil
 	}
 
-	items, err := getOptionalItems(cfg)
+	items, err := getOptionalItems(cfg, peer{})
 	if err != nil {
 		t.Fatalf("getOptionalItems failed: %v", err)
 	}

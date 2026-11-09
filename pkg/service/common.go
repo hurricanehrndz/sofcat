@@ -301,7 +301,7 @@ func executeCommand(cfg config.Configuration, cmd Command, managedRun func(confi
 		operationID := newOperationID()
 		return CommandResponse{Status: "ok", OperationID: operationID, prior: prior, requested: prior.next(selectedForRemoval, cmd.caller)}, nil
 	case actionListOptionalInstalls:
-		items, err := getOptionalItems(cfg)
+		items, err := getOptionalItems(cfg, cmd.caller)
 		if err != nil {
 			return CommandResponse{}, err
 		}
@@ -432,7 +432,7 @@ func addServiceManagedInstall(cfg config.Configuration, caller peer, name string
 	// Authorize the requested name against the currently available optional
 	// installs before writing anything (R3). An unknown name is rejected and the
 	// file is left untouched; the service answers item_not_available.
-	available, err := getOptionalItems(cfg)
+	available, err := getOptionalItems(cfg, peer{})
 	if err != nil {
 		return "", selection{}, err
 	}
@@ -540,8 +540,9 @@ func loadServiceLocalManifest(cfg config.Configuration) (manifest.Item, error) {
 // fetches the admin manifests and catalogs, loads the self-serve manifest, and
 // for every offered optional name resolves the catalog metadata and real
 // install status. The list call must stand on its own, so it seeds download's
-// config rather than relying on a prior run.
-func getOptionalItems(cfg config.Configuration) ([]OptionalInstallItem, error) {
+// config rather than relying on a prior run. caller is who asked: what their
+// user agent last reported gives the status of user-scope zip items.
+func getOptionalItems(cfg config.Configuration, caller peer) ([]OptionalInstallItem, error) {
 	download.SetConfig(cfg)
 
 	manifests, newCatalogs, machineFacts, err := adminManifests(cfg)
@@ -591,7 +592,7 @@ func getOptionalItems(cfg config.Configuration) ([]OptionalInstallItem, error) {
 	// One shared checker so the registry snapshot amortizes across items.
 	zip := newZipInstaller(cfg, table)
 	zip.Facts = machineFacts
-	checker := &status.Checker{Zip: zip.Installed, Nupkg: func(id string) (string, bool) { return installer.KeptNupkgVersion(cfg.NupkgPath, id) }}
+	checker := &status.Checker{Zip: userZipInstalled(zip, userPlacementStatusFor(cfg.AppDataPath, caller.ID)), Nupkg: func(id string) (string, bool) { return installer.KeptNupkgVersion(cfg.NupkgPath, id) }}
 	now := nowRFC3339UTC()
 
 	items := make([]OptionalInstallItem, 0, len(names))

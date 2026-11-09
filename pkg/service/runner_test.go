@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"os/user"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -969,5 +970,28 @@ func TestResolveTerminalEventMissingSoftware(t *testing.T) {
 	}
 	if ev := resolveTerminalEvent("Blocked", rep); ev.State != "Deferred" || ev.ErrorCode != "blocked_by_running_app" {
 		t.Errorf("blocking-app deferral = %#v", ev)
+	}
+}
+
+// A scheduled run that fails, on the manifest fetch say, must leave an error
+// in the service log; otherwise the run ends without a trace.
+func TestScheduledRunFailureIsLogged(t *testing.T) {
+	cfg := testServiceConfig(t)
+	failing := func(config.Configuration, installer.ProgressFn, *installer.Cancels) (*report.Report, error) {
+		return nil, errors.New("fetch manifest: status 404")
+	}
+	startTestRunner(t, cfg, failing)
+
+	logPath := filepath.Join(cfg.AppDataPath, "sofcat.log")
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		data, _ := os.ReadFile(logPath)
+		if strings.Contains(string(data), `"level":"ERROR"`) && strings.Contains(string(data), "status 404") {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("no ERROR record for the failed scheduled run in %s:\n%s", logPath, data)
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 }

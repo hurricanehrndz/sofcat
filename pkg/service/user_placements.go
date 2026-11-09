@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
 	"github.com/hurricanehrndz/sofcat/pkg/conditions"
@@ -202,7 +203,7 @@ func SaveUserPlan(appDataPath string, plan UserPlacements) error {
 	if err := os.MkdirAll(appDataPath, 0o755); err != nil {
 		return err
 	}
-	return writeFileAtomic(UserPlanPath(appDataPath), func(w io.Writer) error {
+	return writeFileAtomic(UserPlanPath(appDataPath), 0o644, func(w io.Writer) error {
 		_, err := w.Write(data)
 		return err
 	})
@@ -323,7 +324,7 @@ func StageUserArtifacts(ctx context.Context, zip *installer.ZipInstaller, plan [
 
 // logUserPlacementResults records the helper's results in the service log,
 // with the caller the connection resolved: failures at warn, the rest at
-// info. Nothing is kept beyond the log.
+// info. recordUserPlacementStatus keeps what the storefront needs.
 func logUserPlacementResults(who peer, results []UserPlacementResult) {
 	for _, r := range results {
 		level := slog.LevelInfo
@@ -344,23 +345,24 @@ func copyFileAtomic(src, dst string) error {
 		return err
 	}
 	defer func() { _ = in.Close() }()
-	return writeFileAtomic(dst, func(w io.Writer) error {
+	// Users read the staged archives; CreateTemp's 0600 would hide them off
+	// Windows, where no inherited ACL applies.
+	return writeFileAtomic(dst, 0o644, func(w io.Writer) error {
 		_, err := io.Copy(w, in)
 		return err
 	})
 }
 
 // writeFileAtomic writes dst through a temporary file beside it, renamed into
-// place once complete.
-func writeFileAtomic(dst string, write func(io.Writer) error) error {
+// place once complete, with perm. Off Windows perm is the file's access; on
+// Windows the directory's inherited ACL is.
+func writeFileAtomic(dst string, perm os.FileMode, write func(io.Writer) error) error {
 	tmp, err := os.CreateTemp(filepath.Dir(dst), ".staging-*")
 	if err != nil {
 		return err
 	}
 	defer func() { _ = os.Remove(tmp.Name()) }()
-	// Users read the staged archives; CreateTemp's 0600 would hide them off
-	// Windows, where no inherited ACL applies.
-	if err := tmp.Chmod(0o644); err != nil {
+	if err := tmp.Chmod(perm); err != nil {
 		_ = tmp.Close()
 		return err
 	}
@@ -392,6 +394,9 @@ func (sr *serviceRunner) dispatchUserPlacements(conn clientConn, req rpcRequest,
 	}
 	who, _ := requester(conn, logger)
 	logUserPlacementResults(who, params.Results)
+	if err := recordUserPlacementStatus(sr.cfg.AppDataPath, who.ID, params.Results, time.Now().UTC()); err != nil {
+		logger.Warn("unable to store user placement status", "err", err)
+	}
 	return reportUserPlacementsResponse{}, nil
 }
 

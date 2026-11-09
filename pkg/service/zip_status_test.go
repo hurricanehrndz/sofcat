@@ -75,7 +75,7 @@ func TestListZipItemStatus(t *testing.T) {
 		return z
 	}
 
-	items, err := getOptionalItems(cfg)
+	items, err := getOptionalItems(cfg, peer{})
 	if err != nil {
 		t.Fatalf("getOptionalItems: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestListPlacementsError(t *testing.T) {
 	wantErr := errors.New("placements.yaml unreachable")
 	stubZipList(t, catalogs, func(config.Configuration) (placement.Table, error) { return placement.Table{}, wantErr })
 	cfg := config.Configuration{AppDataPath: t.TempDir(), Catalogs: []string{"production"}}
-	if _, err := getOptionalItems(cfg); !errors.Is(err, wantErr) {
+	if _, err := getOptionalItems(cfg, peer{}); !errors.Is(err, wantErr) {
 		t.Errorf("getOptionalItems err = %v, want the placements error", err)
 	}
 }
@@ -147,7 +147,7 @@ func TestListStorefrontFields(t *testing.T) {
 		return z
 	}
 
-	items, err := getOptionalItems(config.Configuration{AppDataPath: t.TempDir(), CachePath: t.TempDir(), Catalogs: []string{"production"}})
+	items, err := getOptionalItems(config.Configuration{AppDataPath: t.TempDir(), CachePath: t.TempDir(), Catalogs: []string{"production"}}, peer{})
 	if err != nil {
 		t.Fatal(err)
 	}
