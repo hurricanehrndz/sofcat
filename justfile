@@ -483,26 +483,55 @@ bootstrap-tapas-macos base_url="http://127.0.0.1:8080/": _require-macos manual-t
     @echo "Then: sudo installer -pkg build/{{tapas_app}}-{{version}}.pkg -target / && sudo install -m 600 -o root -g wheel {{tapas_mac_dir}}/config.yaml '/Library/Application Support/{{tapas_product}}/config.yaml' && sudo launchctl kickstart -k system/{{tapas_identifier}} && sudo test/manual/run-tapas-smoke.sh"
 
 # The Tapas fixture repository under build/manual-test/tapas/server-root,
-# without binaries: placements.yaml, the manifests and the zip items
-# makecatalogs zip-item packs from test/manual/fixtures/tapas/rendered (a
-# windows and a darwin variant per placement), plus the hand-written
-# package-info files in packages-info/.
-_tapas-repo:
+# without binaries: placements.yaml, its template files, the manifests and
+# the zip items makecatalogs zip-item packs from
+# test/manual/fixtures/tapas/rendered (a windows and a darwin variant per
+# placement), plus the hand-written package-info files in packages-info/.
+_tapas-repo: (_fixture-repo tapas_fixtures tapas_server_root "packages/tapas")
+
+# A fixture directory laid out as a repository under root: placements.yaml,
+# templates/, manifests/, the zip items packed from items/ and rendered/ into
+# prefix, and any hand-written package-info files.
+_fixture-repo fixtures root prefix:
     go build -ldflags "-X github.com/hurricanehrndz/sofcat/pkg/version.version={{version}}" \
         -o build/makecatalogs ./cmd/makecatalogs
-    rm -rf {{tapas_server_root}}
-    mkdir -p {{tapas_server_root}}/manifests {{tapas_server_root}}/packages-info
-    cp {{tapas_fixtures}}/placements.yaml {{tapas_server_root}}/
-    cp {{tapas_fixtures}}/manifests/*.yaml {{tapas_server_root}}/manifests/
-    cp {{tapas_fixtures}}/packages-info/*.yaml {{tapas_server_root}}/packages-info/
-    for item in {{tapas_fixtures}}/items/*.yaml; do \
+    rm -rf {{quote(root)}}
+    mkdir -p {{quote(root)}}/manifests {{quote(root)}}/packages-info
+    cp {{quote(fixtures)}}/placements.yaml {{quote(root)}}/
+    cp -R {{quote(fixtures)}}/templates {{quote(root)}}/
+    cp {{quote(fixtures)}}/manifests/*.yaml {{quote(root)}}/manifests/
+    if [ -d {{quote(fixtures)}}/packages-info ]; then cp {{quote(fixtures)}}/packages-info/*.yaml {{quote(root)}}/packages-info/; fi
+    for item in {{quote(fixtures)}}/items/*.yaml; do \
       name=$(basename "$item" .yaml); \
-      build/makecatalogs zip-item --placements {{tapas_fixtures}}/placements.yaml --item "$item" \
-        --rendered {{tapas_fixtures}}/rendered/$name --location-prefix packages/tapas \
-        -o {{tapas_server_root}} > {{tapas_server_root}}/packages-info/$name.yaml || exit 1; \
+      build/makecatalogs zip-item --placements {{quote(fixtures)}}/placements.yaml --item "$item" \
+        --rendered {{quote(fixtures)}}/rendered/$name --location-prefix {{prefix}} \
+        -o {{quote(root)}} > {{quote(root)}}/packages-info/$name.yaml || exit 1; \
     done
-    build/makecatalogs {{tapas_server_root}}
-    build/makecatalogs -check {{tapas_server_root}}
+    build/makecatalogs {{quote(root)}}
+    build/makecatalogs -check {{quote(root)}}
+
+harness_fixtures := "test/manual/fixtures/harness"
+harness_server_root := manual_test_dir / "harness" / "server-root"
+harness_mac_dir := manual_test_dir / "harness" / "mac"
+
+# The harness fixture for a Mac: the Tapas Test brand's pkg, the repository
+# of a harness fixture directory (default the generic one) under
+# build/manual-test/harness/server-root and
+# build/manual-test/harness/mac/config.yaml pointing at base_url. The gate is
+# test/manual/run-harness-smoke.sh; see "Harness validation loop" in
+# AGENTS.md.
+bootstrap-harness-macos fixture=harness_fixtures base_url="http://127.0.0.1:8080/": _require-macos manual-test-server (_harness-repo fixture)
+    {{quote(just_executable())}} --justfile {{quote(justfile())}} brand={{tapas_brand}} pkg
+    rm -rf {{harness_mac_dir}} && mkdir -p {{harness_mac_dir}}
+    printf '%s\n' 'url: {{base_url}}' 'url_packages: {{base_url}}' 'manifest: harness_manifest' 'catalogs:' '  - harness' \
+      > {{harness_mac_dir}}/config.yaml
+    @echo "Prepared harness assets in {{harness_server_root}}; config in {{harness_mac_dir}}/config.yaml"
+    @echo "Run: ./build/manual-test-server -root {{harness_server_root}} -addr 127.0.0.1:8080"
+    @echo "Then: sudo installer -pkg build/{{tapas_app}}-{{version}}.pkg -target / && sudo install -m 600 -o root -g wheel {{harness_mac_dir}}/config.yaml '/Library/Application Support/{{tapas_product}}/config.yaml' && sudo test/manual/run-harness-smoke.sh {{quote(fixture)}}"
+    @echo "Do not kickstart the daemon first: the smoke restarts it after saving the real harness config files."
+
+# The harness fixture repository alone, which also builds on Linux.
+_harness-repo fixture=harness_fixtures: (_fixture-repo fixture harness_server_root "packages/harness")
 
 # Nupkg-item manual-test assets under build/manual-test/nupkg/: a repository of
 # embala-built plain-style packages (test/manual/build-nupkg-repo.sh) and

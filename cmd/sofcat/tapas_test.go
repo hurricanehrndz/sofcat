@@ -1062,7 +1062,10 @@ func tempDir(t *testing.T) string {
 // drop-in templates, the ones the zip-items guide shows.
 func fixtureClaudeTemplates(t *testing.T) (catalog, dropIn string) {
 	t.Helper()
-	table, err := placement.Parse([]byte(readFile(t, filepath.Join("..", "..", "test", "manual", "fixtures", "tapas", "placements.yaml"))), nil)
+	dir := filepath.Join("..", "..", "test", "manual", "fixtures", "tapas")
+	table, err := placement.Parse([]byte(readFile(t, filepath.Join(dir, "placements.yaml"))), func(rel string) ([]byte, error) {
+		return os.ReadFile(filepath.Join(dir, filepath.FromSlash(rel)))
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

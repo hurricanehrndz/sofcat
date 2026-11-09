@@ -1,0 +1,3 @@
+{{- if .Items }}
+{"skills": [{{ range $i, $p := .Items }}{{ if $i }}, {{ end }}{{ json $p.Name }}{{ end }}]}
+{{- end }}

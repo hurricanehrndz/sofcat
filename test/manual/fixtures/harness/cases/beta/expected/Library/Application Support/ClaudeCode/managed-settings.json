@@ -1,0 +1,12 @@
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://beta.ai.example.com/claude",
+    "ANTHROPIC_CUSTOM_HEADERS": "x-example-user: asmith\nx-example-profile: beta"
+  },
+  "model": "example-next",
+  "permissions": {
+    "deny": [
+      "Read(./.env)"
+    ]
+  }
+}

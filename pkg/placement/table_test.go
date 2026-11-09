@@ -440,14 +440,7 @@ placements:
 // to copy.
 func claudeTemplates(t *testing.T) (catalog, dropIn string) {
 	t.Helper()
-	body, err := os.ReadFile(filepath.Join("..", "..", "test", "manual", "fixtures", "tapas", "placements.yaml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	table, err := Parse(body, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	table, _ := parseFixture(t, "tapas")
 	files := table.Placements["tapas-marketplace"].Files
 	if len(files) != 3 || files[0].Path != ".claude-plugin/marketplace.json" || files[2].Paths == nil {
 		t.Fatalf("tapas-marketplace files = %+v", files)

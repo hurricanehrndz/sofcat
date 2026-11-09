@@ -1,0 +1,12 @@
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://ai.example.com/claude",
+    "ANTHROPIC_CUSTOM_HEADERS": "x-example-user: jdoe\nx-example-profile: default"
+  },
+  "model": "example-standard",
+  "permissions": {
+    "deny": [
+      "Read(./.env)"
+    ]
+  }
+}

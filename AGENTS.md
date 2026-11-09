@@ -38,11 +38,13 @@ Guidance for coding agents working in this repository.
   - `just test-zip-only`: Go tests under the `zip_only` tag
   - `just bootstrap-tapas`: build the Tapas Test zip-item fixture brand and repository for a Windows VM
   - `just bootstrap-tapas-macos`: the same for a Mac, with a `.pkg` and config
+  - `just bootstrap-harness-macos`: the harness fixture repository for a Mac, with the Tapas Test `.pkg` and config
   - `just bootstrap-nupkg`: build `sofcat.exe` and an embala-built nupkg repository for the nupkg smoke on a Windows VM
   - `just build-macos`: build the CLI, the per-user helper and `.app` for the host Mac
   - `just pkg`: wrap those into an unsigned `.pkg`
 
-`just build-macos`, `just pkg` and `just bootstrap-tapas-macos` run only on macOS.
+`just build-macos`, `just pkg`, `just bootstrap-tapas-macos` and
+`just bootstrap-harness-macos` run only on macOS.
 
 Prefer `just test` as the default local validation step, even for small changes.
 When changes include SofCat UI code, run `just ui-lint` and `just ui-test`.
@@ -309,6 +311,49 @@ passwordless sudo.
    `sudo sh -c '...'`: the login shell over SSH is zsh, which aborts the
    whole command when a glob such as `tapas-test-*` matches nothing, and a
    smoke on the leftovers fails at step 8 with "not a clean Mac?".
+
+## Harness Validation Loop
+
+The harness fixture (`test/manual/fixtures/harness/`) writes the machine-wide
+config files of Claude Code and Codex as placement files whose templates are
+named by `template_file`. It runs on the Tapas Test brand, on the same rig as
+the macOS loop, starting from a Mac without the brand installed.
+
+**The smoke writes the real harness config paths:**
+`/Library/Application Support/ClaudeCode/managed-settings.json`,
+`/etc/codex/config.toml` and `/etc/codex/managed_config.toml`. It saves any
+file already there and its exit trap puts them back, pass or fail. The trap
+leaves the daemon stopped, because a later run would rewrite or remove the
+restored files, so do step 5 before the Mac restarts. Do not kickstart the
+daemon with the harness config yourself, for the same reason.
+
+1. `just bootstrap-harness-macos` builds the Tapas Test `.pkg`, lays out the
+   fixture repository in `build/manual-test/harness/server-root` and writes
+   `build/manual-test/harness/mac/config.yaml`. Its arguments are a fixture
+   directory (default the generic one) and a base URL (default
+   `http://127.0.0.1:8080/`). A fixture directory holds `placements.yaml`,
+   `templates/`, `manifests/` (`harness_manifest` and
+   `harness_empty_manifest`), `items/`, `rendered/`, `conditions/` and
+   `cases/<case>/` with an optional `facts.json` and the expected files under
+   `expected/`, mirrored by absolute path.
+2. Serve it on the Mac:
+   `./build/manual-test-server -root build/manual-test/harness/server-root -addr 127.0.0.1:8080`.
+3. Install and configure, without a kickstart:
+   `sudo installer -pkg build/tapas-test-<version>.pkg -target /`, then
+   `sudo install -m 600 -o root -g wheel build/manual-test/harness/mac/config.yaml "/Library/Application Support/Tapas Test/config.yaml"`.
+4. Gate: `sudo test/manual/run-harness-smoke.sh [fixture-dir]` must exit 0 and
+   print `HARNESS SMOKE PASSED`. It installs the fixture's condition scripts,
+   then for each case provides the facts, restarts the daemon and compares
+   what its startup run wrote with the expected files (`.json` parsed, others
+   byte for byte), owner `root:wheel` and mode 0644, and the placed item trees
+   with the fixture's by hash. Last it switches the daemon to
+   `harness_empty_manifest` and checks the files are gone.
+5. Clean up as in step 7 of the macOS loop: stop the test server, run
+   `-serviceremove` and remove the brand's directories.
+
+`go test ./pkg/placement -run Fixture` renders the generic fixture's templates
+with each case's facts on any host and compares the expected files byte for
+byte, and `just _harness-repo` builds and checks the repository without a Mac.
 
 ## Diagnostics
 

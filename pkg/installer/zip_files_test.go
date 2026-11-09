@@ -30,11 +30,14 @@ type marketTest struct {
 // templates, which the zip-items guide shows for brands to copy.
 func claudeTemplates(t *testing.T) (catalog, dropIn string) {
 	t.Helper()
-	body, err := os.ReadFile(filepath.Join("..", "..", "test", "manual", "fixtures", "tapas", "placements.yaml"))
+	dir := filepath.Join("..", "..", "test", "manual", "fixtures", "tapas")
+	body, err := os.ReadFile(filepath.Join(dir, "placements.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	table, err := placement.Parse(body, nil)
+	table, err := placement.Parse(body, func(rel string) ([]byte, error) {
+		return os.ReadFile(filepath.Join(dir, filepath.FromSlash(rel)))
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
