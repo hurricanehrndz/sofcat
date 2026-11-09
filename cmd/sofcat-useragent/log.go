@@ -15,16 +15,19 @@ import (
 // ui-client.log.
 const logName = "useragent.log"
 
-// setupLogger discards everything unless SOFCAT_DEBUG=1 or SOFCAT_UI_DEBUG=1,
-// the switches the storefront honours and the helper did when it was part of
-// it. Then it logs at debug level to
-// %LOCALAPPDATA%\<Name>\useragent.log, beside the receipts. A failure leaves
-// a usable, discarding logger. It is ui/log.go's setup with its own file;
-// both are a few lines in package main, so neither is shared.
+// logMaxMiB caps useragent.log; at the cap it rotates to one backup, so the
+// agent, which the service starts on every plan change, keeps at most twice
+// this in the user's profile. lumberjack counts whole MiB, so 1 is its floor.
+const logMaxMiB = 1
+
+// setupLogger always logs to %LOCALAPPDATA%\<Name>\useragent.log, beside the
+// receipts: at info level, or debug with SOFCAT_DEBUG=1 or
+// SOFCAT_UI_DEBUG=1, the switches the storefront honours. It rotates with
+// lumberjack, as the service's own log does, but at logMaxMiB with one
+// backup. A failure leaves a usable, discarding logger, so the sync still
+// runs. It is ui/log.go's setup with its own file; both are a few lines in
+// package main, so neither is shared.
 func setupLogger() (*slog.Logger, *lumberjack.Logger, error) {
-	if os.Getenv("SOFCAT_DEBUG") != "1" && os.Getenv("SOFCAT_UI_DEBUG") != "1" {
-		return slog.New(slog.DiscardHandler), nil, nil
-	}
 	localAppData := os.Getenv("LOCALAPPDATA")
 	if localAppData == "" {
 		return slog.New(slog.DiscardHandler), nil, errors.New("LOCALAPPDATA is not set")
@@ -35,8 +38,12 @@ func setupLogger() (*slog.Logger, *lumberjack.Logger, error) {
 	}
 	writer := &lumberjack.Logger{
 		Filename:   filepath.Join(directory, logName),
-		MaxSize:    10,
+		MaxSize:    logMaxMiB,
 		MaxBackups: 1,
 	}
-	return slog.New(slog.NewJSONHandler(writer, &slog.HandlerOptions{Level: slog.LevelDebug})), writer, nil
+	level := slog.LevelInfo
+	if os.Getenv("SOFCAT_DEBUG") == "1" || os.Getenv("SOFCAT_UI_DEBUG") == "1" {
+		level = slog.LevelDebug
+	}
+	return slog.New(slog.NewJSONHandler(writer, &slog.HandlerOptions{Level: level})), writer, nil
 }

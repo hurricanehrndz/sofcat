@@ -63,6 +63,10 @@ file in that user's receipt directory, waiting while another sync holds it. `-se
 any helper still running and closes an open storefront, so the uninstaller
 can delete their executables.
 
+Each helper run logs what it placed, held and failed to
+`%LOCALAPPDATA%\<NAME>\useragent.log`. The file rotates at 1 MiB to a single
+backup. `SOFCAT_DEBUG=1` in the user's environment adds debug records.
+
 A tree has two hashes. The catalog's `tree_hash` is the hash of the archive's
 contents, as CI packed them. The receipt's `placed_hash` is the hash of the
 tree as sofcat wrote it, files sofcat rendered on the device included; with
