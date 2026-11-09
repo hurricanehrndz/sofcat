@@ -560,7 +560,10 @@ func (sr *serviceRunner) dispatch(ctx context.Context, conn clientConn, req rpcR
 		}, nil
 
 	case methodListOptionalInstalls:
-		resp, err := sr.submit(ctx, Command{Action: actionListOptionalInstalls})
+		// What the caller's user agent last reported gives their user-scope
+		// items' status.
+		_, caller := requester(conn, logger)
+		resp, err := sr.submit(ctx, Command{Action: actionListOptionalInstalls, caller: caller})
 		if err != nil {
 			return nil, commandError(err, "")
 		}

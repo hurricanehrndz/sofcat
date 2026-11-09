@@ -46,7 +46,7 @@ func TestListAndRunAgreeOnConditionalItems(t *testing.T) {
 	manifestGet = func(config.Configuration) ([]manifest.Item, []string, error) { return raw, nil, nil }
 	catalogGet = func(config.Configuration) (map[int]map[string]catalog.Item, error) { return catalogs, nil }
 
-	listed, err := getOptionalItems(cfg)
+	listed, err := getOptionalItems(cfg, peer{})
 	if err != nil {
 		t.Fatalf("getOptionalItems: %v", err)
 	}
