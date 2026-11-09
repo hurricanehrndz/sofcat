@@ -141,8 +141,13 @@ func TestUserPlanStore(t *testing.T) {
 		t.Fatalf("user specs = %+v, want codex only", specs)
 	}
 	plan := UserPlacements{Entries: entries, Facts: conditions.Facts{"os": "windows", "assigned_user": "jdoe"}, Placements: specs}
-	if err := SaveUserPlan(appData, plan); err != nil {
-		t.Fatal(err)
+	if changed, err := SaveUserPlan(appData, plan); err != nil || !changed {
+		t.Fatalf("first save: changed = %v, %v; want true", changed, err)
+	}
+	// The service starts the per-user helpers only on a change: a scheduled
+	// run saving the same plan must not start them again.
+	if changed, err := SaveUserPlan(appData, plan); err != nil || changed {
+		t.Fatalf("same plan saved again: changed = %v, %v; want false", changed, err)
 	}
 	if got, err := LoadUserPlan(appData); err != nil || !reflect.DeepEqual(got, plan) {
 		t.Errorf("stored plan = %+v, %v; want %+v", got, err, plan)
@@ -153,8 +158,8 @@ func TestUserPlanStore(t *testing.T) {
 
 	// No placements are stored as {}, not null, so only an older service's
 	// plan lacks them.
-	if err := SaveUserPlan(appData, UserPlacements{}); err != nil {
-		t.Fatal(err)
+	if changed, err := SaveUserPlan(appData, UserPlacements{}); err != nil || !changed {
+		t.Fatalf("emptied plan: changed = %v, %v; want true", changed, err)
 	}
 	if got, err := LoadUserPlan(appData); err != nil || got.Placements == nil || len(got.Placements) != 0 {
 		t.Errorf("plan without user placements = %#v, %v; want empty placements", got, err)
@@ -275,7 +280,7 @@ func TestUserPlacementMethods(t *testing.T) {
 		entries[i].location = ""
 	}
 	stored := UserPlacements{Entries: entries, Facts: conditions.Facts{"os": "windows"}, Placements: UserSpecs(userPlanTable, placement.Windows)}
-	if err := SaveUserPlan(cfg.AppDataPath, stored); err != nil {
+	if _, err := SaveUserPlan(cfg.AppDataPath, stored); err != nil {
 		t.Fatal(err)
 	}
 	// Two calls: the same plan, facts included, whoever asks.
@@ -296,7 +301,7 @@ func TestUserPlacementMethods(t *testing.T) {
 	if got, err := client.ListUserPlacements(ctx); err != nil || got.Placements != nil {
 		t.Errorf("older plan over the pipe = %#v, %v; want nil placements", got, err)
 	}
-	if err := SaveUserPlan(cfg.AppDataPath, stored); err != nil {
+	if _, err := SaveUserPlan(cfg.AppDataPath, stored); err != nil {
 		t.Fatal(err)
 	}
 

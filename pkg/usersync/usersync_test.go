@@ -220,6 +220,57 @@ func TestSyncRetryLimits(t *testing.T) {
 	if _, err := Sync(context.Background(), answered, guard, t.TempDir(), slog.Default()); err == nil || answered.calls != 1 || len(*waits) != 0 {
 		t.Errorf("answered error: err %v, calls %d, waits %d; want one call, no retry", err, answered.calls, len(*waits))
 	}
+
+	// A helper the service started does not retry: one left waiting would
+	// hold its executable open through an uninstall.
+	defer func(d time.Duration) { PlanRetryFor = d }(PlanRetryFor)
+	PlanRetryFor = 0
+	unreachable := &fakeClient{err: refused}
+	if _, err := Sync(context.Background(), unreachable, guard, t.TempDir(), slog.Default()); !errors.Is(err, service.ErrConnect) || unreachable.calls != 1 || len(*waits) != 0 {
+		t.Errorf("no retry: err %v, calls %d, waits %d; want ErrConnect after one call", err, unreachable.calls, len(*waits))
+	}
+}
+
+// signalClient reports each plan fetch on fetched.
+type signalClient struct {
+	*fakeClient
+	fetched chan struct{}
+}
+
+func (c signalClient) ListUserPlacements(ctx context.Context) (service.UserPlacements, error) {
+	c.fetched <- struct{}{}
+	return c.fakeClient.ListUserPlacements(ctx)
+}
+
+// One user's syncs overlap at logon, on a service start and across two
+// sessions. A second sync waits for the first's lock and only then fetches
+// the plan, so it applies the newest one rather than racing the first.
+func TestSyncWaitsForLock(t *testing.T) {
+	entry, guard, profile := fixture(t)
+	receipts := t.TempDir()
+	unlock, err := lock(receipts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := signalClient{&fakeClient{plan: []service.UserPlacement{entry}}, make(chan struct{}, 1)}
+	done := make(chan error, 1)
+	go func() {
+		_, err := Sync(context.Background(), client, guard, receipts, slog.Default())
+		done <- err
+	}()
+	select {
+	case <-client.fetched:
+		t.Fatal("the plan was fetched while another sync held the lock")
+	case <-time.After(200 * time.Millisecond):
+	}
+	unlock()
+	<-client.fetched
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(profile, ".agents", "skills", "skill", "SKILL.md")); err != nil {
+		t.Errorf("skill not placed after the lock was released: %v", err)
+	}
 }
 
 // The helper's receipt carries the plan's managed flag and its templates

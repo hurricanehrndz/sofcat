@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -178,7 +179,11 @@ func UserPlanPath(appDataPath string) string {
 
 // SaveUserPlan stores plan at UserPlanPath through a temporary file, so a
 // concurrent listUserPlacements reads either the old plan or the new one.
-func SaveUserPlan(appDataPath string, plan UserPlacements) error {
+// It reports whether the bytes differ from the stored plan, read from
+// disk so a service restart is not a change; json.Marshal sorts map keys and
+// the entries are sorted, so an unchanged plan encodes the same. An
+// unchanged plan is not rewritten.
+func SaveUserPlan(appDataPath string, plan UserPlacements) (bool, error) {
 	if plan.Entries == nil {
 		plan.Entries = []UserPlacement{}
 	}
@@ -190,15 +195,21 @@ func SaveUserPlan(appDataPath string, plan UserPlacements) error {
 	}
 	data, err := json.Marshal(plan)
 	if err != nil {
-		return err
+		return false, err
+	}
+	if old, err := os.ReadFile(UserPlanPath(appDataPath)); err == nil && bytes.Equal(old, data) {
+		return false, nil
 	}
 	if err := os.MkdirAll(appDataPath, 0o755); err != nil {
-		return err
+		return false, err
 	}
-	return writeFileAtomic(UserPlanPath(appDataPath), func(w io.Writer) error {
+	if err := writeFileAtomic(UserPlanPath(appDataPath), func(w io.Writer) error {
 		_, err := w.Write(data)
 		return err
-	})
+	}); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // LoadUserPlan reads the plan the last run stored; before the first run there

@@ -237,8 +237,14 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 		}
 		userPlan := service.UserPlan(planDesired, planHeld, managed, catalogs, table, zip.Guard.GOOS, dir)
 		service.StageUserArtifacts(context.Background(), zip, userPlan, dir)
-		if err := service.SaveUserPlan(cfg.AppDataPath, service.UserPlacements{Entries: userPlan, Facts: machineFacts, Placements: service.UserSpecs(table, zip.Guard.GOOS)}); err != nil {
+		changed, err := service.SaveUserPlan(cfg.AppDataPath, service.UserPlacements{Entries: userPlan, Facts: machineFacts, Placements: service.UserSpecs(table, zip.Guard.GOOS)})
+		if err != nil {
 			slog.Warn("unable to store the user-placement plan", "err", err)
+		}
+		// A new plan reaches the users signed in now at once; everyone
+		// else gets it at their next logon.
+		if changed {
+			service.StartUserSync()
 		}
 	}
 
