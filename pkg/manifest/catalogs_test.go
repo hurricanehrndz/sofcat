@@ -171,7 +171,7 @@ func TestGetCatalogsReturnsErrorForInvalidYAML(t *testing.T) {
 	downloadGet = fakeDownloadByURL(
 		map[string][]byte{
 			"https://example.com/catalogs/valid.yaml":  baseYAML,
-			"https://example.com/catalogs/broken.yaml": []byte(":\n- not valid yaml"),
+			"https://example.com/catalogs/broken.yaml": []byte("key: [unclosed"),
 		},
 		nil,
 	)
