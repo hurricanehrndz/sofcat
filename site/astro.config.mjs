@@ -31,7 +31,7 @@ export default defineConfig({
         },
         {
           label: "Reference",
-          items: ["reference/data-directory", "reference/code-signing"],
+          items: ["reference/data-directory", "reference/event-log", "reference/code-signing"],
         },
         {
           label: "Contributing",

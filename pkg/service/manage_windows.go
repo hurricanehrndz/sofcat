@@ -5,6 +5,7 @@ package service
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/hurricanehrndz/sofcat/pkg/config"
 	"github.com/hurricanehrndz/sofcat/pkg/identity"
+	"github.com/hurricanehrndz/sofcat/pkg/sofcatlog"
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
 	"golang.org/x/sys/windows/svc"
@@ -195,23 +197,40 @@ func installWindowsService(m *mgr.Mgr, cfg config.Configuration) error {
 	if err := createServiceFunc(m, cfg.ServiceName, exePath, serviceConfig, startArgs...); err != nil {
 		return fmt.Errorf("failed to create service %q: %w", cfg.ServiceName, err)
 	}
+	slog.Info("registered the service", "service", cfg.ServiceName, "exe", exePath, "event", sofcatlog.EventServiceInstalled)
 
 	// The helper beside this executable runs at every logon. A failure from
 	// here on undoes the registration, so a retried install does not meet a
 	// half-finished service and refuse.
 	name, data := userSyncRunValue(filepath.Join(filepath.Dir(exePath), userAgentExe()))
 	if err := setRunValueFunc(name, data); err != nil {
-		_ = deleteServiceFunc(m, cfg)
+		undoServiceInstall(m, cfg, "")
 		return fmt.Errorf("failed to write Run value %q: %w", name, err)
 	}
+	slog.Info("wrote the Run value", "name", name, "data", data, "event", sofcatlog.EventRunValueWritten)
 	if err := startServiceFunc(m, cfg); err != nil {
-		_ = deleteRunValueFunc(name)
-		_ = deleteServiceFunc(m, cfg)
+		undoServiceInstall(m, cfg, name)
 		return err
 	}
-	serviceVerbose(cfg, "install complete for service=%q", cfg.ServiceName)
 
 	return nil
+}
+
+// undoServiceInstall removes the Run value runValue, unless it is empty, and
+// the service registration of an install that failed part way.
+func undoServiceInstall(m *mgr.Mgr, cfg config.Configuration, runValue string) {
+	if runValue != "" {
+		if _, err := deleteRunValueFunc(runValue); err != nil {
+			slog.Error("unable to undo the Run value", "name", runValue, "err", err, "event", sofcatlog.EventRunValueRemoved)
+		} else {
+			slog.Info("undid the Run value", "name", runValue, "event", sofcatlog.EventRunValueRemoved)
+		}
+	}
+	if err := deleteServiceFunc(m, cfg); err != nil {
+		slog.Error("unable to undo the service registration", "service", cfg.ServiceName, "err", err, "event", sofcatlog.EventServiceInstalled)
+	} else {
+		slog.Info("undid the service registration", "service", cfg.ServiceName, "event", sofcatlog.EventServiceInstalled)
+	}
 }
 
 func serviceExists(m *mgr.Mgr, name string) (bool, error) {
@@ -243,17 +262,22 @@ func setRunValue(name, data string) error {
 	return k.SetStringValue(name, data)
 }
 
-// deleteRunValue removes the value; one that is already gone is not an error.
-func deleteRunValue(name string) error {
+// deleteRunValue removes the value and reports whether it was there; one that
+// is already gone, as on the uninstaller's second -serviceremove, is not an
+// error.
+func deleteRunValue(name string) (bool, error) {
 	k, err := registry.OpenKey(runRoot, runKey, registry.SET_VALUE|registry.WOW64_64KEY)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer func() { _ = k.Close() }()
-	if err := k.DeleteValue(name); err != nil && !errors.Is(err, registry.ErrNotExist) {
-		return err
+	if err := k.DeleteValue(name); err != nil {
+		if errors.Is(err, registry.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
 	}
-	return nil
+	return true, nil
 }
 
 func startWindowsService(m *mgr.Mgr, cfg config.Configuration) error {
@@ -266,7 +290,7 @@ func startWindowsService(m *mgr.Mgr, cfg config.Configuration) error {
 
 	status, err := s.Query()
 	if err == nil && (status.State == svc.Running || status.State == svc.StartPending) {
-		serviceVerbose(cfg, "service=%q already running", cfg.ServiceName)
+		slog.Info("the service is already running", "service", cfg.ServiceName, "event", sofcatlog.EventServiceStarted)
 		return nil
 	}
 
@@ -275,7 +299,7 @@ func startWindowsService(m *mgr.Mgr, cfg config.Configuration) error {
 	if err := s.Start(); err != nil && !errors.Is(err, windows.ERROR_SERVICE_ALREADY_RUNNING) {
 		return fmt.Errorf("failed to start service %q: %w", cfg.ServiceName, err)
 	}
-	serviceVerbose(cfg, "start command accepted for service=%q", cfg.ServiceName)
+	slog.Info("started the service", "service", cfg.ServiceName, "event", sofcatlog.EventServiceStarted)
 	return nil
 }
 
@@ -290,7 +314,7 @@ func stopWindowsService(m *mgr.Mgr, cfg config.Configuration) error {
 	status, err := s.Control(svc.Stop)
 	if err != nil {
 		if errors.Is(err, windows.ERROR_SERVICE_NOT_ACTIVE) {
-			serviceVerbose(cfg, "service=%q already stopped", cfg.ServiceName)
+			slog.Info("the service is already stopped", "service", cfg.ServiceName, "event", sofcatlog.EventServiceStopped)
 			return nil
 		}
 		if !errors.Is(err, windows.ERROR_SERVICE_CANNOT_ACCEPT_CTRL) {
@@ -313,7 +337,7 @@ func stopWindowsService(m *mgr.Mgr, cfg config.Configuration) error {
 			return fmt.Errorf("failed querying service %q: %w", cfg.ServiceName, err)
 		}
 	}
-	serviceVerbose(cfg, "service=%q stopped", cfg.ServiceName)
+	slog.Info("stopped the service", "service", cfg.ServiceName, "event", sofcatlog.EventServiceStopped)
 
 	return nil
 }
@@ -338,12 +362,24 @@ func removeWindowsService(m *mgr.Mgr, cfg config.Configuration) error {
 			return err
 		}
 	} else {
-		serviceVerbose(cfg, "service=%q does not exist; removing the Run value and ending agents only", cfg.ServiceName)
+		slog.Info("the service is not installed; removing the Run value and ending agents only", "service", cfg.ServiceName, "event", sofcatlog.EventServiceDeleted)
 	}
 	name, _ := userSyncRunValue("")
-	if err := deleteRunValueFunc(name); err != nil {
-		return fmt.Errorf("failed to remove Run value %q: %w", name, err)
+	removed, rerr := deleteRunValueFunc(name)
+	if rerr != nil {
+		return fmt.Errorf("failed to remove Run value %q: %w", name, rerr)
 	}
+	if removed {
+		slog.Info("removed the Run value", "name", name, "event", sofcatlog.EventRunValueRemoved)
+	} else {
+		slog.Info("the Run value is already absent", "name", name, "event", sofcatlog.EventRunValueRemoved)
+	}
+	// A known and accepted race (decision 17): at a logon, Explorer can read
+	// the Run value just before the delete above and start an agent after
+	// the sweep below. That agent retries for a minute holding its exe, so
+	// the uninstaller can leave the exe behind until the next uninstall or
+	// reboot. If that ever matters, the fix is in the agent: stop retrying
+	// once the Run value is gone.
 	endAgentsFunc()
 	return nil
 }
@@ -370,7 +406,7 @@ func deleteWindowsService(m *mgr.Mgr, cfg config.Configuration) error {
 		existing, err := m.OpenService(cfg.ServiceName)
 		if err != nil {
 			if errors.Is(err, windows.ERROR_SERVICE_DOES_NOT_EXIST) {
-				serviceVerbose(cfg, "service=%q fully removed", cfg.ServiceName)
+				slog.Info("deleted the service", "service", cfg.ServiceName, "event", sofcatlog.EventServiceDeleted)
 				return nil
 			}
 			return fmt.Errorf("failed to verify removal of service %q: %w", cfg.ServiceName, err)

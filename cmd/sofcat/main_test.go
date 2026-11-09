@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,6 +32,8 @@ func resetMainHooks() {
 	serviceStatusFunc = service.ServiceStatus
 	protectAppDataFunc = func(string) error { return nil }
 	protectConfigFunc = func(string) error { return nil }
+	// Never register the brand's event source on a test machine.
+	startManagementLogFunc = func(string, bool, io.Writer) func() { return func() {} }
 	newZipInstaller = installer.NewMachineZip
 }
 
@@ -518,6 +522,41 @@ func TestRouteServiceActionPrintsSuccess(t *testing.T) {
 				t.Fatalf("expected stdout to include %q, got %q", tt.wantOutput, stdout)
 			}
 		})
+	}
+}
+
+// A management command logs its steps and outcome through the event-log tee
+// under the brand's source, so a silent uninstall leaves a record: here, a
+// data directory it could not protect and the failure itself.
+func TestRouteServiceActionLogsToManagementLog(t *testing.T) {
+	resetMainHooks()
+	defer resetMainHooks()
+
+	var logged bytes.Buffer
+	var source string
+	startManagementLogFunc = func(src string, _ bool, _ io.Writer) func() {
+		source = src
+		prev := slog.Default()
+		slog.SetDefault(slog.New(slog.NewTextHandler(&logged, nil)))
+		return func() { slog.SetDefault(prev) }
+	}
+	protectAppDataFunc = func(string) error { return errors.New("access denied") }
+	runServiceActionFunc = func(config.Configuration, string) error { return errors.New("scm unavailable") }
+
+	if err := route(config.Configuration{ServiceInstall: true}); err == nil {
+		t.Fatal("route succeeded, want the action's error")
+	}
+	if source != identity.Slug {
+		t.Errorf("event source = %q, want %q", source, identity.Slug)
+	}
+	out := logged.String()
+	for _, s := range []string{
+		`level=WARN msg="unable to protect the data directory"`,
+		`level=ERROR msg="-serviceinstall failed" err="scm unavailable"`,
+	} {
+		if !strings.Contains(out, s) {
+			t.Errorf("log lacks %q:\n%s", s, out)
+		}
 	}
 }
 

@@ -49,7 +49,8 @@ writes there.
 The per-user helper writes outside both: each user's receipts and its
 `useragent.log` (capped at 1 MiB plus one backup) live in
 `%LOCALAPPDATA%\SofCat`. The uninstaller leaves them, as it leaves
-`C:\ProgramData\SofCat`.
+`C:\ProgramData\SofCat` and the `sofcat` source in the Application log
+([Event log](/reference/event-log/)).
 
 ## ACL
 
@@ -112,7 +113,7 @@ root, so every stock-root placement is refused until `app_data_path` moves
 to `Data` or goes away. A mistyped `app_data_path` such as `C:\ProgramData`
 is left alone. Symbolic
 links and junctions are skipped, never followed, and a `config.yaml` that is
-not a regular file is refused. If any part fails, the install prints a warning
-and the service logs one to `sofcat.log`. The service still runs, and the
+not a regular file is refused. If any part fails, the install logs a warning
+to stderr and the [event log](/reference/event-log/) (ID 9), and the service logs one to `sofcat.log`. The service still runs, and the
 run-time check that keeps self-service from changing admin-managed items
 still applies.
