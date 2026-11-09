@@ -18,6 +18,10 @@ const logName = "useragent.log"
 // logMaxMiB caps useragent.log; at the cap it rotates to one backup, so the
 // agent, which the service starts on every plan change, keeps at most twice
 // this in the user's profile. lumberjack counts whole MiB, so 1 is its floor.
+// The cap is best effort: when two agents share the file (a logon start and a
+// service spawn in one session), the one that hits the cap cannot rename the
+// file the other holds open, so its later writes are dropped and the file can
+// pass the cap until the other exits. The sync is unaffected.
 const logMaxMiB = 1
 
 // setupLogger always logs to %LOCALAPPDATA%\<Name>\useragent.log, beside the

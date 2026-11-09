@@ -26,8 +26,8 @@ func agentExes() []string {
 // endAgents ends every running process whose image is one of agentExes
 // beside this executable, so the uninstaller that runs next can delete them.
 // A logon agent waiting for a service that is gone retries for a minute, and
-// an open storefront stays open; either would keep its executable in place. The same file name in another
-// directory is left alone. Nothing here fails the remove: each failure is
+// an open storefront stays open; either would keep its executable in place.
+// The same file name in another directory is left alone. Nothing here fails the remove: each failure is
 // logged and the sweep goes on.
 //
 // The agent runs as the signed-in user, whose process DACL does not grant
