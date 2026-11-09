@@ -1017,6 +1017,35 @@ func TestTapasUserScopeRequiresSoftware(t *testing.T) {
 	}
 }
 
+// TestTapasUserPlanHoldsCanceledItem: an item the user canceled during the
+// run is held in the stored user plan. The cancel reverted the selection
+// after the run computed its desired set, and a stored plan reaches
+// signed-in users at once, so the helper must not place the item.
+func TestTapasUserPlanHoldsCanceledItem(t *testing.T) {
+	e := newTapasEnv(t)
+	e.servePlacements(map[string]string{"codex": "${USERPROFILE}/.agents/skills"}, nil, []string{"codex"})
+	e.zipItem("canceled", "1.0", map[string]map[string]string{"codex": {"SKILL.md": "canceled"}})
+	e.publishCatalog()
+	e.put("manifests/tapas.yaml", []byte("name: tapas\ncatalogs: [tapas]\nmanaged_installs: [canceled]\n"))
+
+	cancels := installer.NewCancels()
+	cancels.Cancel("canceled")
+	func() {
+		defer sofcatlog.Close()
+		if _, err := managedRun(e.cfg, nil, cancels); err != nil {
+			t.Fatalf("managedRun: %v", err)
+		}
+	}()
+
+	plan, err := service.LoadUserPlan(e.cfg.AppDataPath)
+	if err != nil || len(plan.Entries) != 1 || plan.Entries[0].Item != "canceled" {
+		t.Fatalf("plan = %+v, %v; want canceled/codex only", plan, err)
+	}
+	if entry := plan.Entries[0]; !entry.Held || exists(entry.Archive) {
+		t.Errorf("canceled entry = %+v, want held and its archive not staged", entry)
+	}
+}
+
 // tempDir is t.TempDir with its symlinks resolved. On macOS it lives under
 // /var/folders, a symlink to /private/var/folders, and the guard compares
 // resolved paths.
