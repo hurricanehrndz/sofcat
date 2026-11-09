@@ -48,7 +48,7 @@ param(
     # The data directory (app_data_path), beside config.yaml.
     [string]$DataDir     = "$env:ProgramData\Tapas Test\Data",
     [string]$Slug        = "tapas-test",
-    # The brand's write root; see test/manual/fixtures/tapas/brand/harnesses.yaml.
+    # The brand's write root; see test/manual/fixtures/tapas/placements.yaml.
     [string]$SmokeRoot   = "$env:ProgramData\tapas-test-smoke",
     [string]$LogPath     = "C:\sofcat-test\tapas-authz.log",
     [int]$TimeoutSec     = 120

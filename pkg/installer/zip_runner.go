@@ -274,7 +274,7 @@ func (r *Runner) ScopeExit(keep func(item string) bool) error {
 	return nil
 }
 
-// Regenerate rewrites every marketplace's generated files from the receipts
+// Regenerate rewrites every placement's files from the receipts
 // (ZipInstaller.RegenerateAll), recording each failure as a FailedItem named
 // for the placement, with action generate.
 func (r *Runner) Regenerate() {

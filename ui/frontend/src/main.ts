@@ -56,7 +56,7 @@ import {
   visibleItems,
   withFailure,
   withLive,
-  worksInLine,
+  appliesToLine,
 } from "./state.ts";
 import type {
   ActiveOperations,
@@ -331,10 +331,10 @@ function card(item: OptionalInstallItem): HTMLElement {
   meta.textContent = [item.category, item.developer].filter(Boolean).join(" · ");
   meta.hidden = meta.textContent === "";
 
-  const worksIn = document.createElement("p");
-  worksIn.className = "card-meta";
-  worksIn.textContent = worksInLine(item);
-  worksIn.hidden = worksIn.textContent === "";
+  const appliesTo = document.createElement("p");
+  appliesTo.className = "card-meta";
+  appliesTo.textContent = appliesToLine(item);
+  appliesTo.hidden = appliesTo.textContent === "";
 
   // The status line shows only what the button cannot: a pending or required
   // item's status, or a failure or deferral reason (see cardStatus and
@@ -369,7 +369,7 @@ function card(item: OptionalInstallItem): HTMLElement {
   details.addEventListener("click", () => openDetail(item, details));
 
   actions.append(details);
-  article.append(glyph, name, meta, worksIn, status, actions);
+  article.append(glyph, name, meta, appliesTo, status, actions);
   article.dataset.item = item.itemName;
   updateCardProgress(article, item, cardStatus(item), true);
   return article;
@@ -664,9 +664,9 @@ function renderDetail(): void {
   setGlyph(need<HTMLElement>("#detail-glyph"), item);
   setText("#detail-name", item.displayName, item.itemName);
   setText("#detail-developer", item.developer ?? "", "");
-  const worksIn = need<HTMLParagraphElement>("#detail-works-in");
-  worksIn.textContent = worksInLine(item);
-  worksIn.hidden = worksIn.textContent === "";
+  const appliesTo = need<HTMLParagraphElement>("#detail-applies-to");
+  appliesTo.textContent = appliesToLine(item);
+  appliesTo.hidden = appliesTo.textContent === "";
   setText("#detail-description", item.description ?? "", "No description is published for this item.");
   setText("#detail-developer-value", item.developer ?? "");
   setText("#detail-version", item.version);

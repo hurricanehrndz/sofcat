@@ -191,6 +191,7 @@ export const BUILT_IN_LABELS = {
   cancel: "Cancel",
   pending_install: "Will be installed",
   pending_remove: "Will be removed",
+  applies_to: "Applies to",
 } as const;
 
 export type LabelKey = keyof typeof BUILT_IN_LABELS;
@@ -204,13 +205,17 @@ export function actionLabel(item: Pick<OptionalInstallItem, "actionLabels">, key
   return typeof custom === "string" && custom.trim() ? custom : BUILT_IN_LABELS[key];
 }
 
-/** worksInLine names the harnesses the item reaches, or "" when it names none. */
-export function worksInLine(item: Pick<OptionalInstallItem, "worksIn">): string {
+/**
+ * appliesToLine is the item's applies_to label, "Applies to" unless the item
+ * or a placement sets one, followed by the names its placements list, or ""
+ * when they list none. It is display text, not scoping.
+ */
+export function appliesToLine(item: Pick<OptionalInstallItem, "actionLabels" | "appliesTo">): string {
   // A cached list is untrusted shape-wise, so keep only real names.
-  const names = Array.isArray(item.worksIn)
-    ? item.worksIn.filter((name): name is string => typeof name === "string" && name.trim() !== "")
+  const names = Array.isArray(item.appliesTo)
+    ? item.appliesTo.filter((name): name is string => typeof name === "string" && name.trim() !== "")
     : [];
-  return names.length ? `Works in: ${names.join(", ")}` : "";
+  return names.length ? `${actionLabel(item, "applies_to")}: ${names.join(", ")}` : "";
 }
 
 /** REQUIRED_LABEL is the status of an item an admin manifest requires. */

@@ -1,0 +1,190 @@
+# Placements of the Tapas smoke repository (site/src/content/docs/guides/zip-items.md). Every machine
+# placement except outside-skills sits under the fixture brand's write root,
+# ${ProgramData}\tapas-test-smoke on Windows and
+# /Library/Application Support/Tapas Test on macOS (brand/write-roots.yaml).
+#
+# makecatalogs renders the tree templates (tapas-desktop-managed's .mcp.json)
+# with this admin fact over the built-in samples; the smokes' condition
+# script provides it on the device.
+check_facts:
+  assigned_user: jdoe
+placements:
+  # Its file is a templated index of the skills placed here: a JSON list
+  # with the OS fact, removed when none is left.
+  claude-skills:
+    paths:
+      darwin: /Library/Application Support/Tapas Test/claude/skills
+      windows: ${ProgramData}\tapas-test-smoke\claude\skills
+    applies_to: [Claude Code]
+    action_labels: {install: Add, installed: Added, pending_install: Will be added}
+    files:
+      - paths:
+          darwin: /Library/Application Support/Tapas Test/claude/skills-index.json
+          windows: ${ProgramData}\tapas-test-smoke\claude\skills-index.json
+        template: |
+          {{- if .Items }}
+          {
+            "os": {{ json (fact "os") }},
+            "root": {{ json .Placement.Root }},
+            "skills": {{ json .Items }}
+          }
+          {{- end }}
+  # sofcat creates this root, so it gets the .tapas-test-owned marker. Its
+  # index exists to show the file disappears once nothing is placed: the
+  # smokes remove its only item last.
+  exclusive-skills:
+    paths:
+      darwin: /Library/Application Support/Tapas Test/exclusive/skills
+      windows: ${ProgramData}\tapas-test-smoke\exclusive\skills
+    applies_to: [Claude Code]
+    exclusive: true
+    files:
+      - paths:
+          darwin: /Library/Application Support/Tapas Test/claude/exclusive-index.json
+          windows: ${ProgramData}\tapas-test-smoke\claude\exclusive-index.json
+        template: |
+          {{- if .Items }}
+          {"skills": [{{ range $i, $p := .Items }}{{ if $i }}, {{ end }}{{ json $p.Name }}{{ end }}]}
+          {{- end }}
+  # The smoke fills this root with an unmarked file first, so it is refused.
+  foreign-skills:
+    paths:
+      darwin: /Library/Application Support/Tapas Test/foreign/skills
+      windows: ${ProgramData}\tapas-test-smoke\foreign\skills
+    applies_to: [Claude Code]
+    exclusive: true
+  # Per user on Windows: the service skips it. Per machine on macOS.
+  codex-skills:
+    paths:
+      darwin: /Library/Application Support/Tapas Test/codex/skills
+      windows: ${USERPROFILE}\.agents\skills
+    scope:
+      windows: user
+    applies_to: [Codex]
+  # Per user on Windows only, with the spec the helper receives in the plan:
+  # exclusive on a fresh directory nothing else uses, so the helper creates
+  # and marks it; items_dir; and a generated index.json under the root that
+  # reads .User, the vars and the items (run-tapas-user-sync.ps1). No darwin
+  # path, since darwin user scope is not supported: tapas-user-plugin ships
+  # no darwin variant, so a Mac run has nothing to place.
+  tapas-user-plugins:
+    paths:
+      windows: ${USERPROFILE}\.agents\tapas-plugins
+    scope:
+      windows: user
+    applies_to: [Codex]
+    exclusive: true
+    items_dir: plugins
+    vars:
+      name: tapas-user
+    files:
+      - path: index.json
+        template: |
+          {{- if .Items }}
+          {
+            "user": {{ json .User }},
+            "name": {{ json .Placement.Vars.name }},
+            "root": {{ json .Placement.Root }},
+            "plugins": [{{ range $i, $p := .Items }}{{ if $i }}, {{ end }}{{ json $p.Name }}{{ end }}]
+          }
+          {{- end }}
+  # Claude Desktop style organization plugins, whose trees ship templates:
+  # .claude-plugin/plugin.json.tmpl sets installationPreference from the
+  # managed flag, and tapas-desktop-managed's .mcp.json.tmpl reads the
+  # assigned_user admin fact and branches on the os built-in.
+  tapas-desktop-plugins:
+    paths:
+      darwin: /Library/Application Support/Tapas Test/desktop/org-plugins
+      windows: ${ProgramData}\tapas-test-smoke\desktop\org-plugins
+    applies_to: [Claude Desktop]
+  # Outside every write root: refused.
+  outside-skills:
+    paths:
+      darwin: /Library/Application Support/tapas-test-outside/skills
+      windows: ${ProgramData}\tapas-test-outside\skills
+    applies_to: [Claude Code]
+  # A Claude Code marketplace sofcat creates, so it gets the marker: plugins
+  # under plugins\<item>, the Claude catalog in .claude-plugin\marketplace.json,
+  # a Codex-format catalog whose versions carry each plugin's placed hash,
+  # and the managed-settings drop-in that registers the marketplace and
+  # enables its managed plugins. The Claude catalog and drop-in are the
+  # zip-items guide's examples, byte for byte.
+  tapas-marketplace:
+    paths:
+      darwin: /Library/Application Support/Tapas Test/marketplace
+      windows: ${ProgramData}\tapas-test-smoke\marketplace
+    applies_to: [Claude Code, Codex]
+    action_labels:
+      applies_to: Works in
+      install: Make available
+      installing: Making available…
+      installed: Available
+      remove: Withdraw
+      pending_install: Will be available
+      pending_remove: Will be withdrawn
+    exclusive: true
+    items_dir: plugins
+    vars:
+      name: tapas-test
+      owner: {name: Tapas Test}
+      renames: {old-plugin: tapas-managed-plugin}
+      allowCrossMarketplaceDependenciesOn: [other]
+    files:
+      - path: .claude-plugin/marketplace.json
+        template: |
+          {
+            "name": {{ json .Placement.Vars.name }},
+            "owner": {{ json .Placement.Vars.owner }},
+            {{- if ne (index .Placement.Vars "renames") nil }}
+            "renames": {{ json .Placement.Vars.renames }},
+            {{- end }}
+            {{- if ne (index .Placement.Vars "allowCrossMarketplaceDependenciesOn") nil }}
+            "allowCrossMarketplaceDependenciesOn": {{ json .Placement.Vars.allowCrossMarketplaceDependenciesOn }},
+            {{- end }}
+            "plugins": [
+              {{- range $i, $p := .Items }}{{ if $i }},{{ end }}
+              {
+                "name": {{ json $p.Name }},
+                "source": {{ json (printf "./plugins/%s" $p.Name) }},
+                "version": {{ json $p.Version }},
+                "defaultEnabled": {{ $p.Managed }}
+              }
+              {{- end }}
+            ]
+          }
+      - path: .agents/plugins/marketplace.json
+        template: |
+          {
+            "name": {{ json .Placement.Vars.name }},
+            "interface": {"displayName": {{ json .Placement.Vars.owner.name }}},
+            "plugins": [
+              {{- range $i, $p := .Items }}{{ if $i }},{{ end }}
+              {
+                "name": {{ json $p.Name }},
+                "version": "{{ $p.Version }}+{{ slice $p.PlacedHash 7 19 }}",
+                "source": {"source": "local", "path": "./plugins/{{ $p.Name }}"},
+                "policy": {
+                  "installation": {{ if $p.Managed }}"INSTALLED_BY_DEFAULT"{{ else }}"AVAILABLE"{{ end }},
+                  "authentication": "ON_INSTALL"
+                }
+              }
+              {{- end }}
+            ]
+          }
+      - paths:
+          darwin: /Library/Application Support/Tapas Test/claude/managed-settings.d/50-tapas-test.json
+          windows: ${ProgramData}\tapas-test-smoke\claude\managed-settings.d\50-tapas-test.json
+        template: |
+          {{- if .Items }}
+          {
+            "extraKnownMarketplaces": {
+              {{ json .Placement.Vars.name }}: {"source": {"source": "directory", "path": {{ json .Placement.Root }}}}
+            },
+            "enabledPlugins": {
+              {{- $first := true }}
+              {{- range .Items }}{{ if .Managed }}{{ if not $first }},{{ end }}{{ $first = false }}
+              {{ json (printf "%s@%s" .Name $.Placement.Vars.name) }}: true
+              {{- end }}{{ end }}
+            }
+          }
+          {{- end }}

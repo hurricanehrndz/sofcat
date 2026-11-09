@@ -1,0 +1,11 @@
+# Input to makecatalogs zip-item; just bootstrap-tapas packs rendered/tapas-user-plugin.
+# Placed per user on Windows by the helper under the exclusive
+# tapas-user-plugins root, in its plugins items_dir, with the generated
+# index.json beside it (run-tapas-user-sync.ps1). Windows only: no darwin
+# variant, so a Mac run finds nothing to place.
+item_name: tapas-user-plugin
+display_name: Tapas User Plugin
+section: Plugins
+description: A managed plugin the per-user helper places in an exclusive profile directory
+catalog: tapas
+version: 1.0.0

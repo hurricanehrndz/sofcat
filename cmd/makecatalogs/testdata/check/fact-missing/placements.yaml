@@ -1,0 +1,11 @@
+# A catalog template reading a fact no OS has.
+placements:
+  market:
+    paths:
+      darwin: /Library/Application Support/Demo/marketplace
+      windows: ${ProgramData}\Demo\marketplace
+    items_dir: plugins
+    files:
+      - path: .agents/plugins/marketplace.json
+        template: |
+          {"host": {{ json (fact "missing") }}}

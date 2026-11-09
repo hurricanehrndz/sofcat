@@ -462,7 +462,7 @@ bootstrap-tapas-macos base_url="http://127.0.0.1:8080/": _require-macos manual-t
     @echo "Then: sudo installer -pkg build/{{tapas_app}}-{{version}}.pkg -target / && sudo install -m 600 -o root -g wheel {{tapas_mac_dir}}/config.yaml '/Library/Application Support/{{tapas_product}}/config.yaml' && sudo launchctl kickstart -k system/{{tapas_identifier}} && sudo test/manual/run-tapas-smoke.sh"
 
 # The Tapas fixture repository under build/manual-test/tapas/server-root,
-# without binaries: harnesses.yaml, the manifests and the zip items
+# without binaries: placements.yaml, the manifests and the zip items
 # makecatalogs zip-item packs from test/manual/fixtures/tapas/rendered (a
 # windows and a darwin variant per placement), plus the hand-written
 # package-info files in packages-info/.
@@ -471,12 +471,12 @@ _tapas-repo:
         -o build/makecatalogs ./cmd/makecatalogs
     rm -rf {{tapas_server_root}}
     mkdir -p {{tapas_server_root}}/manifests {{tapas_server_root}}/packages-info
-    cp {{tapas_fixtures}}/harnesses.yaml {{tapas_server_root}}/
+    cp {{tapas_fixtures}}/placements.yaml {{tapas_server_root}}/
     cp {{tapas_fixtures}}/manifests/*.yaml {{tapas_server_root}}/manifests/
     cp {{tapas_fixtures}}/packages-info/*.yaml {{tapas_server_root}}/packages-info/
     for item in {{tapas_fixtures}}/items/*.yaml; do \
       name=$(basename "$item" .yaml); \
-      build/makecatalogs zip-item --harnesses {{tapas_fixtures}}/harnesses.yaml --item "$item" \
+      build/makecatalogs zip-item --placements {{tapas_fixtures}}/placements.yaml --item "$item" \
         --rendered {{tapas_fixtures}}/rendered/$name --location-prefix packages/tapas \
         -o {{tapas_server_root}} > {{tapas_server_root}}/packages-info/$name.yaml || exit 1; \
     done

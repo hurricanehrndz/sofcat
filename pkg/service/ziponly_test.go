@@ -8,7 +8,7 @@ import (
 
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
 	"github.com/hurricanehrndz/sofcat/pkg/config"
-	"github.com/hurricanehrndz/sofcat/pkg/harness"
+	"github.com/hurricanehrndz/sofcat/pkg/placement"
 )
 
 // A zip-only build cannot install an item that needs a command installer or a
@@ -23,7 +23,7 @@ func TestZipOnlyRejectedItemsNotOffered(t *testing.T) {
 	scripted.Name, scripted.PostScript = "Scripted", "exit 0"
 	exe := catalog.Item{Name: "Exe", Installer: catalog.InstallerItem{Type: "exe", Location: "a.exe"}}
 	stubZipList(t, map[int]map[string]catalog.Item{1: {"Zip": zip, "Scripted": scripted, "Exe": exe}},
-		func(config.Configuration) (harness.Table, error) { return harness.Table{}, nil })
+		func(config.Configuration) (placement.Table, error) { return placement.Table{}, nil })
 
 	items, err := getOptionalItems(cfg)
 	if err != nil {

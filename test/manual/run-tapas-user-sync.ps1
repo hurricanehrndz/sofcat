@@ -9,7 +9,11 @@ it placed the Codex skills in this user's profile: the trees under
 %LOCALAPPDATA%\Tapas Test\receipts with the plan's managed flag,
 tapas-user-skill's NOTE.md rendered with this account's login name, and
 nothing under %USERPROFILE%\.agents owned by SYSTEM (the service must never
-write there).
+write there). It also checks the placement spec reaches the helper:
+tapas-user-plugin lands in the exclusive tapas-user-plugins root, which the
+helper marks as its own, under its items_dir, beside an index.json rendered
+with this account's login name, the placement's vars and its items; once
+deleted, that file is back after a second run.
 
 Run AFTER run-tapas-smoke.ps1 has passed (a service run has staged the
 archive and stored the plan), in the logged-on user's desktop session with a
@@ -30,6 +34,10 @@ param(
     # account's login name and the plan's managed flag.
     [string]$UserItem    = "tapas-user-skill",
     [string]$Placement   = "codex-skills",
+    # The managed item in the exclusive, items_dir and files placement.
+    [string]$PluginItem      = "tapas-user-plugin",
+    [string]$PluginPlacement = "tapas-user-plugins",
+    [string]$Slug        = "tapas-test",
     [string]$Version     = "1.0.0",
     [string]$LogPath     = "C:\sofcat-test\tapas-user-sync.log",
     [int]$TimeoutSec     = 120
@@ -47,6 +55,20 @@ function Fail {
     param([string]$Message)
     Log "ASSERTION FAILED: $Message"
     exit 1
+}
+
+# Invoke-UserSync runs the helper once and fails unless it exits 0.
+function Invoke-UserSync {
+    Log "Starting $UI --user-sync"
+    $process = Start-Process -FilePath $UI -ArgumentList "--user-sync" -PassThru
+    # Caching the handle keeps ExitCode readable after exit in PowerShell 5.1.
+    $null = $process.Handle
+    if (-not $process.WaitForExit($TimeoutSec * 1000)) {
+        $process | Stop-Process -Force
+        Fail "--user-sync did not exit within ${TimeoutSec}s"
+    }
+    if ($process.ExitCode -ne 0) { Fail "--user-sync exited $($process.ExitCode)" }
+    Log "--user-sync exited 0"
 }
 
 try {
@@ -67,7 +89,11 @@ try {
     $receiptPath = Join-Path $env:LOCALAPPDATA "$ProductName\receipts\$Placement\$Item.json"
     $userTree = Join-Path $agents "skills\$UserItem"
     $userReceiptPath = Join-Path $env:LOCALAPPDATA "$ProductName\receipts\$Placement\$UserItem.json"
-    foreach ($stale in @($tree, $receiptPath, $userTree, $userReceiptPath)) {
+    # The whole plugin root goes, marker included, so the helper must create
+    # and mark it again for the exclusive placement to accept it.
+    $pluginRoot = Join-Path $agents "tapas-plugins"
+    $pluginReceiptPath = Join-Path $env:LOCALAPPDATA "$ProductName\receipts\$PluginPlacement\$PluginItem.json"
+    foreach ($stale in @($tree, $receiptPath, $userTree, $userReceiptPath, $pluginRoot, $pluginReceiptPath)) {
         if (Test-Path -LiteralPath $stale) {
             Remove-Item -LiteralPath $stale -Recurse -Force
             Log "Removed pre-existing $stale"
@@ -76,16 +102,7 @@ try {
 
     # The helper logs to %LOCALAPPDATA%\<slug>\ui-client.log with this set.
     $env:SOFCAT_UI_DEBUG = "1"
-    Log "Starting $UI --user-sync"
-    $process = Start-Process -FilePath $UI -ArgumentList "--user-sync" -PassThru
-    # Caching the handle keeps ExitCode readable after exit in PowerShell 5.1.
-    $null = $process.Handle
-    if (-not $process.WaitForExit($TimeoutSec * 1000)) {
-        $process | Stop-Process -Force
-        Fail "--user-sync did not exit within ${TimeoutSec}s"
-    }
-    if ($process.ExitCode -ne 0) { Fail "--user-sync exited $($process.ExitCode)" }
-    Log "--user-sync exited 0"
+    Invoke-UserSync
 
     if (-not (Test-Path -LiteralPath (Join-Path $tree "SKILL.md"))) { Fail "$tree\SKILL.md is missing" }
     Log "Placed $tree"
@@ -126,6 +143,42 @@ try {
         Fail "rendered inputs: $($in | ConvertTo-Json -Compress -Depth 5)"
     }
     Log "$note names $env:USERNAME; receipt $userReceiptPath managed=true with one rendered record"
+
+    # tapas-user-plugins is exclusive with items_dir plugins and a generated
+    # index.json: without its spec the helper would place the tree at the
+    # root, write no marker and no file.
+    $marker = Join-Path $pluginRoot ".$Slug-owned"
+    if (-not (Test-Path -LiteralPath $marker)) { Fail "marker $marker is missing: the exclusive root is not the helper's" }
+    $pluginTree = Join-Path $pluginRoot "plugins\$PluginItem"
+    if (-not (Test-Path -LiteralPath (Join-Path $pluginTree "SKILL.md"))) { Fail "$pluginTree\SKILL.md is missing" }
+    if (Test-Path -LiteralPath (Join-Path $pluginRoot $PluginItem)) { Fail "$PluginItem was placed at the root, not under items_dir" }
+    if (-not (Test-Path -LiteralPath $pluginReceiptPath)) { Fail "receipt $pluginReceiptPath is missing" }
+    $prc = Get-Content -LiteralPath $pluginReceiptPath -Raw | ConvertFrom-Json
+    if ($prc.item -ne $PluginItem -or $prc.placement -ne $PluginPlacement -or $prc.path -ne $pluginTree -or -not $prc.managed) {
+        Fail "receipt $pluginReceiptPath does not match: $($prc | ConvertTo-Json -Compress)"
+    }
+    Log "Placed $pluginTree under the marked root $pluginRoot; receipt matches"
+
+    # index.json renders .User, .Placement.Vars.name, .Placement.Root and
+    # the placement's items (placements.yaml).
+    $index = Join-Path $pluginRoot "index.json"
+    if (-not (Test-Path -LiteralPath $index)) { Fail "$index is missing" }
+    $indexText = Get-Content -LiteralPath $index -Raw
+    $ix = $indexText | ConvertFrom-Json
+    $plugins = @($ix.plugins)
+    if ($ix.user -ne $env:USERNAME -or $ix.name -ne "tapas-user" -or $ix.root -ne $pluginRoot -or $plugins.Count -ne 1 -or $plugins[0] -ne $PluginItem) {
+        Fail "$index reads '$indexText', want user $env:USERNAME, name tapas-user, root $pluginRoot, plugins [$PluginItem]"
+    }
+    Log "$index names $env:USERNAME, tapas-user and $PluginItem"
+
+    # A sync with no tree change still regenerates the placement's files.
+    Remove-Item -LiteralPath $index -Force
+    Log "Deleted $index"
+    Invoke-UserSync
+    if (-not (Test-Path -LiteralPath $index)) { Fail "$index was not restored by a second run" }
+    $restored = Get-Content -LiteralPath $index -Raw
+    if ($restored -ne $indexText) { Fail "$index restored as '$restored', want '$indexText'" }
+    Log "$index restored as it was"
 
     $paths = @($agents) + @(Get-ChildItem -LiteralPath $agents -Recurse -Force | ForEach-Object { $_.FullName })
     foreach ($path in $paths) {

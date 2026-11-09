@@ -70,9 +70,10 @@ export class OptionalInstallItem {
     "actionLabels"?: { [_ in string]?: string };
 
     /**
-     * WorksIn names the harnesses the item's placements reach.
+     * AppliesTo is the union of the applies_to of the item's placements,
+     * shown after the applies_to label; display only.
      */
-    "worksIn"?: string[];
+    "appliesTo"?: string[];
 
     /** Creates a new OptionalInstallItem instance. */
     constructor($$source: Partial<OptionalInstallItem> = {}) {
@@ -117,8 +118,8 @@ export class OptionalInstallItem {
         if ("actionLabels" in $$parsedSource) {
             $$parsedSource["actionLabels"] = $$createField16_0($$parsedSource["actionLabels"]);
         }
-        if ("worksIn" in $$parsedSource) {
-            $$parsedSource["worksIn"] = $$createField17_0($$parsedSource["worksIn"]);
+        if ("appliesTo" in $$parsedSource) {
+            $$parsedSource["appliesTo"] = $$createField17_0($$parsedSource["appliesTo"]);
         }
         return new OptionalInstallItem($$parsedSource as Partial<OptionalInstallItem>);
     }

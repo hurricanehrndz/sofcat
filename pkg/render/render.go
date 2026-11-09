@@ -142,7 +142,7 @@ func branch(b *parse.BranchNode) []parse.Node {
 // expression named, with their values. path is where the output goes: one
 // ending in .json must be JSON and comes back canonical (Canonical); any
 // other is verbatim. An output that is empty or only whitespace is returned
-// as nil, so a settings placement can decide to remove its file. The error
+// as nil, so a placement file template can decide to remove its file. The error
 // names the template and, when the engine reports them, the line and column.
 //
 // text/template has no cancellation, so a render that outlives the timeout

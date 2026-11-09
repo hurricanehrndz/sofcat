@@ -174,8 +174,9 @@ type OptionalInstallItem struct {
 	// ActionLabels holds the labels the item or its placements set, keyed
 	// by catalog.ActionLabelKeys; the UI supplies the rest.
 	ActionLabels map[string]string `json:"actionLabels,omitempty"`
-	// WorksIn names the harnesses the item's placements reach.
-	WorksIn []string `json:"worksIn,omitempty"`
+	// AppliesTo is the union of the applies_to of the item's placements,
+	// shown after the applies_to label; display only.
+	AppliesTo []string `json:"appliesTo,omitempty"`
 }
 
 type listOptionalInstallsResponse struct {
