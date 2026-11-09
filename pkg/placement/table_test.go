@@ -201,20 +201,31 @@ func TestParseItemsDir(t *testing.T) {
 	}
 }
 
-// Files and items_dir are machine scope only, since the per-user helper
-// rebuilds a user spec without them.
-func TestParseUserScopeLimits(t *testing.T) {
+// User scope takes the whole spec, since the plan carries it to the per-user
+// helper; a files path may use ${USERPROFILE} only on an OS whose scope is
+// user, and darwin has no user scope at all.
+func TestParseUserScopeSpec(t *testing.T) {
 	for name, extra := range map[string]string{
-		"items_dir": "items_dir: plugins",
-		"files":     "files: [{path: .x.json, template: x}]",
-		"vars":      "vars: {name: x}",
+		"items_dir":   "items_dir: plugins",
+		"files":       "files: [{path: .x.json, template: x}]",
+		"files paths": `files: [{paths: {windows: '${USERPROFILE}\x.json'}, template: x}]`,
+		"vars":        "vars: {name: x}",
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := Parse([]byte("placements:\n  p: {paths: {windows: '${USERPROFILE}\\p'}, scope: {windows: user}, " + extra + "}\n"))
-			if err == nil || !strings.Contains(err.Error(), "need machine scope") {
+			if _, err := Parse([]byte("placements:\n  p: {paths: {windows: '${USERPROFILE}\\p'}, scope: {windows: user}, " + extra + "}\n")); err != nil {
 				t.Errorf("error %v", err)
 			}
 		})
+	}
+	_, err := Parse([]byte(`placements:
+  p: {paths: {windows: 'C:\p'}, files: [{paths: {windows: '${USERPROFILE}\x.json'}, template: x}]}
+`))
+	if err == nil || !strings.Contains(err.Error(), "not user scope") {
+		t.Errorf("${USERPROFILE} in a machine-scope files path: error %v", err)
+	}
+	_, err = Parse([]byte("placements:\n  p: {paths: {darwin: /p}, scope: {darwin: user}, items_dir: plugins}\n"))
+	if err == nil || !strings.Contains(err.Error(), "darwin: user is not supported") {
+		t.Errorf("darwin user scope: error %v", err)
 	}
 }
 

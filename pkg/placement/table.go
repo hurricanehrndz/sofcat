@@ -234,15 +234,6 @@ func validatePlacement(name string, p Spec) []error {
 	if p.ItemsDir != "" && (!isCleanRelative(p.ItemsDir) || strings.HasPrefix(p.ItemsDir, ".")) {
 		fail("items_dir: %q is not a clean relative path whose first segment does not start with .", p.ItemsDir)
 	}
-	// Deliberately machine scope only: the per-user helper rebuilds a
-	// user-scope spec from name and path alone (usersync.userTable), so it
-	// would place trees at <root>/<item>, render no files and give tree
-	// templates no vars. Lifting this
-	// means carrying the spec in the user plan
-	// (.tmp/user-scope-spec/plan.md).
-	if (p.ItemsDir != "" || len(p.Files) > 0 || len(p.Vars) > 0) && (p.ScopeFor(Darwin) == ScopeUser || p.ScopeFor(Windows) == ScopeUser) {
-		fail("scope: items_dir, vars and files need machine scope on every OS")
-	}
 	if p.FilesAtomic && len(p.Files) == 0 {
 		fail("files_atomic: set without files")
 	}
