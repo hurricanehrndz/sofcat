@@ -121,9 +121,35 @@ func TestGuardUserProfile(t *testing.T) {
 	}
 }
 
+// TestGuardUserHome: on macOS a user-scope path names the home ${HOME}, from
+// the caller's value, against the darwin_user roots and never the machine
+// ones; ${USERPROFILE} stays unexpanded there and is refused.
+func TestGuardUserHome(t *testing.T) {
+	home, machine := t.TempDir(), t.TempDir()
+	g := Guard{
+		GOOS:  Darwin,
+		Roots: Roots{Darwin: []string{machine}, DarwinUser: []string{"${HOME}/.agents"}},
+		Vars:  map[string]string{"HOME": home},
+	}
+	if _, err := g.Resolve("${HOME}/.agents/skills", ScopeUser); err != nil {
+		t.Errorf("user placement under ${HOME}/.agents refused: %v", err)
+	}
+	if _, err := g.Resolve(".agents/skills", ScopeUser); err != nil {
+		t.Errorf("home-relative user placement refused: %v", err)
+	}
+	for _, raw := range []string{"${HOME}/Documents", "${USERPROFILE}/.agents/skills", filepath.Join(machine, "x")} {
+		if _, err := g.Resolve(raw, ScopeUser); !errors.Is(err, ErrRefused) {
+			t.Errorf("user placement %s: error %v, want refused", raw, err)
+		}
+	}
+	if _, err := g.Resolve("${HOME}/.agents/skills", ScopeMachine); !errors.Is(err, ErrRefused) {
+		t.Errorf("${HOME} expanded in machine scope: %v", err)
+	}
+}
+
 func TestParseRoots(t *testing.T) {
-	r, err := ParseRoots([]byte("darwin: [/a]\nwindows: ['${ProgramFiles}\\X']\nwindows_user: [.agents]\n"))
-	if err != nil || len(r.Darwin) != 1 || len(r.Windows) != 1 || len(r.WindowsUser) != 1 {
+	r, err := ParseRoots([]byte("darwin: [/a]\nwindows: ['${ProgramFiles}\\X']\nwindows_user: [.agents]\ndarwin_user: ['${HOME}/.agents']\n"))
+	if err != nil || len(r.Darwin) != 1 || len(r.Windows) != 1 || len(r.WindowsUser) != 1 || len(r.DarwinUser) != 1 {
 		t.Fatalf("ParseRoots = %+v, %v", r, err)
 	}
 	if _, err := ParseRoots([]byte("linux: [/a]\n")); err == nil {
@@ -149,5 +175,19 @@ func TestStockRootsWindows(t *testing.T) {
 	}
 	if _, err := g.Resolve(filepath.Join(root, "Data", "x"), ScopeMachine); !errors.Is(err, ErrRefused) || !strings.Contains(err.Error(), "inside the data directory") {
 		t.Errorf("a placement inside Data not refused as such: %v", err)
+	}
+}
+
+// TestGuardRefusesUserArtifacts: on macOS the staged archives sit beside
+// Data, under the stock machine root, so a machine placement there must not
+// overwrite what every user's helper places.
+func TestGuardRefusesUserArtifacts(t *testing.T) {
+	support := filepath.Join(t.TempDir(), identity.Name)
+	g := Guard{GOOS: Darwin, Roots: Roots{Darwin: []string{support}}, DataDir: filepath.Join(support, "Data")}
+	if _, err := g.Resolve(filepath.Join(support, "user-artifacts", "x"), ScopeMachine); !errors.Is(err, ErrRefused) || !strings.Contains(err.Error(), "user-artifacts") {
+		t.Errorf("a placement inside user-artifacts: error %v, want refused", err)
+	}
+	if _, err := g.Resolve(filepath.Join(support, "marketplace"), ScopeMachine); err != nil {
+		t.Errorf("a placement beside user-artifacts refused: %v", err)
 	}
 }

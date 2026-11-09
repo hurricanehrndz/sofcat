@@ -27,6 +27,9 @@ type Roots struct {
 	// WindowsUser are the user-scope roots on Windows, relative to the user's
 	// profile: either starting with ${USERPROFILE} or a relative path.
 	WindowsUser []string `yaml:"windows_user"`
+	// DarwinUser are the user-scope roots on macOS, relative to the user's
+	// home: either starting with ${HOME} or a relative path.
+	DarwinUser []string `yaml:"darwin_user"`
 }
 
 // ParseRoots decodes write-roots.yaml, rejecting unknown fields.
@@ -63,6 +66,8 @@ func (r Roots) For(goos, scope string) []string {
 		return r.Windows
 	case goos == Windows && scope == ScopeUser:
 		return r.WindowsUser
+	case goos == Darwin && scope == ScopeUser:
+		return r.DarwinUser
 	default:
 		return nil
 	}

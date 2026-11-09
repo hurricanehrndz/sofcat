@@ -200,19 +200,23 @@ _icns_src := if icon_png == "" { "assets/sofcat-icon-1024.png" } else { icon_png
 _require-macos:
     @[ "$(uname)" = Darwin ] || { echo "this recipe runs only on macOS (Xcode command line tools: cgo, sips, iconutil, pkgbuild)" >&2; exit 1; }
 
-# macOS binaries for the host architecture -> build/<app> (the CLI, pure Go)
-# and build/<product>.app (the UI: Wails needs cgo and the Xcode command line
+# macOS binaries for the host architecture -> build/<app> (the CLI) and
+# build/<app>-useragent (the per-user helper), both pure Go, and
+# build/<product>.app (the UI: Wails needs cgo and the Xcode command line
 # tools). Same tags and identity as `build`; no -H windowsgui. The icon.icns
 # is made with sips and iconutil, which ship with macOS. With
-# CODESIGN_IDENTITY set, the CLI is signed after its build and the app as a
-# bundle once it is complete, since the signature seals Info.plist and the
-# icon too; the bundle's main executable is covered by that one signature.
+# CODESIGN_IDENTITY set, the CLI and the helper are signed after their builds
+# and the app as a bundle once it is complete, since the signature seals
+# Info.plist and the icon too; the bundle's main executable is covered by
+# that one signature.
 build-macos: _require-macos ui-assets
     mkdir -p build
     {{ if write_roots == "" { "true" } else { "cp '" + write_roots + "' pkg/placement/brand-write-roots.yaml" } }}
     CGO_ENABLED=0 go build -tags "{{_svc_tags}}" -ldflags "-X github.com/hurricanehrndz/sofcat/pkg/version.appName={{app}} -X github.com/hurricanehrndz/sofcat/pkg/version.version={{version}} {{_identity}}" \
         -o build/{{app}} ./cmd/sofcat
     {{ if CODESIGN_IDENTITY == "" { "true" } else { _codesign + " --identifier " + identifier + ".cli build/" + app } }}
+    CGO_ENABLED=0 go build -tags "{{_svc_tags}}" -ldflags "{{_identity}}" -o build/{{app}}-useragent ./cmd/sofcat-useragent
+    {{ if CODESIGN_IDENTITY == "" { "true" } else { _codesign + " --identifier " + identifier + ".useragent build/" + app + "-useragent" } }}
     {{ if icon_png == "" { "true" } else { "cp '" + icon_png + "' ui/brand-icon.png" } }}
     rm -rf "{{_app_bundle}}" build/icon.iconset
     mkdir -p "{{_app_bundle}}/Contents/MacOS" "{{_app_bundle}}/Contents/Resources" build/icon.iconset
@@ -256,12 +260,15 @@ _sign-check:
 
 # macOS installer -> build/<app>-<version>.pkg (unsigned without
 # PRODUCTSIGN_IDENTITY): the app in
-# /Applications, the CLI in /Library/Application Support/<product>/bin and the
-# launchd plist in /Library/LaunchDaemons, all root:wheel. Each goes in its own
-# component rooted at its install location, so the payload never lists
+# /Applications, the CLI and the per-user helper in
+# /Library/Application Support/<product>/bin, the launchd plist in
+# /Library/LaunchDaemons and the helper's in /Library/LaunchAgents, all
+# root:wheel. Each goes in its own component rooted at its install location,
+# so the payload never lists
 # /Library/Application Support, whose root:admin owner and mode Installer
 # would otherwise reset. The plist is what
-# `<app> -serviceinstall` writes for that layout (`-print-launchd-plist`), and
+# `<app> -serviceinstall` writes for that layout (`-print-launchd-plist`, and
+# `-print-useragent-plist` for the helper's), and
 # the postinstall script bootstraps it, so the daemon starts with no config
 # until config.yaml is written and the daemon kickstarted, as the Windows
 # installer does. With PRODUCTSIGN_IDENTITY set, productbuild signs the
@@ -271,12 +278,14 @@ pkg: _require-macos _sign-check build-macos
     #!/usr/bin/env bash
     set -euo pipefail
     work=build/pkg
-    rm -rf "$work" && mkdir -p "$work/support/bin" "$work/daemon" "$work/scripts"
-    cp build/{{app}} "$work/support/bin/{{app}}"
+    rm -rf "$work" && mkdir -p "$work/support/bin" "$work/daemon" "$work/agent" "$work/scripts"
+    cp build/{{app}} build/{{app}}-useragent "$work/support/bin/"
     plist="$work/daemon/{{identifier}}.plist"
     build/{{app}} -print-launchd-plist > "$plist"
-    plutil -lint "$plist"
-    chmod 0644 "$plist" && chmod 0755 "$work/support" "$work/support/bin" "$work/support/bin/{{app}}" "$work/daemon"
+    agent_plist="$work/agent/{{identifier}}.useragent.plist"
+    build/{{app}} -print-useragent-plist > "$agent_plist"
+    plutil -lint "$plist" "$agent_plist"
+    chmod 0644 "$plist" "$agent_plist" && chmod 0755 "$work/support" "$work/support/bin" "$work/support/bin/{{app}}" "$work/support/bin/{{app}}-useragent" "$work/daemon" "$work/agent"
     # The daemon logs into Data, root-only like the Windows data directory;
     # the service fixes its owner and mode again at every start. On an upgrade
     # the bootout returns before launchd has let go of the old daemon, and a
@@ -306,11 +315,16 @@ pkg: _require-macos _sign-check build-macos
       --identifier {{identifier}}.app --version {{version}} "$work/app.pkg"
     pkgbuild --root "$work/support" --install-location "/Library/Application Support/{{product}}" \
       --identifier {{identifier}}.cli --version {{version}} "$work/cli.pkg"
-    # Last, so its postinstall runs after the app and the CLI are in place.
+    # The helper's LaunchAgent: launchd loads it at each GUI login, and the
+    # daemon starts it for users already signed in once it stores a plan.
+    pkgbuild --root "$work/agent" --install-location /Library/LaunchAgents \
+      --identifier {{identifier}}.useragent --version {{version}} "$work/agent.pkg"
+    # Last, so its postinstall runs after the app, the CLI and the helper are
+    # in place.
     pkgbuild --root "$work/daemon" --scripts "$work/scripts" --install-location /Library/LaunchDaemons \
       --identifier {{identifier}}.daemon --version {{version}} "$work/daemon.pkg"
     pkg=build/{{app}}-{{version}}.pkg
-    productbuild --package "$work/app.pkg" --package "$work/cli.pkg" --package "$work/daemon.pkg" \
+    productbuild --package "$work/app.pkg" --package "$work/cli.pkg" --package "$work/agent.pkg" --package "$work/daemon.pkg" \
       {{ if PRODUCTSIGN_IDENTITY == "" { "" } else { "--sign " + quote(PRODUCTSIGN_IDENTITY) } }} "$pkg"
     echo "Built $pkg"
     # The notary variables are passed on, so a `just VAR=... pkg` override

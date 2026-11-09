@@ -9,7 +9,7 @@ import (
 
 // RunAction manages the installed launchd daemon (see launchdAction).
 func RunAction(cfg config.Configuration, action string) error {
-	return launchdAction(cfg, action, identity.LaunchdPlistPath())
+	return launchdAction(cfg, action, identity.LaunchdPlistPath(), identity.UserAgentPlistPath())
 }
 
 // ServiceStatus summarises `launchctl print system/<label>`.

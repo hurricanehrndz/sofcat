@@ -14,6 +14,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -21,6 +22,7 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
 	"github.com/hurricanehrndz/sofcat/pkg/conditions"
 	"github.com/hurricanehrndz/sofcat/pkg/download"
+	"github.com/hurricanehrndz/sofcat/pkg/identity"
 	"github.com/hurricanehrndz/sofcat/pkg/installer"
 	"github.com/hurricanehrndz/sofcat/pkg/placement"
 )
@@ -34,7 +36,7 @@ type UserPlacement struct {
 	Version   string `json:"version"`
 	Placement string `json:"placement"`
 	// Path is the placement root from placements.yaml, unexpanded: the helper
-	// expands ${USERPROFILE} for its own user.
+	// expands the home variable (placement.ProfileVar) for its own user.
 	Path string `json:"path"`
 	// Archive is the absolute path of the staged copy under
 	// UserArtifactsDir, named <hash>.zip. Hash is its sha256, TreeHash its
@@ -86,14 +88,14 @@ type reportUserPlacementsParams struct {
 
 type reportUserPlacementsResponse struct{}
 
-// UserArtifactsDir is where the service stages user-placement archives:
-// user-artifacts inside the data directory (${ProgramData}\<Name>\Data by
-// default). Administrators write it and users read it: it is the one entry
-// of the data directory whose ACL lets Users in. It is not a placement and
-// is not checked against the write roots, which refuse the data directory.
+// UserArtifactsDir is where the service stages user-placement archives
+// (identity.UserArtifactsDirFor): user-artifacts inside the data directory
+// on Windows, the one entry of it whose ACL lets Users in, and beside it on
+// macOS. Administrators write it and users read it. It is not a placement;
+// the guard refuses placements into it as it does the data directory.
 // Tests point it at a temporary directory.
 var UserArtifactsDir = func(dataDir string) string {
-	return filepath.Join(dataDir, "user-artifacts")
+	return identity.UserArtifactsDirFor(runtime.GOOS, dataDir)
 }
 
 // UserPlan builds the user-placement plan from a run's desired set (the
