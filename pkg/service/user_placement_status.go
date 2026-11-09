@@ -85,17 +85,12 @@ func recordUserPlacementStatus(appDataPath, sid string, results []UserPlacementR
 	if sid == "" {
 		return nil
 	}
-	plan, err := LoadUserPlan(appDataPath)
+	userPlacementStatusMu.Lock()
+	defer userPlacementStatusMu.Unlock()
+	inPlan, err := userPlanPairs(appDataPath)
 	if err != nil {
 		return err
 	}
-	inPlan := map[[2]string]bool{}
-	for _, e := range plan.Entries {
-		inPlan[[2]string{e.Item, e.Placement}] = true
-	}
-
-	userPlacementStatusMu.Lock()
-	defer userPlacementStatusMu.Unlock()
 	status := loadUserPlacementStatus(appDataPath)
 	mine := status[sid]
 	if mine == nil {
@@ -165,15 +160,46 @@ func oldestUser(status userPlacementStatus) string {
 	return oldest
 }
 
+// userPlanPairs is the item/placement pairs the stored plan lists.
+func userPlanPairs(appDataPath string) (map[[2]string]bool, error) {
+	plan, err := LoadUserPlan(appDataPath)
+	if err != nil {
+		return nil, err
+	}
+	inPlan := map[[2]string]bool{}
+	for _, e := range plan.Entries {
+		inPlan[[2]string{e.Item, e.Placement}] = true
+	}
+	return inPlan, nil
+}
+
 // userPlacementStatusFor is what the user with this SID last reported, by
-// item and placement; nil for an empty SID.
+// item and placement, for what the stored plan still lists: a run that drops
+// an item saves its plan before the agent reports the removal, if it ever
+// does. Nil for an empty SID or an unreadable plan.
 func userPlacementStatusFor(appDataPath, sid string) map[string]map[string]userPlacementOutcome {
 	if sid == "" {
 		return nil
 	}
 	userPlacementStatusMu.Lock()
 	defer userPlacementStatusMu.Unlock()
-	return loadUserPlacementStatus(appDataPath)[sid]
+	inPlan, err := userPlanPairs(appDataPath)
+	if err != nil {
+		slog.Warn("unable to read the user plan for user placement status", "err", err)
+		return nil
+	}
+	mine := loadUserPlacementStatus(appDataPath)[sid]
+	for item, placements := range mine {
+		for name := range placements {
+			if !inPlan[[2]string{item, name}] {
+				delete(placements, name)
+			}
+		}
+		if len(placements) == 0 {
+			delete(mine, item)
+		}
+	}
+	return mine
 }
 
 // userZipInstalled is the storefront's zip status for one user, from what

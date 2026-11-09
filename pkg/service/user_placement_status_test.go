@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"runtime"
@@ -32,14 +33,11 @@ func recordStatus(t *testing.T, appData, sid string, at time.Time, results ...Us
 	}
 }
 
-// TestListUserScopeStatus: the service's machine view has no user receipts,
-// so a user-scope item the user agent placed read "Will be installed"
-// forever. The card now follows what that user's agent last reported, and
-// another user, who reported nothing, still gets the machine view.
-func TestListUserScopeStatus(t *testing.T) {
+// stubUserScopeList serves one zip item, "Skill", whose only placement,
+// codex, is user scope, and stores a plan listing it.
+func stubUserScopeList(t *testing.T, cfg config.Configuration) {
+	t.Helper()
 	const goos = placement.Windows
-	appData := t.TempDir()
-	cfg := config.Configuration{AppDataPath: appData, CachePath: t.TempDir(), Catalogs: []string{"production"}}
 	table := placement.Table{
 		Placements: map[string]placement.Spec{"codex": {
 			Paths: map[string]string{goos: `${USERPROFILE}\.agents\skills`},
@@ -54,16 +52,28 @@ func TestListUserScopeStatus(t *testing.T) {
 		z.Guard = placement.Guard{GOOS: goos, DataDir: cfg.AppDataPath}
 		return z
 	}
-	saveStatusPlan(t, appData, [2]string{"Skill", "codex"})
+	saveStatusPlan(t, cfg.AppDataPath, [2]string{"Skill", "codex"})
+}
 
-	statusFor := func(sid string) string {
-		t.Helper()
-		items, err := getOptionalItems(cfg, peer{ID: sid})
-		if err != nil || len(items) != 1 {
-			t.Fatalf("getOptionalItems(%q) = %+v, %v", sid, items, err)
-		}
-		return items[0].Status
+// listStatus is Skill's status as getOptionalItems lists it for sid.
+func listStatus(t *testing.T, cfg config.Configuration, sid string) string {
+	t.Helper()
+	items, err := getOptionalItems(cfg, peer{ID: sid})
+	if err != nil || len(items) != 1 {
+		t.Fatalf("getOptionalItems(%q) = %+v, %v", sid, items, err)
 	}
+	return items[0].Status
+}
+
+// TestListUserScopeStatus: the service's machine view has no user receipts,
+// so a user-scope item the user agent placed read "Will be installed"
+// forever. The card now follows what that user's agent last reported, and
+// another user, who reported nothing, still gets the machine view.
+func TestListUserScopeStatus(t *testing.T) {
+	appData := t.TempDir()
+	cfg := config.Configuration{AppDataPath: appData, CachePath: t.TempDir(), Catalogs: []string{"production"}}
+	stubUserScopeList(t, cfg)
+	statusFor := func(sid string) string { t.Helper(); return listStatus(t, cfg, sid) }
 	now := time.Now().UTC()
 	recordStatus(t, appData, "S-A", now, UserPlacementResult{Item: "Skill", Placement: "codex", Outcome: "installed"})
 	if got := statusFor("S-A"); got != "Installed" {
@@ -84,6 +94,38 @@ func TestListUserScopeStatus(t *testing.T) {
 	recordStatus(t, appData, "S-A", now, UserPlacementResult{Item: "Skill", Placement: "codex", Outcome: "removed"})
 	if got := statusFor("S-A"); got != "NotInstalled" {
 		t.Errorf("A after removed = %s, want NotInstalled", got)
+	}
+}
+
+// TestListUserScopeStatusFollowsPlan: a run that drops an item saves the
+// plan before the agent reports the removal, if it ever does, so a stored
+// "installed" the plan no longer lists must not keep the card Installed.
+func TestListUserScopeStatusFollowsPlan(t *testing.T) {
+	appData := t.TempDir()
+	cfg := config.Configuration{AppDataPath: appData, CachePath: t.TempDir(), Catalogs: []string{"production"}}
+	stubUserScopeList(t, cfg)
+	recordStatus(t, appData, "S-A", time.Now().UTC(), UserPlacementResult{Item: "Skill", Placement: "codex", Outcome: "installed"})
+	saveStatusPlan(t, appData)
+	if got := listStatus(t, cfg, "S-A"); got != "NotInstalled" {
+		t.Errorf("after the plan dropped Skill = %s, want NotInstalled", got)
+	}
+}
+
+// TestListUserScopeStatusOverThePipe: the storefront's list call reaches
+// the status under the same caller the report was stored for.
+func TestListUserScopeStatusOverThePipe(t *testing.T) {
+	cfg := testServiceConfig(t)
+	cfg.CachePath, cfg.Catalogs = t.TempDir(), []string{"production"}
+	stubUserScopeList(t, cfg)
+	startTestRunner(t, cfg, noopRun)
+	client := NewClient(cfg.ServicePipeName)
+	ctx := context.Background()
+	if err := client.ReportUserPlacements(ctx, []UserPlacementResult{{Item: "Skill", Placement: "codex", Outcome: "installed"}}); err != nil {
+		t.Fatal(err)
+	}
+	items, err := client.ListOptionalInstalls(ctx)
+	if err != nil || len(items) != 1 || items[0].Status != "Installed" {
+		t.Errorf("ListOptionalInstalls = %+v, %v; want Skill Installed", items, err)
 	}
 }
 

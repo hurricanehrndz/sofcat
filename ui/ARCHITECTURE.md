@@ -138,8 +138,9 @@ placement it still holds a receipt in, and sends every result with
 `reportUserPlacements`; a failed regeneration is a result with the
 placement and an empty `item`. The service logs them (failures at warn, with
 the caller from the connection) and merges each caller's results for items the
-stored plan lists into `user-placement-status.json` in its data directory
-(SYSTEM only), by the caller's SID. `ListOptionalInstalls` reads a user-scope
+stored plan lists into `user-placement-status.json` in its data directory, by
+the caller's SID; only SYSTEM and Administrators (the Data directory's ACL)
+read it. `ListOptionalInstalls` reads a user-scope
 item as installed for that caller when its machine-scope placements are and
 their agent last reported every user-scope one placed (`installed`,
 `current`, `adopted` or `unchanged`); a `conflict` keeps the earlier outcome,
