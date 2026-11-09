@@ -154,18 +154,21 @@ winres arch="amd64": brand-check
 # and a brand write-roots.yaml as pkg/placement/brand-write-roots.yaml
 # (gitignored) for the brand_roots tag.
 # A brand with INSTALLERS=zip adds the zip_only tag to all three.
+# -s -w drops the symbol table and DWARF, about 30% of each file; panics
+# still print file:line stack traces, but Delve and symbolized profiles
+# need a build without them.
 build arch="amd64": ui-assets (winres arch)
     mkdir -p build
     {{ if write_roots == "" { "true" } else { "cp '" + write_roots + "' pkg/placement/brand-write-roots.yaml" } }}
     GOOS=windows GOARCH={{arch}} CGO_ENABLED=0 \
-        go build -tags "{{_svc_tags}}" -ldflags "-X github.com/hurricanehrndz/sofcat/pkg/version.appName={{app}} -X github.com/hurricanehrndz/sofcat/pkg/version.version={{version}} {{_identity}}" \
+        go build -tags "{{_svc_tags}}" -ldflags "-s -w -X github.com/hurricanehrndz/sofcat/pkg/version.appName={{app}} -X github.com/hurricanehrndz/sofcat/pkg/version.version={{version}} {{_identity}}" \
         -o build/{{app}}.exe ./cmd/sofcat
     {{ if icon_png == "" { "true" } else { "cp '" + icon_png + "' ui/brand-icon.png" } }}
     GOOS=windows GOARCH={{arch}} CGO_ENABLED=0 \
-        go build -tags {{_ui_tags}} -ldflags "-H windowsgui {{_identity}}" \
+        go build -tags {{_ui_tags}} -ldflags "-s -w -H windowsgui {{_identity}}" \
         -o build/{{app}}-ui.exe ./ui
     GOOS=windows GOARCH={{arch}} CGO_ENABLED=0 \
-        go build -tags "{{_svc_tags}}" -ldflags "-H windowsgui {{_identity}}" \
+        go build -tags "{{_svc_tags}}" -ldflags "-s -w -H windowsgui {{_identity}}" \
         -o build/{{app}}-useragent.exe ./cmd/sofcat-useragent
     {{ if SIGN_CMD == "" { "true" } else { SIGN_CMD + " build/" + app + ".exe build/" + app + "-ui.exe build/" + app + "-useragent.exe" } }}
 

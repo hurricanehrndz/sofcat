@@ -176,7 +176,7 @@ The Windows executable is a pure-Go cross-build:
 
 ```sh
 GOOS=windows GOARCH=amd64 CGO_ENABLED=0 \
-  go build -tags production -ldflags "-H windowsgui" -o build/sofcat-ui.exe ./ui
+  go build -tags production -ldflags "-s -w -H windowsgui" -o build/sofcat-ui.exe ./ui
 ```
 
 Regenerate committed bindings from `ui/` with the pinned command:
