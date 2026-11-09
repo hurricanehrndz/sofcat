@@ -53,7 +53,7 @@ placements:
       windows: ${USERPROFILE}\.agents\skills
     # machine or user per OS. An OS left out is machine. darwin: user is not
     # supported. This one is machine scope on macOS and per user on Windows.
-    # A placement with items_dir, vars or files must be machine scope everywhere.
+    # In user scope the per-user helper places the trees and writes any files.
     scope:
       windows: user
     applies_to: [Codex]

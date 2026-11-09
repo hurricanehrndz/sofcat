@@ -61,6 +61,33 @@ placements:
     scope:
       windows: user
     applies_to: [Codex]
+  # Per user on Windows only, with the spec the helper receives in the plan:
+  # exclusive on a fresh directory nothing else uses, so the helper creates
+  # and marks it; items_dir; and a generated index.json under the root that
+  # reads .User, the vars and the items (run-tapas-user-sync.ps1). No darwin
+  # path, since darwin user scope is not supported: tapas-user-plugin ships
+  # no darwin variant, so a Mac run has nothing to place.
+  tapas-user-plugins:
+    paths:
+      windows: ${USERPROFILE}\.agents\tapas-plugins
+    scope:
+      windows: user
+    applies_to: [Codex]
+    exclusive: true
+    items_dir: plugins
+    vars:
+      name: tapas-user
+    files:
+      - path: index.json
+        template: |
+          {{- if .Items }}
+          {
+            "user": {{ json .User }},
+            "name": {{ json .Placement.Vars.name }},
+            "root": {{ json .Placement.Root }},
+            "plugins": [{{ range $i, $p := .Items }}{{ if $i }}, {{ end }}{{ json $p.Name }}{{ end }}]
+          }
+          {{- end }}
   # Claude Desktop style organization plugins, whose trees ship templates:
   # .claude-plugin/plugin.json.tmpl sets installationPreference from the
   # managed flag, and tapas-desktop-managed's .mcp.json.tmpl reads the
