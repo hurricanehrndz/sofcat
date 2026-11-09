@@ -141,13 +141,8 @@ func TestUserPlanStore(t *testing.T) {
 		t.Fatalf("user specs = %+v, want codex only", specs)
 	}
 	plan := UserPlacements{Entries: entries, Facts: conditions.Facts{"os": "windows", "assigned_user": "jdoe"}, Placements: specs}
-	if changed, err := SaveUserPlan(appData, plan); err != nil || !changed {
-		t.Fatalf("first save: changed = %v, %v; want true", changed, err)
-	}
-	// The service starts the per-user helpers only on a change: a scheduled
-	// run saving the same plan must not start them again.
-	if changed, err := SaveUserPlan(appData, plan); err != nil || changed {
-		t.Fatalf("same plan saved again: changed = %v, %v; want false", changed, err)
+	if err := SaveUserPlan(appData, plan); err != nil {
+		t.Fatal(err)
 	}
 	if got, err := LoadUserPlan(appData); err != nil || !reflect.DeepEqual(got, plan) {
 		t.Errorf("stored plan = %+v, %v; want %+v", got, err, plan)
@@ -158,11 +153,52 @@ func TestUserPlanStore(t *testing.T) {
 
 	// No placements are stored as {}, not null, so only an older service's
 	// plan lacks them.
-	if changed, err := SaveUserPlan(appData, UserPlacements{}); err != nil || !changed {
-		t.Fatalf("emptied plan: changed = %v, %v; want true", changed, err)
+	if err := SaveUserPlan(appData, UserPlacements{}); err != nil {
+		t.Fatal(err)
 	}
 	if got, err := LoadUserPlan(appData); err != nil || got.Placements == nil || len(got.Placements) != 0 {
 		t.Errorf("plan without user placements = %#v, %v; want empty placements", got, err)
+	}
+}
+
+// TestUserSyncDue: every run asks whether to start the per-user helpers.
+// They start once per plan, not once per scheduled run, and again for a
+// plan they have not been started for, including after a run that could not
+// mark it; before any plan is stored there is nothing to start them for.
+func TestUserSyncDue(t *testing.T) {
+	appData := t.TempDir()
+	if _, due := userSyncDue(appData); due {
+		t.Fatal("due with no stored plan")
+	}
+	plan := UserPlacements{Facts: conditions.Facts{"os": "windows"}}
+	if err := SaveUserPlan(appData, plan); err != nil {
+		t.Fatal(err)
+	}
+	hash, due := userSyncDue(appData)
+	if !due {
+		t.Fatal("a new plan is not due")
+	}
+	if _, due := userSyncDue(appData); !due {
+		t.Fatal("an unmarked plan stopped being due")
+	}
+	if err := markUserSyncStarted(appData, hash); err != nil {
+		t.Fatal(err)
+	}
+	if _, due := userSyncDue(appData); due {
+		t.Fatal("due after marking it started")
+	}
+	if err := SaveUserPlan(appData, plan); err != nil {
+		t.Fatal(err)
+	}
+	if _, due := userSyncDue(appData); due {
+		t.Fatal("the same plan saved again is due")
+	}
+	plan.Facts["os"] = "macos"
+	if err := SaveUserPlan(appData, plan); err != nil {
+		t.Fatal(err)
+	}
+	if _, due := userSyncDue(appData); !due {
+		t.Fatal("a changed plan is not due")
 	}
 }
 
@@ -216,7 +252,12 @@ func TestStageUserArtifacts(t *testing.T) {
 		}
 	}
 
-	StageUserArtifacts(context.Background(), z, []UserPlacement{fresh, stale, held}, dir)
+	// Neither cached nor reachable: its fetch fails.
+	missingHash := sha256Hex([]byte("missing"))
+	missing := UserPlacement{Item: "missing.zip", Placement: "codex", Archive: filepath.Join(dir, missingHash+".zip"), Hash: missingHash, location: "packages/missing.zip"}
+
+	plan := []UserPlacement{fresh, stale, held, missing}
+	StageUserArtifacts(context.Background(), z, plan, dir)
 	for path, want := range map[string]string{fresh.Archive: "fresh", stale.Archive: "new"} {
 		if data, err := os.ReadFile(path); err != nil || string(data) != want {
 			t.Errorf("%s = %q, %v; want %q", path, data, err, want)
@@ -225,6 +266,14 @@ func TestStageUserArtifacts(t *testing.T) {
 	entries, _ := os.ReadDir(dir)
 	if len(entries) != 2 {
 		t.Errorf("user-artifacts holds %v, want only the fresh and stale archives", entries)
+	}
+	// An entry whose archive did not stage is saved held, so the helper
+	// keeps the user's current tree instead of removing it over a download
+	// that may work next run; the staged ones stay as planned.
+	for i, want := range []bool{false, false, true, true} {
+		if plan[i].Held != want {
+			t.Errorf("%s held = %v, want %v", plan[i].Item, plan[i].Held, want)
+		}
 	}
 }
 
@@ -280,7 +329,7 @@ func TestUserPlacementMethods(t *testing.T) {
 		entries[i].location = ""
 	}
 	stored := UserPlacements{Entries: entries, Facts: conditions.Facts{"os": "windows"}, Placements: UserSpecs(userPlanTable, placement.Windows)}
-	if _, err := SaveUserPlan(cfg.AppDataPath, stored); err != nil {
+	if err := SaveUserPlan(cfg.AppDataPath, stored); err != nil {
 		t.Fatal(err)
 	}
 	// Two calls: the same plan, facts included, whoever asks.
@@ -301,7 +350,7 @@ func TestUserPlacementMethods(t *testing.T) {
 	if got, err := client.ListUserPlacements(ctx); err != nil || got.Placements != nil {
 		t.Errorf("older plan over the pipe = %#v, %v; want nil placements", got, err)
 	}
-	if _, err := SaveUserPlan(cfg.AppDataPath, stored); err != nil {
+	if err := SaveUserPlan(cfg.AppDataPath, stored); err != nil {
 		t.Fatal(err)
 	}
 

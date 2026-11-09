@@ -47,13 +47,19 @@ type Client interface {
 // PlanRetryFor, in which case nothing is placed or removed.
 //
 // One user's syncs run one at a time: a logon start, a start by the service
-// and the same user in a second session can overlap. Sync waits for the
-// lock file in receiptDir rather than giving up, and fetches the plan only
-// once it holds it, so a plan saved during another sync is never missed.
+// and the same user in a second session can overlap. Sync first fetches the
+// plan, with the retry, and only then waits for the lock file in receiptDir,
+// so a helper with no service to answer it exits rather than waiting behind
+// another sync. Under the lock it fetches the plan again, once, and applies
+// that one, so a plan saved during another sync is never missed.
 func Sync(ctx context.Context, client Client, guard placement.Guard, receiptDir string, logger *slog.Logger) ([]service.UserPlacementResult, error) {
 	login, err := loginName()
 	if err != nil {
 		logger.Warn("user sync: unable to read the current user; nothing placed", "err", err)
+		return nil, err
+	}
+	if _, err = listPlan(ctx, client, logger); err != nil {
+		logger.Warn("user sync: unable to fetch the user-placement plan", "err", err)
 		return nil, err
 	}
 	unlock, err := lock(receiptDir)
@@ -62,7 +68,7 @@ func Sync(ctx context.Context, client Client, guard placement.Guard, receiptDir 
 		return nil, err
 	}
 	defer unlock()
-	plan, err := listPlan(ctx, client, logger)
+	plan, err := client.ListUserPlacements(ctx)
 	if err != nil {
 		logger.Warn("user sync: unable to fetch the user-placement plan", "err", err)
 		return nil, err

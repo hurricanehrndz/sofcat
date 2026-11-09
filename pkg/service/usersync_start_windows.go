@@ -3,6 +3,7 @@
 package service
 
 import (
+	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -20,10 +21,19 @@ import (
 // unelevated) and that user's environment, and the service does not wait for
 // it; the helper reports its results through reportUserPlacements.
 //
+// It starts nothing unless the stored plan differs from the one the helpers
+// were last started for (userSyncDue), and records the plan only when no
+// session failed. A missing helper, a failed start or a run without SYSTEM
+// rights leaves it unrecorded, so the next run tries again.
+//
 // WTSQueryUserToken needs SYSTEM (SeTcbPrivilege). An elevated
 // administrator's -config run saves the plan too; its sessions are skipped at
-// debug level and those users catch up at their next logon.
-func StartUserSync() {
+// debug level and the next service run catches those users up.
+func StartUserSync(appDataPath string) {
+	hash, due := userSyncDue(appDataPath)
+	if !due {
+		return
+	}
 	exe, err := os.Executable()
 	if err != nil {
 		slog.Warn("user sync: unable to find the helper", "err", err)
@@ -31,18 +41,32 @@ func StartUserSync() {
 	}
 	// Always next to this executable, never from config.
 	helper := filepath.Join(filepath.Dir(exe), identity.Slug+"-ui.exe")
+	if _, err = os.Stat(helper); err != nil {
+		slog.Debug("user sync: no helper to start", "helper", helper, "err", err)
+		return
+	}
 	sessions, err := userSessions()
 	if err != nil {
 		slog.Warn("user sync: unable to list sessions", "err", err)
 		return
 	}
 	started := map[string]bool{}
+	failed := false
 	for _, session := range sessions {
-		startInSession(session, helper, started)
+		if !startInSession(session, helper, started) {
+			failed = true
+		}
+	}
+	if failed {
+		return
+	}
+	if err := markUserSyncStarted(appDataPath, hash); err != nil {
+		slog.Warn("user sync: unable to record the plan the helpers were started for", "err", err)
 	}
 }
 
-// userSessions lists every session but session 0, the services' own.
+// userSessions lists every session but session 0, the services' own, and
+// listener sessions, which no user signs in to.
 func userSessions() ([]uint32, error) {
 	var info *windows.WTS_SESSION_INFO
 	var count uint32
@@ -52,7 +76,7 @@ func userSessions() ([]uint32, error) {
 	defer windows.WTSFreeMemory(uintptr(unsafe.Pointer(info)))
 	var ids []uint32
 	for _, s := range unsafe.Slice(info, count) {
-		if s.SessionID != 0 {
+		if s.SessionID != 0 && s.State != windows.WTSListen {
 			ids = append(ids, s.SessionID)
 		}
 	}
@@ -60,31 +84,33 @@ func userSessions() ([]uint32, error) {
 }
 
 // startInSession starts the helper in session unless its user, by SID, is in
-// started already: a user signed in twice gets one helper.
-func startInSession(session uint32, helper string, started map[string]bool) {
+// started already: a user signed in twice gets one helper. A SID counts only
+// once its helper started, so a failure in one session is tried again in the
+// user's next. It reports false on a failure the next run should retry; a
+// session nobody is signed in to is not one.
+func startInSession(session uint32, helper string, started map[string]bool) bool {
 	var token windows.Token
 	if err := windows.WTSQueryUserToken(session, &token); err != nil {
 		// ERROR_NO_TOKEN: nobody is signed in to it. ERROR_PRIVILEGE_NOT_HELD:
-		// not SYSTEM.
+		// not SYSTEM, a failure so that the next service run catches up.
 		slog.Debug("user sync: no user token for session", "session", session, "err", err)
-		return
+		return errors.Is(err, windows.ERROR_NO_TOKEN)
 	}
 	defer func() { _ = token.Close() }()
 	tokenUser, err := token.GetTokenUser()
 	if err != nil {
 		slog.Debug("user sync: unable to read the session's user", "session", session, "err", err)
-		return
+		return false
 	}
 	sid := tokenUser.User.Sid.String()
 	if started[sid] {
-		return
+		return true
 	}
-	started[sid] = true
 
 	var env *uint16
 	if err = windows.CreateEnvironmentBlock(&env, token, false); err != nil {
 		slog.Warn("user sync: unable to build the user's environment", "session", session, "sid", sid, "err", err)
-		return
+		return false
 	}
 	defer func() { _ = windows.DestroyEnvironmentBlock(env) }()
 
@@ -99,9 +125,11 @@ func startInSession(session uint32, helper string, started map[string]bool) {
 		nil, nil, false, windows.CREATE_UNICODE_ENVIRONMENT|windows.CREATE_NO_WINDOW, env, nil, si, &pi)
 	if err != nil {
 		slog.Warn("user sync: unable to start the helper", "session", session, "sid", sid, "helper", helper, "err", err)
-		return
+		return false
 	}
+	started[sid] = true
 	_ = windows.CloseHandle(pi.Thread)
 	_ = windows.CloseHandle(pi.Process)
 	slog.Info("user sync: started the helper", "session", session, "sid", sid, "pid", pi.ProcessId)
+	return true
 }

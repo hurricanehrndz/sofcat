@@ -180,7 +180,8 @@ func fakeWait(t *testing.T) *[]time.Duration {
 }
 
 // At logon the service may still be starting: a connection failure is
-// retried every five seconds, and the plan that then arrives is applied.
+// retried every five seconds, and the plan that then arrives is applied
+// (fetched once more under the lock, without retry).
 func TestSyncRetriesUnreachableService(t *testing.T) {
 	entry, guard, profile := fixture(t)
 	waits := fakeWait(t)
@@ -190,8 +191,8 @@ func TestSyncRetriesUnreachableService(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if client.calls != 3 || !slices.Equal(*waits, []time.Duration{5 * time.Second, 5 * time.Second}) {
-		t.Errorf("calls %d, waits %v; want 3 calls, two 5s waits", client.calls, *waits)
+	if client.calls != 4 || !slices.Equal(*waits, []time.Duration{5 * time.Second, 5 * time.Second}) {
+		t.Errorf("calls %d, waits %v; want 4 calls, two 5s waits", client.calls, *waits)
 	}
 	if len(results) != 1 || results[0].Outcome != string(installer.OutcomeInstalled) {
 		t.Errorf("results = %+v, want skill installed", results)
@@ -231,6 +232,26 @@ func TestSyncRetryLimits(t *testing.T) {
 	}
 }
 
+// The fetch under the lock is not retried: the service answered a moment
+// before, and a sync holding the lock must not keep the user's other syncs
+// waiting for a minute. Its error ends the sync with nothing removed.
+func TestSyncSecondFetchFails(t *testing.T) {
+	entry, guard, profile := fixture(t)
+	receipts := t.TempDir()
+	if _, err := Sync(context.Background(), &fakeClient{plan: []service.UserPlacement{entry}}, guard, receipts, slog.Default()); err != nil {
+		t.Fatal(err)
+	}
+	waits := fakeWait(t)
+	refused := fmt.Errorf("%w pipe: connection refused", service.ErrConnect)
+	client := &fakeClient{failures: []error{nil, refused}}
+	if _, err := Sync(context.Background(), client, guard, receipts, slog.Default()); !errors.Is(err, service.ErrConnect) || client.calls != 2 || len(*waits) != 0 {
+		t.Errorf("err %v, calls %d, waits %d; want ErrConnect after two calls, no retry", err, client.calls, len(*waits))
+	}
+	if _, err := os.Stat(filepath.Join(profile, ".agents", "skills", "skill", "SKILL.md")); err != nil {
+		t.Errorf("skill removed after the second fetch failed: %v", err)
+	}
+}
+
 // signalClient reports each plan fetch on fetched.
 type signalClient struct {
 	*fakeClient
@@ -243,8 +264,10 @@ func (c signalClient) ListUserPlacements(ctx context.Context) (service.UserPlace
 }
 
 // One user's syncs overlap at logon, on a service start and across two
-// sessions. A second sync waits for the first's lock and only then fetches
-// the plan, so it applies the newest one rather than racing the first.
+// sessions. A second sync fetches the plan once before the lock, so it exits
+// at once when no service answers, then waits for the first's lock and
+// fetches again, so it applies the newest plan rather than the one it saw
+// before waiting.
 func TestSyncWaitsForLock(t *testing.T) {
 	entry, guard, profile := fixture(t)
 	receipts := t.TempDir()
@@ -260,7 +283,12 @@ func TestSyncWaitsForLock(t *testing.T) {
 	}()
 	select {
 	case <-client.fetched:
-		t.Fatal("the plan was fetched while another sync held the lock")
+	case <-time.After(5 * time.Second):
+		t.Fatal("the plan was not fetched before waiting for the lock")
+	}
+	select {
+	case <-client.fetched:
+		t.Fatal("the plan was fetched again while another sync held the lock")
 	case <-time.After(200 * time.Millisecond):
 	}
 	unlock()
