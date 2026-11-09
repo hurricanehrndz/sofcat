@@ -61,7 +61,8 @@ cannot start helpers, so those users catch up at the next service run. The
 storefront does not sync. A user's syncs run one at a time. Each takes a lock
 file in that user's receipt directory, waiting while another sync holds it. `-serviceremove` ends
 any helper still running and closes an open storefront, so the uninstaller
-can delete their executables.
+can delete their executables. Each process it ends, and each it could not,
+is recorded in the [event log](/reference/event-log/).
 
 Each helper run logs what it placed, held and failed to
 `%LOCALAPPDATA%\<NAME>\useragent.log`. The file rotates at 1 MiB to a single

@@ -48,7 +48,9 @@ Everything the service writes lives under `C:\ProgramData\SofCat`; see
 [Data directory](/reference/data-directory/). To remove SofCat, run
 `"C:\Program Files\SofCat\uninstall.exe" /S`. It removes the service and the
 program files, closes the storefront if it is open, and leaves
-`C:\ProgramData\SofCat` alone.
+`C:\ProgramData\SofCat` alone. The install and the uninstall record each step
+in the Windows Application log under the source `sofcat`; see
+[Event log](/reference/event-log/).
 
 Nothing is code signed yet. See [Code signing](/reference/code-signing/).
 

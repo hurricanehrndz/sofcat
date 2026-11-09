@@ -69,6 +69,11 @@ the service, removes the value and ends any running helper and storefront
 copies. sofcat owns both on every platform, so
 the installer scripts only call it. `setup.exe /S` and `uninstall.exe /S` are
 the unattended forms; `setup.exe` refuses to install over an existing service.
+The four `-service*` management commands log each step to stderr and to the
+Windows Application log under the source `<slug>`, which `-serviceinstall`
+registers and nothing removes
+(`site/src/content/docs/reference/event-log.md`); the running service logs
+to `sofcat.log` only.
 With `SIGN_CMD` set (environment or `just SIGN_CMD=... setup`), `build` runs
 it on the three executables and `setup` has embala run it on `setup.exe` and the
 uninstaller stub (`site/src/content/docs/reference/code-signing.md`); unset,
@@ -216,8 +221,10 @@ store the plan, then reboot (the VM autologs on at boot; a plain sign-out does
 not log back in) and check the skill appears without opening the storefront.
 `uninstall.exe /S` must remove the value and the service. It leaves
 `C:\ProgramData\<Name>` alone, the staged archives in `Data\user-artifacts`
-included, as it leaves the config; remove the whole directory by hand for a
-clean slate.
+included, as it leaves the config and the `<slug>` event source; remove the
+whole directory by hand for a clean slate. Its steps, the ended agents
+included, are in the Application log:
+`Get-WinEvent -FilterHashtable @{LogName='Application'; ProviderName='<slug>'}`.
 
 Nupkg items (`site/src/content/docs/guides/nupkg-items.md`) have their own
 loop, on a clean VM with no Chocolatey. `just bootstrap-nupkg` builds
