@@ -410,3 +410,75 @@ func TestUserTableForcesUserScope(t *testing.T) {
 		t.Errorf("order = %v", table.Order)
 	}
 }
+
+// filesFixture installs the fixture's skill in a placement whose one file,
+// .index.txt, lists its items, and returns the client, guard, receipt
+// directory and the file's path.
+func filesFixture(t *testing.T) (*fakeClient, placement.Guard, string, string) {
+	t.Helper()
+	entry, guard, profile := fixture(t)
+	spec := codexSpec(entry)
+	spec.Files = []placement.File{{Path: ".index.txt", Template: `{{ range .Items }}{{ .Name }}{{ end }}`}}
+	client := &fakeClient{plan: []service.UserPlacement{entry}, placements: map[string]placement.Spec{"codex": spec}}
+	receipts := t.TempDir()
+	results, err := Sync(context.Background(), client, guard, receipts, slog.Default())
+	if err != nil || len(results) != 1 || results[0].Outcome != string(installer.OutcomeInstalled) {
+		t.Fatalf("results = %+v, %v; want installed", results, err)
+	}
+	return client, guard, receipts, filepath.Join(profile, ".agents", "skills", ".index.txt")
+}
+
+// A deleted generated file comes back on the next sync, though no tree
+// changed.
+func TestSyncRestoresPlacementFile(t *testing.T) {
+	client, guard, receipts, index := filesFixture(t)
+	if err := os.Remove(index); err != nil {
+		t.Fatal(err)
+	}
+	results, err := Sync(context.Background(), client, guard, receipts, slog.Default())
+	if err != nil || len(results) != 1 || results[0].Outcome != string(installer.OutcomeCurrent) {
+		t.Fatalf("results = %+v, %v; want current", results, err)
+	}
+	if got, err := os.ReadFile(index); err != nil || string(got) != "skill" {
+		t.Errorf("index.txt = %q, %v; want restored", got, err)
+	}
+}
+
+// A file that fails to render is reported for its placement, with no item.
+func TestSyncReportsPlacementFileFailure(t *testing.T) {
+	client, guard, receipts, _ := filesFixture(t)
+	spec := client.placements["codex"]
+	spec.Files = []placement.File{{Path: ".index.txt", Template: `{{ fact "missing" }}`}}
+	client.placements["codex"] = spec
+	results, err := Sync(context.Background(), client, guard, receipts, slog.Default())
+	if err != nil || len(results) != 2 || results[0].Outcome != string(installer.OutcomeCurrent) {
+		t.Fatalf("results = %+v, %v; want current and a file failure", results, err)
+	}
+	if r := results[1]; r.Item != "" || r.Placement != "codex" || r.Outcome != string(installer.OutcomeRefused) || r.Error == "" {
+		t.Errorf("file failure = %+v", r)
+	}
+	if !slices.Equal(client.reported, results) {
+		t.Errorf("reported %+v, want %+v", client.reported, results)
+	}
+}
+
+// A user-scope placement root can exist without anything of ours in it,
+// such as a tool's profile directory: with no receipt of this user there,
+// no file is generated.
+func TestSyncNoPlacementFileWithoutReceipts(t *testing.T) {
+	entry, guard, profile := fixture(t)
+	root := filepath.Join(profile, ".agents", "skills")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	spec := codexSpec(entry)
+	spec.Files = []placement.File{{Path: ".index.txt", Template: `generated`}}
+	client := &fakeClient{plan: []service.UserPlacement{}, placements: map[string]placement.Spec{"codex": spec}}
+	results, err := Sync(context.Background(), client, guard, t.TempDir(), slog.Default())
+	if err != nil || len(results) != 0 {
+		t.Fatalf("results = %+v, %v; want none", results, err)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".index.txt")); !os.IsNotExist(err) {
+		t.Errorf("index.txt generated without receipts: %v", err)
+	}
+}

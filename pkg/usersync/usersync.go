@@ -37,6 +37,8 @@ type Client interface {
 // Receipts live in receiptDir. Held entries are neither placed nor removed.
 // The trees' templates render with the plan's facts, each entry's managed
 // flag and this account's login name; the helper runs no script of its own.
+// After scope exit, the files of each placement the user holds receipts in
+// are regenerated; a failure is a result with no item.
 // Every result is logged and reported; the returned error is set only when
 // the login name cannot be read or no plan could be fetched, after retrying
 // a service that cannot be reached yet for up to a minute, in which case
@@ -105,6 +107,25 @@ func Sync(ctx context.Context, client Client, guard placement.Guard, receiptDir 
 			continue
 		}
 		record(rc.Item, rc.Placement, z.Remove(rc))
+	}
+
+	// Regenerate the files of every placement this user still has items in,
+	// so a file deleted or left stale is restored with no tree change. Not
+	// every user-scope placement: its root, a tool's profile directory, can
+	// exist with nothing of ours in it. Scope exit removed receipts, so they
+	// are read again.
+	if remaining, err := receipt.List(receiptDir); err != nil {
+		logger.Warn("user sync: unable to read receipts; skipping placement files", "dir", receiptDir, "err", err)
+	} else {
+		var names []string
+		for _, rc := range remaining {
+			if !slices.Contains(names, rc.Placement) {
+				names = append(names, rc.Placement)
+			}
+		}
+		for _, res := range z.Regenerate(names) {
+			record("", res.Placement, res)
+		}
 	}
 
 	if err := client.ReportUserPlacements(ctx, results); err != nil {

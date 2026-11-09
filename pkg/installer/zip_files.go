@@ -27,8 +27,16 @@ import (
 // when no tree changes. A placement whose root does not exist is skipped:
 // nothing was ever placed there, and an empty catalog would only be clutter.
 func (z *ZipInstaller) RegenerateAll() []Result {
+	return z.Regenerate(z.Table.Names())
+}
+
+// Regenerate is RegenerateAll for the placements in names only. The per-user
+// helper passes those its user holds receipts for, since a user-scope root
+// such as a tool's profile directory exists whether or not sofcat placed
+// anything there.
+func (z *ZipInstaller) Regenerate(names []string) []Result {
 	var failed []Result
-	for _, name := range z.Table.Names() {
+	for _, name := range names {
 		spec := z.Table.Placements[name]
 		if _, ok := spec.Path(z.Guard.GOOS); !ok || !generates(spec) {
 			continue
