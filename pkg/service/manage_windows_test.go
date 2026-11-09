@@ -223,6 +223,20 @@ func TestRunValueWriteAndRemove(t *testing.T) {
 	}
 }
 
+// -serviceremove ends the storefront as well as the helper: an open
+// storefront keeps <slug>-ui.exe locked, and the uninstaller then cannot
+// delete it. Both names carry the brand's slug.
+func TestAgentExesIncludeStorefront(t *testing.T) {
+	origSlug := identity.Slug
+	defer func() { identity.Slug = origSlug }()
+	identity.Slug = "tapas-test"
+
+	got := strings.Join(agentExes(), " ")
+	if want := "tapas-test-useragent.exe tapas-test-ui.exe"; got != want {
+		t.Errorf("agentExes() = %q, want %q", got, want)
+	}
+}
+
 // The real sweep, with no agent beside the test binary: it lists every
 // process, opens none of them, and returns.
 func TestEndAgentsWithNothingToEnd(t *testing.T) {

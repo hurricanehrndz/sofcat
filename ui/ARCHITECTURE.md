@@ -147,7 +147,8 @@ their agent last reported every user-scope one placed (`installed`,
 and an item the caller has no outcome for reads from the machine's receipts.
 The service never opens a user's receipts. A signed-in user gets new content as soon as
 the run that changed the plan ends. `-serviceremove` ends any helper still
-running beside it, after it removes the `Run` value.
+running beside it, after it removes the `Run` value, and any storefront, so an
+open window does not keep `<slug>-ui.exe` locked against the uninstaller.
 
 `streamOperationStatus` answers with its result and then sends every record of
 the operation, from the first, as `operationStatus` notifications on the same
@@ -389,7 +390,7 @@ The build order is `npm ci`, Vite production assets, then a pure-Go Windows buil
 
 ## Diagnostics
 
-Structured `slog` diagnostics are opt-in through `SOFCAT_UI_DEBUG=1` or `SOFCAT_DEBUG=1`. Enabled logs use the existing lumberjack dependency at `%LOCALAPPDATA%\sofcat\ui-client.log`, 10 MiB with one backup. The per-user helper honours the same switches and logs to its own `%LOCALAPPDATA%\<Name>\useragent.log`, so the two never rotate each other's file. Lifecycle and status-event records are debug-level and include available operation, operation ID, state, result, and duration fields. Disabled diagnostics create no directory or file, and logging failures do not affect UI operations.
+Structured `slog` diagnostics are opt-in through `SOFCAT_UI_DEBUG=1` or `SOFCAT_DEBUG=1`. Enabled logs use the existing lumberjack dependency at `%LOCALAPPDATA%\sofcat\ui-client.log`, 10 MiB with one backup. The per-user helper always logs, at info level, to its own `%LOCALAPPDATA%\<Name>\useragent.log`, so the two never rotate each other's file; it rotates at 1 MiB with one backup, the same switches add its debug records, and a log it cannot open never stops the sync. Lifecycle and status-event records are debug-level and include available operation, operation ID, state, result, and duration fields. The storefront's disabled diagnostics create no directory or file, and logging failures do not affect UI operations.
 
 ## Deliberate ceilings
 

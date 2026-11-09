@@ -46,6 +46,11 @@ The executables are not here. `sofcat.exe`, `sofcat-ui.exe` and
 already lets Users read and execute them and only Administrators and TrustedInstaller write. SofCat never
 writes there.
 
+The per-user helper writes outside both: each user's receipts and its
+`useragent.log` (capped at 1 MiB plus one backup) live in
+`%LOCALAPPDATA%\SofCat`. The uninstaller leaves them, as it leaves
+`C:\ProgramData\SofCat`.
+
 ## ACL
 
 - **`C:\ProgramData\SofCat`:** SDDL

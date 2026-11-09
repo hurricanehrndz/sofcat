@@ -100,7 +100,8 @@ try {
         }
     }
 
-    # The agent logs to %LOCALAPPDATA%\<Name>\useragent.log with this set.
+    # The agent always logs to %LOCALAPPDATA%\<Name>\useragent.log; this adds
+    # its debug records.
     $env:SOFCAT_UI_DEBUG = "1"
     Invoke-UserSync
 

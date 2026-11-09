@@ -18,7 +18,8 @@ func userSyncRunValue(agentExe string) (name, data string) {
 }
 
 // isAgentImage reports whether image, a running process's full image path,
-// is one of agents, the full paths of the executables -serviceremove ends.
+// is one of agents, the full paths of the executables -serviceremove ends
+// (the helper and the storefront).
 // Windows paths are case-insensitive, so the comparison is too.
 func isAgentImage(image string, agents []string) bool {
 	image = filepath.Clean(image)
