@@ -20,7 +20,7 @@ just brand=branding/acme setup   # -> build/acme-apps-<version>-x86_64-setup.exe
 | `icon.png` | no | Window and taskbar icon (256x256 is best) and the app-bar mark when no runtime logo is set. Defaults to the SofCat icon. |
 | `write-roots.yaml` | no | Where zip items may be placed, compiled in; see [Zip items](../../site/src/content/docs/guides/zip-items.md#write-roots). Defaults to `${ProgramData}\<NAME>` (Windows) and `/Library/Application Support/<NAME>` (macOS), the directory holding the config and `Data`. |
 
-Setting `INSTALLERS=zip` in `brand.env` makes both binaries zip-only: they
+Setting `INSTALLERS=zip` in `brand.env` makes all three binaries zip-only: they
 contain no command installer (`msi`, `exe`, `ps1`, `msix`, `nupkg`) and run no
 catalog script, and they reject catalog items that need either; see
 [Zip items](../../site/src/content/docs/guides/zip-items.md#zip-only-builds). `brand-check`

@@ -3,7 +3,8 @@
 Bootstrap SofCat on a Windows VM from prepared manual-test assets.
 
 .DESCRIPTION
-- Downloads sofcat.exe and sofcat-ui.exe from a provided base URL.
+- Downloads sofcat.exe, sofcat-ui.exe and sofcat-useragent.exe from a
+  provided base URL.
 - Writes config.yaml to ProgramData.
 - Optionally installs/starts service mode. -serviceinstall also registers the
   per-user helper at logon, as the setup.exe installer does.
@@ -210,20 +211,25 @@ $binaryPath = Join-Path $InstallPath "$Slug.exe"
 $binaryUrl = "$BaseUrl" + "$Slug.exe"
 $uiBinaryPath = Join-Path $InstallPath "$Slug-ui.exe"
 $uiBinaryUrl = "$BaseUrl" + "$Slug-ui.exe"
+$agentBinaryPath = Join-Path $InstallPath "$Slug-useragent.exe"
+$agentBinaryUrl = "$BaseUrl" + "$Slug-useragent.exe"
 
 Remove-ExistingSofCatService
 
 Write-Step "Downloading $ProductName binary from $binaryUrl"
 Invoke-WebRequest -Uri $binaryUrl -OutFile $binaryPath
-$runningUI = @(Get-Process -Name "$Slug-ui" -ErrorAction SilentlyContinue)
+$runningUI = @(Get-Process -Name "$Slug-ui", "$Slug-useragent" -ErrorAction SilentlyContinue)
 if ($runningUI.Count -gt 0) {
-    Write-Step "Stopping running $ProductName UI so $uiBinaryPath can be replaced"
+    Write-Step "Stopping running $ProductName UI and user agent so they can be replaced"
     $runningUI | Stop-Process -Force
     Start-Sleep -Seconds 2
 }
 
 Write-Step "Downloading $ProductName UI binary from $uiBinaryUrl"
 Invoke-WebRequest -Uri $uiBinaryUrl -OutFile $uiBinaryPath
+
+Write-Step "Downloading $ProductName user agent from $agentBinaryUrl"
+Invoke-WebRequest -Uri $agentBinaryUrl -OutFile $agentBinaryPath
 
 Write-Step "Writing config to $ConfigPath"
 Write-SofCatConfig -ConfigFilePath $ConfigPath -URLValue $BaseUrl -ManifestValue $Manifest -CatalogList $Catalogs -AppDataPathValue $AppDataPath -ListHeadingValue $ListHeading
@@ -242,6 +248,7 @@ if ($StartService) {
 Write-Step "Bootstrap complete"
 Write-Host "Binary: $binaryPath"
 Write-Host "UI binary: $uiBinaryPath"
+Write-Host "User agent: $agentBinaryPath"
 Write-Host "Config: $ConfigPath"
 Write-Host ""
 Write-Host "Install path added to PATH: $InstallPath"

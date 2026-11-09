@@ -23,11 +23,11 @@ self-service app install the optional ones for standard users.
    .\sofcat-<version>-x86_64-setup.exe /S
    ```
 
-   The installer puts `sofcat.exe` and `sofcat-ui.exe` in
-   `C:\Program Files\SofCat`, registers and starts the `sofcat` service, adds
-   a Start-menu shortcut and an Add or remove programs entry, and registers
-   the per-user helper to run at logon. It ships no config, and it refuses to
-   install over an existing service.
+   The installer puts `sofcat.exe`, `sofcat-ui.exe` and `sofcat-useragent.exe`,
+   the per-user helper, in `C:\Program Files\SofCat`, registers and starts the
+   `sofcat` service, adds a Start-menu shortcut and an Add or remove programs
+   entry, and registers the helper to run at logon. It ships no config, and it
+   refuses to install over an existing service.
 
 2. Write `C:\ProgramData\SofCat\config.yaml` and point it at your repository:
 

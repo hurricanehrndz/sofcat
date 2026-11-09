@@ -86,8 +86,9 @@ gets at most its own labels. The UI fills in its built-in labels ("Install",
 {"itemName":"tapas-optional-plugin","displayName":"Tapas Optional Plugin","version":"1.0.0","catalog":"tapas","isManaged":false,"isRequired":false,"isInstalled":false,"status":"NotInstalled","statusUpdatedAtUtc":"2026-11-03T12:00:00Z","actionLabels":{"install":"Enable for me","installed":"Available","installing":"Making available…","remove":"Withdraw","applies_to":"Works in"},"appliesTo":["Claude Code","Codex"]}
 ```
 
-The two user-placement methods serve the per-user helper, `<slug>-ui.exe
---user-sync`, and are not bound into Wails. SYSTEM never writes into a user
+The two user-placement methods serve the per-user helper,
+`<slug>-useragent.exe` (`cmd/sofcat-useragent`), and are not bound into
+Wails. SYSTEM never writes into a user
 profile: for zip variants whose placement scope on Windows is `user`, a run
 that is not check-only stages each verified archive as `<hash>.zip` in
 `user-artifacts` inside the data directory
@@ -115,19 +116,30 @@ enforces `exclusive`, places under `items_dir` and renders the placement's
 `files` as the service does in machine scope; `{}` when there is none. A
 plan from an older service has no `placements`: the helper then builds each
 spec from the entry's `path` alone, with none of those, and logs that at
-debug. The helper, run at logon by the HKLM `Run` value
-`<slug>.exe -serviceinstall` writes
-and in the background whenever the storefront starts, retries a service it
-cannot connect to every 5 seconds for up to a minute (without a plan it
-removes nothing), expands `${USERPROFILE}` itself, checks the path against
+debug. An entry whose archive fails to stage is stored `held`, so a user
+keeps the trees they have until it stages. The helper runs at logon from the
+HKLM `Run` value `<slug>.exe -serviceinstall` writes. There it retries a
+service it cannot connect to every 5 seconds until a minute has passed since
+the first attempt (without a plan it removes nothing). The service also starts
+it, with `--no-retry`, whenever a run stores a plan that differs from the one
+the helpers were last started for: one helper per user SID, in each active or
+disconnected session, with the session's token (UAC-filtered, so unelevated)
+and that user's environment. A plan stored by an elevated administrator's
+`-config` run cannot start helpers (no SeTcbPrivilege), so it is recorded as
+not yet given and the next service run starts them. The storefront does not
+sync. One user's syncs run one at a time. Each fetches the plan, takes the
+lock file `.sync.lock` in the receipt directory, waiting while another sync
+holds it, and fetches the plan again under the lock. The helper expands
+`${USERPROFILE}` itself, checks the path against
 the build's `windows_user` roots, re-verifies `hash`, places the tree with
 receipts in `%LOCALAPPDATA%\<Name>\receipts`, removes its own
 receipt-tracked trees that left the plan, regenerates the `files` of every
 placement it still holds a receipt in, and sends every result with
 `reportUserPlacements`; a failed regeneration is a result with the
 placement and an empty `item`. The service only logs them (failures at warn, with
-the caller from the connection). A logged-on user gets new content at the
-next logon or storefront start.
+the caller from the connection). A signed-in user gets new content as soon as
+the run that changed the plan ends. `-serviceremove` ends any helper still
+running beside it, after it removes the `Run` value.
 
 `streamOperationStatus` answers with its result and then sends every record of
 the operation, from the first, as `operationStatus` notifications on the same
@@ -369,7 +381,7 @@ The build order is `npm ci`, Vite production assets, then a pure-Go Windows buil
 
 ## Diagnostics
 
-Structured `slog` diagnostics are opt-in through `SOFCAT_UI_DEBUG=1` or `SOFCAT_DEBUG=1`. Enabled logs use the existing lumberjack dependency at `%LOCALAPPDATA%\sofcat\ui-client.log`, 10 MiB with one backup. Lifecycle and status-event records are debug-level and include available operation, operation ID, state, result, and duration fields. Disabled diagnostics create no directory or file, and logging failures do not affect UI operations.
+Structured `slog` diagnostics are opt-in through `SOFCAT_UI_DEBUG=1` or `SOFCAT_DEBUG=1`. Enabled logs use the existing lumberjack dependency at `%LOCALAPPDATA%\sofcat\ui-client.log`, 10 MiB with one backup. The per-user helper honours the same switches and logs to its own `%LOCALAPPDATA%\<Name>\useragent.log`, so the two never rotate each other's file. Lifecycle and status-event records are debug-level and include available operation, operation ID, state, result, and duration fields. Disabled diagnostics create no directory or file, and logging failures do not affect UI operations.
 
 ## Deliberate ceilings
 

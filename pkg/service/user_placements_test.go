@@ -161,6 +161,47 @@ func TestUserPlanStore(t *testing.T) {
 	}
 }
 
+// TestUserSyncDue: every run asks whether to start the per-user helpers.
+// They start once per plan, not once per scheduled run, and again for a
+// plan they have not been started for, including after a run that could not
+// mark it; before any plan is stored there is nothing to start them for.
+func TestUserSyncDue(t *testing.T) {
+	appData := t.TempDir()
+	if _, due := userSyncDue(appData); due {
+		t.Fatal("due with no stored plan")
+	}
+	plan := UserPlacements{Facts: conditions.Facts{"os": "windows"}}
+	if err := SaveUserPlan(appData, plan); err != nil {
+		t.Fatal(err)
+	}
+	hash, due := userSyncDue(appData)
+	if !due {
+		t.Fatal("a new plan is not due")
+	}
+	if _, due := userSyncDue(appData); !due {
+		t.Fatal("an unmarked plan stopped being due")
+	}
+	if err := markUserSyncStarted(appData, hash); err != nil {
+		t.Fatal(err)
+	}
+	if _, due := userSyncDue(appData); due {
+		t.Fatal("due after marking it started")
+	}
+	if err := SaveUserPlan(appData, plan); err != nil {
+		t.Fatal(err)
+	}
+	if _, due := userSyncDue(appData); due {
+		t.Fatal("the same plan saved again is due")
+	}
+	plan.Facts["os"] = "macos"
+	if err := SaveUserPlan(appData, plan); err != nil {
+		t.Fatal(err)
+	}
+	if _, due := userSyncDue(appData); !due {
+		t.Fatal("a changed plan is not due")
+	}
+}
+
 // TestUserPlanStoreFromOlderService: a plan stored before the plan carried
 // specs still loads, with Placements nil, which tells the helper to
 // synthesize them.
@@ -211,7 +252,12 @@ func TestStageUserArtifacts(t *testing.T) {
 		}
 	}
 
-	StageUserArtifacts(context.Background(), z, []UserPlacement{fresh, stale, held}, dir)
+	// Neither cached nor reachable: its fetch fails.
+	missingHash := sha256Hex([]byte("missing"))
+	missing := UserPlacement{Item: "missing.zip", Placement: "codex", Archive: filepath.Join(dir, missingHash+".zip"), Hash: missingHash, location: "packages/missing.zip"}
+
+	plan := []UserPlacement{fresh, stale, held, missing}
+	StageUserArtifacts(context.Background(), z, plan, dir)
 	for path, want := range map[string]string{fresh.Archive: "fresh", stale.Archive: "new"} {
 		if data, err := os.ReadFile(path); err != nil || string(data) != want {
 			t.Errorf("%s = %q, %v; want %q", path, data, err, want)
@@ -220,6 +266,14 @@ func TestStageUserArtifacts(t *testing.T) {
 	entries, _ := os.ReadDir(dir)
 	if len(entries) != 2 {
 		t.Errorf("user-artifacts holds %v, want only the fresh and stale archives", entries)
+	}
+	// An entry whose archive did not stage is saved held, so the helper
+	// keeps the user's current tree instead of removing it over a download
+	// that may work next run; the staged ones stay as planned.
+	for i, want := range []bool{false, false, true, true} {
+		if plan[i].Held != want {
+			t.Errorf("%s held = %v, want %v", plan[i].Item, plan[i].Held, want)
+		}
 	}
 }
 

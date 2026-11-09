@@ -21,6 +21,7 @@ embala.ui.page{ kind = "directory", default = os.getenv("ProgramFiles") .. "\\@P
 
 embala.fs.copy("@APP@.exe", "@APP@.exe")
 embala.fs.copy("@APP@-ui.exe", "@APP@-ui.exe")
+embala.fs.copy("@APP@-useragent.exe", "@APP@-useragent.exe")
 
 embala.shortcut.create{ name = "@PRODUCT@", target = "@APP@-ui.exe", location = "start-menu", description = "@DESCRIPTION@" }
 

@@ -57,7 +57,7 @@ What already works:
   `installable_condition`. See [Installable conditions](site/src/content/docs/guides/conditions.md).
 - **Zip items.** Package directory trees, such as AI skills, as deterministic
   zips with `makecatalogs`. On Windows a per-user helper
-  (`<slug>-ui.exe --user-sync`, started at logon) places them in each user's
+  (`<slug>-useragent.exe`, started at logon and on every plan change) places them in each user's
   profile. See [Zip items](site/src/content/docs/guides/zip-items.md).
 - **macOS.** A launchd daemon and a self-service app bundle, installed by the
   `.pkg` from `just pkg`, with the same features.
@@ -84,7 +84,7 @@ flowchart LR
    .\sofcat-<version>-x86_64-setup.exe /S
    ```
 
-   The installer puts both executables in `C:\Program Files\SofCat`,
+   The installer puts the three executables in `C:\Program Files\SofCat`,
    registers and starts the `sofcat` service, adds a Start-menu shortcut to
    the app and an Add or remove programs entry, and registers the per-user
    helper to run at logon. It ships no config. SofCat never writes under
@@ -147,7 +147,7 @@ You need Go 1.27, Node 24 and [`just`](https://github.com/casey/just).
 ```sh
 mise install
 just dev-setup   # frontend deps and the pre-commit hook
-just build       # build/sofcat.exe and build/sofcat-ui.exe
+just build       # build/sofcat.exe, sofcat-ui.exe and sofcat-useragent.exe
 just setup       # build/sofcat-<version>-x86_64-setup.exe
 ```
 

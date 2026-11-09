@@ -1,7 +1,6 @@
-// Package usersync is the per-user helper's work (`<slug>-ui.exe
-// --user-sync`): it asks the service for the user-placement plan, places
-// each tree into the caller's own profile from the archive the service
-// staged, removes the trees its own receipts track that left the plan, and
+// Package usersync is the per-user helper's work (`<slug>-useragent.exe`):
+// it asks the service for the user-placement plan, places each tree into
+// the caller's own profile from the archive the service staged, removes the trees its own receipts track that left the plan, and
 // reports every result back. It runs as the user, never as SYSTEM, and is
 // portable so it is tested on any host.
 package usersync
@@ -12,7 +11,9 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"os"
 	"os/user"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -40,20 +41,33 @@ type Client interface {
 // After scope exit, the files of each placement the user holds receipts in
 // are regenerated; a failure is a result with no item.
 // Every result is logged and reported; the returned error is set only when
-// the login name cannot be read or no plan could be fetched, after retrying
-// a service that cannot be reached yet for up to a minute, in which case
-// nothing is placed or removed.
+// the login name cannot be read, the lock cannot be taken or no plan could
+// be fetched, after retrying a service that cannot be reached yet for up to
+// PlanRetryFor, in which case nothing is placed or removed.
 //
-// Two syncs for one user at once (a logon and a storefront start) can trip
-// over each other's staging directory; the loser logs a failed result and
-// the next sync converges. A per-user lock is the upgrade if that shows up.
+// One user's syncs run one at a time: a logon start, a start by the service
+// and the same user in a second session can overlap. Sync first fetches the
+// plan, with the retry, and only then waits for the lock file in receiptDir,
+// so a helper with no service to answer it exits rather than waiting behind
+// another sync. Under the lock it fetches the plan again, once, and applies
+// that one, so a plan saved during another sync is never missed.
 func Sync(ctx context.Context, client Client, guard placement.Guard, receiptDir string, logger *slog.Logger) ([]service.UserPlacementResult, error) {
 	login, err := loginName()
 	if err != nil {
 		logger.Warn("user sync: unable to read the current user; nothing placed", "err", err)
 		return nil, err
 	}
-	plan, err := listPlan(ctx, client, logger)
+	if _, err = listPlan(ctx, client, logger); err != nil {
+		logger.Warn("user sync: unable to fetch the user-placement plan", "err", err)
+		return nil, err
+	}
+	unlock, err := lock(receiptDir)
+	if err != nil {
+		logger.Warn("user sync: unable to take the per-user lock; nothing placed", "dir", receiptDir, "err", err)
+		return nil, err
+	}
+	defer unlock()
+	plan, err := client.ListUserPlacements(ctx)
 	if err != nil {
 		logger.Warn("user sync: unable to fetch the user-placement plan", "err", err)
 		return nil, err
@@ -135,11 +149,20 @@ func Sync(ctx context.Context, client Client, guard placement.Guard, receiptDir 
 }
 
 // The service may still be starting when the helper runs at logon: a
-// connection failure is retried every planRetryInterval for planRetryFor.
-// Tests replace wait so they need not sleep.
+// connection failure is retried every planRetryInterval until PlanRetryFor
+// has passed since the first attempt. The window is wall-clock time: on
+// Windows each failed attempt also spends the client's connect timeout
+// (five seconds) waiting for the pipe, so the window counts that too. No
+// attempt starts after PlanRetryFor; the last one can end a connect timeout
+// later. A helper the service started sets PlanRetryFor to 0 and makes one
+// attempt, which still spends the connect timeout when the service is gone:
+// the service answered a moment ago, and a helper left retrying would hold
+// its executable open through an uninstall. Tests replace now and wait so
+// they need not sleep.
 var (
-	planRetryFor      = 60 * time.Second
+	PlanRetryFor      = 60 * time.Second
 	planRetryInterval = 5 * time.Second
+	now               = time.Now
 	wait              = func(ctx context.Context, d time.Duration) error {
 		t := time.NewTimer(d)
 		defer t.Stop()
@@ -154,18 +177,48 @@ var (
 
 // listPlan fetches the plan, retrying only while the service cannot be
 // reached; any other error, such as one the service answered, is returned
-// at once.
+// at once. The last wait is cut short so the final attempt starts as the
+// window ends.
 func listPlan(ctx context.Context, client Client, logger *slog.Logger) (service.UserPlacements, error) {
-	for waited := time.Duration(0); ; waited += planRetryInterval {
+	deadline := now().Add(PlanRetryFor)
+	for {
 		plan, err := client.ListUserPlacements(ctx)
-		if err == nil || !errors.Is(err, service.ErrConnect) || waited >= planRetryFor {
+		if err == nil || !errors.Is(err, service.ErrConnect) {
 			return plan, err
 		}
-		logger.Info("user sync: service not reachable yet; retrying", "in", planRetryInterval, "err", err)
-		if err := wait(ctx, planRetryInterval); err != nil {
+		left := deadline.Sub(now())
+		if left <= 0 {
+			return plan, err
+		}
+		d := min(planRetryInterval, left)
+		logger.Info("user sync: service not reachable yet; retrying", "in", d, "err", err)
+		if err := wait(ctx, d); err != nil {
 			return service.UserPlacements{}, err
 		}
 	}
+}
+
+// lockName is the lock file in the receipt directory. receipt.List reads
+// only its subdirectories, so the file is never taken for a receipt.
+const lockName = ".sync.lock"
+
+// lock blocks until this process holds receiptDir's lock file, creating
+// both if needed. A file lock, not a mutex: a Local\ mutex is per session,
+// and a Global\ one needs SeCreateGlobalPrivilege, which standard users lack.
+// The lock goes with the process, so a crashed sync never strands it.
+func lock(receiptDir string) (func(), error) {
+	if err := os.MkdirAll(receiptDir, 0o755); err != nil {
+		return nil, err
+	}
+	f, err := os.OpenFile(filepath.Join(receiptDir, lockName), os.O_RDWR|os.O_CREATE, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	if err := lockFile(f); err != nil {
+		_ = f.Close()
+		return nil, err
+	}
+	return func() { _ = f.Close() }, nil
 }
 
 // currentUser is user.Current; tests replace it.

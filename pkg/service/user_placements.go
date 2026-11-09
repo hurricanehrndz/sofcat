@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -26,7 +27,7 @@ import (
 // UserPlacement is one entry of the user-placement plan, listUserPlacements'
 // result: a zip item's variant for a placement whose scope on this OS is
 // user. The service never writes these trees; the per-user helper
-// (`<slug>-ui.exe --user-sync`) does, from the archive the service staged.
+// (`<slug>-useragent.exe`) does, from the archive the service staged.
 type UserPlacement struct {
 	Item      string `json:"item"`
 	Version   string `json:"version"`
@@ -41,7 +42,8 @@ type UserPlacement struct {
 	Hash     string `json:"hash"`
 	TreeHash string `json:"treeHash"`
 	// Held is true for an item under a conditional_items block the service
-	// could not decide: the helper neither installs nor removes it.
+	// could not decide, one deferred this run, or one whose archive failed
+	// to stage: the helper neither installs nor removes it.
 	Held bool `json:"held"`
 	// Managed is true when a manifest lists the item in managed_installs:
 	// the helper's receipt records it and the tree's templates read it as
@@ -178,6 +180,8 @@ func UserPlanPath(appDataPath string) string {
 
 // SaveUserPlan stores plan at UserPlanPath through a temporary file, so a
 // concurrent listUserPlacements reads either the old plan or the new one.
+// json.Marshal sorts map keys and the entries are sorted, so an unchanged
+// plan encodes the same bytes and is not rewritten.
 func SaveUserPlan(appDataPath string, plan UserPlacements) error {
 	if plan.Entries == nil {
 		plan.Entries = []UserPlacement{}
@@ -192,6 +196,9 @@ func SaveUserPlan(appDataPath string, plan UserPlacements) error {
 	if err != nil {
 		return err
 	}
+	if old, err := os.ReadFile(UserPlanPath(appDataPath)); err == nil && bytes.Equal(old, data) {
+		return nil
+	}
 	if err := os.MkdirAll(appDataPath, 0o755); err != nil {
 		return err
 	}
@@ -199,6 +206,34 @@ func SaveUserPlan(appDataPath string, plan UserPlacements) error {
 		_, err := w.Write(data)
 		return err
 	})
+}
+
+// userSyncStartedPath holds the sha256 of the stored plan the per-user
+// helpers were last started for.
+func userSyncStartedPath(appDataPath string) string {
+	return UserPlanPath(appDataPath) + ".started"
+}
+
+// userSyncDue reports whether the stored plan differs from the one the
+// helpers were last started for, and returns its sha256 for
+// markUserSyncStarted. It compares files, not what this run saved, so a
+// failed start, a manual run without SYSTEM rights or a service stopped
+// between the save and the start is retried at the next run. With no stored
+// plan there is nothing to hand out.
+func userSyncDue(appDataPath string) (string, bool) {
+	data, err := os.ReadFile(UserPlanPath(appDataPath))
+	if err != nil {
+		return "", false
+	}
+	sum := sha256.Sum256(data)
+	hash := hex.EncodeToString(sum[:])
+	started, err := os.ReadFile(userSyncStartedPath(appDataPath))
+	return hash, err != nil || string(started) != hash
+}
+
+// markUserSyncStarted records hash as the plan the helpers were started for.
+func markUserSyncStarted(appDataPath, hash string) error {
+	return os.WriteFile(userSyncStartedPath(appDataPath), []byte(hash), 0o644)
 }
 
 // LoadUserPlan reads the plan the last run stored; before the first run there
@@ -230,8 +265,10 @@ func LoadUserPlan(appDataPath string) (UserPlacements, error) {
 // StageUserArtifacts makes dir hold exactly the archives plan references:
 // each non-held entry's archive is downloaded and verified through zip (its
 // cache and repository) and copied in when missing or different, and files
-// no entry references are removed. A failure is logged and skips only its
-// entry; the service never writes the user placements themselves.
+// no entry references are removed. A failure is logged and sets the entry's
+// Held in plan, in place, so the helper keeps the user's current tree rather
+// than removing it over a download that may work next run; the service never
+// writes the user placements themselves.
 func StageUserArtifacts(ctx context.Context, zip *installer.ZipInstaller, plan []UserPlacement, dir string) {
 	keep := map[string]bool{}
 	for _, e := range plan {
@@ -246,7 +283,8 @@ func StageUserArtifacts(ctx context.Context, zip *installer.ZipInstaller, plan [
 		slog.Warn("unable to create the user-artifacts directory", "path", dir, "err", err)
 		return
 	}
-	for _, e := range plan {
+	for i := range plan {
+		e := &plan[i]
 		if e.Held {
 			continue
 		}
@@ -260,7 +298,8 @@ func StageUserArtifacts(ctx context.Context, zip *installer.ZipInstaller, plan [
 			err = copyFileAtomic(cached, e.Archive)
 		}
 		if err != nil {
-			slog.Warn("unable to stage user-placement archive", "item", e.Item, "placement", e.Placement, "err", err)
+			slog.Warn("unable to stage user-placement archive; holding the item", "item", e.Item, "placement", e.Placement, "err", err)
+			e.Held = true
 			continue
 		}
 		slog.Info("Staged user-placement archive", "item", e.Item, "placement", e.Placement, "path", e.Archive)

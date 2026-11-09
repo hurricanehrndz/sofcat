@@ -356,9 +356,20 @@ Write-Step "The user-scope Codex placement is skipped and the item still succeed
 $codexReceipts = Join-Path $receiptDir "codex-skills"
 if (Test-Path $codexReceipts) { Fail "the service wrote user-scope receipts under $codexReceipts" }
 $systemProfile = Join-Path $env:windir "System32\config\systemprofile"
-foreach ($profileDir in @($systemProfile, $env:USERPROFILE)) {
-    $codexTree = Join-Path $profileDir ".agents\skills\tapas-managed-skill"
-    if (Test-Path $codexTree) { Fail "the service wrote the user-scope tree $codexTree" }
+$codexTree = Join-Path $systemProfile ".agents\skills\tapas-managed-skill"
+if (Test-Path $codexTree) { Fail "the service wrote the user-scope tree $codexTree" }
+# The service starts the per-user helper in each signed-in session, so this
+# user's tree may already exist. The helper runs with the session's filtered
+# token, which owns what it creates; anything owned by SYSTEM or by the
+# elevated Administrators group was written by the service.
+$codexTree = Join-Path $env:USERPROFILE ".agents\skills\tapas-managed-skill"
+if (Test-Path $codexTree) {
+    $userSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    $items = @(Get-Item -LiteralPath $codexTree -Force) + @(Get-ChildItem -LiteralPath $codexTree -Recurse -Force)
+    foreach ($item in $items) {
+        $owner = (Get-Acl -LiteralPath $item.FullName).GetOwner([Security.Principal.SecurityIdentifier]).Value
+        if ($owner -ne $userSid) { Fail "$($item.FullName) is owned by $owner, not the user's helper ($userSid): the service wrote the user-scope tree" }
+    }
 }
 $entry = @((Read-Inventory).ManagedInstalls | Where-Object { $_.name -eq "tapas-managed-skill" })
 if ($entry.Count -ne 1 -or $entry[0].status -ne "installed") {

@@ -223,11 +223,12 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 	plan.checkUpdates(run, runner.Checker, cfg.CachePath)
 
 	// The service never writes into a user profile: it stages the archives
-	// of user-scope placements for the per-user helper (--user-sync), then
+	// of user-scope placements for the per-user helper (<slug>-useragent), then
 	// stores the plan listUserPlacements serves. The plan comes from the
 	// run's own desired and held sets, the ones scope exit used, with each
 	// item deferred this run held too: the helper neither places nor removes
-	// it, and its archive is not staged.
+	// it, and its archive is not staged. An entry whose archive fails to
+	// stage is saved held as well (StageUserArtifacts sets it in userPlan).
 	if !cfg.CheckOnly {
 		dir := service.UserArtifactsDir(cfg.AppDataPath)
 		planDesired, planHeld := maps.Clone(desired), maps.Clone(heldSet)
@@ -240,6 +241,10 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 		if err := service.SaveUserPlan(cfg.AppDataPath, service.UserPlacements{Entries: userPlan, Facts: machineFacts, Placements: service.UserSpecs(table, zip.Guard.GOOS)}); err != nil {
 			slog.Warn("unable to store the user-placement plan", "err", err)
 		}
+		// A new plan reaches the users signed in now at once; everyone
+		// else gets it at their next logon. Every run asks, so a start
+		// that failed or was skipped is retried until one succeeds.
+		service.StartUserSync(cfg.AppDataPath)
 	}
 
 	// Offered optional installs the user has not selected still belong in the

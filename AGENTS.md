@@ -48,22 +48,27 @@ Prefer `just test` as the default local validation step, even for small changes.
 When changes include SofCat UI code, run `just ui-lint` and `just ui-test`.
 When changes span Go service/CLI and UI protocol layers, run `just test`, `just ui-lint`, and `just ui-test`.
 
-`just build` produces both raw Windows executables — `build/sofcat.exe` and the
-pure-Go, windows-GUI `build/sofcat-ui.exe`
-(`GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -tags production -ldflags "-H windowsgui"`).
+`just build` produces the three raw Windows executables, all pure Go and
+cross-built (`GOOS=windows GOARCH=amd64 CGO_ENABLED=0`): `build/sofcat.exe`,
+the windows-GUI storefront `build/sofcat-ui.exe`
+(`go build -tags production -ldflags "-H windowsgui" ./ui`) and the per-user
+helper `build/sofcat-useragent.exe` (`cmd/sofcat-useragent`, also
+`-H windowsgui`, no Wails).
 `just setup` wraps them in embala's `setup.exe` (`installer/embala.toml`,
 `install.lua` and `uninstall.lua`, embala 0.10.0); it builds on Linux. The
 installer copies them into `C:\Program Files\SofCat`, adds the Start-menu
 shortcut and the Add or remove programs entry, then runs
 `sofcat.exe -serviceinstall`, which registers and starts the service and
 writes the HKLM `Run` value `<slug>-user-sync` that starts the per-user
-helper, `<slug>-ui.exe --user-sync`, at logon. Its `uninstall.exe` runs
-`sofcat.exe -serviceremove`, which stops and deletes the service and removes
-the value, then reverses the copies. sofcat owns both on every platform, so
+helper, `<slug>-useragent.exe`, at logon. The service also starts the helper
+in every signed-in session whenever the user-placement plan changes. Its
+`uninstall.exe` runs `sofcat.exe -serviceremove`, which stops and deletes
+the service, removes the value and ends any running helper, then reverses
+the copies. sofcat owns both on every platform, so
 the installer scripts only call it. `setup.exe /S` and `uninstall.exe /S` are
 the unattended forms; `setup.exe` refuses to install over an existing service.
 With `SIGN_CMD` set (environment or `just SIGN_CMD=... setup`), `build` runs
-it on both executables and `setup` has embala run it on `setup.exe` and the
+it on the three executables and `setup` has embala run it on `setup.exe` and the
 uninstaller stub (`site/src/content/docs/reference/code-signing.md`); unset,
 nothing is signed.
 Everything the service writes lives under `C:\ProgramData\SofCat`, as under
@@ -71,8 +76,8 @@ Everything the service writes lives under `C:\ProgramData\SofCat`, as under
 directory (the default `app_data_path`, SYSTEM and Administrators only
 except `Data\user-artifacts`, which Users read) and any placement of its own
 (`site/src/content/docs/reference/data-directory.md`).
-A brand with `INSTALLERS=zip` in its `brand.env` adds the `zip_only` tag to both
-binaries, which compiles out the command installers and catalog scripts
+A brand with `INSTALLERS=zip` in its `brand.env` adds the `zip_only` tag to all
+three binaries, which compiles out the command installers and catalog scripts
 (`*_command.go`/`*_script.go` versus their `*_zip_only.go` twins); test that
 set with `just test-zip-only` and
 `golangci-lint run --build-tags zip_only ./...`.
@@ -168,7 +173,7 @@ validation.** It is gitignored and describes this machine's test rig: which VM
 to use and the exact commands for each step below.
 
 1. Start from a clean VM. `just bootstrap <url the VM can reach>`
-   builds both binaries and the fixture assets. Serve them with
+   builds the binaries and the fixture assets. Serve them with
    `./build/manual-test-server -root build/manual-test/server-root -addr <addr>`.
 2. Copy `build/manual-test/vm/bootstrap-vm.ps1`, `test/manual/run-selfserve-smoke.ps1`
    and `test/manual/launch-wails-ui.ps1` to the VM, then run
@@ -199,7 +204,7 @@ and must exit 0 and print `TAPAS AUTHZ PASSED` (the guest log is
 `C:\sofcat-test\tapas-authz.log`).
 Then copy `test/manual/run-tapas-user-sync.ps1` and run it as the logged-on
 standard user (`rig run-it --wait test/manual/run-tapas-user-sync.ps1`; create
-`C:\sofcat-test\` first): it runs `tapas-test-ui.exe --user-sync` and must
+`C:\sofcat-test\` first): it runs `tapas-test-useragent.exe` and must
 print `TAPAS USER SYNC PASSED` (its log is `C:\sofcat-test\tapas-user-sync.log`).
 For the logon path, install the branded installer
 (`just brand=test/manual/fixtures/tapas/brand setup`) on a clean VM and write
