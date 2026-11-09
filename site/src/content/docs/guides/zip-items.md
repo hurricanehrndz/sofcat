@@ -42,14 +42,25 @@ read ([Data directory](/reference/data-directory/)), each named `<hash>.zip` aft
 its sha256 (never after its catalog `location`), removes archives no entry
 references, and then stores the plan, built from that run's desired set
 (dependencies and `update_for` riders included), as `user-plan.json` in its
-data directory. The per-user helper `<slug>-ui.exe --user-sync`, which runs
-at every logon and storefront start, fetches that stored plan, so it needs no
-repository access, and places the trees in each user's profile under the
+data directory. An entry whose archive fails to stage is stored held, so the
+helper leaves that item's trees as they are until the archive stages. The
+per-user helper, `<slug>-useragent.exe`, fetches that stored plan, so it
+needs no repository access, and places the trees in each user's profile under the
 `windows_user` roots, with receipts in `%LOCALAPPDATA%\<NAME>\receipts`, and
 writes the placements' `files` (Placement files)
 ([Protocol](https://github.com/hurricanehrndz/sofcat/blob/main/ui/ARCHITECTURE.md#protocol)). The item succeeds when every
 machine-scope placement does; a failed placement leaves the others alone and
 is reported on its own.
+
+The helper starts at every logon, from the HKLM `Run` value that
+`-serviceinstall` writes. The service also starts it whenever a run stores a
+plan the signed-in users have not been given yet: one helper per user, in
+each active or disconnected session, running as that user and unelevated. A
+plan stored by an elevated administrator's own `<slug>.exe -config` run
+cannot start helpers, so those users catch up at the next service run. The
+storefront does not sync. A user's syncs run one at a time. Each takes a lock
+file in that user's receipt directory, waiting while another sync holds it. `-serviceremove` ends
+any helper still running, so the uninstaller can delete its executable.
 
 A tree has two hashes. The catalog's `tree_hash` is the hash of the archive's
 contents, as CI packed them. The receipt's `placed_hash` is the hash of the
@@ -142,7 +153,7 @@ the stored plan carries every user-scope placement's spec, so `exclusive`,
 `items_dir`, `vars` and `files` work there as in machine scope. The helper
 renders the files from this user's receipts, after each change to the
 placement and on every sync for each placement the user holds a receipt in,
-so a deleted file is back at the next logon or storefront start. A
+so a deleted file is back at the next sync. A
 placement this user has no item in gets no file, even when its root exists.
 A failure is reported under the placement's name with no item, in the
 service log. A `paths` entry may use `${USERPROFILE}` only on an OS where
@@ -606,7 +617,7 @@ zip item with `placement_refused`.
 
 ### Zip-only builds
 
-A brand whose `brand.env` sets `INSTALLERS=zip` builds both binaries with the
+A brand whose `brand.env` sets `INSTALLERS=zip` builds all three binaries with the
 `zip_only` Go build tag. Such a binary has no code for the `msi`, `exe`, `ps1`,
 `msix` and `nupkg` installers or for catalog scripts. It treats a catalog item
 as invalid when it has an `installer.type` other than `zip`, an

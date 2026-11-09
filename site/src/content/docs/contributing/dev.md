@@ -31,15 +31,16 @@ production build).
 Every build recipe writes only under `build/` (gitignored), except the frontend
 recipes: `ui-install` writes `ui/frontend/node_modules/` and `ui-assets`
 writes `ui/frontend/dist/` (both gitignored), and `winres` (run by `build`)
-writes `cmd/sofcat/rsrc_windows_<arch>.syso` and `ui/rsrc_windows_<arch>.syso`
+writes `rsrc_windows_<arch>.syso` in `cmd/sofcat`, `cmd/sofcat-useragent` and `ui`
 (gitignored) from `<pkg>/winres/winres.json`. Those carry the icon, a
 VERSIONINFO resource stamped with `version`, and an `asInvoker` manifest into
-both executables. A plain `go build` without them gives an anonymous exe with
+all three executables. A plain `go build` without them gives an anonymous exe with
 the generic icon, which antivirus ML heuristics trust less
 ([Code signing](/reference/code-signing/)). Nothing is emitted at the repo root.
 
-A normal `just build` produces **both** raw Windows executables:
-`build/sofcat.exe` and `build/sofcat-ui.exe`. The UI build runs the Vite
+A normal `just build` produces the three raw Windows executables:
+`build/sofcat.exe`, `build/sofcat-ui.exe` and `build/sofcat-useragent.exe`,
+the per-user helper. The UI build runs the Vite
 production build first, then embeds `ui/frontend/dist`. No installer is
 produced by `just build`; `just setup` builds the installer,
 `build/sofcat-<version>-x86_64-setup.exe`, with embala's `setup` format (see

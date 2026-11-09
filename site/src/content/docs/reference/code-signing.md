@@ -13,7 +13,7 @@ unsigned Go binaries poorly when they also carry no publisher or version
 metadata.
 
 `just winres` now embeds a VERSIONINFO resource (company, product, version,
-original filename) and an `asInvoker` manifest in both executables. That makes
+original filename) and an `asInvoker` manifest in all three executables. That makes
 a false positive less likely but does not rule one out. Two things do more,
 and both need the maintainer to act.
 
@@ -55,8 +55,8 @@ is not, so a local `just build` or `just setup` still produces the unsigned
 files it always has. `SIGN_CMD` is a shell command line; the build appends the
 file to sign and runs it.
 
-- `just build` runs it once, after both `go build`s, with `build/<slug>.exe`
-  and `build/<slug>-ui.exe` appended, and fails if the command fails.
+- `just build` runs it once, after the three `go build`s, with `build/<slug>.exe`,
+  `build/<slug>-ui.exe` and `build/<slug>-useragent.exe` appended, and fails if the command fails.
 - `just setup`, which depends on `build`, appends a `[sign.windows]` section
   with `command = "<SIGN_CMD> $f"` to the `embala.toml` it renders into
   `build/setup/`, so embala runs the same command on the uninstaller stub it

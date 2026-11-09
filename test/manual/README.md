@@ -152,7 +152,7 @@ particular VM rig is machine-local (see `AGENTS.local.md`). The loop:
 1. `test/manual/build-e2e-repo.sh` (downloads the Chrome enterprise MSI once into
 `build/cache/`, renders `fixtures/e2e/packages-info/GoogleChrome.yaml.in` with
 the MSI's version and SHA-256, compiles the catalog with `makecatalogs`, and
-copies the selfserve fixtures and both binaries into `build/e2e-repo/`).
+copies the selfserve fixtures and the three executables into `build/e2e-repo/`).
 2. Copy `build/e2e-repo.tar` to the VM and extract it to `C:\sofcat-repo`
    (`tar.exe -xf ... --strip-components=1`).
 3. `bootstrap-vm.ps1 -BaseUrl file://C:/sofcat-repo/ -Manifest e2e_manifest -Catalogs e2e_catalog -InstallService -StartService -NoPause`.

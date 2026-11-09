@@ -100,7 +100,7 @@ try {
         }
     }
 
-    # The helper logs to %LOCALAPPDATA%\<slug>\ui-client.log with this set.
+    # The agent logs to %LOCALAPPDATA%\<Name>\useragent.log with this set.
     $env:SOFCAT_UI_DEBUG = "1"
     Invoke-UserSync
 

@@ -84,7 +84,7 @@ flowchart LR
    .\sofcat-<version>-x86_64-setup.exe /S
    ```
 
-   The installer puts both executables in `C:\Program Files\SofCat`,
+   The installer puts the three executables in `C:\Program Files\SofCat`,
    registers and starts the `sofcat` service, adds a Start-menu shortcut to
    the app and an Add or remove programs entry, and registers the per-user
    helper to run at logon. It ships no config. SofCat never writes under

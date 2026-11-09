@@ -41,9 +41,9 @@ these its own ACL.
 `Data\user-artifacts\` is the one entry users read: the staged archives the
 per-user helper places into each profile ([Zip items](/guides/zip-items/#installing)).
 
-The executables are not here. `sofcat.exe` and `sofcat-ui.exe` install to
-`C:\Program Files\SofCat`, whose default ACL already lets Users read and
-execute them and only Administrators and TrustedInstaller write. SofCat never
+The executables are not here. `sofcat.exe`, `sofcat-ui.exe` and
+`sofcat-useragent.exe` install to `C:\Program Files\SofCat`, whose default ACL
+already lets Users read and execute them and only Administrators and TrustedInstaller write. SofCat never
 writes there.
 
 ## ACL
