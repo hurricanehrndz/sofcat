@@ -65,8 +65,11 @@ func StartUserSync(appDataPath string) {
 	}
 }
 
-// userSessions lists every session but session 0, the services' own, and
-// listener sessions, which no user signs in to.
+// userSessions lists the sessions a user is signed in to: Active ones, locked
+// included, and Disconnected ones, which covers a disconnected remote session
+// and a fast-user-switched one. Session 0, the services' own, is left out, and
+// so are listeners, the sign-in screen (Connected) and sessions part-way
+// through logon or logoff, which have no user token to start a helper with.
 func userSessions() ([]uint32, error) {
 	var info *windows.WTS_SESSION_INFO
 	var count uint32
@@ -76,7 +79,7 @@ func userSessions() ([]uint32, error) {
 	defer windows.WTSFreeMemory(uintptr(unsafe.Pointer(info)))
 	var ids []uint32
 	for _, s := range unsafe.Slice(info, count) {
-		if s.SessionID != 0 && s.State != windows.WTSListen {
+		if s.SessionID != 0 && (s.State == windows.WTSActive || s.State == windows.WTSDisconnected) {
 			ids = append(ids, s.SessionID)
 		}
 	}
@@ -91,10 +94,12 @@ func userSessions() ([]uint32, error) {
 func startInSession(session uint32, helper string, started map[string]bool) bool {
 	var token windows.Token
 	if err := windows.WTSQueryUserToken(session, &token); err != nil {
-		// ERROR_NO_TOKEN: nobody is signed in to it. ERROR_PRIVILEGE_NOT_HELD:
-		// not SYSTEM, a failure so that the next service run catches up.
+		// ERROR_NO_TOKEN: nobody is signed in to it.
+		// ERROR_CTX_WINSTATION_NOT_FOUND: it logged off since the listing.
+		// ERROR_PRIVILEGE_NOT_HELD: not SYSTEM, a failure so that the next
+		// service run catches up.
 		slog.Debug("user sync: no user token for session", "session", session, "err", err)
-		return errors.Is(err, windows.ERROR_NO_TOKEN)
+		return errors.Is(err, windows.ERROR_NO_TOKEN) || errors.Is(err, windows.ERROR_CTX_WINSTATION_NOT_FOUND)
 	}
 	defer func() { _ = token.Close() }()
 	tokenUser, err := token.GetTokenUser()

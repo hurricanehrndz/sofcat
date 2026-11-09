@@ -252,22 +252,27 @@ func TestSyncSecondFetchFails(t *testing.T) {
 	}
 }
 
-// signalClient reports each plan fetch on fetched.
+// signalClient reports each plan fetch on fetched. After the first fetch the
+// plan becomes next, as if the service saved a new one meanwhile.
 type signalClient struct {
 	*fakeClient
 	fetched chan struct{}
+	next    []service.UserPlacement
 }
 
 func (c signalClient) ListUserPlacements(ctx context.Context) (service.UserPlacements, error) {
 	c.fetched <- struct{}{}
-	return c.fakeClient.ListUserPlacements(ctx)
+	plan, err := c.fakeClient.ListUserPlacements(ctx)
+	c.plan = c.next
+	return plan, err
 }
 
 // One user's syncs overlap at logon, on a service start and across two
 // sessions. A second sync fetches the plan once before the lock, so it exits
 // at once when no service answers, then waits for the first's lock and
 // fetches again, so it applies the newest plan rather than the one it saw
-// before waiting.
+// before waiting: the first fetch here is empty, and only the second carries
+// the entry.
 func TestSyncWaitsForLock(t *testing.T) {
 	entry, guard, profile := fixture(t)
 	receipts := t.TempDir()
@@ -275,7 +280,7 @@ func TestSyncWaitsForLock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	client := signalClient{&fakeClient{plan: []service.UserPlacement{entry}}, make(chan struct{}, 1)}
+	client := signalClient{&fakeClient{}, make(chan struct{}, 1), []service.UserPlacement{entry}}
 	done := make(chan error, 1)
 	go func() {
 		_, err := Sync(context.Background(), client, guard, receipts, slog.Default())
