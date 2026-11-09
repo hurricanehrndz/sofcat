@@ -32,10 +32,16 @@ type fakeClient struct {
 	failures []error
 	calls    int
 	reported []service.UserPlacementResult
+	// Each fetch advances clock by cost, as a connect timeout would.
+	clock *fakeClock
+	cost  time.Duration
 }
 
 func (c *fakeClient) ListUserPlacements(context.Context) (service.UserPlacements, error) {
 	c.calls++
+	if c.clock != nil {
+		c.clock.now = c.clock.now.Add(c.cost)
+	}
 	if len(c.failures) > 0 {
 		err := c.failures[0]
 		c.failures = c.failures[1:]
@@ -166,17 +172,25 @@ func TestSyncRefusesDataDir(t *testing.T) {
 	}
 }
 
-// fakeWait records the waits Sync asks for instead of sleeping.
-func fakeWait(t *testing.T) *[]time.Duration {
+// fakeClock stands in for now and wait: a wait is recorded and moves the
+// clock on instead of sleeping.
+type fakeClock struct {
+	now   time.Time
+	waits []time.Duration
+}
+
+func fakeWait(t *testing.T) *fakeClock {
 	t.Helper()
-	var waits []time.Duration
-	orig := wait
+	c := &fakeClock{now: time.Unix(0, 0)}
+	origNow, origWait := now, wait
+	now = func() time.Time { return c.now }
 	wait = func(_ context.Context, d time.Duration) error {
-		waits = append(waits, d)
+		c.waits = append(c.waits, d)
+		c.now = c.now.Add(d)
 		return nil
 	}
-	t.Cleanup(func() { wait = orig })
-	return &waits
+	t.Cleanup(func() { now, wait = origNow, origWait })
+	return c
 }
 
 // At logon the service may still be starting: a connection failure is
@@ -184,15 +198,15 @@ func fakeWait(t *testing.T) *[]time.Duration {
 // (fetched once more under the lock, without retry).
 func TestSyncRetriesUnreachableService(t *testing.T) {
 	entry, guard, profile := fixture(t)
-	waits := fakeWait(t)
+	clock := fakeWait(t)
 	refused := fmt.Errorf("%w pipe: connection refused", service.ErrConnect)
 	client := &fakeClient{plan: []service.UserPlacement{entry}, failures: []error{refused, refused}}
 	results, err := Sync(context.Background(), client, guard, t.TempDir(), slog.Default())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if client.calls != 4 || !slices.Equal(*waits, []time.Duration{5 * time.Second, 5 * time.Second}) {
-		t.Errorf("calls %d, waits %v; want 4 calls, two 5s waits", client.calls, *waits)
+	if client.calls != 4 || !slices.Equal(clock.waits, []time.Duration{5 * time.Second, 5 * time.Second}) {
+		t.Errorf("calls %d, waits %v; want 4 calls, two 5s waits", client.calls, clock.waits)
 	}
 	if len(results) != 1 || results[0].Outcome != string(installer.OutcomeInstalled) {
 		t.Errorf("results = %+v, want skill installed", results)
@@ -202,24 +216,48 @@ func TestSyncRetriesUnreachableService(t *testing.T) {
 	}
 }
 
-// Retries stop after a minute, and an error the service answered is not
-// retried at all; either way nothing is removed.
+// Retries stop after a minute of wall-clock time, and an error the service
+// answered is not retried at all; either way nothing is removed.
 func TestSyncRetryLimits(t *testing.T) {
 	_, guard, _ := fixture(t)
-	waits := fakeWait(t)
+	clock := fakeWait(t)
 	refused := fmt.Errorf("%w pipe: connection refused", service.ErrConnect)
 	client := &fakeClient{err: refused}
 	if _, err := Sync(context.Background(), client, guard, t.TempDir(), slog.Default()); !errors.Is(err, service.ErrConnect) {
 		t.Errorf("err = %v, want ErrConnect", err)
 	}
-	if client.calls != 13 || len(*waits) != 12 {
-		t.Errorf("calls %d, waits %d; want 13 calls over 60s", client.calls, len(*waits))
+	if client.calls != 13 || len(clock.waits) != 12 {
+		t.Errorf("calls %d, waits %d; want 13 calls over 60s", client.calls, len(clock.waits))
 	}
 
-	*waits = nil
+	// On Windows each failed attempt also spends the five-second connect
+	// timeout; the minute counts it, so the logon agent gives up after about
+	// a minute rather than two (the VM measured 125 s). The last wait is cut
+	// short so the final attempt starts as the minute ends.
+	for _, tc := range []struct {
+		cost     time.Duration
+		calls    int
+		lastWait time.Duration
+	}{
+		{5 * time.Second, 7, 5 * time.Second},
+		{3 * time.Second, 9, time.Second},
+	} {
+		clock.now, clock.waits = time.Unix(0, 0), nil
+		slow := &fakeClient{err: refused, clock: clock, cost: tc.cost}
+		if _, err := Sync(context.Background(), slow, guard, t.TempDir(), slog.Default()); !errors.Is(err, service.ErrConnect) {
+			t.Errorf("cost %v: err = %v, want ErrConnect", tc.cost, err)
+		}
+		elapsed := clock.now.Sub(time.Unix(0, 0))
+		if slow.calls != tc.calls || clock.waits[len(clock.waits)-1] != tc.lastWait || elapsed != PlanRetryFor+tc.cost {
+			t.Errorf("cost %v: calls %d, waits %v, elapsed %v; want %d calls, last wait %v, elapsed %v",
+				tc.cost, slow.calls, clock.waits, elapsed, tc.calls, tc.lastWait, PlanRetryFor+tc.cost)
+		}
+	}
+
+	clock.waits = nil
 	answered := &fakeClient{err: &service.Error{Message: "command failed"}}
-	if _, err := Sync(context.Background(), answered, guard, t.TempDir(), slog.Default()); err == nil || answered.calls != 1 || len(*waits) != 0 {
-		t.Errorf("answered error: err %v, calls %d, waits %d; want one call, no retry", err, answered.calls, len(*waits))
+	if _, err := Sync(context.Background(), answered, guard, t.TempDir(), slog.Default()); err == nil || answered.calls != 1 || len(clock.waits) != 0 {
+		t.Errorf("answered error: err %v, calls %d, waits %d; want one call, no retry", err, answered.calls, len(clock.waits))
 	}
 
 	// A helper the service started does not retry: one left waiting would
@@ -227,8 +265,8 @@ func TestSyncRetryLimits(t *testing.T) {
 	defer func(d time.Duration) { PlanRetryFor = d }(PlanRetryFor)
 	PlanRetryFor = 0
 	unreachable := &fakeClient{err: refused}
-	if _, err := Sync(context.Background(), unreachable, guard, t.TempDir(), slog.Default()); !errors.Is(err, service.ErrConnect) || unreachable.calls != 1 || len(*waits) != 0 {
-		t.Errorf("no retry: err %v, calls %d, waits %d; want ErrConnect after one call", err, unreachable.calls, len(*waits))
+	if _, err := Sync(context.Background(), unreachable, guard, t.TempDir(), slog.Default()); !errors.Is(err, service.ErrConnect) || unreachable.calls != 1 || len(clock.waits) != 0 {
+		t.Errorf("no retry: err %v, calls %d, waits %d; want ErrConnect after one call", err, unreachable.calls, len(clock.waits))
 	}
 }
 
@@ -241,11 +279,11 @@ func TestSyncSecondFetchFails(t *testing.T) {
 	if _, err := Sync(context.Background(), &fakeClient{plan: []service.UserPlacement{entry}}, guard, receipts, slog.Default()); err != nil {
 		t.Fatal(err)
 	}
-	waits := fakeWait(t)
+	clock := fakeWait(t)
 	refused := fmt.Errorf("%w pipe: connection refused", service.ErrConnect)
 	client := &fakeClient{failures: []error{nil, refused}}
-	if _, err := Sync(context.Background(), client, guard, receipts, slog.Default()); !errors.Is(err, service.ErrConnect) || client.calls != 2 || len(*waits) != 0 {
-		t.Errorf("err %v, calls %d, waits %d; want ErrConnect after two calls, no retry", err, client.calls, len(*waits))
+	if _, err := Sync(context.Background(), client, guard, receipts, slog.Default()); !errors.Is(err, service.ErrConnect) || client.calls != 2 || len(clock.waits) != 0 {
+		t.Errorf("err %v, calls %d, waits %d; want ErrConnect after two calls, no retry", err, client.calls, len(clock.waits))
 	}
 	if _, err := os.Stat(filepath.Join(profile, ".agents", "skills", "skill", "SKILL.md")); err != nil {
 		t.Errorf("skill removed after the second fetch failed: %v", err)

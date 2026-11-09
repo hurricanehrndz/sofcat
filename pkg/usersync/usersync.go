@@ -149,13 +149,20 @@ func Sync(ctx context.Context, client Client, guard placement.Guard, receiptDir 
 }
 
 // The service may still be starting when the helper runs at logon: a
-// connection failure is retried every planRetryInterval for PlanRetryFor.
-// A helper the service started sets PlanRetryFor to 0: the service answered
-// a moment ago, and a helper left waiting would hold its executable open
-// through an uninstall. Tests replace wait so they need not sleep.
+// connection failure is retried every planRetryInterval until PlanRetryFor
+// has passed since the first attempt. The window is wall-clock time: on
+// Windows each failed attempt also spends the client's connect timeout
+// (five seconds) waiting for the pipe, so the window counts that too. No
+// attempt starts after PlanRetryFor; the last one can end a connect timeout
+// later. A helper the service started sets PlanRetryFor to 0 and makes one
+// attempt, which still spends the connect timeout when the service is gone:
+// the service answered a moment ago, and a helper left retrying would hold
+// its executable open through an uninstall. Tests replace now and wait so
+// they need not sleep.
 var (
 	PlanRetryFor      = 60 * time.Second
 	planRetryInterval = 5 * time.Second
+	now               = time.Now
 	wait              = func(ctx context.Context, d time.Duration) error {
 		t := time.NewTimer(d)
 		defer t.Stop()
@@ -170,15 +177,22 @@ var (
 
 // listPlan fetches the plan, retrying only while the service cannot be
 // reached; any other error, such as one the service answered, is returned
-// at once.
+// at once. The last wait is cut short so the final attempt starts as the
+// window ends.
 func listPlan(ctx context.Context, client Client, logger *slog.Logger) (service.UserPlacements, error) {
-	for waited := time.Duration(0); ; waited += planRetryInterval {
+	deadline := now().Add(PlanRetryFor)
+	for {
 		plan, err := client.ListUserPlacements(ctx)
-		if err == nil || !errors.Is(err, service.ErrConnect) || waited >= PlanRetryFor {
+		if err == nil || !errors.Is(err, service.ErrConnect) {
 			return plan, err
 		}
-		logger.Info("user sync: service not reachable yet; retrying", "in", planRetryInterval, "err", err)
-		if err := wait(ctx, planRetryInterval); err != nil {
+		left := deadline.Sub(now())
+		if left <= 0 {
+			return plan, err
+		}
+		d := min(planRetryInterval, left)
+		logger.Info("user sync: service not reachable yet; retrying", "in", d, "err", err)
+		if err := wait(ctx, d); err != nil {
 			return service.UserPlacements{}, err
 		}
 	}
