@@ -44,6 +44,7 @@ func installFakeSCM(t *testing.T) *fakeSCM {
 	deleteServiceFunc = func(*mgr.Mgr, config.Configuration) error { return step("delete") }
 	setRunValueFunc = func(name, data string) error { return step("set " + name + "=" + data) }
 	deleteRunValueFunc = func(name string) error { return step("unset " + name) }
+	endAgentsFunc = func() { _ = step("end agents") }
 	t.Cleanup(func() {
 		serviceExistsFunc = serviceExists
 		createServiceFunc = createService
@@ -52,6 +53,7 @@ func installFakeSCM(t *testing.T) *fakeSCM {
 		deleteServiceFunc = deleteWindowsService
 		setRunValueFunc = setRunValue
 		deleteRunValueFunc = deleteRunValue
+		endAgentsFunc = endAgents
 	})
 	return f
 }
@@ -143,7 +145,8 @@ func TestInstallWindowsServiceUndoesOnRunValueFailure(t *testing.T) {
 }
 
 // -serviceremove runs from the uninstaller before it deletes the executable,
-// so the stop (which waits for Stopped) comes first; the Run value goes last.
+// so the stop (which waits for Stopped) comes first. The Run value goes next
+// and the running agents last, so no logon starts one after the sweep.
 func TestRemoveWindowsServiceStopsDeletesAndUnregistersHelper(t *testing.T) {
 	f := installFakeSCM(t)
 	f.exists = true
@@ -152,7 +155,7 @@ func TestRemoveWindowsServiceStopsDeletesAndUnregistersHelper(t *testing.T) {
 	if err := removeWindowsService(nil, cfg); err != nil {
 		t.Fatalf("remove: %v", err)
 	}
-	expectCalls(t, f.calls, []string{"exists", "stop", "delete", "unset " + identity.Slug + "-user-sync"})
+	expectCalls(t, f.calls, []string{"exists", "stop", "delete", "unset " + identity.Slug + "-user-sync", "end agents"})
 
 	f.calls = nil
 	f.fail["stop"] = errors.New("timed out")
@@ -163,7 +166,8 @@ func TestRemoveWindowsServiceStopsDeletesAndUnregistersHelper(t *testing.T) {
 }
 
 // On a half-cleaned machine (service deleted by hand, Run value left behind)
-// the uninstaller must still succeed and take the value with it.
+// the uninstaller must still succeed, take the value with it and end the
+// agents.
 func TestRemoveWindowsServiceWithoutServiceRemovesRunValue(t *testing.T) {
 	f := installFakeSCM(t)
 	cfg := config.Configuration{ServiceName: "sofcat"}
@@ -171,7 +175,7 @@ func TestRemoveWindowsServiceWithoutServiceRemovesRunValue(t *testing.T) {
 	if err := removeWindowsService(nil, cfg); err != nil {
 		t.Fatalf("remove without a service: %v", err)
 	}
-	expectCalls(t, f.calls, []string{"exists", "unset " + identity.Slug + "-user-sync"})
+	expectCalls(t, f.calls, []string{"exists", "unset " + identity.Slug + "-user-sync", "end agents"})
 
 	f.calls = nil
 	f.fail["exists"] = errors.New("access denied")
@@ -217,4 +221,10 @@ func TestRunValueWriteAndRemove(t *testing.T) {
 	if err = deleteRunValueFunc(name); err != nil {
 		t.Fatalf("delete of a missing value: %v", err)
 	}
+}
+
+// The real sweep, with no agent beside the test binary: it lists every
+// process, opens none of them, and returns.
+func TestEndAgentsWithNothingToEnd(t *testing.T) {
+	endAgents()
 }

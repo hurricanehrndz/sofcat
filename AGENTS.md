@@ -63,7 +63,8 @@ writes the HKLM `Run` value `<slug>-user-sync` that starts the per-user
 helper, `<slug>-useragent.exe`, at logon. The service also starts the helper
 in every signed-in session whenever the user-placement plan changes. Its
 `uninstall.exe` runs `sofcat.exe -serviceremove`, which stops and deletes
-the service and removes the value, then reverses the copies. sofcat owns both on every platform, so
+the service, removes the value and ends any running helper, then reverses
+the copies. sofcat owns both on every platform, so
 the installer scripts only call it. `setup.exe /S` and `uninstall.exe /S` are
 the unattended forms; `setup.exe` refuses to install over an existing service.
 With `SIGN_CMD` set (environment or `just SIGN_CMD=... setup`), `build` runs

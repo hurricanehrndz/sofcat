@@ -28,6 +28,7 @@ var (
 	deleteServiceFunc  = deleteWindowsService
 	setRunValueFunc    = setRunValue
 	deleteRunValueFunc = deleteRunValue
+	endAgentsFunc      = endAgents
 )
 
 // The key whose values Windows starts at every logon, in the 64-bit view.
@@ -318,9 +319,11 @@ func stopWindowsService(m *mgr.Mgr, cfg config.Configuration) error {
 }
 
 // removeWindowsService stops the service and waits for it, so the uninstaller
-// that runs next can delete its executable, deletes it and removes the Run
-// value. A service that is already gone (a half-cleaned machine) only has
-// the Run value left to remove.
+// that runs next can delete its executable, deletes it, removes the Run value
+// and then ends the running agents beside this executable (endAgents), last,
+// so no logon starts a fresh one after the sweep. A service that is already
+// gone (a half-cleaned machine) only has the Run value and the agents left.
+// Ending the agents never fails the remove.
 func removeWindowsService(m *mgr.Mgr, cfg config.Configuration) error {
 	serviceVerbose(cfg, "remove requested for service=%q", cfg.ServiceName)
 	exists, err := serviceExistsFunc(m, cfg.ServiceName)
@@ -335,12 +338,13 @@ func removeWindowsService(m *mgr.Mgr, cfg config.Configuration) error {
 			return err
 		}
 	} else {
-		serviceVerbose(cfg, "service=%q does not exist; removing the Run value only", cfg.ServiceName)
+		serviceVerbose(cfg, "service=%q does not exist; removing the Run value and ending agents only", cfg.ServiceName)
 	}
 	name, _ := userSyncRunValue("")
 	if err := deleteRunValueFunc(name); err != nil {
 		return fmt.Errorf("failed to remove Run value %q: %w", name, err)
 	}
+	endAgentsFunc()
 	return nil
 }
 

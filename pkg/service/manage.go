@@ -1,6 +1,11 @@
 package service
 
-import "github.com/hurricanehrndz/sofcat/pkg/identity"
+import (
+	"path/filepath"
+	"strings"
+
+	"github.com/hurricanehrndz/sofcat/pkg/identity"
+)
 
 // userSyncRunValue is the HKLM Run value that starts the per-user helper,
 // <slug>-useragent.exe, at every logon (site/src/content/docs/guides/zip-items.md).
@@ -10,4 +15,17 @@ import "github.com/hurricanehrndz/sofcat/pkg/identity"
 // so an upgrade overwrites it rather than leaving a stale one behind.
 func userSyncRunValue(agentExe string) (name, data string) {
 	return identity.Slug + "-user-sync", `"` + agentExe + `"`
+}
+
+// isAgentImage reports whether image, a running process's full image path,
+// is one of agents, the full paths of the executables -serviceremove ends.
+// Windows paths are case-insensitive, so the comparison is too.
+func isAgentImage(image string, agents []string) bool {
+	image = filepath.Clean(image)
+	for _, a := range agents {
+		if strings.EqualFold(image, filepath.Clean(a)) {
+			return true
+		}
+	}
+	return false
 }

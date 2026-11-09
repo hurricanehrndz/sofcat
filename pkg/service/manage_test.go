@@ -26,3 +26,26 @@ func TestUserSyncRunValue(t *testing.T) {
 		}
 	}
 }
+
+// -serviceremove ends only the agent beside the executable it removes: the
+// same file name in another directory, such as a second brand's install or a
+// copy under Downloads, is left running. Case does not matter on Windows.
+func TestIsAgentImage(t *testing.T) {
+	agents := []string{`C:\Program Files\SofCat\sofcat-useragent.exe`}
+	tests := []struct {
+		image string
+		want  bool
+	}{
+		{`C:\Program Files\SofCat\sofcat-useragent.exe`, true},
+		{`c:\program files\sofcat\SOFCAT-USERAGENT.EXE`, true},
+		{`C:\Users\std\Downloads\sofcat-useragent.exe`, false},
+		{`C:\Program Files\SofCat\sofcat.exe`, false},
+		{`C:\Program Files\SofCat\sofcat-useragent.exe.bak`, false},
+		{``, false},
+	}
+	for _, tt := range tests {
+		if got := isAgentImage(tt.image, agents); got != tt.want {
+			t.Errorf("isAgentImage(%q) = %v, want %v", tt.image, got, tt.want)
+		}
+	}
+}
