@@ -77,7 +77,7 @@ func newTemplateTest(t *testing.T, index string) templateTest {
       - path: .agents/plugins/marketplace.json
         template: |
 %[5]s
-`, testOS(), skills, market, indexPath, indent(codexTemplate), indent(index), indent(catalog)))
+`, testOS(), skills, market, indexPath, indent(codexTemplate), indent(index), indent(catalog)), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

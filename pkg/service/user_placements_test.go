@@ -394,3 +394,38 @@ func TestUserPlacementMethods(t *testing.T) {
 		}
 	}
 }
+
+// TestUserPlanCarriesTemplateFileText: the helper never fetches, so the
+// stored plan holds a user-scope template_file entry as its resolved text.
+func TestUserPlanCarriesTemplateFileText(t *testing.T) {
+	const text = `{"n": {{ len .Items }}}`
+	table, err := placement.Parse([]byte(`placements:
+  codex:
+    paths: {windows: '${USERPROFILE}\.agents\skills'}
+    scope: {windows: user}
+    files:
+      - {path: .index.json, template_file: templates/index.json.tmpl}
+`), func(string) ([]byte, error) { return []byte(text), nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	appData := t.TempDir()
+	if err = SaveUserPlan(appData, UserPlacements{Placements: UserSpecs(table, placement.Windows)}); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := os.ReadFile(UserPlanPath(appData))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(stored), "template_file") || strings.Contains(string(stored), "index.json.tmpl") {
+		t.Errorf("stored plan names the template file:\n%s", stored)
+	}
+	plan, err := LoadUserPlan(appData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []placement.File{{Path: ".index.json", Template: text}}
+	if got := plan.Placements["codex"].Files; !reflect.DeepEqual(got, want) {
+		t.Errorf("stored files = %+v, want %+v", got, want)
+	}
+}
