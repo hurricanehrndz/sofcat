@@ -367,6 +367,26 @@ func TestMarketplaceRegenerateRestoresDeleted(t *testing.T) {
 	}
 }
 
+// TestRegenerateAllSkipsUserScope: the service has no user to expand a
+// user-scope root for, so its per-run pass leaves those placements to the
+// per-user helper instead of reporting a failed generate on every run.
+// Regenerate, which the helper calls, still takes them.
+func TestRegenerateAllSkipsUserScope(t *testing.T) {
+	z, _ := newTestZip(t)
+	z.Table.Placements["user-plugins"] = placement.Spec{
+		Paths: map[string]string{testOS(): "${USERPROFILE}/plugins"},
+		Scope: map[string]string{testOS(): placement.ScopeUser},
+		Files: []placement.File{{Path: "index.json", Template: "{}"}},
+	}
+	z.Table.Order = append(z.Table.Order, "user-plugins")
+	if failed := z.RegenerateAll(); len(failed) != 0 {
+		t.Fatalf("RegenerateAll = %+v, want the user-scope placement skipped", failed)
+	}
+	if failed := z.Regenerate([]string{"user-plugins"}); len(failed) != 1 {
+		t.Errorf("Regenerate(user-plugins) without USERPROFILE = %+v, want one failure", failed)
+	}
+}
+
 // TestMarketplaceLastPluginRemoved: with no plugin left the drop-in goes, so
 // the harness stops loading an empty marketplace, and the manifest stays
 // valid with no plugins.

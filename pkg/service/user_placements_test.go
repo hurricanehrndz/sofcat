@@ -310,8 +310,9 @@ func TestUserPlacementMethods(t *testing.T) {
 
 	// The -S commands that mirror the two methods.
 	listed, err := SendCommand(cfg, "listuserplacements")
-	if err != nil || len(listed.Items) != 2 || !strings.Contains(listed.Items[0], `"item":"dependency"`) || !strings.Contains(listed.Items[0], `"held":false`) ||
-		!strings.Contains(listed.Items[0], `"managed":false`) || !strings.Contains(listed.Items[1], `"managed":true`) {
+	if err != nil || len(listed.Items) != 3 || !strings.Contains(listed.Items[0], `"item":"dependency"`) || !strings.Contains(listed.Items[0], `"held":false`) ||
+		!strings.Contains(listed.Items[0], `"managed":false`) || !strings.Contains(listed.Items[1], `"managed":true`) ||
+		!strings.HasPrefix(listed.Items[2], `{"placements":{"codex":`) {
 		t.Errorf("-S ListUserPlacements = %+v, %v", listed.Items, err)
 	}
 	if _, err := SendCommand(cfg, "ReportUserPlacements:managed,codex,failed,boom"); err != nil {

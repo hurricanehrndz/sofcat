@@ -357,7 +357,7 @@ func (sr *serviceRunner) dispatchUserPlacements(conn clientConn, req rpcRequest,
 }
 
 // sendUserPlacementCommand is `-S ListUserPlacements`, one JSON line per
-// entry, and `-S ReportUserPlacements:item,placement,outcome[,error]`, which
+// entry and then one holding the plan's placements, and `-S ReportUserPlacements:item,placement,outcome[,error]`, which
 // sends one result.
 func sendUserPlacementCommand(ctx context.Context, client *Client, cmd Command) (CommandResponse, error) {
 	if cmd.Action == actionReportUserPlacements {
@@ -374,7 +374,13 @@ func sendUserPlacementCommand(ctx context.Context, client *Client, cmd Command) 
 	if err != nil {
 		return CommandResponse{}, err
 	}
-	resp := CommandResponse{Status: "ok", UserPlan: &plan, Items: make([]string, 0, len(plan.Entries))}
+	specs, err := json.Marshal(struct {
+		Placements map[string]placement.Spec `json:"placements"`
+	}{plan.Placements})
+	if err != nil {
+		return CommandResponse{}, fmt.Errorf("failed to encode user placement specs: %w", err)
+	}
+	resp := CommandResponse{Status: "ok", UserPlan: &plan, Items: make([]string, 0, len(plan.Entries)+1)}
 	for _, e := range plan.Entries {
 		line, err := json.Marshal(e)
 		if err != nil {
@@ -382,5 +388,6 @@ func sendUserPlacementCommand(ctx context.Context, client *Client, cmd Command) 
 		}
 		resp.Items = append(resp.Items, string(line))
 	}
+	resp.Items = append(resp.Items, string(specs))
 	return resp, nil
 }

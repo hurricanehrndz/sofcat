@@ -18,22 +18,28 @@ import (
 
 // A placement's files have no receipts: sofcat owns them outright and
 // rewrites them from the receipts after every change to the placement and
-// once per run (RegenerateAll). Each is rendered from its entry's template.
+// once per run (RegenerateAll for machine scope, Regenerate from the per-user
+// helper for user scope). Each is rendered from its entry's template.
 
-// RegenerateAll regenerates every placement in the placement table that has
-// files and a path on this OS, and returns a failed Result per placement
-// that failed. A managed run calls it once, after scope exit, so a file
-// deleted, refused or left stale by an earlier failure is restored even
-// when no tree changes. A placement whose root does not exist is skipped:
-// nothing was ever placed there, and an empty catalog would only be clutter.
+// RegenerateAll regenerates every machine-scope placement in the placement
+// table that has files and a path on this OS, and returns a failed Result
+// per placement that failed. A managed run calls it once, after scope exit,
+// so a file deleted, refused or left stale by an earlier failure is restored
+// even when no tree changes. A placement whose root does not exist is
+// skipped: nothing was ever placed there, and an empty catalog would only be
+// clutter. A user-scope placement is skipped too: the service has no user to
+// expand its root for, and the per-user helper regenerates it.
 func (z *ZipInstaller) RegenerateAll() []Result {
-	return z.Regenerate(z.Table.Names())
+	names := slices.DeleteFunc(z.Table.Names(), func(name string) bool {
+		return z.Table.Placements[name].ScopeFor(z.Guard.GOOS) == placement.ScopeUser
+	})
+	return z.Regenerate(names)
 }
 
-// Regenerate is RegenerateAll for the placements in names only. The per-user
-// helper passes those its user holds receipts for, since a user-scope root
-// such as a tool's profile directory exists whether or not sofcat placed
-// anything there.
+// Regenerate is RegenerateAll for the placements in names only, whatever
+// their scope. The per-user helper passes the user-scope placements its user
+// holds receipts for, since a user-scope root such as a tool's profile
+// directory exists whether or not sofcat placed anything there.
 func (z *ZipInstaller) Regenerate(names []string) []Result {
 	var failed []Result
 	for _, name := range names {

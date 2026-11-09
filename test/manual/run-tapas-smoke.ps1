@@ -850,6 +850,13 @@ foreach ($path in $before.Keys) {
 if ($after.Count -ne $before.Count) { Fail "the run wrote a new receipt: $($after.Keys -join ', ')" }
 Pass "$($before.Count) receipts untouched"
 
+Write-Step "The run regenerated every placement's files without an error"
+# The service skips user-scope placements, whose roots only the per-user
+# helper can expand; a generate error here means it tried one.
+$generateErrors = @(@((Read-Inventory).Errors) | Where-Object { "$_" -match '^generate of ' })
+if ($generateErrors.Count -gt 0) { Fail "inventory reports generate errors: $($generateErrors -join '; ')" }
+Pass "no generate error in $inventoryPath"
+
 # --- Last item out ----------------------------------------------------------------
 
 Write-Step "Removing the last exclusive skill removes its index"
