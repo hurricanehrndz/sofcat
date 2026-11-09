@@ -25,7 +25,7 @@ const (
 	methodRemoveItem            = "removeItem"
 	methodCancelOperation       = "cancelOperation"
 	methodStreamOperationStatus = "streamOperationStatus"
-	// The per-user helper's methods (`<slug>-ui.exe --user-sync`), not
+	// The per-user helper's methods (`<slug>-useragent.exe`), not
 	// bound into the UI's Wails surface.
 	methodListUserPlacements   = "listUserPlacements"
 	methodReportUserPlacements = "reportUserPlacements"

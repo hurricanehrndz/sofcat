@@ -78,11 +78,11 @@ func TestInstallWindowsServiceRegistersHelperAndStarts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	uiExe := filepath.Join(filepath.Dir(exe), identity.Slug+"-ui.exe")
+	agentExe := filepath.Join(filepath.Dir(exe), userAgentExe())
 	expectCalls(t, f.calls, []string{
 		"exists",
 		"create",
-		fmt.Sprintf(`set %s-user-sync="%s" --user-sync`, identity.Slug, uiExe),
+		fmt.Sprintf(`set %s-user-sync="%s"`, identity.Slug, agentExe),
 		"start",
 	})
 	if f.config.DisplayName != identity.Name || f.config.Description != identity.Name+" application management service" {
@@ -131,7 +131,7 @@ func TestInstallWindowsServiceUndoesOnRunValueFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	name, data := userSyncRunValue(filepath.Join(filepath.Dir(exe), identity.Slug+"-ui.exe"))
+	name, data := userSyncRunValue(filepath.Join(filepath.Dir(exe), userAgentExe()))
 	f.fail["set "+name+"="+data] = errors.New("boom")
 	cfg := config.Configuration{ServiceName: "sofcat", ConfigPath: `C:\ProgramData\SofCat\config.yaml`}
 
@@ -197,7 +197,7 @@ func TestRunValueWriteAndRemove(t *testing.T) {
 	}
 	_ = k.Close()
 
-	name, data := userSyncRunValue(`C:\Program Files\SofCat\sofcat-ui.exe`)
+	name, data := userSyncRunValue(`C:\Program Files\SofCat\sofcat-useragent.exe`)
 	if err = setRunValueFunc(name, data); err != nil {
 		t.Fatalf("set: %v", err)
 	}

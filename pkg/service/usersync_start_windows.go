@@ -13,7 +13,11 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// StartUserSync starts the per-user helper, <slug>-ui.exe --user-sync, once
+// userAgentExe is the per-user helper's file name, beside <slug>.exe: what
+// the service starts here and what the logon Run value names.
+func userAgentExe() string { return identity.Slug + "-useragent.exe" }
+
+// StartUserSync starts the per-user helper, <slug>-useragent.exe, once
 // for each user signed in to the machine, so a new user-placement plan
 // reaches their profiles without waiting for a logon. Locked, disconnected
 // and switched-away sessions count: their profiles are loaded. Each helper
@@ -40,7 +44,7 @@ func StartUserSync(appDataPath string) {
 		return
 	}
 	// Always next to this executable, never from config.
-	helper := filepath.Join(filepath.Dir(exe), identity.Slug+"-ui.exe")
+	helper := filepath.Join(filepath.Dir(exe), userAgentExe())
 	if _, err = os.Stat(helper); err != nil {
 		slog.Debug("user sync: no helper to start", "helper", helper, "err", err)
 		return
@@ -122,7 +126,7 @@ func startInSession(session uint32, helper string, started map[string]bool) bool
 	// The service was answering a moment ago, so the helper does not retry
 	// the pipe: one left waiting would hold its executable open through an
 	// uninstall.
-	cmdLine := windows.ComposeCommandLine([]string{helper, "--user-sync", "--no-retry"})
+	cmdLine := windows.ComposeCommandLine([]string{helper, "--no-retry"})
 	si := &windows.StartupInfo{Desktop: windows.StringToUTF16Ptr(`winsta0\default`)}
 	si.Cb = uint32(unsafe.Sizeof(*si))
 	var pi windows.ProcessInformation

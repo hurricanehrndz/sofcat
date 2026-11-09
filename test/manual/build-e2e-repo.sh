@@ -5,7 +5,8 @@
 # out exactly as a served repo is, so the VM can point `url:` at it directly
 # (file://C:/sofcat-repo/) or an HTTP server can serve it:
 #
-#   sofcat.exe, sofcat-ui.exe        current build (just build)
+#   sofcat.exe, sofcat-ui.exe,       current build (just build)
+#   sofcat-useragent.exe
 #   manifests/                         e2e_manifest + the selfserve fixtures
 #   catalogs/                          e2e_catalog (from makecatalogs) + selfserve_catalog
 #   packages-info/GoogleChrome.yaml    rendered from the .in template
@@ -50,7 +51,7 @@ echo "==> Chrome $version sha256 $hash"
 
 rm -rf "$repo"
 mkdir -p "$repo"/{manifests,catalogs,packages-info,packages/google-chrome}
-cp build/sofcat.exe build/sofcat-ui.exe "$repo/"
+cp build/sofcat.exe build/sofcat-ui.exe build/sofcat-useragent.exe "$repo/"
 cp "$fixtures"/selfserve/manifests/*.yaml "$fixtures"/e2e/manifests/*.yaml "$repo/manifests/"
 cp -R "$fixtures"/selfserve/packages/scripts "$repo/packages/scripts"
 # Branding assets e2e-chrome.sh installs on the guest (not part of a served repo).

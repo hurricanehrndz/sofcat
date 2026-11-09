@@ -41,6 +41,7 @@ jobs:
           subject-path: |
             build/sofcat.exe
             build/sofcat-ui.exe
+            build/sofcat-useragent.exe
             build/sofcat-*-setup.exe
             build/makecatalogs-*
       - name: Stage provenance bundle
@@ -54,6 +55,7 @@ jobs:
           path: |
             ./build/sofcat.exe
             ./build/sofcat-ui.exe
+            ./build/sofcat-useragent.exe
             ./build/sofcat-*-setup.exe
             ./build/makecatalogs-*
           if-no-files-found: error
@@ -62,7 +64,7 @@ jobs:
         with:
           allowUpdates: false
           prerelease: true
-          artifacts: "./build/sofcat.exe,./build/sofcat-ui.exe,./build/sofcat-*-setup.exe,./build/makecatalogs-*,./build/sofcat-*.sigstore.json"
+          artifacts: "./build/sofcat.exe,./build/sofcat-ui.exe,./build/sofcat-useragent.exe,./build/sofcat-*-setup.exe,./build/makecatalogs-*,./build/sofcat-*.sigstore.json"
           tag: ${{ github.ref_name }}
           token: ${{ secrets.GITHUB_TOKEN }}
   integration:

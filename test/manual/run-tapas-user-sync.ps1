@@ -3,7 +3,7 @@
 User-scope placement check for the Tapas Test fixture brand.
 
 .DESCRIPTION
-Runs the per-user helper, `tapas-test-ui.exe --user-sync`, and asserts that
+Runs the per-user helper, `tapas-test-useragent.exe`, and asserts that
 it placed the Codex skills in this user's profile: the trees under
 %USERPROFILE%\.agents\skills, their receipts under
 %LOCALAPPDATA%\Tapas Test\receipts with the plan's managed flag,
@@ -27,7 +27,7 @@ at the end. PowerShell 5.1 compatible.
 
 [CmdletBinding()]
 param(
-    [string]$UI          = "$env:ProgramFiles\Tapas Test\tapas-test-ui.exe",
+    [string]$Agent       = "$env:ProgramFiles\Tapas Test\tapas-test-useragent.exe",
     [string]$ProductName = "Tapas Test",
     [string]$Item        = "tapas-managed-skill",
     # The managed skill whose NOTE.md.tmpl the helper renders with this
@@ -59,16 +59,16 @@ function Fail {
 
 # Invoke-UserSync runs the helper once and fails unless it exits 0.
 function Invoke-UserSync {
-    Log "Starting $UI --user-sync"
-    $process = Start-Process -FilePath $UI -ArgumentList "--user-sync" -PassThru
+    Log "Starting $Agent"
+    $process = Start-Process -FilePath $Agent -PassThru
     # Caching the handle keeps ExitCode readable after exit in PowerShell 5.1.
     $null = $process.Handle
     if (-not $process.WaitForExit($TimeoutSec * 1000)) {
         $process | Stop-Process -Force
-        Fail "--user-sync did not exit within ${TimeoutSec}s"
+        Fail "the agent did not exit within ${TimeoutSec}s"
     }
-    if ($process.ExitCode -ne 0) { Fail "--user-sync exited $($process.ExitCode)" }
-    Log "--user-sync exited 0"
+    if ($process.ExitCode -ne 0) { Fail "the agent exited $($process.ExitCode)" }
+    Log "the agent exited 0"
 }
 
 try {
@@ -80,7 +80,7 @@ try {
     if ((New-Object Security.Principal.WindowsPrincipal $identity).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
         Fail "this check needs a standard (non-elevated) token"
     }
-    if (-not (Test-Path -LiteralPath $UI -PathType Leaf)) { Fail "$UI is not installed" }
+    if (-not (Test-Path -LiteralPath $Agent -PathType Leaf)) { Fail "$Agent is not installed" }
 
     # Start without the tree and its receipt, so a pass proves this run of
     # the helper placed them.

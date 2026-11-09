@@ -27,7 +27,7 @@ import (
 // UserPlacement is one entry of the user-placement plan, listUserPlacements'
 // result: a zip item's variant for a placement whose scope on this OS is
 // user. The service never writes these trees; the per-user helper
-// (`<slug>-ui.exe --user-sync`) does, from the archive the service staged.
+// (`<slug>-useragent.exe`) does, from the archive the service staged.
 type UserPlacement struct {
 	Item      string `json:"item"`
 	Version   string `json:"version"`

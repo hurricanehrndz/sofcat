@@ -27,6 +27,7 @@ just bootstrap
 This creates:
 - `build/manual-test/server-root/sofcat.exe`
 - `build/manual-test/server-root/sofcat-ui.exe`
+- `build/manual-test/server-root/sofcat-useragent.exe`
 - `build/manual-test/server-root/manifests/example_manifest.yaml`
 - `build/manual-test/server-root/catalogs/example_catalog.yaml`
 - `build/manual-test/server-root/packages/` (empty)

@@ -14,7 +14,6 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/branding"
 	"github.com/hurricanehrndz/sofcat/pkg/identity"
 	"github.com/hurricanehrndz/sofcat/pkg/service"
-	"github.com/hurricanehrndz/sofcat/pkg/usersync"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -24,8 +23,6 @@ var defaultWindowTitle = identity.Name + " UI"
 
 func main() {
 	pipeName := flag.String("pipe-name", identity.PipeName(), "SofCat service pipe name")
-	userSync := flag.Bool("user-sync", false, "place this user's user-scope items without a window, then exit")
-	noRetry := flag.Bool("no-retry", false, "with --user-sync, do not wait for an unreachable service (set when the service starts the helper)")
 	flag.Parse()
 
 	// ponytail: startup diagnostics go to stderr, which is invisible in the
@@ -38,22 +35,7 @@ func main() {
 	if logWriter != nil {
 		defer func() { _ = logWriter.Close() }()
 	}
-	// The zip installer the user sync runs logs through slog's default.
-	slog.SetDefault(logger)
-
 	client := service.NewClient(*pipeName)
-	if *userSync {
-		// The per-user helper, started at logon by the HKLM Run value
-		// -serviceinstall writes, and by the service whenever it saves a new
-		// plan (with --no-retry): no window, and exit 0 even when an item
-		// fails; every result is logged and reported.
-		if *noRetry {
-			usersync.PlanRetryFor = 0
-		}
-		runUserSync(context.Background(), client, logger)
-		return
-	}
-
 	uiService := &UIService{
 		client: client,
 		logger: logger,

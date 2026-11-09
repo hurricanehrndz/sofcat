@@ -16,7 +16,7 @@ publisher := shell(_read, _brand_env, "PUBLISHER", "Carlos Hernandez")
 identifier := shell(_read, _brand_env, "IDENTIFIER", "ca.hrndz.sofcat")
 description := shell(_read, _brand_env, "DESCRIPTION", "A catalog for anything you can put on disk or run")
 homepage := shell(_read, _brand_env, "HOMEPAGE", "https://github.com/hurricanehrndz/sofcat")
-# INSTALLERS=zip builds both binaries with the zip_only tag: no command
+# INSTALLERS=zip builds the Windows binaries with the zip_only tag: no command
 # installers or catalog scripts are compiled in (site/src/content/docs/guides/zip-items.md).
 installers := shell(_read, _brand_env, "INSTALLERS", "")
 _zip_tag := if installers == "zip" { ",zip_only" } else { "" }
@@ -25,7 +25,7 @@ _brand_png := if brand == "" { "" } else { brand / "icon.png" }
 icon_ico := if path_exists(_brand_ico) == "true" { _brand_ico } else { "assets/sofcat.ico" }
 icon_png := if path_exists(_brand_png) == "true" { _brand_png } else { "" }
 # A brand's write-roots.yaml (where zip items may be placed) is compiled into
-# both binaries under the brand_roots tag; without it the stock roots apply.
+# the binaries under the brand_roots tag; without it the stock roots apply.
 _brand_roots := if brand == "" { "" } else { brand / "write-roots.yaml" }
 write_roots := if path_exists(_brand_roots) == "true" { _brand_roots } else { "" }
 _svc_tags := trim_start_match((if write_roots == "" { "" } else { "brand_roots" }) + _zip_tag, ",")
@@ -37,7 +37,7 @@ _subst := "-e 's|@APP@|" + app + "|g' -e 's|@PRODUCT@|" + product + "|g' -e 's|@
 _identity := "-X github.com/hurricanehrndz/sofcat/pkg/identity.Slug=" + app + " -X 'github.com/hurricanehrndz/sofcat/pkg/identity.Name=" + product + "' -X github.com/hurricanehrndz/sofcat/pkg/identity.Identifier=" + identifier
 version := `git describe --tags --always --dirty 2>/dev/null || echo dev`
 # Signing hook (site/src/content/docs/reference/code-signing.md): a shell
-# command line that `build` runs with both executables appended and `setup`
+# command line that `build` runs with the three executables appended and `setup`
 # hands to embala as [sign.windows] for setup.exe and the uninstaller stub.
 # Unset, nothing is signed.
 SIGN_CMD := env("SIGN_CMD", "")
@@ -141,18 +141,19 @@ site: site-install ui-install
 # under build/winres/<pkg>/.
 winres arch="amd64": brand-check
     rm -rf build/winres
-    for dir in cmd/sofcat ui; do \
+    for dir in cmd/sofcat cmd/sofcat-useragent ui; do \
       out=build/winres/$dir && mkdir -p $out && cp "{{icon_ico}}" $out/icon.ico && \
       sed {{_subst}} $dir/winres/winres.json > $out/winres.json && \
       go run github.com/tc-hib/go-winres@v0.3.3 make --arch {{arch}} --in $out/winres.json \
         --file-version "{{version}}" --product-version "{{version}}" --out $dir/rsrc || exit 1; \
     done
 
-# Windows binaries (pure Go, no cgo) -> build/<app>.exe and build/<app>-ui.exe.
+# Windows binaries (pure Go, no cgo) -> build/<app>.exe, build/<app>-ui.exe and
+# build/<app>-useragent.exe, the per-user helper (cmd/sofcat-useragent).
 # A brand icon.png is staged as ui/brand-icon.png (gitignored) for the brand tag,
 # and a brand write-roots.yaml as pkg/placement/brand-write-roots.yaml
 # (gitignored) for the brand_roots tag.
-# A brand with INSTALLERS=zip adds the zip_only tag to both.
+# A brand with INSTALLERS=zip adds the zip_only tag to all three.
 build arch="amd64": ui-assets (winres arch)
     mkdir -p build
     {{ if write_roots == "" { "true" } else { "cp '" + write_roots + "' pkg/placement/brand-write-roots.yaml" } }}
@@ -163,7 +164,10 @@ build arch="amd64": ui-assets (winres arch)
     GOOS=windows GOARCH={{arch}} CGO_ENABLED=0 \
         go build -tags {{_ui_tags}} -ldflags "-H windowsgui {{_identity}}" \
         -o build/{{app}}-ui.exe ./ui
-    {{ if SIGN_CMD == "" { "true" } else { SIGN_CMD + " build/" + app + ".exe build/" + app + "-ui.exe" } }}
+    GOOS=windows GOARCH={{arch}} CGO_ENABLED=0 \
+        go build -tags "{{_svc_tags}}" -ldflags "-H windowsgui {{_identity}}" \
+        -o build/{{app}}-useragent.exe ./cmd/sofcat-useragent
+    {{ if SIGN_CMD == "" { "true" } else { SIGN_CMD + " build/" + app + ".exe build/" + app + "-ui.exe build/" + app + "-useragent.exe" } }}
 
 # Windows installer -> build/<app>-<pkg_version>-x86_64-setup.exe (embala's
 # setup format; it builds on any OS, since the stub is prebuilt and embala
@@ -175,7 +179,7 @@ build arch="amd64": ui-assets (winres arch)
 setup: build
     rm -rf build/setup
     mkdir -p build/setup
-    cp build/{{app}}.exe build/{{app}}-ui.exe build/setup/
+    cp build/{{app}}.exe build/{{app}}-ui.exe build/{{app}}-useragent.exe build/setup/
     for f in embala.toml install.lua uninstall.lua; do \
       sed -e "s/@VERSION@/{{pkg_version}}/" {{_subst}} installer/$f > build/setup/$f || exit 1; \
     done
@@ -376,7 +380,7 @@ manual-test-server:
 # server URL (auto-detected from the default route when base_url is empty).
 bootstrap base_url="": build manual-test-server
     mkdir -p {{server_root}}/manifests {{server_root}}/catalogs {{server_root}}/packages {{vm_dir}}
-    cp build/{{app}}.exe build/{{app}}-ui.exe {{server_root}}/
+    cp build/{{app}}.exe build/{{app}}-ui.exe build/{{app}}-useragent.exe {{server_root}}/
     cp examples/example_manifest.yaml {{server_root}}/manifests/
     cp examples/example_catalog.yaml {{server_root}}/catalogs/
     cp test/manual/fixtures/selfserve/manifests/*.yaml {{server_root}}/manifests/
@@ -422,7 +426,7 @@ bootstrap-tapas base_url="": manual-test-server _tapas-repo
     {{quote(just_executable())}} --justfile {{quote(justfile())}} brand={{tapas_brand}} build
     rm -rf {{tapas_vm_dir}}
     mkdir -p {{tapas_vm_dir}}
-    cp build/{{tapas_app}}.exe build/{{tapas_app}}-ui.exe {{tapas_server_root}}/
+    cp build/{{tapas_app}}.exe build/{{tapas_app}}-ui.exe build/{{tapas_app}}-useragent.exe {{tapas_server_root}}/
     cp test/manual/bootstrap-vm.ps1 {{tapas_vm_dir}}/
     @base_url="{{base_url}}"; \
     if [ -z "$base_url" ]; then \

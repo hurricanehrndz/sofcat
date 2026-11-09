@@ -1,7 +1,6 @@
-// Package usersync is the per-user helper's work (`<slug>-ui.exe
-// --user-sync`): it asks the service for the user-placement plan, places
-// each tree into the caller's own profile from the archive the service
-// staged, removes the trees its own receipts track that left the plan, and
+// Package usersync is the per-user helper's work (`<slug>-useragent.exe`):
+// it asks the service for the user-placement plan, places each tree into
+// the caller's own profile from the archive the service staged, removes the trees its own receipts track that left the plan, and
 // reports every result back. It runs as the user, never as SYSTEM, and is
 // portable so it is tested on any host.
 package usersync

@@ -223,7 +223,7 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 	plan.checkUpdates(run, runner.Checker, cfg.CachePath)
 
 	// The service never writes into a user profile: it stages the archives
-	// of user-scope placements for the per-user helper (--user-sync), then
+	// of user-scope placements for the per-user helper (<slug>-useragent), then
 	// stores the plan listUserPlacements serves. The plan comes from the
 	// run's own desired and held sets, the ones scope exit used, with each
 	// item deferred this run held too: the helper neither places nor removes

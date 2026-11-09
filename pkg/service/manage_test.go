@@ -13,16 +13,16 @@ func TestUserSyncRunValue(t *testing.T) {
 	defer func() { identity.Slug = origSlug }()
 
 	tests := []struct {
-		slug, uiExe, wantName, wantData string
+		slug, agentExe, wantName, wantData string
 	}{
-		{"sofcat", `C:\Program Files\SofCat\sofcat-ui.exe`, "sofcat-user-sync", `"C:\Program Files\SofCat\sofcat-ui.exe" --user-sync`},
-		{"tapas-test", `C:\Program Files\Tapas Test\tapas-test-ui.exe`, "tapas-test-user-sync", `"C:\Program Files\Tapas Test\tapas-test-ui.exe" --user-sync`},
+		{"sofcat", `C:\Program Files\SofCat\sofcat-useragent.exe`, "sofcat-user-sync", `"C:\Program Files\SofCat\sofcat-useragent.exe"`},
+		{"tapas-test", `C:\Program Files\Tapas Test\tapas-test-useragent.exe`, "tapas-test-user-sync", `"C:\Program Files\Tapas Test\tapas-test-useragent.exe"`},
 	}
 	for _, tt := range tests {
 		identity.Slug = tt.slug
-		name, data := userSyncRunValue(tt.uiExe)
+		name, data := userSyncRunValue(tt.agentExe)
 		if name != tt.wantName || data != tt.wantData {
-			t.Errorf("userSyncRunValue(%q) = %q, %q; want %q, %q", tt.uiExe, name, data, tt.wantName, tt.wantData)
+			t.Errorf("userSyncRunValue(%q) = %q, %q; want %q, %q", tt.agentExe, name, data, tt.wantName, tt.wantData)
 		}
 	}
 }

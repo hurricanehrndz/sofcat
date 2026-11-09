@@ -198,7 +198,7 @@ func installWindowsService(m *mgr.Mgr, cfg config.Configuration) error {
 	// The helper beside this executable runs at every logon. A failure from
 	// here on undoes the registration, so a retried install does not meet a
 	// half-finished service and refuse.
-	name, data := userSyncRunValue(filepath.Join(filepath.Dir(exePath), identity.Slug+"-ui.exe"))
+	name, data := userSyncRunValue(filepath.Join(filepath.Dir(exePath), userAgentExe()))
 	if err := setRunValueFunc(name, data); err != nil {
 		_ = deleteServiceFunc(m, cfg)
 		return fmt.Errorf("failed to write Run value %q: %w", name, err)

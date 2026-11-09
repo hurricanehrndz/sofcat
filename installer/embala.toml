@@ -7,10 +7,10 @@
 # a [sign.windows] section to the rendered copy, so embala signs setup.exe and
 # the uninstaller stub (site/src/content/docs/reference/code-signing.md).
 #
-# The setup.exe puts both executables in C:\Program Files\SofCat and runs
+# The setup.exe puts the three executables in C:\Program Files\SofCat and runs
 # `sofcat.exe -serviceinstall`, which registers and starts the SofCat service
 # and writes the HKLM Run value sofcat-user-sync that starts
-# `sofcat-ui.exe --user-sync` at every logon (site/src/content/docs/guides/zip-items.md); its
+# the per-user helper `sofcat-useragent.exe` at every logon (site/src/content/docs/guides/zip-items.md); its
 # uninstaller runs `sofcat.exe -serviceremove`, which undoes both. sofcat owns
 # its service and that value, so the scripts only call it. The installer ships
 # no config.yaml: management tooling writes C:\ProgramData\SofCat\config.yaml,
@@ -33,6 +33,7 @@ install-mode = "per-machine"
 files = [
   { src = "@APP@.exe", dest = "@APP@.exe" },
   { src = "@APP@-ui.exe", dest = "@APP@-ui.exe" },
+  { src = "@APP@-useragent.exe", dest = "@APP@-useragent.exe" },
 ]
 # Raw scripts: the shortcut and ARP entry live in install.lua, since `script`
 # cannot be combined with `main-executable` or `shortcuts`.
