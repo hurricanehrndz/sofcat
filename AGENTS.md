@@ -75,7 +75,7 @@ registers and nothing removes
 (`site/src/content/docs/reference/event-log.md`); the running service logs
 to `sofcat.log` only.
 With `SIGN_CMD` set (environment or `just SIGN_CMD=... setup`), `build` runs
-it on the three executables and `setup` has embala run it on `setup.exe` and the
+it on the three executables, `makecatalogs` on its two Windows ones and `setup` has embala run it on `setup.exe` and the
 uninstaller stub (`site/src/content/docs/reference/code-signing.md`); unset,
 nothing is signed.
 Everything the service writes lives under `C:\ProgramData\SofCat`, as under
