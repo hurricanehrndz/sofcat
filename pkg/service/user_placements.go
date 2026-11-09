@@ -60,6 +60,12 @@ type UserPlacement struct {
 type UserPlacements struct {
 	Entries []UserPlacement  `json:"entries"`
 	Facts   conditions.Facts `json:"facts"`
+	// Placements holds the spec of every placement whose scope on this OS is
+	// user, entries or not, so the helper enforces exclusive and places
+	// items_dir, vars and files as the service would, and still removes a
+	// placement's files once its last item leaves. A plan from an older
+	// service has none: nil, never empty, so the helper can tell.
+	Placements map[string]placement.Spec `json:"placements"`
 }
 
 // UserPlacementResult is the helper's outcome for one placement, sent with
@@ -99,12 +105,7 @@ var UserArtifactsDir = func(dataDir string) string {
 // same archive and a catalog location never shapes a path; a variant whose
 // hash is not a sha256 is left out.
 func UserPlan(desired, held, managed map[string]bool, catalogs map[int]map[string]catalog.Item, table placement.Table, goos, dir string) []UserPlacement {
-	var userPlacements []string
-	for _, name := range table.Names() {
-		if table.Placements[name].ScopeFor(goos) == placement.ScopeUser {
-			userPlacements = append(userPlacements, name)
-		}
-	}
+	userPlacements := userScopeNames(table, goos)
 
 	names := slices.Collect(maps.Keys(desired))
 	for name := range held {
@@ -148,6 +149,28 @@ func UserPlan(desired, held, managed map[string]bool, catalogs map[int]map[strin
 	return entries
 }
 
+// userScopeNames returns the placements whose scope on goos is user, in
+// table order.
+func userScopeNames(table placement.Table, goos string) []string {
+	var names []string
+	for _, name := range table.Names() {
+		if table.Placements[name].ScopeFor(goos) == placement.ScopeUser {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+// UserSpecs returns the spec of every placement whose scope on goos is
+// user, for UserPlacements.Placements.
+func UserSpecs(table placement.Table, goos string) map[string]placement.Spec {
+	specs := map[string]placement.Spec{}
+	for _, name := range userScopeNames(table, goos) {
+		specs[name] = table.Placements[name]
+	}
+	return specs
+}
+
 // UserPlanPath is where a run stores the plan listUserPlacements serves.
 func UserPlanPath(appDataPath string) string {
 	return filepath.Join(appDataPath, "user-plan.json")
@@ -161,6 +184,9 @@ func SaveUserPlan(appDataPath string, plan UserPlacements) error {
 	}
 	if plan.Facts == nil {
 		plan.Facts = conditions.Facts{}
+	}
+	if plan.Placements == nil {
+		plan.Placements = map[string]placement.Spec{}
 	}
 	data, err := json.Marshal(plan)
 	if err != nil {
@@ -177,9 +203,10 @@ func SaveUserPlan(appDataPath string, plan UserPlacements) error {
 
 // LoadUserPlan reads the plan the last run stored; before the first run there
 // is none, which is an empty plan. It reads no repository, so the helper gets
-// its plan at logon even while the repository is unreachable.
+// its plan at logon even while the repository is unreachable. A stored plan
+// from an older service keeps Placements nil.
 func LoadUserPlan(appDataPath string) (UserPlacements, error) {
-	empty := UserPlacements{Entries: []UserPlacement{}, Facts: conditions.Facts{}}
+	empty := UserPlacements{Entries: []UserPlacement{}, Facts: conditions.Facts{}, Placements: map[string]placement.Spec{}}
 	data, err := os.ReadFile(UserPlanPath(appDataPath))
 	if errors.Is(err, fs.ErrNotExist) {
 		return empty, nil
@@ -330,7 +357,7 @@ func (sr *serviceRunner) dispatchUserPlacements(conn clientConn, req rpcRequest,
 }
 
 // sendUserPlacementCommand is `-S ListUserPlacements`, one JSON line per
-// entry, and `-S ReportUserPlacements:item,placement,outcome[,error]`, which
+// entry and then one holding the plan's placements, and `-S ReportUserPlacements:item,placement,outcome[,error]`, which
 // sends one result.
 func sendUserPlacementCommand(ctx context.Context, client *Client, cmd Command) (CommandResponse, error) {
 	if cmd.Action == actionReportUserPlacements {
@@ -347,7 +374,13 @@ func sendUserPlacementCommand(ctx context.Context, client *Client, cmd Command) 
 	if err != nil {
 		return CommandResponse{}, err
 	}
-	resp := CommandResponse{Status: "ok", UserPlan: &plan, Items: make([]string, 0, len(plan.Entries))}
+	specs, err := json.Marshal(struct {
+		Placements map[string]placement.Spec `json:"placements"`
+	}{plan.Placements})
+	if err != nil {
+		return CommandResponse{}, fmt.Errorf("failed to encode user placement specs: %w", err)
+	}
+	resp := CommandResponse{Status: "ok", UserPlan: &plan, Items: make([]string, 0, len(plan.Entries)+1)}
 	for _, e := range plan.Entries {
 		line, err := json.Marshal(e)
 		if err != nil {
@@ -355,5 +388,6 @@ func sendUserPlacementCommand(ctx context.Context, client *Client, cmd Command) 
 		}
 		resp.Items = append(resp.Items, string(line))
 	}
+	resp.Items = append(resp.Items, string(specs))
 	return resp, nil
 }

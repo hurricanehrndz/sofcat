@@ -60,7 +60,7 @@ answer echoes the `id` with a `result` or an `error`:
 | `removeItem` | `{itemName}` | `AcceptedOperation` |
 | `cancelOperation` | `{operationId}` | `{canceled: true}` |
 | `streamOperationStatus` | `{operationId}` | `{streamAccepted: true}`, then notifications |
-| `listUserPlacements` | none | `{entries: [{item, version, placement, path, archive, hash, treeHash, held, managed}], facts: {...}}` |
+| `listUserPlacements` | none | `{entries: [{item, version, placement, path, archive, hash, treeHash, held, managed}], facts: {...}, placements: {name: spec}}` |
 | `reportUserPlacements` | `{results: [{item, placement, outcome, error?}]}` | `{}` |
 
 `getServiceInfo`, `getBranding`, the two mutations and `cancelOperation` skip the
@@ -94,7 +94,7 @@ that is not check-only stages each verified archive as `<hash>.zip` in
 (`${ProgramData}\<Name>\Data\user-artifacts`, which administrators write and
 users read), removes archives no plan entry references, and then stores the
 plan in the data directory as `user-plan.json` (`{entries: [...], facts:
-{...}}`, written atomically). The plan is that run's desired set (installs
+{...}, placements: {...}}`, written atomically). The plan is that run's desired set (installs
 and updates with their dependencies and `update_for` riders, the set scope
 exit keeps) filtered to those variants, the same for every caller, with the
 facts that run collected (built-in and admin-script facts alike, once per
@@ -107,15 +107,25 @@ the first run gets an empty plan. `path` is the unexpanded placement root,
 `managed` is the manifest's flag, which the helper records in its receipt and
 renders the tree's templates with (`.Item.Managed`); the templates also
 render with `facts` and the account's login name, and the helper runs no
-script. The helper, run at logon by the HKLM `Run` value
+script. `placements` maps the name of every placement whose scope on this
+OS is `user`, whether or not an entry targets it, to its spec as
+`placements.yaml` gives it (`paths`, `scope`, `exclusive`, `items_dir`,
+`vars`, `files` and the rest, with their YAML key names), so the helper
+enforces `exclusive`, places under `items_dir` and renders the placement's
+`files` as the service does in machine scope; `{}` when there is none. A
+plan from an older service has no `placements`: the helper then builds each
+spec from the entry's `path` alone, with none of those, and logs that at
+debug. The helper, run at logon by the HKLM `Run` value
 `<slug>.exe -serviceinstall` writes
 and in the background whenever the storefront starts, retries a service it
 cannot connect to every 5 seconds for up to a minute (without a plan it
 removes nothing), expands `${USERPROFILE}` itself, checks the path against
 the build's `windows_user` roots, re-verifies `hash`, places the tree with
 receipts in `%LOCALAPPDATA%\<Name>\receipts`, removes its own
-receipt-tracked trees that left the plan, and sends every result with
-`reportUserPlacements`. The service only logs them (failures at warn, with
+receipt-tracked trees that left the plan, regenerates the `files` of every
+placement it still holds a receipt in, and sends every result with
+`reportUserPlacements`; a failed regeneration is a result with the
+placement and an empty `item`. The service only logs them (failures at warn, with
 the caller from the connection). A logged-on user gets new content at the
 next logon or storefront start.
 

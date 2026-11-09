@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"math"
 	"path"
 	"slices"
 	"strings"
@@ -44,33 +45,33 @@ type Table struct {
 // trees and, optionally, files rendered from the trees it holds.
 type Spec struct {
 	// Paths maps an OS (darwin, windows) to the placement root on it.
-	Paths map[string]string `yaml:"paths,omitempty"`
+	Paths map[string]string `yaml:"paths,omitempty" json:"paths,omitempty"`
 	// Scope maps an OS to machine or user. An OS left out is machine.
-	Scope map[string]string `yaml:"scope,omitempty"`
+	Scope map[string]string `yaml:"scope,omitempty" json:"scope,omitempty"`
 	// AppliesTo is display text for the storefront, never scoping.
-	AppliesTo    []string          `yaml:"applies_to,omitempty"`
-	ActionLabels map[string]string `yaml:"action_labels,omitempty"`
-	Exclusive    bool              `yaml:"exclusive,omitempty"`
+	AppliesTo    []string          `yaml:"applies_to,omitempty" json:"applies_to,omitempty"`
+	ActionLabels map[string]string `yaml:"action_labels,omitempty" json:"action_labels,omitempty"`
+	Exclusive    bool              `yaml:"exclusive,omitempty" json:"exclusive,omitempty"`
 	// ItemsDir puts item trees in <root>/<ItemsDir>/<item> rather than
 	// <root>/<item>.
-	ItemsDir string `yaml:"items_dir,omitempty"`
+	ItemsDir string `yaml:"items_dir,omitempty" json:"items_dir,omitempty"`
 	// Vars is free data for the placement's templates (.Placement.Vars).
-	Vars map[string]any `yaml:"vars,omitempty"`
+	Vars map[string]any `yaml:"vars,omitempty" json:"vars,omitempty"`
 	// Files are rendered from the placement's receipts after every change
 	// to it.
-	Files []File `yaml:"files,omitempty"`
+	Files []File `yaml:"files,omitempty" json:"files,omitempty"`
 	// FilesAtomic writes none of Files unless every one renders and passes
 	// its checks. Without it, each is written on its own.
-	FilesAtomic bool `yaml:"files_atomic,omitempty"`
+	FilesAtomic bool `yaml:"files_atomic,omitempty" json:"files_atomic,omitempty"`
 }
 
 // File is a file a placement renders (render.FileContext): at Path,
 // relative to the placement root, or at Paths, one absolute path per OS.
 // An empty render removes the file.
 type File struct {
-	Path     string            `yaml:"path,omitempty"`
-	Paths    map[string]string `yaml:"paths,omitempty"`
-	Template string            `yaml:"template"`
+	Path     string            `yaml:"path,omitempty" json:"path,omitempty"`
+	Paths    map[string]string `yaml:"paths,omitempty" json:"paths,omitempty"`
+	Template string            `yaml:"template" json:"template"`
 }
 
 // View describes placement name, rooted at root, to a template.
@@ -78,7 +79,30 @@ func (p Spec) View(name, root string) render.Placement {
 	v := render.Placement{Name: name, Root: root}
 	// Nil without vars, so tree inputs (installer.treeInputs) leave it out.
 	if len(p.Vars) > 0 {
-		v.Vars = render.JSONValue(p.Vars)
+		v.Vars = integral(render.JSONValue(p.Vars))
+	}
+	return v
+}
+
+// integral turns every whole float64 in a JSON value into an int, in place,
+// so vars read the same from placements.yaml and from the user plan's JSON,
+// which decodes every number as float64: the service, the helper and
+// makecatalogs -check render alike. YAML 3.0 is therefore 3. A float beyond
+// 2^53 is left alone.
+func integral(v any) any {
+	switch v := v.(type) {
+	case map[string]any:
+		for k, e := range v {
+			v[k] = integral(e)
+		}
+	case []any:
+		for i, e := range v {
+			v[i] = integral(e)
+		}
+	case float64:
+		if v == math.Trunc(v) && math.Abs(v) <= 1<<53 {
+			return int(v)
+		}
 	}
 	return v
 }
@@ -233,15 +257,6 @@ func validatePlacement(name string, p Spec) []error {
 	}
 	if p.ItemsDir != "" && (!isCleanRelative(p.ItemsDir) || strings.HasPrefix(p.ItemsDir, ".")) {
 		fail("items_dir: %q is not a clean relative path whose first segment does not start with .", p.ItemsDir)
-	}
-	// Deliberately machine scope only: the per-user helper rebuilds a
-	// user-scope spec from name and path alone (usersync.userTable), so it
-	// would place trees at <root>/<item>, render no files and give tree
-	// templates no vars. Lifting this
-	// means carrying the spec in the user plan
-	// (.tmp/user-scope-spec/plan.md).
-	if (p.ItemsDir != "" || len(p.Files) > 0 || len(p.Vars) > 0) && (p.ScopeFor(Darwin) == ScopeUser || p.ScopeFor(Windows) == ScopeUser) {
-		fail("scope: items_dir, vars and files need machine scope on every OS")
 	}
 	if p.FilesAtomic && len(p.Files) == 0 {
 		fail("files_atomic: set without files")

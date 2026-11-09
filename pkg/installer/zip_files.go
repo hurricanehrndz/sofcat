@@ -18,17 +18,31 @@ import (
 
 // A placement's files have no receipts: sofcat owns them outright and
 // rewrites them from the receipts after every change to the placement and
-// once per run (RegenerateAll). Each is rendered from its entry's template.
+// once per run (RegenerateAll for machine scope, Regenerate from the per-user
+// helper for user scope). Each is rendered from its entry's template.
 
-// RegenerateAll regenerates every placement in the placement table that has
-// files and a path on this OS, and returns a failed Result per placement
-// that failed. A managed run calls it once, after scope exit, so a file
-// deleted, refused or left stale by an earlier failure is restored even
-// when no tree changes. A placement whose root does not exist is skipped:
-// nothing was ever placed there, and an empty catalog would only be clutter.
+// RegenerateAll regenerates every machine-scope placement in the placement
+// table that has files and a path on this OS, and returns a failed Result
+// per placement that failed. A managed run calls it once, after scope exit,
+// so a file deleted, refused or left stale by an earlier failure is restored
+// even when no tree changes. A placement whose root does not exist is
+// skipped: nothing was ever placed there, and an empty catalog would only be
+// clutter. A user-scope placement is skipped too: the service has no user to
+// expand its root for, and the per-user helper regenerates it.
 func (z *ZipInstaller) RegenerateAll() []Result {
+	names := slices.DeleteFunc(z.Table.Names(), func(name string) bool {
+		return z.Table.Placements[name].ScopeFor(z.Guard.GOOS) == placement.ScopeUser
+	})
+	return z.Regenerate(names)
+}
+
+// Regenerate is RegenerateAll for the placements in names only, whatever
+// their scope. The per-user helper passes the user-scope placements its user
+// holds receipts for, since a user-scope root such as a tool's profile
+// directory exists whether or not sofcat placed anything there.
+func (z *ZipInstaller) Regenerate(names []string) []Result {
 	var failed []Result
-	for _, name := range z.Table.Names() {
+	for _, name := range names {
 		spec := z.Table.Placements[name]
 		if _, ok := spec.Path(z.Guard.GOOS); !ok || !generates(spec) {
 			continue
@@ -132,18 +146,19 @@ func (z *ZipInstaller) regenerate(name string) error {
 // written on this OS: under root for a relative path, else its own path
 // here. ok is false when the entry has no path on this OS.
 func (z *ZipInstaller) filePath(name string, spec placement.Spec, f placement.File, root string) (path string, ok bool, err error) {
+	scope := spec.ScopeFor(z.Guard.GOOS)
 	if f.Path != "" {
 		local := filepath.FromSlash(f.Path)
 		if !filepath.IsLocal(local) {
 			return "", false, fmt.Errorf("%w: placement %q: file %q is not a path inside the placement", placement.ErrRefused, name, f.Path)
 		}
-		path, err = z.Guard.Check(filepath.Join(root, local), placement.ScopeMachine)
+		path, err = z.Guard.Check(filepath.Join(root, local), scope)
 	} else {
 		raw, has := f.Paths[z.Guard.GOOS]
 		if !has || raw == "" {
 			return "", false, nil
 		}
-		path, err = z.Guard.Resolve(raw, placement.ScopeMachine)
+		path, err = z.Guard.Resolve(raw, scope)
 	}
 	if err != nil {
 		return "", false, fmt.Errorf("placement %q: %w", name, err)
@@ -167,12 +182,17 @@ func (z *ZipInstaller) fileContext(name string, spec placement.Spec, root string
 	for i, rc := range rcs {
 		items[i] = render.Item{Name: rc.Item, Version: rc.Version, Managed: rc.Managed, Path: rc.Path, TreeHash: rc.TreeHash, PlacedHash: rc.PlacedHash}
 	}
-	return render.FileContext{
+	ctx := render.FileContext{
 		OS:        z.Guard.GOOS,
 		Scope:     spec.ScopeFor(z.Guard.GOOS),
 		Placement: spec.View(name, root),
 		Items:     items,
 	}
+	// As in tree templates: the service, in machine scope, has no user.
+	if ctx.Scope == placement.ScopeUser {
+		ctx.User = z.User
+	}
+	return ctx
 }
 
 // renderFile parses and renders a placement file template for path.

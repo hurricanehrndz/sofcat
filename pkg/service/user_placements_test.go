@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -117,18 +118,29 @@ func TestUserPlan(t *testing.T) {
 	}
 }
 
-// TestUserPlanStore: the stored plan reads back as written, facts included,
-// and a data directory without one is an empty plan.
+// TestUserPlanStore: the stored plan reads back as written, facts and the
+// user-scope specs included, and a data directory without one is an empty
+// plan.
 func TestUserPlanStore(t *testing.T) {
 	appData := filepath.Join(t.TempDir(), "data")
-	if got, err := LoadUserPlan(appData); err != nil || got.Entries == nil || len(got.Entries) != 0 || got.Facts == nil {
+	if got, err := LoadUserPlan(appData); err != nil || got.Entries == nil || len(got.Entries) != 0 || got.Facts == nil || got.Placements == nil {
 		t.Fatalf("absent plan = %#v, %v; want empty", got, err)
 	}
-	entries := UserPlan(set("managed"), nil, set("managed"), userPlanCatalogs(), userPlanTable, placement.Windows, "dir")
+	table := placement.Table{Placements: maps.Clone(userPlanTable.Placements), Order: slices.Clone(userPlanTable.Order)}
+	codex := table.Placements["codex"]
+	codex.Exclusive, codex.ItemsDir = true, "plugins"
+	codex.Vars = map[string]any{"name": "acme"}
+	codex.Files = []placement.File{{Path: "index.json", Template: "x"}}
+	table.Placements["codex"] = codex
+	entries := UserPlan(set("managed"), nil, set("managed"), userPlanCatalogs(), table, placement.Windows, "dir")
 	for i := range entries {
 		entries[i].location = "" // not stored
 	}
-	plan := UserPlacements{Entries: entries, Facts: conditions.Facts{"os": "windows", "assigned_user": "jdoe"}}
+	specs := UserSpecs(table, placement.Windows)
+	if !reflect.DeepEqual(specs, map[string]placement.Spec{"codex": codex}) {
+		t.Fatalf("user specs = %+v, want codex only", specs)
+	}
+	plan := UserPlacements{Entries: entries, Facts: conditions.Facts{"os": "windows", "assigned_user": "jdoe"}, Placements: specs}
 	if err := SaveUserPlan(appData, plan); err != nil {
 		t.Fatal(err)
 	}
@@ -137,6 +149,30 @@ func TestUserPlanStore(t *testing.T) {
 	}
 	if entries, _ := os.ReadDir(appData); len(entries) != 1 {
 		t.Errorf("data directory holds %v, want only user-plan.json", entries)
+	}
+
+	// No placements are stored as {}, not null, so only an older service's
+	// plan lacks them.
+	if err := SaveUserPlan(appData, UserPlacements{}); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := LoadUserPlan(appData); err != nil || got.Placements == nil || len(got.Placements) != 0 {
+		t.Errorf("plan without user placements = %#v, %v; want empty placements", got, err)
+	}
+}
+
+// TestUserPlanStoreFromOlderService: a plan stored before the plan carried
+// specs still loads, with Placements nil, which tells the helper to
+// synthesize them.
+func TestUserPlanStoreFromOlderService(t *testing.T) {
+	appData := t.TempDir()
+	old := `{"entries":[{"item":"skill","version":"1.0","placement":"codex","path":"${USERPROFILE}\\.agents\\skills","archive":"a.zip","hash":"h","treeHash":"t","held":false,"managed":true}],"facts":{"os":"windows"}}`
+	if err := os.WriteFile(UserPlanPath(appData), []byte(old), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := LoadUserPlan(appData)
+	if err != nil || len(got.Entries) != 1 || got.Entries[0].Item != "skill" || got.Facts["os"] != "windows" || got.Placements != nil {
+		t.Errorf("older plan = %#v, %v; want its entry, facts and nil placements", got, err)
 	}
 }
 
@@ -238,7 +274,7 @@ func TestUserPlacementMethods(t *testing.T) {
 	for i := range entries {
 		entries[i].location = ""
 	}
-	stored := UserPlacements{Entries: entries, Facts: conditions.Facts{"os": "windows"}}
+	stored := UserPlacements{Entries: entries, Facts: conditions.Facts{"os": "windows"}, Placements: UserSpecs(userPlanTable, placement.Windows)}
 	if err := SaveUserPlan(cfg.AppDataPath, stored); err != nil {
 		t.Fatal(err)
 	}
@@ -252,6 +288,17 @@ func TestUserPlacementMethods(t *testing.T) {
 			t.Fatalf("plan = %+v, want the stored %+v", got, stored)
 		}
 	}
+	// A plan an older service stored reaches the helper with nil placements,
+	// not empty ones.
+	if err := os.WriteFile(UserPlanPath(cfg.AppDataPath), []byte(`{"entries":[],"facts":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := client.ListUserPlacements(ctx); err != nil || got.Placements != nil {
+		t.Errorf("older plan over the pipe = %#v, %v; want nil placements", got, err)
+	}
+	if err := SaveUserPlan(cfg.AppDataPath, stored); err != nil {
+		t.Fatal(err)
+	}
 
 	if err := client.ReportUserPlacements(ctx, []UserPlacementResult{{Item: "managed", Placement: "codex", Outcome: "installed"}}); err != nil {
 		t.Errorf("ReportUserPlacements: %v", err)
@@ -263,8 +310,9 @@ func TestUserPlacementMethods(t *testing.T) {
 
 	// The -S commands that mirror the two methods.
 	listed, err := SendCommand(cfg, "listuserplacements")
-	if err != nil || len(listed.Items) != 2 || !strings.Contains(listed.Items[0], `"item":"dependency"`) || !strings.Contains(listed.Items[0], `"held":false`) ||
-		!strings.Contains(listed.Items[0], `"managed":false`) || !strings.Contains(listed.Items[1], `"managed":true`) {
+	if err != nil || len(listed.Items) != 3 || !strings.Contains(listed.Items[0], `"item":"dependency"`) || !strings.Contains(listed.Items[0], `"held":false`) ||
+		!strings.Contains(listed.Items[0], `"managed":false`) || !strings.Contains(listed.Items[1], `"managed":true`) ||
+		!strings.HasPrefix(listed.Items[2], `{"placements":{"codex":`) {
 		t.Errorf("-S ListUserPlacements = %+v, %v", listed.Items, err)
 	}
 	if _, err := SendCommand(cfg, "ReportUserPlacements:managed,codex,failed,boom"); err != nil {

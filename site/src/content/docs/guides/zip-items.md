@@ -45,7 +45,8 @@ references, and then stores the plan, built from that run's desired set
 data directory. The per-user helper `<slug>-ui.exe --user-sync`, which runs
 at every logon and storefront start, fetches that stored plan, so it needs no
 repository access, and places the trees in each user's profile under the
-`windows_user` roots, with receipts in `%LOCALAPPDATA%\<NAME>\receipts`
+`windows_user` roots, with receipts in `%LOCALAPPDATA%\<NAME>\receipts`, and
+writes the placements' `files` (Placement files)
 ([Protocol](https://github.com/hurricanehrndz/sofcat/blob/main/ui/ARCHITECTURE.md#protocol)). The item succeeds when every
 machine-scope placement does; a failed placement leaves the others alone and
 is reported on its own.
@@ -136,9 +137,24 @@ triggered the rewrite fails with `placement_refused`, and the per-run rewrite
 reports it under the placement's name, action `generate`, until it is fixed.
 Two entries naming the same file write none.
 
-Files are written by the service only, and the per-user helper places trees
-without `items_dir` or `vars`, so a placement with `files`, `items_dir` or
-`vars` must be `machine` scope on every OS.
+In `user` scope the per-user helper does all of this instead of the service:
+the stored plan carries every user-scope placement's spec, so `exclusive`,
+`items_dir`, `vars` and `files` work there as in machine scope. The helper
+renders the files from this user's receipts, after each change to the
+placement and on every sync for each placement the user holds a receipt in,
+so a deleted file is back at the next logon or storefront start. A
+placement this user has no item in gets no file, even when its root exists.
+A failure is reported under the placement's name with no item, in the
+service log. A `paths` entry may use `${USERPROFILE}` only on an OS where
+the placement's scope is `user`.
+
+`exclusive` in a profile directory is strict: once the user puts a file of
+their own in the root before the helper has created and marked it, the
+helper refuses that placement on every sync, for that user, until the
+directory is empty again. The user sees nothing; the only sign is a warning
+in the service log. Point an exclusive user-scope placement at a directory
+nothing else uses, not at a tool's own directory such as
+`%USERPROFILE%\.codex`.
 
 #### A Claude Code marketplace
 
@@ -237,10 +253,10 @@ The context is:
 | Field | Meaning |
 |---|---|
 | `.OS` | `windows` or `darwin`. |
-| `.Scope` | `machine` or `user` (today always `machine`: files are written by the service). |
+| `.Scope` | `machine` or `user`: `user` when the per-user helper writes the file. |
 | `.Placement` | The placement the file belongs to: `.Name`, `.Root` (the expanded placement root, whichever path the file has) and `.Vars`, the placement's `vars` as written in `placements.yaml` (`.Vars.owner.name` reads a key of a map; `index .Placement.Vars "key"` reads a key that may be missing). |
 | `.Items` | The receipts of the placement, sorted by item: `.Name`, `.Version`, `.Managed`, `.Path`, `.TreeHash`, `.PlacedHash`. `{{ json .Items }}` emits them with the receipt's field names (`name`, `version`, `managed`, `path`, `tree_hash`, `placed_hash`). |
-| `.User` | Empty in machine scope. |
+| `.User` | In user scope, the login name of the account the helper runs as, without domain, as for tree templates; empty in machine scope. |
 
 `.PlacedHash` is the hash of the tree as placed, rendered files included, so
 a catalog template can stamp a version that changes when a rendered file
@@ -732,7 +748,7 @@ placements:
 |---|---|
 | key | The placement name. Variants and rendered trees use it. |
 | `paths` | The placement root, keyed by `darwin` and `windows`. Every placement is a directory: one tree per item at `<root>/<item_name>`. |
-| `scope` | `machine` or `user`, keyed like `paths`. An OS left out is `machine`. `darwin: user` is not supported, and `user` not with `items_dir`, `vars` or `files`. |
+| `scope` | `machine` or `user`, keyed like `paths`. An OS left out is `machine`. `darwin: user` is not supported. In `user` scope the per-user helper places the trees and writes the `files`. |
 | `applies_to` | Display names, such as `[Claude Code]`. The storefront shows a line such as "Applies to: Claude Code" for an item (see Storefront labels). Display only: it does not limit where an item is placed. |
 | `action_labels` | Optional storefront label overrides for the placement's items. Keys: `install`, `installing`, `installed`, `remove`, `removing`, `update`, `cancel`, `pending_install`, `pending_remove`, `applies_to`. |
 | `exclusive` | Optional. When true, sofcat does not write into an existing, non-empty root it did not create. |
