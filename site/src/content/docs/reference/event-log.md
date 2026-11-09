@@ -23,6 +23,11 @@ The entry's level is the record's: Information, Warning or Error. Its text is
 the message followed by the details as `key=value` pairs, for example
 `ended a running agent pid=4120 image="C:\Program Files\SofCat\sofcat-useragent.exe"`.
 
+On stderr, each step is an info-level log line on every run. The step
+messages that used to need `-v` are among them. When a command fails,
+stderr shows the error twice: once as the `level=ERROR` log line and once
+as the plain error line the command exits with.
+
 ## Event IDs
 
 | ID | Step |
@@ -34,7 +39,7 @@ the message followed by the details as `key=value` pairs, for example
 | 5 | The service stopped, or was already stopped |
 | 6 | The service deleted, or found not installed by `-serviceremove` |
 | 7 | The logon `Run` value `<slug>-user-sync` written |
-| 8 | The `Run` value removed, or undone after a failed install |
+| 8 | The `Run` value removed, already absent (the uninstaller runs `-serviceremove` twice), or undone after a failed install |
 | 9 | The ACL on the data directory or `config.yaml` applied, or a warning that it could not be |
 | 10 | `-serviceremove` ended a running per-user helper or storefront |
 | 11 | An ended process had not exited 5 seconds later; its executable may be left behind |
@@ -47,9 +52,20 @@ The IDs never change meaning; new kinds of step get new IDs.
 `-serviceinstall` registers the source in the Application log before its
 other steps, as an EventCreate source (the messages file Windows ships for
 `eventcreate.exe`, which accepts IDs 1 to 1000). A source that already
-exists, from a reinstall or an upgrade, is left as it is. `-serviceremove`,
+exists, from a reinstall or an upgrade, is left as it is, unless it has no
+message file (a registration that stopped part way), which is registered
+again. `-serviceremove`,
 `-servicestart` and `-servicestop` register it too when it is missing, for a
 machine installed by an older version.
+
+A brand's slug must not match an event source that already exists, built
+in or from other software, such as `MsiInstaller` or `Application Error`.
+SofCat would write its entries under that source and its message file, and
+they would read wrong or not at all. Check before choosing a slug:
+
+```powershell
+Test-Path 'HKLM:\SYSTEM\CurrentControlSet\Services\EventLog\Application\<slug>'
+```
 
 Nothing removes the source: it stays registered after uninstall, as
 `C:\ProgramData\SofCat` stays, so the uninstall's own entries remain readable.

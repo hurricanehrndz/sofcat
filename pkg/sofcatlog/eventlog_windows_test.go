@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"golang.org/x/sys/windows"
+	"golang.org/x/sys/windows/registry"
 	"golang.org/x/sys/windows/svc/eventlog"
 )
 
@@ -49,5 +50,37 @@ func TestEventLogRoundTrip(t *testing.T) {
 		if !strings.Contains(text, s) {
 			t.Errorf("event lacks %q:\n%s", s, text)
 		}
+	}
+}
+
+// A source key without EventMessageFile, left by a registration that stopped
+// part way, is repaired rather than counted as registered: otherwise every
+// entry would read "description not found" forever.
+func TestRegisterSourceRepairsHalfRegistered(t *testing.T) {
+	if !windows.GetCurrentProcessToken().IsElevated() {
+		t.Skip("registering an event source needs an elevated token")
+	}
+	source := fmt.Sprintf("sofcat-test-%d-%d", os.Getpid(), time.Now().UnixNano())
+	path := `SYSTEM\CurrentControlSet\Services\EventLog\Application\` + source
+	k, _, err := registry.CreateKey(registry.LOCAL_MACHINE, path, registry.SET_VALUE)
+	if err != nil {
+		t.Fatalf("CreateKey: %v", err)
+	}
+	_ = k.Close()
+	t.Cleanup(func() { _ = eventlog.Remove(source) })
+
+	if err = registerSource(source); err != nil {
+		t.Fatalf("registerSource: %v", err)
+	}
+	k, err = registry.OpenKey(registry.LOCAL_MACHINE, path, registry.QUERY_VALUE)
+	if err != nil {
+		t.Fatalf("OpenKey: %v", err)
+	}
+	defer func() { _ = k.Close() }()
+	if v, _, verr := k.GetStringValue("EventMessageFile"); verr != nil || !strings.Contains(v, "EventCreate.exe") {
+		t.Errorf("EventMessageFile = %q, %v; want the EventCreate message file", v, verr)
+	}
+	if v, _, verr := k.GetIntegerValue("TypesSupported"); verr != nil || v != uint64(eventlog.Error|eventlog.Warning|eventlog.Info) {
+		t.Errorf("TypesSupported = %d, %v", v, verr)
 	}
 }

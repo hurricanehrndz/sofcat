@@ -3,6 +3,8 @@
 package sofcatlog
 
 import (
+	"errors"
+
 	"golang.org/x/sys/windows/registry"
 	"golang.org/x/sys/windows/svc/eventlog"
 )
@@ -23,10 +25,13 @@ func openEventSink(source string) (EventSink, func(), error) {
 // registerSource registers source as an EventCreate source, whose message
 // file prints each entry's text as given. A source that already exists, from
 // an earlier install or an older version, counts as registered and is left
-// as it is. Nothing removes it, not even -serviceremove, so the uninstall's
-// own entries stay readable afterwards.
+// as it is, unless it has no EventMessageFile: a key a half-finished
+// registration left behind, which is removed and registered again. Nothing
+// else removes it, not even -serviceremove, so the uninstall's own entries
+// stay readable afterwards.
 func registerSource(source string) error {
-	err := eventlog.InstallAsEventCreate(source, eventlog.Error|eventlog.Warning|eventlog.Info)
+	const types = eventlog.Error | eventlog.Warning | eventlog.Info
+	err := eventlog.InstallAsEventCreate(source, types)
 	if err == nil {
 		return nil
 	}
@@ -34,6 +39,13 @@ func registerSource(source string) error {
 	if kerr != nil {
 		return err
 	}
+	_, _, verr := k.GetStringValue("EventMessageFile")
 	_ = k.Close()
-	return nil
+	if !errors.Is(verr, registry.ErrNotExist) {
+		return nil
+	}
+	if rerr := eventlog.Remove(source); rerr != nil {
+		return rerr
+	}
+	return eventlog.InstallAsEventCreate(source, types)
 }

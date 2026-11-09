@@ -220,7 +220,7 @@ func installWindowsService(m *mgr.Mgr, cfg config.Configuration) error {
 // the service registration of an install that failed part way.
 func undoServiceInstall(m *mgr.Mgr, cfg config.Configuration, runValue string) {
 	if runValue != "" {
-		if err := deleteRunValueFunc(runValue); err != nil {
+		if _, err := deleteRunValueFunc(runValue); err != nil {
 			slog.Error("unable to undo the Run value", "name", runValue, "err", err, "event", sofcatlog.EventRunValueRemoved)
 		} else {
 			slog.Info("undid the Run value", "name", runValue, "event", sofcatlog.EventRunValueRemoved)
@@ -262,17 +262,22 @@ func setRunValue(name, data string) error {
 	return k.SetStringValue(name, data)
 }
 
-// deleteRunValue removes the value; one that is already gone is not an error.
-func deleteRunValue(name string) error {
+// deleteRunValue removes the value and reports whether it was there; one that
+// is already gone, as on the uninstaller's second -serviceremove, is not an
+// error.
+func deleteRunValue(name string) (bool, error) {
 	k, err := registry.OpenKey(runRoot, runKey, registry.SET_VALUE|registry.WOW64_64KEY)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer func() { _ = k.Close() }()
-	if err := k.DeleteValue(name); err != nil && !errors.Is(err, registry.ErrNotExist) {
-		return err
+	if err := k.DeleteValue(name); err != nil {
+		if errors.Is(err, registry.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
 	}
-	return nil
+	return true, nil
 }
 
 func startWindowsService(m *mgr.Mgr, cfg config.Configuration) error {
@@ -360,10 +365,15 @@ func removeWindowsService(m *mgr.Mgr, cfg config.Configuration) error {
 		slog.Info("the service is not installed; removing the Run value and ending agents only", "service", cfg.ServiceName, "event", sofcatlog.EventServiceDeleted)
 	}
 	name, _ := userSyncRunValue("")
-	if err := deleteRunValueFunc(name); err != nil {
-		return fmt.Errorf("failed to remove Run value %q: %w", name, err)
+	removed, rerr := deleteRunValueFunc(name)
+	if rerr != nil {
+		return fmt.Errorf("failed to remove Run value %q: %w", name, rerr)
 	}
-	slog.Info("removed the Run value", "name", name, "event", sofcatlog.EventRunValueRemoved)
+	if removed {
+		slog.Info("removed the Run value", "name", name, "event", sofcatlog.EventRunValueRemoved)
+	} else {
+		slog.Info("the Run value is already absent", "name", name, "event", sofcatlog.EventRunValueRemoved)
+	}
 	// A known and accepted race (decision 17): at a logon, Explorer can read
 	// the Run value just before the delete above and start an agent after
 	// the sweep below. That agent retries for a minute holding its exe, so

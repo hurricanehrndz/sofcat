@@ -43,7 +43,7 @@ func installFakeSCM(t *testing.T) *fakeSCM {
 	stopServiceFunc = func(*mgr.Mgr, config.Configuration) error { return step("stop") }
 	deleteServiceFunc = func(*mgr.Mgr, config.Configuration) error { return step("delete") }
 	setRunValueFunc = func(name, data string) error { return step("set " + name + "=" + data) }
-	deleteRunValueFunc = func(name string) error { return step("unset " + name) }
+	deleteRunValueFunc = func(name string) (bool, error) { return true, step("unset " + name) }
 	endAgentsFunc = func() { _ = step("end agents") }
 	t.Cleanup(func() {
 		serviceExistsFunc = serviceExists
@@ -215,11 +215,14 @@ func TestRunValueWriteAndRemove(t *testing.T) {
 		t.Fatalf("value %q = %q, %v; want %q", name, got, err, data)
 	}
 
-	if err = deleteRunValueFunc(name); err != nil {
-		t.Fatalf("delete: %v", err)
+	// The uninstaller runs -serviceremove twice; the second run must say the
+	// value was already gone, not that it removed it.
+	removed, err := deleteRunValueFunc(name)
+	if err != nil || !removed {
+		t.Fatalf("delete = %v, %v; want true, nil", removed, err)
 	}
-	if err = deleteRunValueFunc(name); err != nil {
-		t.Fatalf("delete of a missing value: %v", err)
+	if removed, err = deleteRunValueFunc(name); err != nil || removed {
+		t.Fatalf("delete of a missing value = %v, %v; want false, nil", removed, err)
 	}
 }
 
