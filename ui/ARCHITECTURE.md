@@ -139,7 +139,8 @@ placement it still holds a receipt in, and sends every result with
 placement and an empty `item`. The service only logs them (failures at warn, with
 the caller from the connection). A signed-in user gets new content as soon as
 the run that changed the plan ends. `-serviceremove` ends any helper still
-running beside it, after it removes the `Run` value.
+running beside it, after it removes the `Run` value, and any storefront, so an
+open window does not keep `<slug>-ui.exe` locked against the uninstaller.
 
 `streamOperationStatus` answers with its result and then sends every record of
 the operation, from the first, as `operationStatus` notifications on the same

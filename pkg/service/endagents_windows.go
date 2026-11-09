@@ -10,20 +10,23 @@ import (
 	"strings"
 	"unsafe"
 
+	"github.com/hurricanehrndz/sofcat/pkg/identity"
 	"golang.org/x/sys/windows"
 )
 
 // agentExes are the file names, beside <slug>.exe, of the processes
-// -serviceremove ends. The storefront is not one of them: closing a visible
-// window during a silent uninstall is a separate decision.
+// -serviceremove ends: the per-user helper and the storefront, <slug>-ui.exe
+// (the name `just build` gives it). Ending the storefront closes a visible
+// window, even during a silent uninstall; left open, it keeps its executable
+// locked and the uninstaller cannot delete it.
 func agentExes() []string {
-	return []string{userAgentExe()}
+	return []string{userAgentExe(), identity.Slug + "-ui.exe"}
 }
 
 // endAgents ends every running process whose image is one of agentExes
-// beside this executable, so the uninstaller that runs next can delete it. A
-// logon agent waiting for a service that is gone retries for a minute and
-// would otherwise keep its executable in place. The same file name in another
+// beside this executable, so the uninstaller that runs next can delete them.
+// A logon agent waiting for a service that is gone retries for a minute, and
+// an open storefront stays open; either would keep its executable in place. The same file name in another
 // directory is left alone. Nothing here fails the remove: each failure is
 // logged and the sweep goes on.
 //

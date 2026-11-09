@@ -47,7 +47,8 @@ self-service app install the optional ones for standard users.
 Everything the service writes lives under `C:\ProgramData\SofCat`; see
 [Data directory](/reference/data-directory/). To remove SofCat, run
 `"C:\Program Files\SofCat\uninstall.exe" /S`. It removes the service and the
-program files and leaves `C:\ProgramData\SofCat` alone.
+program files, closes the storefront if it is open, and leaves
+`C:\ProgramData\SofCat` alone.
 
 Nothing is code signed yet. See [Code signing](/reference/code-signing/).
 
