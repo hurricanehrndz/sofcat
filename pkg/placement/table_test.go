@@ -1,6 +1,7 @@
 package placement
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -93,6 +94,50 @@ func TestView(t *testing.T) {
 	want := map[string]any{"name": "acme", "owner": map[string]any{"name": "Acme IT"}}
 	if v := p.View("market", "/m"); v.Name != "market" || v.Root != "/m" || !reflect.DeepEqual(v.Vars, want) {
 		t.Errorf("view = %+v", v)
+	}
+}
+
+// The per-user helper gets specs through the user plan's JSON, where every
+// number is a float64: its templates must still see the vars the service
+// sees from placements.yaml.
+func TestSpecJSONRoundTrip(t *testing.T) {
+	table, err := Parse([]byte(`placements:
+  p:
+    paths: {windows: '${USERPROFILE}\p'}
+    scope: {windows: user}
+    exclusive: true
+    items_dir: plugins
+    vars: {name: acme, count: 3, whole: 2.0, ratio: 1.5, enabled: true, owner: {name: Acme IT, ids: [1, 2.5, x]}}
+    files: [{path: .x.json, template: x}, {paths: {windows: '${USERPROFILE}\y.json'}, template: y}]
+    files_atomic: true
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec := table.Placements["p"]
+	data, err := json.Marshal(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{`"items_dir":"plugins"`, `"files_atomic":true`, `"exclusive":true`} {
+		if !strings.Contains(string(data), key) {
+			t.Errorf("JSON %s lacks %s", data, key)
+		}
+	}
+	var back Spec
+	if err := json.Unmarshal(data, &back); err != nil {
+		t.Fatal(err)
+	}
+	if want, got := spec.View("p", "/r").Vars, back.View("p", "/r").Vars; !reflect.DeepEqual(got, want) {
+		t.Errorf("vars through JSON = %#v, want %#v", got, want)
+	}
+	owner := back.View("p", "/r").Vars.(map[string]any)["owner"]
+	if want := map[string]any{"name": "Acme IT", "ids": []any{1, 2.5, "x"}}; !reflect.DeepEqual(owner, want) {
+		t.Errorf("owner = %#v, want %#v", owner, want)
+	}
+	back.Vars, spec.Vars = nil, nil
+	if !reflect.DeepEqual(back, spec) {
+		t.Errorf("spec through JSON = %+v, want %+v", back, spec)
 	}
 }
 

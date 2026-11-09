@@ -24,7 +24,10 @@ import (
 type fakeClient struct {
 	plan  []service.UserPlacement
 	facts conditions.Facts
-	err   error
+	// placements are the plan's specs, passed through JSON as over the pipe;
+	// nil is a plan from an older service.
+	placements map[string]placement.Spec
+	err        error
 	// failures are returned, in order, before plan or err.
 	failures []error
 	calls    int
@@ -38,7 +41,17 @@ func (c *fakeClient) ListUserPlacements(context.Context) (service.UserPlacements
 		c.failures = c.failures[1:]
 		return service.UserPlacements{}, err
 	}
-	return service.UserPlacements{Entries: c.plan, Facts: c.facts}, c.err
+	plan := service.UserPlacements{Entries: c.plan, Facts: c.facts}
+	if c.placements != nil {
+		data, err := json.Marshal(c.placements)
+		if err != nil {
+			return service.UserPlacements{}, err
+		}
+		if err := json.Unmarshal(data, &plan.Placements); err != nil {
+			return service.UserPlacements{}, err
+		}
+	}
+	return plan, c.err
 }
 
 func (c *fakeClient) ReportUserPlacements(_ context.Context, r []service.UserPlacementResult) error {
@@ -294,5 +307,106 @@ func TestLoginName(t *testing.T) {
 	}
 	if len(client.reported) != 0 {
 		t.Errorf("reported %+v without a user", client.reported)
+	}
+}
+
+// codexSpec is the spec of the fixture's placement as the plan carries it.
+func codexSpec(entry service.UserPlacement) placement.Spec {
+	return placement.Spec{
+		Paths: map[string]string{placement.Windows: entry.Path},
+		Scope: map[string]string{placement.Windows: placement.ScopeUser},
+	}
+}
+
+// An exclusive user placement refuses a directory holding files it did not
+// put there. A plan from an older service carries no spec, so the same
+// directory takes the tree at <root>/<item>.
+func TestSyncExclusive(t *testing.T) {
+	entry, guard, profile := fixture(t)
+	root := filepath.Join(profile, ".agents", "skills")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "mine.md"), []byte("mine"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	spec := codexSpec(entry)
+	spec.Exclusive, spec.ItemsDir = true, "plugins"
+	client := &fakeClient{plan: []service.UserPlacement{entry}, placements: map[string]placement.Spec{"codex": spec}}
+	results, err := Sync(context.Background(), client, guard, t.TempDir(), slog.Default())
+	if err != nil || len(results) != 1 || results[0].Outcome != string(installer.OutcomeRefused) {
+		t.Fatalf("results = %+v, %v; want refused", results, err)
+	}
+	if _, statErr := os.Stat(filepath.Join(root, "plugins")); !os.IsNotExist(statErr) {
+		t.Errorf("exclusive placement written to: %v", statErr)
+	}
+
+	old := &fakeClient{plan: []service.UserPlacement{entry}}
+	results, err = Sync(context.Background(), old, guard, t.TempDir(), slog.Default())
+	if err != nil || len(results) != 1 || results[0].Outcome != string(installer.OutcomeInstalled) {
+		t.Fatalf("older plan: results = %+v, %v; want installed", results, err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "skill", "SKILL.md")); err != nil {
+		t.Errorf("older plan: skill not at <root>/<item>: %v", err)
+	}
+}
+
+// A user placement's items_dir, vars and files apply as in machine scope:
+// the tree lands under items_dir, the file renders with the user's root and
+// login name, and it goes when the last item leaves the plan, which still
+// carries the placement's spec.
+func TestSyncPlacementSpec(t *testing.T) {
+	orig := currentUser
+	currentUser = func() (*user.User, error) { return &user.User{Username: `CORP\alice`}, nil }
+	t.Cleanup(func() { currentUser = orig })
+
+	entry, guard, profile := fixture(t)
+	root := filepath.Join(profile, ".agents", "skills")
+	spec := codexSpec(entry)
+	spec.ItemsDir = "plugins"
+	spec.Vars = map[string]any{"count": 2}
+	spec.Files = []placement.File{{
+		Path:     "index.txt",
+		Template: `{{ range .Items }}{{ $.User }} {{ $.Placement.Root }} {{ .Name }} {{ .Path }} {{ $.Placement.Vars.count }}{{ end }}`,
+	}}
+	client := &fakeClient{plan: []service.UserPlacement{entry}, placements: map[string]placement.Spec{"codex": spec}}
+	receipts := t.TempDir()
+	results, err := Sync(context.Background(), client, guard, receipts, slog.Default())
+	if err != nil || len(results) != 1 || results[0].Outcome != string(installer.OutcomeInstalled) {
+		t.Fatalf("results = %+v, %v; want installed", results, err)
+	}
+	tree := filepath.Join(root, "plugins", "skill")
+	if _, statErr := os.Stat(filepath.Join(tree, "SKILL.md")); statErr != nil {
+		t.Errorf("skill not under items_dir: %v", statErr)
+	}
+	index := filepath.Join(root, "index.txt")
+	if got, readErr := os.ReadFile(index); readErr != nil || string(got) != "alice "+root+" skill "+tree+" 2" {
+		t.Errorf("index.txt = %q, %v", got, readErr)
+	}
+
+	client.plan = []service.UserPlacement{}
+	results, err = Sync(context.Background(), client, guard, receipts, slog.Default())
+	if err != nil || len(results) != 1 || results[0].Outcome != string(installer.OutcomeRemoved) {
+		t.Fatalf("results = %+v, %v; want removed", results, err)
+	}
+	if _, err := os.Stat(index); !os.IsNotExist(err) {
+		t.Errorf("index.txt left after the last item: %v", err)
+	}
+}
+
+// The helper's specs are user scope whatever the plan says: the guard holds
+// the machine roots too, which a machine-scope spec would be checked against.
+func TestUserTableForcesUserScope(t *testing.T) {
+	spec := placement.Spec{Paths: map[string]string{placement.Windows: `C:\skills`}, Scope: map[string]string{placement.Windows: placement.ScopeMachine}}
+	plan := service.UserPlacements{Placements: map[string]placement.Spec{"codex": spec}}
+	table := userTable(plan, []receipt.Receipt{{Placement: "gone"}}, placement.Windows, slog.Default())
+	if got := table.Placements["codex"].ScopeFor(placement.Windows); got != placement.ScopeUser {
+		t.Errorf("codex scope = %s, want user", got)
+	}
+	if spec.Scope[placement.Windows] != placement.ScopeMachine {
+		t.Error("userTable changed the plan's spec")
+	}
+	if !slices.Equal(table.Order, []string{"codex", "gone"}) {
+		t.Errorf("order = %v", table.Order)
 	}
 }

@@ -132,18 +132,19 @@ func (z *ZipInstaller) regenerate(name string) error {
 // written on this OS: under root for a relative path, else its own path
 // here. ok is false when the entry has no path on this OS.
 func (z *ZipInstaller) filePath(name string, spec placement.Spec, f placement.File, root string) (path string, ok bool, err error) {
+	scope := spec.ScopeFor(z.Guard.GOOS)
 	if f.Path != "" {
 		local := filepath.FromSlash(f.Path)
 		if !filepath.IsLocal(local) {
 			return "", false, fmt.Errorf("%w: placement %q: file %q is not a path inside the placement", placement.ErrRefused, name, f.Path)
 		}
-		path, err = z.Guard.Check(filepath.Join(root, local), placement.ScopeMachine)
+		path, err = z.Guard.Check(filepath.Join(root, local), scope)
 	} else {
 		raw, has := f.Paths[z.Guard.GOOS]
 		if !has || raw == "" {
 			return "", false, nil
 		}
-		path, err = z.Guard.Resolve(raw, placement.ScopeMachine)
+		path, err = z.Guard.Resolve(raw, scope)
 	}
 	if err != nil {
 		return "", false, fmt.Errorf("placement %q: %w", name, err)
@@ -167,12 +168,17 @@ func (z *ZipInstaller) fileContext(name string, spec placement.Spec, root string
 	for i, rc := range rcs {
 		items[i] = render.Item{Name: rc.Item, Version: rc.Version, Managed: rc.Managed, Path: rc.Path, TreeHash: rc.TreeHash, PlacedHash: rc.PlacedHash}
 	}
-	return render.FileContext{
+	ctx := render.FileContext{
 		OS:        z.Guard.GOOS,
 		Scope:     spec.ScopeFor(z.Guard.GOOS),
 		Placement: spec.View(name, root),
 		Items:     items,
 	}
+	// As in tree templates: the service, in machine scope, has no user.
+	if ctx.Scope == placement.ScopeUser {
+		ctx.User = z.User
+	}
+	return ctx
 }
 
 // renderFile parses and renders a placement file template for path.
