@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"go.yaml.in/yaml/v4"
 
@@ -121,7 +122,11 @@ type Branding struct {
 	Sections []string `yaml:"sections,omitempty"`
 }
 
-func init() {
+// registerFlags defines sofcat's flags on flag.CommandLine. Get calls it, not
+// init: the user agent and the storefront import this package through
+// pkg/service, and their own command lines must not inherit sofcat's flags.
+// Once, because the tests parse several command lines.
+var registerFlags = sync.OnceFunc(func() {
 	// Define flag names and defaults here
 
 	// About
@@ -157,10 +162,11 @@ func init() {
 	flag.BoolVar(&serviceStartArg, "servicestart", false, "")
 	flag.BoolVar(&serviceStopArg, "servicestop", false, "")
 	flag.BoolVar(&serviceStatusArg, "servicestatus", false, "")
-}
+})
 
 func parseArguments() (string, bool, bool, bool) {
 	// Get the command line args
+	registerFlags()
 	flag.Parse()
 	if helpArg {
 		version.Print()
