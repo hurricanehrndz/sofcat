@@ -88,17 +88,44 @@ Verify a signed file with `osslsigncode verify build/sofcat.exe` on Linux or
 `Get-AuthenticodeSignature .\sofcat.exe` on Windows (Status `Valid`), and the
 same for `setup.exe`.
 
-In CI, set `SIGN_CMD` in the environment of the "Build executables, setup.exe
-and makecatalogs" step of `.github/workflows/build_release.yml`. For Trusted
-Signing, install `jsign` (Java) and log in to Azure with OIDC (`azure/login`,
-using the existing `id-token: write` permission) first, and pass the token as
-a secret environment variable. Keep provenance attestation after signing so it
-covers the signed bytes. SignPath works differently: upload the unsigned
-artifacts with `signpath/github-action-submit-signing-request` and attest and
-release what comes back.
+## Release signing in CI
 
-No Windows signing credential exists for this project yet, and no WDSI
-submission has been made. Both need the maintainer's account and identity.
+`.github/workflows/build_release.yml` signs every release with Azure Trusted
+Signing. It downloads a pinned `jsign` jar, logs the Azure CLI in as a service
+principal, takes a token for `https://codesigning.azure.net` and sets
+`SIGN_CMD` for the build step, so the three executables, the uninstaller stub
+and `setup.exe` are signed and timestamped, with the description `SofCat` and
+the URL `https://sofcat.app`. Provenance attestation runs afterwards, so it
+covers the signed bytes. The repository needs:
+
+| Kind | Name | Value |
+| --- | --- | --- |
+| Secret | `AZURE_TENANT_ID` | The Entra tenant of the service principal. |
+| Secret | `AZURE_CLIENT_ID` | Its application (client) ID. |
+| Secret | `AZURE_CLIENT_SECRET` | A client secret for it. |
+| Variable | `TRUSTED_SIGNING_ENDPOINT` | The account's regional endpoint host, such as `eus.codesigning.azure.net`. |
+| Variable | `TRUSTED_SIGNING_ACCOUNT` | The Trusted Signing account name. |
+| Variable | `TRUSTED_SIGNING_PROFILE` | The certificate profile name. |
+
+The service principal needs the "Trusted Signing Certificate Profile Signer"
+role on the certificate profile. A release is never cut unsigned: the build
+step fails when any of the six is missing. The Windows integration job that
+follows then checks each released `.exe` with `Get-AuthenticodeSignature` and
+fails unless every Status is `Valid`.
+
+The client secret is a long-lived credential that has to be rotated before it
+expires. A federated credential (`azure/login` with OIDC, using the job's
+`id-token: write` permission) would remove it.
+
+`Azure/trusted-signing-action` is not used: it needs a Windows runner and
+signs finished files, so it cannot sign the uninstaller stub that embala
+embeds in `setup.exe`, nor the executables before they are packed into it.
+
+SignPath would work differently: upload the unsigned artifacts with
+`signpath/github-action-submit-signing-request` and attest and release what
+comes back.
+
+No WDSI submission has been made; it needs the maintainer's account.
 
 ## macOS signing and notarization
 

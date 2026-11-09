@@ -105,6 +105,16 @@ jobs:
         with:
           name: sofcat-exe-release
           path: ${{ runner.temp }}/sofcat-artifact
+      # Build Release signs on Linux, where nothing checks the chain; Windows
+      # is the judge. The uninstaller stub inside setup.exe is not checked.
+      - name: Verify the release's Authenticode signatures
+        if: github.event_name != 'workflow_dispatch'
+        shell: pwsh
+        run: |
+          $bad = @(Get-ChildItem "${{ runner.temp }}\sofcat-artifact" -Recurse -Filter *.exe |
+            Get-AuthenticodeSignature | Where-Object Status -ne 'Valid')
+          $bad | Format-List Path, Status, StatusMessage
+          if ($bad.Count) { throw "$($bad.Count) release executable(s) not validly signed" }
       - name: Build sofcat.exe from PR merge ref
         if: github.event_name == 'workflow_dispatch'
         shell: pwsh
