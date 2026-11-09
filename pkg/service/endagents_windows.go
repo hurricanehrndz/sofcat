@@ -11,6 +11,7 @@ import (
 	"unsafe"
 
 	"github.com/hurricanehrndz/sofcat/pkg/identity"
+	"github.com/hurricanehrndz/sofcat/pkg/sofcatlog"
 	"golang.org/x/sys/windows"
 )
 
@@ -35,7 +36,7 @@ func agentExes() []string {
 func endAgents() {
 	exe, err := os.Executable()
 	if err != nil {
-		slog.Warn("unable to find the running agents to end", "err", err)
+		slog.Warn("unable to find the running agents to end", "err", err, "event", sofcatlog.EventSweep)
 		return
 	}
 	dir := filepath.Dir(filepath.Clean(exe))
@@ -46,11 +47,11 @@ func endAgents() {
 	}
 
 	if err = enableDebugPrivilege(); err != nil {
-		slog.Warn("unable to enable SeDebugPrivilege; agents of other users may be left running", "err", err)
+		slog.Warn("unable to enable SeDebugPrivilege; agents of other users may be left running", "err", err, "event", sofcatlog.EventSweep)
 	}
 	snap, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
 	if err != nil {
-		slog.Warn("unable to list processes; running agents left alone", "err", err)
+		slog.Warn("unable to list processes; running agents left alone", "err", err, "event", sofcatlog.EventSweep)
 		return
 	}
 	defer func() { _ = windows.CloseHandle(snap) }()
@@ -66,7 +67,7 @@ func endAgents() {
 		}
 	}
 	if !errors.Is(err, windows.ERROR_NO_MORE_FILES) {
-		slog.Warn("unable to list every process; some agents may be left running", "err", err)
+		slog.Warn("unable to list every process; some agents may be left running", "err", err, "event", sofcatlog.EventSweep)
 	}
 }
 
@@ -75,30 +76,35 @@ func endAgents() {
 func endAgent(pid uint32, paths []string) {
 	h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION|windows.PROCESS_TERMINATE|windows.SYNCHRONIZE, false, pid)
 	if err != nil {
-		slog.Warn("unable to open a running agent", "pid", pid, "err", err)
+		slog.Warn("unable to open a running agent", "pid", pid, "err", err, "event", sofcatlog.EventSweep)
 		return
 	}
 	defer func() { _ = windows.CloseHandle(h) }()
 	var buf [windows.MAX_LONG_PATH]uint16
 	n := uint32(len(buf))
 	if err := windows.QueryFullProcessImageName(h, 0, &buf[0], &n); err != nil {
-		slog.Warn("unable to read a running agent's image path", "pid", pid, "err", err)
+		slog.Warn("unable to read a running agent's image path", "pid", pid, "err", err, "event", sofcatlog.EventSweep)
 		return
 	}
 	image := windows.UTF16ToString(buf[:n])
 	if !isAgentImage(image, paths) {
-		slog.Debug("leaving a process of the same name from another directory", "pid", pid, "image", image)
+		slog.Debug("leaving a process of the same name from another directory", "pid", pid, "image", image, "event", sofcatlog.EventSweep)
 		return
 	}
 	if err := windows.TerminateProcess(h, 1); err != nil {
-		slog.Warn("unable to end a running agent", "pid", pid, "image", image, "err", err)
+		slog.Warn("unable to end a running agent", "pid", pid, "image", image, "err", err, "event", sofcatlog.EventSweep)
 		return
 	}
+	// A slow exit warns and does not fail the remove (decisions 14 and 18):
+	// a process still there 5 s after TerminateProcess is stuck in the
+	// kernel, which no retry fixes, and uninstall.lua replays its file
+	// removals whatever -serviceremove returns. The warning reaches the
+	// Application log, so the exe left behind can be traced.
 	if ev, err := windows.WaitForSingleObject(h, 5000); err != nil || ev != windows.WAIT_OBJECT_0 {
-		slog.Warn("a running agent has not exited yet", "pid", pid, "image", image, "err", err)
+		slog.Warn("a running agent has not exited yet", "pid", pid, "image", image, "err", err, "event", sofcatlog.EventAgentNotExited)
 		return
 	}
-	slog.Info("ended a running agent", "pid", pid, "image", image)
+	slog.Info("ended a running agent", "pid", pid, "image", image, "event", sofcatlog.EventAgentEnded)
 }
 
 // enableDebugPrivilege enables SeDebugPrivilege on this process's token for

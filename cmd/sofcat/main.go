@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/hurricanehrndz/sofcat/pkg/config"
+	"github.com/hurricanehrndz/sofcat/pkg/identity"
 	"github.com/hurricanehrndz/sofcat/pkg/report"
 	"github.com/hurricanehrndz/sofcat/pkg/service"
 	"github.com/hurricanehrndz/sofcat/pkg/sofcatlog"
@@ -21,6 +22,7 @@ var (
 	serviceStatusFunc      = service.ServiceStatus
 	protectAppDataFunc     = protectAppData
 	protectConfigFunc      = protectConfig
+	startManagementLogFunc = sofcatlog.StartManagementLog
 )
 
 func main() {
@@ -46,45 +48,16 @@ func printLaunchdPlist(args []string, w io.Writer) bool {
 	return true
 }
 
-func route(cfg config.Configuration) error { //nolint:gocognit // CEILING: known-complex, split in Workstream B (kernel-repair)
-	if cfg.ServiceInstall {
-		// Before the install, so a reinstall over an existing service still
-		// fixes the tree. The service applies it again at every start.
-		if err := protectAppDataFunc(cfg.AppDataPath); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: unable to protect %s: %v\n", cfg.AppDataPath, err)
-		}
-		if err := protectConfigFunc(cfg.ConfigPath); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: unable to protect %s: %v\n", cfg.ConfigPath, err)
-		}
-		if err := runServiceActionFunc(cfg, "install"); err != nil {
-			return err
-		}
-		fmt.Println("Service installed successfully")
-		return nil
-	}
-
-	if cfg.ServiceRemove {
-		if err := runServiceActionFunc(cfg, "remove"); err != nil {
-			return err
-		}
-		fmt.Println("Service removed successfully")
-		return nil
-	}
-
-	if cfg.ServiceStart {
-		if err := runServiceActionFunc(cfg, "start"); err != nil {
-			return err
-		}
-		fmt.Println("Service started successfully")
-		return nil
-	}
-
-	if cfg.ServiceStop {
-		if err := runServiceActionFunc(cfg, "stop"); err != nil {
-			return err
-		}
-		fmt.Println("Service stopped successfully")
-		return nil
+func route(cfg config.Configuration) error {
+	switch {
+	case cfg.ServiceInstall:
+		return manageService(cfg, "install", "installed")
+	case cfg.ServiceRemove:
+		return manageService(cfg, "remove", "removed")
+	case cfg.ServiceStart:
+		return manageService(cfg, "start", "started")
+	case cfg.ServiceStop:
+		return manageService(cfg, "stop", "stopped")
 	}
 
 	if cfg.ServiceStatus {
@@ -152,6 +125,38 @@ func route(cfg config.Configuration) error { //nolint:gocognit // CEILING: known
 		printRunSummary(rep)
 	}
 	return err
+}
+
+// manageService runs one service management command. Its steps and outcome
+// go to stderr and, on Windows, to the Application log under the brand's
+// source (sofcatlog.StartManagementLog), the one record an uninstall leaves.
+func manageService(cfg config.Configuration, action, done string) error {
+	defer startManagementLogFunc(identity.Slug, cfg.Debug, os.Stderr)()
+	cmd := "-service" + action
+	slog.Info(cmd+" started", "event", sofcatlog.EventCommand)
+	if action == "install" {
+		// Before the install, so a reinstall over an existing service still
+		// fixes the tree. The service applies it again at every start.
+		protectStep("data directory", cfg.AppDataPath, protectAppDataFunc)
+		protectStep("config file", cfg.ConfigPath, protectConfigFunc)
+	}
+	if err := runServiceActionFunc(cfg, action); err != nil {
+		slog.Error(cmd+" failed", "err", err, "event", sofcatlog.EventCommand)
+		return err
+	}
+	slog.Info(cmd+" succeeded", "event", sofcatlog.EventCommand)
+	fmt.Printf("Service %s successfully\n", done)
+	return nil
+}
+
+// protectStep applies protect to path and logs the result; a failure is only
+// a warning, as at every service start.
+func protectStep(what, path string, protect func(string) error) {
+	if err := protect(path); err != nil {
+		slog.Warn("unable to protect the "+what, "path", path, "err", err, "event", sofcatlog.EventProtected)
+		return
+	}
+	slog.Info("protected the "+what, "path", path, "event", sofcatlog.EventProtected)
 }
 
 // printRunSummary prints what the run left waiting: deferred items with their
