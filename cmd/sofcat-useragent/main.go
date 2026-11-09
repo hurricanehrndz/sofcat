@@ -1,9 +1,11 @@
 // Command sofcat-useragent, built as <slug>-useragent, is the per-user helper:
 // it places the signed-in user's user-scope zip items into their own profile
-// (pkg/usersync) and exits, with no window. The HKLM Run value that
-// -serviceinstall writes starts it at every logon, and the service starts it
-// in each signed-in session, with -no-retry, whenever it saves a new
-// user-placement plan. It runs as the user, never as SYSTEM.
+// (pkg/usersync) and exits, with no window. What -serviceinstall writes
+// starts it at every logon: the HKLM Run value on Windows, the LaunchAgent
+// /Library/LaunchAgents/<identifier>.useragent.plist on macOS. The service
+// starts it in each signed-in session whenever it saves a new user-placement
+// plan: directly, with -no-retry, on Windows; through the LaunchAgent, whose
+// arguments are fixed, on macOS. It runs as the user, never as SYSTEM or root.
 package main
 
 import (

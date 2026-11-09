@@ -66,6 +66,17 @@ any helper still running and closes an open storefront, so the uninstaller
 can delete their executables. Each process it ends, and each it could not,
 is recorded in the [event log](/reference/event-log/).
 
+On macOS the helper is a LaunchAgent,
+`/Library/LaunchAgents/<IDENTIFIER>.useragent.plist`, which the package
+installs and `-serviceinstall` writes: launchd runs it once at every GUI
+login, as that user. On a new plan the service runs it again for each user
+signed in to a GUI session, fast-user-switched ones included, with
+`launchctl kickstart`, or with `launchctl bootstrap` for a user who signed in
+before the install. A helper still running then is started again at the
+next service run. `-serviceremove` boots it out of every user's session,
+which ends a running helper, and deletes the plist. The helper logs to
+`~/Library/Application Support/<NAME>/useragent.log`.
+
 Each helper run logs what it placed, held and failed to
 `%LOCALAPPDATA%\<NAME>\useragent.log`. The file rotates at 1 MiB to a single
 backup. `SOFCAT_DEBUG=1` in the user's environment adds debug records.

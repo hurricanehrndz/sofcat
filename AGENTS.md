@@ -39,7 +39,7 @@ Guidance for coding agents working in this repository.
   - `just bootstrap-tapas`: build the Tapas Test zip-item fixture brand and repository for a Windows VM
   - `just bootstrap-tapas-macos`: the same for a Mac, with a `.pkg` and config
   - `just bootstrap-nupkg`: build `sofcat.exe` and an embala-built nupkg repository for the nupkg smoke on a Windows VM
-  - `just build-macos`: build the CLI and `.app` for the host Mac
+  - `just build-macos`: build the CLI, the per-user helper and `.app` for the host Mac
   - `just pkg`: wrap those into an unsigned `.pkg`
 
 `just build-macos`, `just pkg` and `just bootstrap-tapas-macos` run only on macOS.
@@ -89,18 +89,23 @@ three binaries, which compiles out the command installers and catalog scripts
 set with `just test-zip-only` and
 `golangci-lint run --build-tags zip_only ./...`.
 
-On a Mac, `just build-macos` builds the CLI for the host architecture
-(`build/<slug>`, pure Go) and the UI as `build/<Name>.app` (cgo, so the Xcode
-command line tools), and `just pkg` wraps both with the launchd plist into
+On a Mac, `just build-macos` builds the CLI and the per-user helper for the
+host architecture (`build/<slug>` and `build/<slug>-useragent`, pure Go) and
+the UI as `build/<Name>.app` (cgo, so the Xcode command line tools), and
+`just pkg` wraps them with the launchd plists into
 `build/<slug>-<version>.pkg`, unsigned by default. With `CODESIGN_IDENTITY` set,
-`build-macos` codesigns the CLI and the app (hardened runtime; `-` is
+`build-macos` codesigns the CLI, the helper and the app (hardened runtime; `-` is
 ad-hoc), with `PRODUCTSIGN_IDENTITY` set `pkg` signs the product archive, and
 with `NOTARIZE=1` plus `NOTARY_AUTH=api-key`, `NOTARY_API_KEY_PATH`,
 `NOTARY_API_KEY_ID` and `NOTARY_API_ISSUER_ID` it runs `just notarize` on it
 (`site/src/content/docs/reference/code-signing.md`). It installs the app in `/Applications`,
-the CLI in `/Library/Application Support/<Name>/bin/<slug>` and the plist,
-labelled with the brand's `IDENTIFIER`, in `/Library/LaunchDaemons`; its
-postinstall script bootstraps the daemon. The daemon reads
+the CLI and the helper in `/Library/Application Support/<Name>/bin/`, the
+plist, labelled with the brand's `IDENTIFIER`, in `/Library/LaunchDaemons`
+and the helper's LaunchAgent, `<IDENTIFIER>.useragent`, in
+`/Library/LaunchAgents`; its postinstall script bootstraps the daemon.
+launchd runs the helper at each GUI login, and the daemon kickstarts it (or
+bootstraps it) in every signed-in user's session when the user-placement plan
+changes; `-serviceremove` boots it out of them and deletes its plist. The daemon reads
 `/Library/Application Support/<Name>/config.yaml`, keeps its state in the
 root-only `.../<Name>/Data` (0700) and serves
 `/var/run/<slug>/<slug>-service.sock`. The service and `-serviceinstall` make
@@ -282,13 +287,23 @@ passwordless sudo.
    the end; a failed run leaves it there until the pkg is reinstalled. That
    variable is a test hook read from the service's own environment, which
    only root can set (launchd's root-owned plist); nothing else honours it.
+   It needs a user signed in to the GUI (the rig's SSH user is): it checks
+   that the daemon starts the per-user helper's LaunchAgent for them, by
+   bootstrap first and by kickstart on a later plan change.
+   Then, as that user (not root), `test/manual/run-tapas-user-sync.sh` must
+   exit 0 and print `TAPAS USER SYNC PASSED`: it runs the installed helper
+   and checks `tapas-user-plugin` under `~/.agents/tapas-plugins` and its
+   receipt under `~/Library/Application Support/Tapas Test/receipts`.
 6. Visible gate: open `/Applications/Tapas Test.app` as the logged-on user and
    screenshot it (`mac show`, or VNC if the capture shows only wallpaper).
 7. Clean up: stop the test server, then
    `sudo "/Library/Application Support/Tapas Test/bin/tapas-test" -serviceremove`
+   (it also boots the helper's LaunchAgent out and deletes its plist)
    and remove `/Applications/Tapas Test.app`,
    `/Library/Application Support/Tapas Test` and
-   `/Library/Application Support/tapas-test-*`. Run that removal through
+   `/Library/Application Support/tapas-test-*`, and, as the user,
+   `~/.agents/tapas-plugins` and `~/Library/Application Support/Tapas Test`.
+   Run the root removal through
    `sudo sh -c '...'`: the login shell over SSH is zsh, which aborts the
    whole command when a glob such as `tapas-test-*` matches nothing, and a
    smoke on the leftovers fails at step 8 with "not a clean Mac?".

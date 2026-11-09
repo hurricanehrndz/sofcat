@@ -28,7 +28,10 @@ func TestStockNamesUnchanged(t *testing.T) {
 		"linux socket":  "/run/sofcat",
 		"launchd label": "ca.hrndz.sofcat",
 		"launchd plist": "/Library/LaunchDaemons/ca.hrndz.sofcat.plist",
+		"agent label":   "ca.hrndz.sofcat.useragent",
+		"agent plist":   "/Library/LaunchAgents/ca.hrndz.sofcat.useragent.plist",
 		"cli":           "/Library/Application Support/SofCat/bin/sofcat",
+		"agent":         "/Library/Application Support/SofCat/bin/sofcat-useragent",
 		"app":           "/Applications/SofCat.app",
 	}
 	assertNames(t, want)
@@ -51,7 +54,10 @@ func TestRebrandMovesEveryName(t *testing.T) {
 		"linux socket":  "/run/acme",
 		"launchd label": "com.example.acme",
 		"launchd plist": "/Library/LaunchDaemons/com.example.acme.plist",
+		"agent label":   "com.example.acme.useragent",
+		"agent plist":   "/Library/LaunchAgents/com.example.acme.useragent.plist",
 		"cli":           "/Library/Application Support/Acme Software Center/bin/acme",
+		"agent":         "/Library/Application Support/Acme Software Center/bin/acme-useragent",
 		"app":           "/Applications/Acme Software Center.app",
 	}
 	assertNames(t, want)
@@ -71,7 +77,10 @@ func assertNames(t *testing.T, want map[string]string) {
 		"linux socket":  SocketDirFor("linux"),
 		"launchd label": LaunchdLabel(),
 		"launchd plist": LaunchdPlistPath(),
+		"agent label":   UserAgentLabel(),
+		"agent plist":   UserAgentPlistPath(),
 		"cli":           CLIPath(),
+		"agent":         UserAgentPath(),
 		"app":           AppPath(),
 	}
 	for key, value := range want {

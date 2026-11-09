@@ -53,6 +53,9 @@ func BinDir() string { return SupportDir() + "/bin" }
 // CLIPath is the installed macOS CLI.
 func CLIPath() string { return BinDir() + "/" + Slug }
 
+// UserAgentPath is the installed macOS per-user helper, beside the CLI.
+func UserAgentPath() string { return BinDir() + "/" + Slug + "-useragent" }
+
 // AppPath is the installed macOS app bundle.
 func AppPath() string { return "/Applications/" + Name + ".app" }
 
@@ -61,6 +64,13 @@ func LaunchdLabel() string { return Identifier }
 
 // LaunchdPlistPath is the macOS daemon's property list.
 func LaunchdPlistPath() string { return "/Library/LaunchDaemons/" + Identifier + ".plist" }
+
+// UserAgentLabel is the launchd label of the macOS per-user helper's
+// LaunchAgent.
+func UserAgentLabel() string { return Identifier + ".useragent" }
+
+// UserAgentPlistPath is the per-user helper's LaunchAgent property list.
+func UserAgentPlistPath() string { return "/Library/LaunchAgents/" + UserAgentLabel() + ".plist" }
 
 // ProgramDataDir is the Windows twin of SupportDir, %ProgramData%\<Name>:
 // the config, Data and sofcat's own placements live in it. The executables

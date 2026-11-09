@@ -720,8 +720,8 @@ func TestRouteManagedRunPrintsWaitingItems(t *testing.T) {
 }
 
 // TestPrintLaunchdPlist: `just pkg` ships whatever -print-launchd-plist
-// prints, so it must be exactly the installed-layout plist, and no other
-// argument list may trigger it.
+// and -print-useragent-plist print, so each must be exactly its installed-layout
+// plist, and no other argument list may trigger them.
 func TestPrintLaunchdPlist(t *testing.T) {
 	var buf bytes.Buffer
 	if !printLaunchdPlist([]string{"sofcat", "-print-launchd-plist"}, &buf) {
@@ -733,7 +733,15 @@ func TestPrintLaunchdPlist(t *testing.T) {
 	}
 
 	buf.Reset()
-	for _, args := range [][]string{{"sofcat"}, {"sofcat", "-c", "x"}, {"sofcat", "-print-launchd-plist", "-c", "x"}} {
+	if !printLaunchdPlist([]string{"sofcat", "-print-useragent-plist"}, &buf) {
+		t.Fatal("-print-useragent-plist not handled")
+	}
+	if want := service.UserAgentPlist(identity.UserAgentPath()); !bytes.Equal(buf.Bytes(), want) {
+		t.Fatalf("printed:\n%s\nwant:\n%s", buf.Bytes(), want)
+	}
+
+	buf.Reset()
+	for _, args := range [][]string{{"sofcat"}, {"sofcat", "-c", "x"}, {"sofcat", "-print-launchd-plist", "-c", "x"}, {"sofcat", "-print-useragent-plist", "-c", "x"}} {
 		if printLaunchdPlist(args, &buf) || buf.Len() != 0 {
 			t.Fatalf("%q handled as -print-launchd-plist", args)
 		}

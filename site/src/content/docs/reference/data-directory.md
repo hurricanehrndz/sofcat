@@ -48,7 +48,9 @@ No placement may write into it.
 The executables are not here. `sofcat.exe`, `sofcat-ui.exe` and
 `sofcat-useragent.exe` install to `C:\Program Files\SofCat`, whose default ACL
 already lets Users read and execute them and only Administrators and TrustedInstaller write. SofCat never
-writes there.
+writes there. On macOS, `sofcat` and `sofcat-useragent` sit in
+`/Library/Application Support/SofCat/bin` (root-owned, 0755), and the
+helper's LaunchAgent plist in `/Library/LaunchAgents` (root-owned, 0644).
 
 The per-user helper writes outside both: each user's receipts and its
 `useragent.log` (capped at 1 MiB plus one backup) live in

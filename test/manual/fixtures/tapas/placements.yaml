@@ -61,16 +61,17 @@ placements:
     scope:
       windows: user
     applies_to: [Codex]
-  # Per user on Windows only, with the spec the helper receives in the plan:
+  # Per user on both OSes, with the spec the helper receives in the plan:
   # exclusive on a fresh directory nothing else uses, so the helper creates
   # and marks it; items_dir; and a generated index.json under the root that
-  # reads .User, the vars and the items (run-tapas-user-sync.ps1). No darwin
-  # path, since darwin user scope is not supported: tapas-user-plugin ships
-  # no darwin variant, so a Mac run has nothing to place.
+  # reads .User, the vars and the items (run-tapas-user-sync.ps1 and
+  # run-tapas-user-sync.sh). The only user-scope placement on macOS.
   tapas-user-plugins:
     paths:
+      darwin: ${HOME}/.agents/tapas-plugins
       windows: ${USERPROFILE}\.agents\tapas-plugins
     scope:
+      darwin: user
       windows: user
     applies_to: [Codex]
     exclusive: true
