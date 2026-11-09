@@ -3,6 +3,8 @@ package installer
 import (
 	"context"
 	"errors"
+	"maps"
+	"slices"
 	"sync"
 )
 
@@ -75,6 +77,18 @@ func (c *Cancels) EndRun() {
 	defer c.mu.Unlock()
 	clear(c.canceled)
 	clear(c.acting)
+}
+
+// Withdrawn returns, sorted, the items withdrawn from the run under way. Their
+// selection was reverted after the run computed what it wants, so the run
+// holds them in the user plan rather than saving a stale choice.
+func (c *Cancels) Withdrawn() []string {
+	if c == nil {
+		return nil
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return slices.Sorted(maps.Keys(c.canceled))
 }
 
 func (c *Cancels) withdrawn(name string) bool {
