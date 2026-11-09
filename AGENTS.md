@@ -48,11 +48,12 @@ Prefer `just test` as the default local validation step, even for small changes.
 When changes include SofCat UI code, run `just ui-lint` and `just ui-test`.
 When changes span Go service/CLI and UI protocol layers, run `just test`, `just ui-lint`, and `just ui-test`.
 
-`just build` produces the three raw Windows executables, all pure Go and
-cross-built (`GOOS=windows GOARCH=amd64 CGO_ENABLED=0`): `build/sofcat.exe`,
-the windows-GUI storefront `build/sofcat-ui.exe`
-(`go build -tags production -ldflags "-H windowsgui" ./ui`) and the per-user
-helper `build/sofcat-useragent.exe` (`cmd/sofcat-useragent`, also
+`just build` produces the three raw Windows executables, all pure Go,
+cross-built (`GOOS=windows GOARCH=amd64 CGO_ENABLED=0`) and stripped
+(`-ldflags "-s -w"`): `build/sofcat.exe`, the windows-GUI storefront
+`build/sofcat-ui.exe`
+(`go build -tags production -ldflags "-s -w -H windowsgui" ./ui`) and the
+per-user helper `build/sofcat-useragent.exe` (`cmd/sofcat-useragent`, also
 `-H windowsgui`, no Wails).
 `just setup` wraps them in embala's `setup.exe` (`installer/embala.toml`,
 `install.lua` and `uninstall.lua`, embala 0.10.0); it builds on Linux. The
