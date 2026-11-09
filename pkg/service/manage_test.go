@@ -1,6 +1,8 @@
 package service
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/hurricanehrndz/sofcat/pkg/identity"
@@ -47,5 +49,33 @@ func TestIsAgentImage(t *testing.T) {
 		if got := isAgentImage(tt.image, agents); got != tt.want {
 			t.Errorf("isAgentImage(%q) = %v, want %v", tt.image, got, tt.want)
 		}
+	}
+}
+
+// A path that names the agent's file differently, a link here and an 8.3
+// short name or a \\?\ path on Windows, still matches; otherwise the agent
+// is left running and the uninstaller cannot delete it.
+func TestIsAgentImageSameFile(t *testing.T) {
+	dir := t.TempDir()
+	agent := filepath.Join(dir, "sofcat-useragent.exe")
+	other := filepath.Join(dir, "other.exe")
+	for _, p := range []string{agent, other} {
+		if err := os.WriteFile(p, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	link := filepath.Join(dir, "link.exe")
+	if err := os.Symlink(agent, link); err != nil {
+		t.Skipf("cannot create a symlink: %v", err)
+	}
+	agents := []string{agent}
+	if !isAgentImage(link, agents) {
+		t.Errorf("isAgentImage(%q) = false for a link to the agent", link)
+	}
+	if isAgentImage(other, agents) {
+		t.Errorf("isAgentImage(%q) = true for another file", other)
+	}
+	if isAgentImage(filepath.Join(dir, "missing.exe"), []string{filepath.Join(dir, "gone.exe")}) {
+		t.Error("isAgentImage matched two paths that do not exist")
 	}
 }
