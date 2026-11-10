@@ -1,5 +1,3 @@
-//go:build !zip_only
-
 package status
 
 import (
@@ -11,9 +9,7 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
 )
 
-// scriptCheckFunc runs a catalog item's check.script. A zip-only build (the
-// zip_only tag) leaves this file out, so its binary cannot run catalog
-// scripts; status_zip_only.go stands in.
+// scriptCheckFunc runs a catalog item's check.script; tests replace it.
 var scriptCheckFunc = checkScript
 
 func checkScript(catalogItem catalog.Item, cachePath string, installType string) (actionNeeded bool, checkErr error) {

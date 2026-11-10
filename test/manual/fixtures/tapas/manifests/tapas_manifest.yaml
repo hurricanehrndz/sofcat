@@ -16,8 +16,7 @@ optional_installs:
   - tapas-outside-skill
   - tapas-optional-plugin
   - tapas-second-plugin
-  - tapas-scripted-skill
-  - tapas-choco-skill
+  - tapas-depends-skill
   - tapas-exclusive-skill
   - tapas-desktop-optional
   - tapas-optional-user-skill

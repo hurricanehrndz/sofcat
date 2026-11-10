@@ -96,7 +96,7 @@ A placement outside every root fails with `placement_refused`. See
 
 A store that ships nothing but zip items can be a
 [zip-only build](/guides/zip-items/#zip-only-builds), which has no code for
-installers or catalog scripts.
+the `msi`, `exe`, `ps1`, `msix` and `nupkg` installers.
 
 ## Point a device at it
 

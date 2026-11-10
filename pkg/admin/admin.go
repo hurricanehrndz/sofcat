@@ -147,7 +147,7 @@ func CollectCatalogs(repoPath string) (CatalogSet, error) { //nolint:gocognit //
 		if err := conditions.Check(parsed.Item.InstallableCondition); err != nil {
 			set.Problems = append(set.Problems, fmt.Sprintf("%s: invalid installable_condition: %v", packageInfoPath, err))
 		}
-		set.Problems = append(set.Problems, checkRequiresSoftware(packageInfoPath, parsed.Item.RequiresSoftware)...)
+		set.Problems = append(set.Problems, checkDependsCheck(packageInfoPath, parsed.Item.DependsCheck)...)
 		set.Problems = append(set.Problems, checkActionLabels(packageInfoPath, parsed.Item.CustomActionLabels)...)
 		if parsed.Item.Installer.Type == "zip" {
 			set.Problems = append(set.Problems, checkZipItem(packageInfoPath, parsed.Item.Installer, placements)...)
@@ -230,17 +230,29 @@ func readPlacements(repoPath string) repoPlacements {
 	return repoPlacements{path: path, table: table, present: true}
 }
 
-// checkRequiresSoftware reports requires_software entries without a
-// display_name, which the deferral message needs, or with neither munki nor
-// chocolatey, which no OS would check.
-func checkRequiresSoftware(path string, reqs []catalog.RequiredSoftware) []string {
+// checkDependsCheck reports depends_check entries without a display_name,
+// which the deferral message needs, with no check at all, or with a script
+// no OS would run: a key other than windows and darwin, an empty script, or a
+// darwin script without the #! line it is executed by.
+func checkDependsCheck(path string, deps []catalog.DependsCheck) []string {
 	var problems []string
-	for i, req := range reqs {
-		if strings.TrimSpace(req.DisplayName) == "" {
-			problems = append(problems, fmt.Sprintf("%s: requires_software[%d] has no display_name", path, i))
+	for i, dep := range deps {
+		if strings.TrimSpace(dep.DisplayName) == "" {
+			problems = append(problems, fmt.Sprintf("%s: depends_check[%d] has no display_name", path, i))
 		}
-		if req.Munki == "" && req.Chocolatey == "" {
-			problems = append(problems, fmt.Sprintf("%s: requires_software[%d] needs munki or chocolatey", path, i))
+		if dep.Sofcat == "" && dep.Munki == "" && len(dep.Script) == 0 {
+			problems = append(problems, fmt.Sprintf("%s: depends_check[%d] needs sofcat, munki or script", path, i))
+		}
+		for _, goos := range slices.Sorted(maps.Keys(dep.Script)) {
+			script := dep.Script[goos]
+			switch {
+			case !slices.Contains(catalog.DependsCheckScriptOS, goos):
+				problems = append(problems, fmt.Sprintf("%s: depends_check[%d] script key %q is not one of %s", path, i, goos, strings.Join(catalog.DependsCheckScriptOS, ", ")))
+			case strings.TrimSpace(script) == "":
+				problems = append(problems, fmt.Sprintf("%s: depends_check[%d] script for %s is empty", path, i, goos))
+			case goos == "darwin" && !strings.HasPrefix(script, "#!"):
+				problems = append(problems, fmt.Sprintf("%s: depends_check[%d] script for darwin does not start with #!", path, i))
+			}
 		}
 	}
 	return problems

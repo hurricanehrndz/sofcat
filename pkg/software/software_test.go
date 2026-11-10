@@ -69,58 +69,48 @@ func TestMunkiReportUnusable(t *testing.T) {
 	}
 }
 
-func TestChocolateyLib(t *testing.T) {
-	lib := t.TempDir()
-	orig := ChocolateyLib
-	ChocolateyLib = func() string { return lib }
-	t.Cleanup(func() { ChocolateyLib = orig })
-	if err := os.Mkdir(filepath.Join(lib, "demo-tool"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(lib, "a-file"), nil, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	for id, want := range map[string]bool{
-		"demo-tool": true,
-		"other":     false,
-		"a-file":    false, // a package is a directory
-		"..":        false,
-		"../lib":    false,
-		"":          false,
-	} {
-		if got := chocolateyLibHas(id); got != want {
-			t.Errorf("chocolateyLibHas(%q) = %v, want %v", id, got, want)
-		}
-	}
-}
-
-// TestMissing: each OS checks only its own key, an entry without one is
-// skipped, and missing names keep catalog order.
+// TestMissing: an entry is present when any check that applies on this OS
+// passes, an entry with no check for this OS is skipped, and missing names
+// keep catalog order.
 func TestMissing(t *testing.T) {
-	origOS, origMunki, origChoco := GOOS, munkiInstalled, chocolateyInstalled
-	t.Cleanup(func() { GOOS, munkiInstalled, chocolateyInstalled = origOS, origMunki, origChoco })
-	present := map[string]bool{"have-munki": true, "have-choco": true}
-	munkiInstalled = func(name string) bool { return present[name] }
-	chocolateyInstalled = func(id string) bool { return present[id] }
+	origOS, origMunki := GOOS, munkiInstalled
+	t.Cleanup(func() { GOOS, munkiInstalled = origOS, origMunki })
+	munkiInstalled = func(name string) bool { return name == "have-munki" }
+	checks := Checks{
+		Sofcat: func(name string) bool { return name == "have-item" },
+		Script: func(script string) bool { return script == "pass" },
+	}
+	scripts := func(result string) map[string]string {
+		return map[string]string{"darwin": result, "windows": result}
+	}
 
-	item := catalog.Item{RequiresSoftware: []catalog.RequiredSoftware{
-		{DisplayName: "Zeta", Munki: "gone", Chocolatey: "gone"},
-		{DisplayName: "Both Present", Munki: "have-munki", Chocolatey: "have-choco"},
-		{DisplayName: "Mac Only", Munki: "gone"},
-		{DisplayName: "Windows Only", Chocolatey: "gone"},
-		{DisplayName: "Alpha", Munki: "gone", Chocolatey: "gone"},
+	item := catalog.Item{DependsCheck: []catalog.DependsCheck{
+		{DisplayName: "Zeta", Sofcat: "gone", Munki: "gone", Script: scripts("fail")},
+		{DisplayName: "By Sofcat", Sofcat: "have-item", Munki: "gone", Script: scripts("fail")},
+		{DisplayName: "By Munki", Sofcat: "gone", Munki: "have-munki"},
+		{DisplayName: "By Script", Sofcat: "gone", Script: scripts("pass")},
+		{DisplayName: "Munki Only", Munki: "gone"},
+		{DisplayName: "Windows Script Only", Script: map[string]string{"windows": "fail"}},
+		{DisplayName: "Alpha", Sofcat: "gone"},
 	}}
 	for goos, want := range map[string][]string{
-		"darwin":  {"Zeta", "Mac Only", "Alpha"},
-		"windows": {"Zeta", "Windows Only", "Alpha"},
-		"linux":   nil,
+		// By Munki: its munki key does not apply off a Mac, so only sofcat does.
+		"darwin":  {"Zeta", "Munki Only", "Alpha"},
+		"windows": {"Zeta", "By Munki", "Windows Script Only", "Alpha"},
+		"linux":   {"Zeta", "By Munki", "By Script", "Alpha"},
 	} {
 		GOOS = goos
-		if got := Missing(item); !slices.Equal(got, want) {
+		if got := Missing(item, checks); !slices.Equal(got, want) {
 			t.Errorf("%s: Missing = %q, want %q", goos, got, want)
 		}
 	}
-	if got := Missing(catalog.Item{}); got != nil {
+
+	// A check the caller does not provide never passes.
+	GOOS = "windows"
+	if got := Missing(item, Checks{}); !slices.Equal(got, []string{"Zeta", "By Sofcat", "By Munki", "By Script", "Windows Script Only", "Alpha"}) {
+		t.Errorf("no checks: Missing = %q", got)
+	}
+	if got := Missing(catalog.Item{}, checks); got != nil {
 		t.Errorf("no requirements: Missing = %q", got)
 	}
 }

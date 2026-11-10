@@ -27,9 +27,9 @@ func zipItem() catalog.Item {
 	}}
 }
 
-// A zip-only binary has no command installer and runs no catalog script
-// (spec R21), so every item that needs one must be rejected with a reason the
-// admin can act on, while a plain zip item stays valid.
+// A zip-only binary has no command installer (spec R21), so every item that
+// needs one must be rejected with a reason the admin can act on, while a zip
+// item stays valid, catalog scripts and all: every build runs those.
 func TestZipOnlyReason(t *testing.T) {
 	setZipOnly(t, true)
 	with := func(edit func(*catalog.Item)) catalog.Item {
@@ -41,13 +41,8 @@ func TestZipOnlyReason(t *testing.T) {
 		item catalog.Item
 		want string
 	}{
-		"exe installer":        {catalog.Item{Installer: catalog.InstallerItem{Type: "exe", Location: "a.exe"}}, `installer.type "exe" is not zip`},
-		"msi uninstaller":      {with(func(i *catalog.Item) { i.Uninstaller.Type = "msi" }), `uninstaller.type "msi" is not zip`},
-		"preinstall_script":    {with(func(i *catalog.Item) { i.PreScript = "x" }), "sets preinstall_script"},
-		"postinstall_script":   {with(func(i *catalog.Item) { i.PostScript = "x" }), "sets postinstall_script"},
-		"preuninstall_script":  {with(func(i *catalog.Item) { i.PreUninstallScript = "x" }), "sets preuninstall_script"},
-		"postuninstall_script": {with(func(i *catalog.Item) { i.PostUninstallScript = "x" }), "sets postuninstall_script"},
-		"check.script":         {with(func(i *catalog.Item) { i.Check.Script = "x" }), "sets check.script"},
+		"exe installer":   {catalog.Item{Installer: catalog.InstallerItem{Type: "exe", Location: "a.exe"}}, `installer.type "exe" is not zip`},
+		"msi uninstaller": {with(func(i *catalog.Item) { i.Uninstaller.Type = "msi" }), `uninstaller.type "msi" is not zip`},
 	} {
 		if got := ZipOnlyReason(tc.item); !strings.Contains(got, tc.want) {
 			t.Errorf("%s: reason %q, want it to contain %q", name, got, tc.want)
@@ -56,6 +51,14 @@ func TestZipOnlyReason(t *testing.T) {
 
 	if got := ZipOnlyReason(zipItem()); got != "" {
 		t.Errorf("zip item rejected: %q", got)
+	}
+	scripted := with(func(i *catalog.Item) {
+		i.PreScript, i.PostScript, i.PreUninstallScript, i.PostUninstallScript = "x", "x", "x", "x"
+		i.Check.Script = "x"
+		i.DependsCheck = []catalog.DependsCheck{{DisplayName: "Tool", Script: map[string]string{"windows": "x"}}}
+	})
+	if got := ZipOnlyReason(scripted); got != "" {
+		t.Errorf("zip item with catalog scripts rejected: %q", got)
 	}
 	if got := ZipOnlyReason(with(func(i *catalog.Item) { i.Uninstaller.Type = "zip" })); got != "" {
 		t.Errorf("zip item with a zip uninstaller rejected: %q", got)
@@ -75,14 +78,14 @@ func TestZipOnlyReasonStock(t *testing.T) {
 // catalog's valid occurrence still wins.
 func TestResolveZipOnly(t *testing.T) {
 	setZipOnly(t, true)
-	scripted := zipItem()
-	scripted.PostScript = "x"
+	msiUninstall := zipItem()
+	msiUninstall.Uninstaller.Type = "msi"
 	exe := catalog.Item{Installer: catalog.InstallerItem{Type: "exe", Location: "a.exe"}}
 	catalogs := map[int]map[string]catalog.Item{
-		1: {"Scripted": scripted, "Exe": exe, "Later": exe},
+		1: {"MsiUninstall": msiUninstall, "Exe": exe, "Later": exe},
 		2: {"Later": zipItem()},
 	}
-	for _, name := range []string{"Scripted", "Exe"} {
+	for _, name := range []string{"MsiUninstall", "Exe"} {
 		if _, err := ResolveItem(name, catalogs); !errors.Is(err, ErrZipOnly) {
 			t.Errorf("ResolveItem(%s) err = %v, want ErrZipOnly", name, err)
 		}
@@ -103,9 +106,9 @@ func TestWarnZipOnlyOnce(t *testing.T) {
 	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
 	t.Cleanup(func() { slog.SetDefault(saved) })
 
-	WarnZipOnly("WarnOnce", "sets check.script")
-	WarnZipOnly("WarnOnce", "sets check.script")
-	if got := strings.Count(buf.String(), "level=WARN"); got != 1 || !strings.Contains(buf.String(), "sets check.script") {
+	WarnZipOnly("WarnOnce", `installer.type "exe" is not zip`)
+	WarnZipOnly("WarnOnce", `installer.type "exe" is not zip`)
+	if got := strings.Count(buf.String(), "level=WARN"); got != 1 || !strings.Contains(buf.String(), "is not zip") {
 		t.Errorf("logged %d warnings, want 1 with the reason:\n%s", got, buf.String())
 	}
 }

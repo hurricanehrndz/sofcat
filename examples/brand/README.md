@@ -21,8 +21,8 @@ just brand=branding/acme setup   # -> build/acme-apps-<version>-x86_64-setup.exe
 | `write-roots.yaml` | no | Where zip items may be placed, compiled in; see [Zip items](../../site/src/content/docs/guides/zip-items.md#write-roots). Defaults to `${ProgramData}\<NAME>` (Windows) and `/Library/Application Support/<NAME>` (macOS), the directory holding the config and `Data`. Managed policy can add more. |
 
 Setting `INSTALLERS=zip` in `brand.env` makes all three binaries zip-only: they
-contain no command installer (`msi`, `exe`, `ps1`, `msix`, `nupkg`) and run no
-catalog script, and they reject catalog items that need either; see
+contain no command installer (`msi`, `exe`, `ps1`, `msix`, `nupkg`) and reject
+catalog items that need one; see
 [Zip items](../../site/src/content/docs/guides/zip-items.md#zip-only-builds). `brand-check`
 rejects any other value.
 

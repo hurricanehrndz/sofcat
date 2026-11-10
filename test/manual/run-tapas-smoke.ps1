@@ -12,11 +12,11 @@ marker and refusal, a placement outside the write roots, the skipped
 user-scope placement and its staged archive in the user-sync plan, the
 marketplace plugins with the generated marketplace.json, the templated Codex
 catalog and skills index and the settings drop-in, a skill deferred until its
-required Chocolatey package exists, a
+required software check passes, a
 held conditional item, scope exit, the Claude Desktop plugins whose trees
 ship templates (plugin.json from the managed flag, .mcp.json from an admin
 fact, re-rendered in place when either changes), and the zip-only build's
-rejection of an exe item and a skill with a postinstall_script. The two-user authorization
+rejection of an exe item. The two-user authorization
 check lives in run-tapas-authz.ps1, which run-tapas-authz.sh drives from the
 host after this smoke over an administrator's and a standard user's SSH
 session. run-tapas-user-sync.ps1 then places the user-scope skill as the
@@ -77,8 +77,8 @@ $dropIn          = Join-Path $SmokeRoot "claude\managed-settings.d\50-tapas-test
 $codexJson       = Join-Path $marketRoot ".agents\plugins\marketplace.json"
 $skillsIndex     = Join-Path $SmokeRoot "claude\skills-index.json"
 $exclusiveIndex  = Join-Path $SmokeRoot "claude\exclusive-index.json"
-# tapas-scripted-skill's postinstall_script writes this if it ever runs.
-$scriptedMarker  = Join-Path $SmokeRoot "scripted-skill-ran.txt"
+# tapas-depends-skill's depends_check script looks for this file.
+$demoToolMarker  = Join-Path $SmokeRoot "demo-tool-installed.txt"
 
 function Write-Step {
     param([string]$Message)
@@ -432,24 +432,6 @@ $line = Assert-LoggedRejection "tapas-exe-item"
 if ($line -notmatch 'installer\.type .{1,4}exe.{1,4} is not zip') { Fail "the rejection does not give the reason: $line" }
 Pass "tapas-exe-item not installed; log: $line"
 
-Write-Step "The zip-only build neither lists nor installs the skill with a postinstall_script"
-if (Get-OptionalItem "tapas-scripted-skill") { Fail "ListOptionalInstalls lists tapas-scripted-skill" }
-if (-not (Get-OptionalItem "tapas-optional-skill")) { Fail "ListOptionalInstalls no longer lists tapas-optional-skill" }
-$bad = Invoke-SofCat "InstallItem:tapas-scripted-skill" -AllowFail
-$badText = $bad.Out -join "`n"
-if ($bad.Code -eq 0) { Fail "InstallItem:tapas-scripted-skill was accepted" }
-if ($badText -notmatch 'item_not_available|not available for self-service') {
-    Fail "InstallItem:tapas-scripted-skill was not refused as item_not_available: $badText"
-}
-if (@(Get-YamlList $SelfServe "managed_installs") -contains "tapas-scripted-skill") {
-    Fail "the refused tapas-scripted-skill is in the self-serve managed_installs"
-}
-Assert-NotPlaced $claudeRoot "claude-skills" "tapas-scripted-skill"
-if (Test-Path -LiteralPath $scriptedMarker) { Fail "tapas-scripted-skill's postinstall_script ran: $scriptedMarker exists" }
-$line = Assert-LoggedRejection "tapas-scripted-skill"
-if ($line -notmatch 'postinstall_script') { Fail "the rejection does not give the reason: $line" }
-Pass "not listed, InstallItem refused, nothing placed; log: $line"
-
 # --- Self-service ---------------------------------------------------------------
 
 $optionalTree = Join-Path $claudeRoot "tapas-optional-skill"
@@ -577,37 +559,37 @@ Pass "tree, receipt and both catalog entries gone; the managed plugin stays enab
 
 # --- Required software -------------------------------------------------------------
 
-# tapas-choco-skill requires_software Demo Tool, Chocolatey package demo-tool.
-$demoToolLib = Join-Path $env:ProgramData "chocolatey\lib\demo-tool"
+# tapas-depends-skill depends_check Demo Tool: its Windows script wants $demoToolMarker.
 
-Write-Step "A skill whose required Chocolatey package is missing is deferred and nothing is written"
-if (Test-Path -LiteralPath $demoToolLib) { Fail "$demoToolLib exists before the smoke created it (not a clean VM?)" }
-$terminal = Invoke-Operation "InstallItem:tapas-choco-skill"
+Write-Step "A skill whose required software is missing is deferred and nothing is written"
+if (Test-Path -LiteralPath $demoToolMarker) { Fail "$demoToolMarker exists before the smoke created it (not a clean VM?)" }
+$terminal = Invoke-Operation "InstallItem:tapas-depends-skill"
 if ($terminal.state -ne "Deferred" -or $terminal.errorCode -ne "missing_software") {
-    Fail "InstallItem:tapas-choco-skill expected Deferred/missing_software, got $($terminal | ConvertTo-Json -Compress)"
+    Fail "InstallItem:tapas-depends-skill expected Deferred/missing_software, got $($terminal | ConvertTo-Json -Compress)"
 }
 $wantMessage = "Needs Demo Tool. Install it first, then try again."
 if ($terminal.errorMessage -notmatch [regex]::Escape($wantMessage)) {
     Fail "the deferral message is not '$wantMessage': $($terminal.errorMessage)"
 }
-Assert-NotPlaced $claudeRoot "claude-skills" "tapas-choco-skill"
-if (@(Get-YamlList $SelfServe "managed_installs") -notcontains "tapas-choco-skill") {
-    Fail "the deferred tapas-choco-skill left the self-serve managed_installs, so no later run retries it"
+Assert-NotPlaced $claudeRoot "claude-skills" "tapas-depends-skill"
+if (@(Get-YamlList $SelfServe "managed_installs") -notcontains "tapas-depends-skill") {
+    Fail "the deferred tapas-depends-skill left the self-serve managed_installs, so no later run retries it"
 }
 Pass "Deferred/missing_software: $($terminal.errorMessage); nothing placed; still selected"
 
-Write-Step "Once the Chocolatey package directory exists, the next run places the skill"
-New-Item -ItemType Directory -Path $demoToolLib -Force | Out-Null
-Assert-Succeeded "InstallItem:tapas-choco-skill"
-Assert-Placed $claudeRoot "claude-skills" "tapas-choco-skill" | Out-Null
-Pass "tapas-choco-skill placed with a receipt"
+Write-Step "Once the marker file exists, the next run places the skill"
+New-Item -ItemType Directory -Path $SmokeRoot -Force | Out-Null
+Set-Content -LiteralPath $demoToolMarker -Value "installed"
+Assert-Succeeded "InstallItem:tapas-depends-skill"
+Assert-Placed $claudeRoot "claude-skills" "tapas-depends-skill" | Out-Null
+Pass "tapas-depends-skill placed with a receipt"
 
 Write-Step "RemoveItem removes the skill that needed Demo Tool"
-Assert-Succeeded "RemoveItem:tapas-choco-skill"
-Wait-Removed $claudeRoot "claude-skills" "tapas-choco-skill"
+Assert-Succeeded "RemoveItem:tapas-depends-skill"
+Wait-Removed $claudeRoot "claude-skills" "tapas-depends-skill"
 Wait-Pruned
-Remove-Item -LiteralPath $demoToolLib -Recurse -Force
-Pass "tree and receipt gone; $demoToolLib removed"
+Remove-Item -LiteralPath $demoToolMarker -Force
+Pass "tree and receipt gone; $demoToolMarker removed"
 
 # --- Adoption --------------------------------------------------------------------
 
@@ -748,12 +730,10 @@ if (@($warnings | Where-Object { $_ -match 'tapas_smoke_held' -and $_ -match 'he
     Fail "inventory does not warn that the tapas_smoke_held block is held: $($warnings -join '; ')"
 }
 Assert-Placed $claudeRoot "claude-skills" "tapas-managed-skill" | Out-Null
-Assert-NotPlaced $claudeRoot "claude-skills" "tapas-scripted-skill"
-if (Test-Path -LiteralPath $scriptedMarker) { Fail "tapas-scripted-skill's postinstall_script ran: $scriptedMarker exists" }
 # claude-skills never empties: tapas-managed-skill stays, so the index stays
 # and follows the receipts. Its removal with the last skill is a unit test.
 Assert-SkillsIndex @("tapas-managed-skill", "tapas-adopt-skill", "tapas-held-skill")
-Pass "tapas-scoped-skill removed, from the skills index too; tapas-held-skill and tapas-managed-skill kept; tapas-scripted-skill never placed"
+Pass "tapas-scoped-skill removed, from the skills index too; tapas-held-skill and tapas-managed-skill kept"
 
 # --- Claude Desktop plugins: tree templates --------------------------------------------
 

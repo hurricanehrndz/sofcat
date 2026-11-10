@@ -182,6 +182,9 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 
 	// Prepare and install
 	slog.Info("Processing managed installs...")
+	runner.ItemInstalled = func(itemName string) bool {
+		return process.Installed(itemName, catalogs, runner.Checker, cfg.CachePath)
+	}
 	process.Installs(installs, catalogs, runner, index)
 
 	// Prepare and uninstall

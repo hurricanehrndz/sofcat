@@ -121,3 +121,19 @@ func PruneSelfServeUninstalls(selfServe *manifest.Item, catalogsMap map[int]map[
 	}
 	return changed
 }
+
+// Installed reports whether sofcat finds the named catalog item installed on
+// this machine, as a depends_check sofcat entry asks. An item no catalog
+// offers this machine, or whose status cannot be checked, is not.
+func Installed(itemName string, catalogsMap map[int]map[string]catalog.Item, checker *status.Checker, cachePath string) bool {
+	item, err := ResolveRemoval(itemName, catalogsMap)
+	if err != nil {
+		return false
+	}
+	installed, err := statusCheck(checker, item, "uninstall", cachePath)
+	if err != nil {
+		slog.Warn("unable to check depends_check item install status", "item", itemName, "err", err)
+		return false
+	}
+	return installed
+}

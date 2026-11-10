@@ -6,7 +6,7 @@ import "github.com/hurricanehrndz/sofcat/pkg/catalog"
 // generic one: item_failed for a failure, blocked_by_running_app for a deferral.
 const (
 	// CodeMissingSoftware: a deferral because software the item requires
-	// (requires_software) is not installed.
+	// (depends_check) is not installed.
 	CodeMissingSoftware = "missing_software"
 	// CodePlacementConflict: a placed tree differs from both the catalog and
 	// its receipt, so sofcat left it alone.
