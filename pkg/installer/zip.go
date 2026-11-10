@@ -21,6 +21,7 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/download"
 	"github.com/hurricanehrndz/sofcat/pkg/identity"
 	"github.com/hurricanehrndz/sofcat/pkg/placement"
+	"github.com/hurricanehrndz/sofcat/pkg/placement/policy"
 	"github.com/hurricanehrndz/sofcat/pkg/receipt"
 	"github.com/hurricanehrndz/sofcat/pkg/report"
 )
@@ -75,7 +76,7 @@ func (z *ZipInstaller) templates() treeRenderer {
 // repository's placement table: machine roots, receipts in the data directory.
 func NewMachineZip(cfg config.Configuration, table placement.Table) *ZipInstaller {
 	return &ZipInstaller{
-		Guard:       placement.MachineGuard(cfg.AppDataPath),
+		Guard:       placement.MachineGuard(cfg.AppDataPath, policy.EffectiveRoots()),
 		Table:       table,
 		ReceiptDir:  receipt.MachineDir(cfg.AppDataPath),
 		CachePath:   cfg.CachePath,

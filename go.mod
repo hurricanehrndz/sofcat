@@ -7,6 +7,7 @@ toolchain go1.27.3
 require (
 	github.com/expr-lang/expr v1.17.8
 	github.com/hashicorp/go-version v1.9.0
+	github.com/micromdm/plist v0.4.0
 	github.com/wailsapp/wails/v3 v3.1.0
 	go.yaml.in/yaml/v4 v4.0.0
 	golang.org/x/sys v0.49.0

@@ -48,6 +48,8 @@ SOCKET="/var/run/$SLUG/$SLUG-service.sock"
 # test/manual/fixtures/tapas/brand/write-roots.yaml and placements.yaml.
 SMOKE_ROOT="$SUPPORT"
 OUTSIDE_ROOT="/Library/Application Support/tapas-test-outside"
+# The managed preferences file whose WriteRoots dictionary adds write roots.
+POLICY_PLIST="/Library/Managed Preferences/$LABEL.plist"
 MUNKI_DIR="/Library/Application Support/tapas-test-munki"
 MUNKI_REPORT="$MUNKI_DIR/ManagedInstallReport.plist"
 TIMEOUT_SEC="${TIMEOUT_SEC:-120}"
@@ -627,6 +629,40 @@ assert_failed_with InstallItem:tapas-outside-skill placement_refused "outside th
 assert_succeeded RemoveItem:tapas-outside-skill
 wait_pruned
 pass "Failed/placement_refused; $OUTSIDE_ROOT not created"
+
+# restart_daemon restarts the daemon, which reads the policy once at startup.
+restart_daemon() {
+	launchctl kickstart -k "system/$LABEL" >/dev/null || fail "could not restart system/$LABEL"
+	wait_for "system/$LABEL to be running" running
+	wait_for "the daemon to answer on $SOCKET" answers
+}
+
+step "A write root from managed policy admits it after a restart"
+[ ! -e "$POLICY_PLIST" ] || fail "$POLICY_PLIST exists before the smoke wrote it (not a clean Mac?)"
+mkdir -p "$(dirname "$POLICY_PLIST")"
+# Binary, as MDM writes managed preferences.
+plutil -create binary1 "$POLICY_PLIST" &&
+	plutil -insert WriteRoots -json "{\"Machine\":[\"$OUTSIDE_ROOT\"]}" "$POLICY_PLIST" &&
+	plutil -convert binary1 "$POLICY_PLIST" || fail "could not write $POLICY_PLIST"
+chown root:wheel "$POLICY_PLIST" && chmod 644 "$POLICY_PLIST"
+restart_daemon
+assert_succeeded InstallItem:tapas-outside-skill
+assert_placed "$OUTSIDE_ROOT/skills" outside-skills tapas-outside-skill
+assert_succeeded RemoveItem:tapas-outside-skill
+wait_removed "$OUTSIDE_ROOT/skills" outside-skills tapas-outside-skill
+wait_pruned
+pass "placed under $OUTSIDE_ROOT/skills with the policy, then removed"
+
+step "A policy file others can write is ignored"
+chmod 666 "$POLICY_PLIST"
+restart_daemon
+assert_failed_with InstallItem:tapas-outside-skill placement_refused "outside the write roots"
+assert_succeeded RemoveItem:tapas-outside-skill
+wait_pruned
+rm -f "$POLICY_PLIST"
+rm -rf "$OUTSIDE_ROOT"
+restart_daemon
+pass "Failed/placement_refused with $POLICY_PLIST at mode 666; file removed"
 
 # --- Scope exit -------------------------------------------------------------------
 

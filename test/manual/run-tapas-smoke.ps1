@@ -44,6 +44,8 @@ param(
     # test/manual/fixtures/tapas/brand/write-roots.yaml and placements.yaml.
     [string]$SmokeRoot   = "$env:ProgramData\tapas-test-smoke",
     [string]$OutsideRoot = "$env:ProgramData\tapas-test-outside",
+    # The managed policy key whose Machine value adds write roots.
+    [string]$PolicyKey   = "HKLM:\SOFTWARE\Policies\Tapas Test\WriteRoots",
     [int]$TimeoutSec     = 120
 )
 
@@ -668,6 +670,31 @@ if (Test-Path $OutsideRoot) { Fail "$OutsideRoot was created" }
 Assert-Succeeded "RemoveItem:tapas-outside-skill"
 Wait-Pruned
 Pass "Failed/placement_refused; $OutsideRoot not created"
+
+Write-Step "A write root from managed policy admits it after a restart"
+# The service reads the policy once, when it starts. The value keeps
+# ${ProgramData} unexpanded, as an administrator would write it.
+if (Test-Path $PolicyKey) { Fail "$PolicyKey exists before the smoke wrote it (not a clean VM?)" }
+New-Item -Path $PolicyKey -Force | Out-Null
+New-ItemProperty -Path $PolicyKey -Name Machine -PropertyType MultiString -Value @('${ProgramData}\tapas-test-outside') | Out-Null
+Restart-Service $Slug
+Wait-For { (Invoke-SofCat "GetServiceInfo" -AllowFail).Code -eq 0 } "the service to answer after the restart"
+Assert-Succeeded "InstallItem:tapas-outside-skill"
+Assert-Placed $outsideRoot "outside-skills" "tapas-outside-skill" | Out-Null
+Assert-Succeeded "RemoveItem:tapas-outside-skill"
+Wait-Removed $outsideRoot "outside-skills" "tapas-outside-skill"
+Wait-Pruned
+Pass "placed under $outsideRoot with the policy, then removed"
+
+Write-Step "Without the policy it is refused again"
+Remove-Item -Path $PolicyKey -Force
+Restart-Service $Slug
+Wait-For { (Invoke-SofCat "GetServiceInfo" -AllowFail).Code -eq 0 } "the service to answer after the restart"
+Assert-FailedWith "InstallItem:tapas-outside-skill" "placement_refused" "outside the write roots" | Out-Null
+Assert-Succeeded "RemoveItem:tapas-outside-skill"
+Wait-Pruned
+Remove-Item -LiteralPath $OutsideRoot -Recurse -Force -ErrorAction SilentlyContinue
+Pass "Failed/placement_refused once $PolicyKey is gone"
 
 # --- Scope exit -------------------------------------------------------------------
 

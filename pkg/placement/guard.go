@@ -47,10 +47,11 @@ func ProfileVar(goos string) string {
 // placements.yaml has no key for it (no variant then matches).
 func HostOS() string { return runtime.GOOS }
 
-// MachineGuard is the service's guard: this OS, the compiled-in roots, the
-// data directory, and the directories holding this build's binaries.
-func MachineGuard(dataDir string) Guard {
-	return Guard{GOOS: HostOS(), Roots: Compiled(), DataDir: dataDir, BinaryDirs: BinaryDirs(HostOS())}
+// MachineGuard is the service's guard: this OS, roots (the build's plus
+// managed policy's, policy.EffectiveRoots), the data directory, and the
+// directories holding this build's binaries.
+func MachineGuard(dataDir string, roots Roots) Guard {
+	return Guard{GOOS: HostOS(), Roots: roots, DataDir: dataDir, BinaryDirs: BinaryDirs(HostOS())}
 }
 
 // BinaryDirs returns the directories holding sofcat's binaries: the running
