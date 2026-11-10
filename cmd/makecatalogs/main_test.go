@@ -268,10 +268,12 @@ func TestCheckFlagsBadConditionalItems(t *testing.T) {
 // what is wrong.
 func TestCheckRejectsBadTemplates(t *testing.T) {
 	for name, want := range map[string][]string{
-		"fact-missing":  {`placement "market"`, `.agents/plugins/marketplace.json`, `fact "missing": no such fact`},
-		"cond-unseeded": {`placement "market"`, `files[0] "/Library/Application Support/Demo/codex.json" on darwin`, `no fact named assigned_user`},
-		"cond-now":      {`placement "market"`, `.agents/plugins/marketplace.json`, `calls now()`},
-		"bad-json":      {`placement "market"`, `.agents/plugins/marketplace.json`, `not JSON`},
+		"fact-missing":               {`placement "market"`, `.agents/plugins/marketplace.json`, `fact "missing": no such fact`},
+		"cond-unseeded":              {`placement "market"`, `files[0] "/Library/Application Support/Demo/codex.json" on darwin`, `no fact named assigned_user`},
+		"cond-now":                   {`placement "market"`, `.agents/plugins/marketplace.json`, `calls now()`},
+		"bad-json":                   {`placement "market"`, `.agents/plugins/marketplace.json`, `not JSON`},
+		"template-file-missing":      {`placement "market"`, `files[0]`, `template_file "templates/absent.json.tmpl"`},
+		"template-file-fact-missing": {`placement "market"`, `.agents/plugins/marketplace.json`, `fact "missing": no such fact`},
 	} {
 		t.Run(name, func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
@@ -299,6 +301,7 @@ func TestCheckExamples(t *testing.T) {
 	repo := t.TempDir()
 	for src, dst := range map[string]string{
 		filepath.Join(examples, "placements.yaml"):                            "placements.yaml",
+		filepath.Join(examples, "templates", "skills-index.json.tmpl"):        filepath.Join("templates", "skills-index.json.tmpl"),
 		filepath.Join(examples, "zip-items", "generated", "hello-world.yaml"): filepath.Join("packages-info", "hello-world.yaml"),
 	} {
 		body, err := os.ReadFile(src)

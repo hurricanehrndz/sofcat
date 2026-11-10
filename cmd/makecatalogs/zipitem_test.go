@@ -174,6 +174,11 @@ func TestZipItemRefusals(t *testing.T) {
 			t.Helper()
 			writeFiles(t, dir, map[string]string{"rendered/claude-code-skills/darwin/NOTE.md.tmpl": `{{ fact "missing" }}`})
 		}, `fact "missing": no such fact`},
+		"template file missing beside placements.yaml": {func(t *testing.T, dir string) {
+			t.Helper()
+			writeFiles(t, dir, map[string]string{"placements.yaml": testPlacements +
+				"    files:\n      - path: index.json\n        template_file: templates/index.json.tmpl\n"})
+		}, `placement "codex-skills": files[0]: template_file "templates/index.json.tmpl"`},
 		"no placement directories": {func(t *testing.T, dir string) {
 			t.Helper()
 			if err := os.RemoveAll(filepath.Join(dir, "rendered")); err != nil {

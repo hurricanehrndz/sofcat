@@ -1,0 +1,29 @@
+{{- /* One profile per group, in priority order: labs, beta, early. A user
+       in none of them gets the default. */ -}}
+{{- if .Items }}
+{{- $profile := "default" }}
+{{- $baseURL := "https://ai.example.com/claude" }}
+{{- $model := "example-standard" }}
+{{- if cond "\"harness-labs\" in memberof" }}
+{{- $profile = "labs" }}
+{{- $baseURL = "https://labs.ai.example.com/claude" }}
+{{- $model = "example-preview" }}
+{{- else if cond "\"harness-beta\" in memberof" }}
+{{- $profile = "beta" }}
+{{- $baseURL = "https://beta.ai.example.com/claude" }}
+{{- $model = "example-next" }}
+{{- else if cond "\"harness-early\" in memberof" }}
+{{- $profile = "early" }}
+{{- $model = "example-next" }}
+{{- end }}
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": {{ json $baseURL }},
+    "ANTHROPIC_CUSTOM_HEADERS": {{ json (printf "x-example-user: %s\nx-example-profile: %s" (fact "assigned_user") $profile) }}
+  },
+  "model": {{ json $model }},
+  "permissions": {
+    "deny": ["Read(./.env)"]
+  }
+}
+{{- end }}

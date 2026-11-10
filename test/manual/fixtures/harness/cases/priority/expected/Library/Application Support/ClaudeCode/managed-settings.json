@@ -1,0 +1,12 @@
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://labs.ai.example.com/claude",
+    "ANTHROPIC_CUSTOM_HEADERS": "x-example-user: mlee\nx-example-profile: labs"
+  },
+  "model": "example-preview",
+  "permissions": {
+    "deny": [
+      "Read(./.env)"
+    ]
+  }
+}

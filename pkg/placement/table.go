@@ -72,6 +72,10 @@ type File struct {
 	Path     string            `yaml:"path,omitempty" json:"path,omitempty"`
 	Paths    map[string]string `yaml:"paths,omitempty" json:"paths,omitempty"`
 	Template string            `yaml:"template" json:"template"`
+	// TemplateFile names a file in the repository that holds the template
+	// instead. Parse reads it into Template and clears it, so it never
+	// reaches a render or the user plan.
+	TemplateFile string `yaml:"template_file,omitempty" json:"-"`
 }
 
 // View describes placement name, rooted at root, to a template.
@@ -164,9 +168,12 @@ func (t Table) Storefront(item catalog.Item, goos string) (labels map[string]str
 	return labels, appliesTo
 }
 
-// Parse decodes placements.yaml, rejecting unknown fields, and validates it.
-// An empty file is an empty table.
-func Parse(data []byte) (Table, error) {
+// Parse decodes placements.yaml, rejecting unknown fields, resolves every
+// template_file through read and validates the result. read returns the
+// file at a slash-separated path relative to the repository root, the
+// directory that holds placements.yaml; it may be nil for a table that
+// names no template file. An empty file is an empty table.
+func Parse(data []byte, read func(rel string) ([]byte, error)) (Table, error) {
 	var t Table
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
@@ -178,10 +185,65 @@ func Parse(data []byte) (Table, error) {
 		return Table{}, fmt.Errorf("parse placements.yaml: %w", err)
 	}
 	t.Order = order
+	if err := t.resolveTemplateFiles(read); err != nil {
+		return Table{}, err
+	}
 	if err := t.Validate(); err != nil {
 		return Table{}, err
 	}
 	return t, nil
+}
+
+// resolveTemplateFiles turns every files entry's template_file into its
+// template text, reading each distinct path once, and reports every entry
+// it cannot resolve.
+func (t Table) resolveTemplateFiles(read func(rel string) ([]byte, error)) error {
+	var errs []error
+	type result struct {
+		body []byte
+		err  error
+	}
+	fetched := map[string]result{}
+	for _, name := range t.Names() {
+		files := t.Placements[name].Files
+		for i := range files {
+			f := &files[i]
+			rel := f.TemplateFile
+			if rel == "" {
+				continue
+			}
+			fail := func(format string, args ...any) {
+				errs = append(errs, fmt.Errorf("placement %q: files[%d]: "+format, append([]any{name, i}, args...)...))
+			}
+			switch {
+			case f.Template != "":
+				fail("set template or template_file, not both")
+				continue
+			case !isCleanRelative(rel):
+				fail("template_file %q is not a clean relative path", rel)
+				continue
+			case read == nil:
+				fail("template_file %q: no repository to read it from", rel)
+				continue
+			}
+			r, ok := fetched[rel]
+			if !ok {
+				r.body, r.err = read(rel)
+				fetched[rel] = r
+			}
+			switch {
+			case r.err != nil:
+				fail("template_file %q: %w", rel, r.err)
+			case len(r.body) > render.MaxTemplate:
+				fail("template_file %q: %d bytes, over the %d-byte limit", rel, len(r.body), render.MaxTemplate)
+			case len(r.body) == 0:
+				fail("template_file %q is empty", rel)
+			default:
+				f.Template, f.TemplateFile = string(r.body), ""
+			}
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // placementOrder returns the keys of the placements mapping in file order.
@@ -311,8 +373,11 @@ func validateFiles(p Spec) []error {
 		default:
 			fail("needs path or paths")
 		}
-		if f.Template == "" {
-			fail("needs a template")
+		// Only Parse resolves a template_file.
+		if f.TemplateFile != "" {
+			fail("template_file %q is not resolved", f.TemplateFile)
+		} else if f.Template == "" {
+			fail("needs template or template_file")
 		} else if _, err := render.Parse(field, f.Template); err != nil {
 			fail("%q: %w", f.Path+strings.Join(slices.Sorted(maps.Values(f.Paths)), ", "), err)
 		}
