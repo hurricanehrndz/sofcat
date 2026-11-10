@@ -1,9 +1,9 @@
 # placements.yaml sits at the repository root, next to catalogs/ and
 # manifests/. It names the placements zip items are written to. See
-# site/src/content/docs/guides/zip-items.md. Unknown fields are rejected.
+# site/src/content/docs/zip-items/placements.md. Unknown fields are rejected.
 #
-# The paths below are illustrative. Check each harness's documentation for
-# the directories it reads, and keep every path inside the build's write roots.
+# The paths below are illustrative. Keep every path inside the build's write
+# roots.
 #
 # Facts makecatalogs -check renders templates with, over a sample of every
 # built-in fact (see the conditions guide): the admin facts the templates
@@ -13,16 +13,16 @@ check_facts:
 placements:
   # The key is the placement name. Catalog variants and item trees use it.
   # Every placement is a directory: one tree per item at <path>/<item_name>.
-  claude-code-skills:
+  wallpapers:
     # The placement root per OS. Only darwin and windows. Windows paths may use
     # ${ProgramFiles} and ${ProgramData}. The user's home, ${USERPROFILE} on
     # Windows and ${HOME} on macOS, only where the scope for that OS is user.
     paths:
-      darwin: /Library/Application Support/ClaudeCode/.claude/skills
-      windows: ${ProgramData}\ClaudeCode\.claude\skills
-    # Display names for the self-service app's line "Applies to: Claude
-    # Code". Display only: it does not limit where the item goes.
-    applies_to: [Claude Code]
+      darwin: /Library/Application Support/Acme/Wallpapers
+      windows: ${ProgramData}\Acme\Wallpapers
+    # Display names for the self-service app's line "Applies to: Desktop".
+    # Display only: it does not limit where the item goes.
+    applies_to: [Desktop]
     # Optional overrides for the app's labels. Keys: install, installing,
     # installed, remove, removing, update, cancel, pending_install,
     # pending_remove, and applies_to, the prefix of that line.
@@ -34,52 +34,50 @@ placements:
     # and either path, relative to the placement root, or paths, one per OS.
     # The template is inline, as template, or in a file of its own, named by
     # template_file relative to this directory: this one is
-    # templates/skills-index.json.tmpl.
+    # templates/wallpapers-index.json.tmpl.
     # An empty output removes the file, so {{ if .Items }} decides whether it
     # stays with nothing placed. fact and cond read the machine's facts. A
     # .json file is rewritten in canonical form, so only the values matter.
     files:
       - paths:
-          darwin: /Library/Application Support/ClaudeCode/skills-index.json
-          windows: ${ProgramData}\ClaudeCode\skills-index.json
-        template_file: templates/skills-index.json.tmpl
-  codex-skills:
+          darwin: /Library/Application Support/Acme/wallpapers-index.json
+          windows: ${ProgramData}\Acme\wallpapers-index.json
+        template_file: templates/wallpapers-index.json.tmpl
+  meeting-backgrounds:
     paths:
-      darwin: /etc/codex/skills
-      windows: ${USERPROFILE}\.agents\skills
+      darwin: /Library/Application Support/Acme/Meeting Backgrounds
+      windows: ${USERPROFILE}\Pictures\Acme Meeting Backgrounds
     # machine or user per OS. An OS left out is machine. This one is machine
     # scope on macOS and per user on Windows. In user scope the per-user helper
     # places the trees and writes any files.
     scope:
       windows: user
-    applies_to: [Codex]
-  acme-marketplace:
+    applies_to: [Video calls]
+  brand-library:
     paths:
-      darwin: /Library/Application Support/Acme/marketplace
-      windows: ${ProgramData}\Acme\marketplace
-    applies_to: [Claude Code, Codex]
+      darwin: /Library/Application Support/Acme/Brand Library
+      windows: ${ProgramData}\Acme\Brand Library
+    applies_to: [Desktop, Video calls]
     # Refuse to write into this directory if it already exists, is not empty
     # and sofcat did not create it.
     exclusive: true
-    # Item trees go to <path>/plugins/<item_name> rather than <path>/<item_name>.
-    items_dir: plugins
+    # Item trees go to <path>/packs/<item_name> rather than <path>/<item_name>.
+    items_dir: packs
     # Free data for the templates, as .Placement.Vars.
     vars:
       name: acme
       owner: {name: Acme IT}
-      # renames: {old-plugin: new-plugin}
-      # allowCrossMarketplaceDependenciesOn: [other-marketplace]
-    # A Claude Code marketplace: its catalog, Codex's catalog (the version
-    # carries the placed hash, so Codex sees a new version whenever a
-    # rendered file in the plugin changes), and the Claude Code drop-in that
-    # registers the marketplace and enables its managed plugins, keyed
-    # <plugin>@<name>, removed when no plugin is left. A relative path must
+      # renames: {old-pack: new-pack}
+    # A catalog of the packs, whose version carries the placed hash (so it
+    # changes whenever a rendered file in the pack changes), and a per-OS
+    # index outside the library that lists the packs shipped by default,
+    # keyed <pack>@<name>, removed when no pack is left. A relative path must
     # not reach into item trees: its first segment differs from items_dir's.
     # A file that is refused or fails to render keeps its old contents and
     # the others are still written; files_atomic: true writes none instead.
     # files_atomic: true
     files:
-      - path: .claude-plugin/marketplace.json
+      - path: library.json
         template: |
           {
             "name": {{ json .Placement.Vars.name }},
@@ -87,49 +85,27 @@ placements:
             {{- if ne (index .Placement.Vars "renames") nil }}
             "renames": {{ json .Placement.Vars.renames }},
             {{- end }}
-            {{- if ne (index .Placement.Vars "allowCrossMarketplaceDependenciesOn") nil }}
-            "allowCrossMarketplaceDependenciesOn": {{ json .Placement.Vars.allowCrossMarketplaceDependenciesOn }},
-            {{- end }}
-            "plugins": [
+            "packs": [
               {{- range $i, $p := .Items }}{{ if $i }},{{ end }}
               {
                 "name": {{ json $p.Name }},
-                "source": {{ json (printf "./plugins/%s" $p.Name) }},
-                "version": {{ json $p.Version }},
-                "defaultEnabled": {{ $p.Managed }}
-              }
-              {{- end }}
-            ]
-          }
-      - path: .agents/plugins/marketplace.json
-        template: |
-          {
-            "name": {{ json .Placement.Vars.name }},
-            "interface": {"displayName": {{ json .Placement.Vars.owner.name }}},
-            "plugins": [
-              {{- range $i, $p := .Items }}{{ if $i }},{{ end }}
-              {
-                "name": {{ json $p.Name }},
+                "path": {{ json (printf "./packs/%s" $p.Name) }},
                 "version": "{{ $p.Version }}+{{ slice $p.PlacedHash 7 19 }}",
-                "source": {"source": "local", "path": "./plugins/{{ $p.Name }}"},
-                "policy": {
-                  "installation": {{ if $p.Managed }}"INSTALLED_BY_DEFAULT"{{ else }}"AVAILABLE"{{ end }},
-                  "authentication": "ON_INSTALL"
-                }
+                "managed": {{ $p.Managed }}
               }
               {{- end }}
             ]
           }
       - paths:
-          darwin: /Library/Application Support/ClaudeCode/managed-settings.d/50-acme.json
-          windows: ${ProgramData}\ClaudeCode\managed-settings.d\50-acme.json
+          darwin: /Library/Application Support/Acme/library.d/50-acme.json
+          windows: ${ProgramData}\Acme\library.d\50-acme.json
         template: |
           {{- if .Items }}
           {
-            "extraKnownMarketplaces": {
-              {{ json .Placement.Vars.name }}: {"source": {"source": "directory", "path": {{ json .Placement.Root }}}}
+            "libraries": {
+              {{ json .Placement.Vars.name }}: {"path": {{ json .Placement.Root }}}
             },
-            "enabledPlugins": {
+            "enabledPacks": {
               {{- $first := true }}
               {{- range .Items }}{{ if .Managed }}{{ if not $first }},{{ end }}{{ $first = false }}
               {{ json (printf "%s@%s" .Name $.Placement.Vars.name) }}: true

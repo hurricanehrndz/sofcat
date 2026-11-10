@@ -17,7 +17,7 @@ identifier := shell(_read, _brand_env, "IDENTIFIER", "ca.hrndz.sofcat")
 description := shell(_read, _brand_env, "DESCRIPTION", "A catalog for anything you can put on disk or run")
 homepage := shell(_read, _brand_env, "HOMEPAGE", "https://github.com/hurricanehrndz/sofcat")
 # INSTALLERS=zip builds the Windows binaries with the zip_only tag: no command
-# installers or catalog scripts are compiled in (site/src/content/docs/guides/zip-items.md).
+# installers or catalog scripts are compiled in (site/src/content/docs/zip-items/building.md).
 installers := shell(_read, _brand_env, "INSTALLERS", "")
 _zip_tag := if installers == "zip" { ",zip_only" } else { "" }
 _brand_ico := if brand == "" { "" } else { brand / "icon.ico" }

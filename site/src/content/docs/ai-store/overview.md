@@ -6,7 +6,7 @@ description: Use sofcat to put skills, plugins and config files for Claude Code,
 An AI store is a sofcat repository whose items are skills, plugins and config
 files for coding agents. A device's manifest decides which ones every user
 gets and which ones they can add from the self-service app. Everything in it
-is a [zip item](/guides/zip-items/): sofcat places files and renders
+is a [zip item](/zip-items/overview/): sofcat places files and renders
 templates, and runs no installer.
 
 [sofcat-harness-example](https://github.com/hurricanehrndz/sofcat-harness-example)
@@ -67,7 +67,7 @@ device fetches both.
 
 `-check` renders every template without a device. It needs a value for each
 fact your own scripts provide, under `check_facts` in `placements.yaml`
-([check_facts](/guides/zip-items/#check_facts)). Run the build in CI on every
+([check_facts](/zip-items/placement-files/#check_facts)). Run the build in CI on every
 change and publish the output directory to any static host. The example
 publishes to GitHub Pages from its
 [workflow](https://github.com/hurricanehrndz/sofcat-harness-example/blob/main/.github/workflows/build.yml).
@@ -92,10 +92,10 @@ windows_user:
 ```
 
 A placement outside every root fails with `placement_refused`. See
-[Write roots](/guides/zip-items/#write-roots).
+[Write roots](/zip-items/placements/#write-roots).
 
 A store that ships nothing but zip items can be a
-[zip-only build](/guides/zip-items/#zip-only-builds), which has no code for
+[zip-only build](/zip-items/building/#zip-only-builds), which has no code for
 the `msi`, `exe`, `ps1`, `msix` and `nupkg` installers.
 
 ## Point a device at it

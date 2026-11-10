@@ -232,7 +232,7 @@ an `id` (a notification): it closes the connection without a reply. The
 `placement_conflict`, `placement_refused`, `blocked_by_running_app`,
 `missing_software`) describes the operation's outcome, not the call. The two
 placement codes are zip-item failures: a placed tree edited outside sofcat, and
-a placement sofcat may not write ([Zip items](../site/src/content/docs/guides/zip-items.md)).
+a placement sofcat may not write ([Zip items](../site/src/content/docs/zip-items/placements.md#write-roots)).
 `missing_software` is a deferral because software the item requires is not
 installed; the message is the deferral reason, which names that software.
 

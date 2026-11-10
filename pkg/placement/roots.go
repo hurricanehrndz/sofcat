@@ -1,6 +1,6 @@
 // Package placement declares placements.yaml, the repository file that
 // defines where zip items are placed (see
-// site/src/content/docs/guides/zip-items.md), and decides where they may be
+// site/src/content/docs/zip-items/placements.md), and decides where they may be
 // written: the write roots of the build and of managed policy, and the checks
 // every placement path passes before sofcat writes under it. It is portable
 // and holds no service state, so the service and a per-user helper share it.

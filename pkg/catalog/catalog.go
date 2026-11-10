@@ -74,7 +74,7 @@ type InstallerItem struct {
 	Variants map[string]map[string]Variant `yaml:"variants,omitempty"`
 }
 
-// Variant is one zip archive of a zip item (see site/src/content/docs/guides/zip-items.md).
+// Variant is one zip archive of a zip item (see site/src/content/docs/zip-items/overview.md).
 type Variant struct {
 	Location string `yaml:"location,omitempty"`
 	// Hash is the lowercase hex sha256 of the zip file.

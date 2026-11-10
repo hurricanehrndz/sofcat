@@ -33,7 +33,7 @@ storefront's "Applies to" line and does not limit where an item goes.
 scope the service does not write the tree. It stages the archive, and the
 per-user helper places it in each signed-in user's profile, under a
 `windows_user` or `darwin_user` write root. See
-[Installing](/guides/zip-items/#installing).
+[Installing](/zip-items/overview/#installing).
 
 ## The item
 
@@ -79,4 +79,4 @@ deletes it.
 
 A file in a tree whose name ends in `.tmpl` is rendered on the device, with
 the device's facts and, in user scope, the user's login name. See
-[Tree templates](/guides/zip-items/#tree-templates).
+[Tree templates](/zip-items/tree-templates/).

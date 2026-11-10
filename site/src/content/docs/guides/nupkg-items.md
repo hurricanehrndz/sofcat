@@ -212,9 +212,9 @@ and 3010 mean Chocolatey's uninstall wants a restart, and the install goes on.
 For an item that needs a nupkg item, list the nupkg item under
 `dependencies`, and sofcat installs it first. To have the item wait for a
 nupkg item without installing it, use `depends_check` with
-`sofcat: <item name>`. To check for other software, see [Required software](/guides/zip-items/#required-software).
+`sofcat: <item name>`. To check for other software, see [Required software](/guides/required-software/).
 
 ## Zip-only builds
 
-A [zip-only build](/guides/zip-items/#zip-only-builds) has no nupkg engine and
+A [zip-only build](/zip-items/building/#zip-only-builds) has no nupkg engine and
 rejects nupkg items.

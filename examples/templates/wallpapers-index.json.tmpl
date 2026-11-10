@@ -2,6 +2,6 @@
 {
   "os": {{ json (fact "os") }},
   "root": {{ json .Placement.Root }},
-  "skills": {{ json .Items }}
+  "packs": {{ json .Items }}
 }
 {{- end }}

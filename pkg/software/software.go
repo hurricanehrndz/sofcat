@@ -1,6 +1,6 @@
 // Package software checks a catalog item's depends_check entries: software
 // sofcat needs on the machine but does not install for the item (see
-// site/src/content/docs/guides/zip-items.md).
+// site/src/content/docs/guides/required-software.md).
 package software
 
 import (

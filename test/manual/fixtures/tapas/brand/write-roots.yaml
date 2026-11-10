@@ -1,4 +1,4 @@
-# Where the Tapas Test build may place zip items (site/src/content/docs/guides/zip-items.md). Each
+# Where the Tapas Test build may place zip items (site/src/content/docs/zip-items/placements.md). Each
 # OS's machine root covers every placement in ../placements.yaml except
 # outside-skills, which lies outside it on purpose; its user root covers the
 # user-scope ones except policy-user-skills, likewise outside. The smokes add
