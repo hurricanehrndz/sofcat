@@ -1,9 +1,61 @@
 ---
 title: Building zip items
-description: Pack deterministic zips, compute tree hashes, generate package-info files and check a repository.
+description: Build a repository from item files and trees, pack deterministic zips, compute tree hashes and check the result.
 ---
 
 These are the formats and commands that turn an item tree into a catalog entry, and the checks that guard it.
+
+## Building a repository
+
+`makecatalogs build` turns a source directory into a repository a device
+reads:
+
+```sh
+makecatalogs build <source> -o <out> [--location-prefix <prefix>]
+```
+
+The source holds:
+
+```
+placements.yaml           where items land
+items/<item>.yaml         an item file: package-info without installer, with placements
+item-trees/<item_name>/   the item's files, at the root
+templates/                optional: placement file templates
+manifests/                optional
+conditions/               optional: fact scripts the repository delivers
+packages-info/            optional: package-info files written by hand
+```
+
+An item file is a package-info file without `installer`. Its top-level
+`placements` lists the placements its tree goes to:
+
+```yaml
+# items/acme-wallpapers.yaml
+item_name: acme-wallpapers
+display_name: Acme Wallpapers
+catalog: branding
+version: 1.0.0
+placements: [wallpapers]
+```
+
+The whole tree at `item-trees/<item_name>/` goes to every placement the item
+lists, on every OS that placement has a path for. An item that needs
+different files in different placements is two items, each with its own
+tree.
+
+`build` plans every item before it writes anything. It fails on any of the
+`zip-item` errors below, on two item files with the same `item_name`, on a
+tree no item file names, and on a `packages-info/<item_name>.yaml` that would
+be generated over. Then it wipes `<out>`, copies `placements.yaml` and the
+optional directories, packs each item's zips under `<out>/<prefix>/`
+(default `packages`), writes `<out>/packages-info/<item_name>.yaml`,
+compiles the catalogs and runs the [`-check`](#makecatalogs--check) pass.
+`items/` and `item-trees/` are not copied.
+
+`<out>` is rebuilt from nothing on every run, so keep nothing else in it.
+`build` refuses an `<out>` that is the source or holds it, and an `<out>`
+that is not empty and has no `catalogs/` directory, since that does not look
+like an earlier build. A build that fails part way can be rerun.
 
 ## The archive
 
@@ -35,7 +87,7 @@ OS computes the hash. Empty directories do not count.
 makecatalogs pack [--os darwin|windows] <dir> -o <file.zip>
 makecatalogs tree-hash [--os darwin|windows] <dir>
 makecatalogs zip-item --placements <placements.yaml> --item <item.yaml> \
-  --trees <dir> --location-prefix <prefix> -o <repo>
+  --tree <dir> --location-prefix <prefix> -o <repo>
 ```
 
 - `pack` writes the zip and prints `{"hash":"<hex>","tree_hash":"sha256:<hex>"}`.
@@ -43,40 +95,44 @@ makecatalogs zip-item --placements <placements.yaml> --item <item.yaml> \
   compare a placed tree with the catalog.
 - Without `--os`, both use the OS they run on: executable bits are kept,
   except on Windows. Pack every `windows` tree with `--os windows`.
-- `zip-item` turns item trees into a package-info file. `<item.yaml>` is
-  a package-info file without `installer`. `<dir>` holds one tree per
-  placement and OS, at `<dir>/<placement>/<darwin|windows>/`. Write the
-  trees by hand, or generate them in CI with any template engine; a `.tmpl`
+- `zip-item` does for one item what `build` does for each: it turns the
+  item's tree into a package-info file. `<item.yaml>` is an item file and
+  `<dir>` its tree, the item's files at the root. Write the tree by hand, or
+  generate it in CI with any template engine; a `.tmpl`
   file a tree ships is rendered on the device instead ([Tree templates](/zip-items/tree-templates/)), and
-  `zip-item` test-renders it. Each tree is packed, `windows` trees with
-  `--os windows`, to `<repo>/<prefix>/<item_name>-<version>-<12 hex of
-  tree_hash>.zip`. Trees that hash the same share one zip. The package-info
-  file, with `installer` filled in, goes to stdout.
+  `zip-item` test-renders it. The tree is packed for each OS a listed
+  placement has a path for, with `--os windows` for `windows`, to
+  `<repo>/<prefix>/<item_name>-<version>-<12 hex of
+  tree_hash>.zip`. Variants that hash the same share one zip. The package-info
+  file, without `placements` and with `installer` filled in, goes to stdout.
 
 `zip-item` checks everything before it writes a file. It fails, and writes
 nothing, when:
 
 - `<item.yaml>` already has an `installer`
-- `<dir>` has no placement directories
+- `<item.yaml>` has no `placements`, or lists one twice
 - a placement is not in `placements.yaml`
-- an OS directory is not `darwin` or `windows`
-- the placement has no path for that OS
-- a tree is empty or holds a symlink
-- a tree's root is a single directory named after the item
-- a tree ships `x` beside `x.tmpl`, a file named just `.tmpl`, or an
+- the tree is empty or holds a symlink
+- the tree's root is a single directory named after the item
+- the tree ships `x` beside `x.tmpl`, a file named just `.tmpl`, or an
   `x.tmpl.tmpl`
 - a `.tmpl` fails to render with the sample facts and `check_facts`, with
   `.Item.Managed` either way or with the sample user ([Tree templates, Validation](/zip-items/tree-templates/#validation)); the error names the item, the OS and the template
 
-[examples/zip-items/](https://github.com/hurricanehrndz/sofcat/tree/main/examples/zip-items) holds an item tree, the
-input, and the output. To regenerate the output:
+[examples/zip-items/](https://github.com/hurricanehrndz/sofcat/tree/main/examples/zip-items) holds two items, their
+trees and the output: `acme-wallpapers` goes to `wallpapers` and
+`acme-meeting-backgrounds`, with a different file, to `meeting-backgrounds`.
+To regenerate the output:
 
 ```sh
-makecatalogs zip-item --placements examples/placements.yaml \
-  --item examples/zip-items/acme-wallpapers.yaml \
-  --trees examples/zip-items/item-trees/acme-wallpapers \
-  --location-prefix packages/wallpapers -o examples/zip-items/generated \
-  > examples/zip-items/generated/acme-wallpapers.yaml
+rm examples/zip-items/generated/packages/wallpapers/*.zip
+for item in acme-wallpapers acme-meeting-backgrounds; do
+  makecatalogs zip-item --placements examples/placements.yaml \
+    --item "examples/zip-items/$item.yaml" \
+    --tree "examples/zip-items/item-trees/$item" \
+    --location-prefix packages/wallpapers -o examples/zip-items/generated \
+    > "examples/zip-items/generated/$item.yaml"
+done
 ```
 
 ## makecatalogs -check

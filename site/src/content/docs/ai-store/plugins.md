@@ -95,10 +95,11 @@ The templates can also live in files of their own, named by `template_file`
 The [example repository](https://github.com/hurricanehrndz/sofcat-harness-example)
 does that.
 
-A plugin's tree goes under the placement like any item's:
+A plugin's item file lists the marketplace under `placements`
+(`placements: [acme-marketplace]`), and its tree holds the plugin's files:
 
 ```
-item-trees/example-plugin/acme-marketplace/darwin/
+item-trees/example-plugin/
   .claude-plugin/plugin.json
   skills/release-notes/SKILL.md
 ```

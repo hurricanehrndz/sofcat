@@ -1,5 +1,6 @@
-# Input to makecatalogs zip-item; just bootstrap-harness-macos packs item-trees/codex-models.
+# Input to makecatalogs build; just bootstrap-harness-macos packs item-trees/codex-models.
 item_name: codex-models
+placements: [harness-codex]
 display_name: Codex Models
 section: Harness
 description: The Codex model catalog; its placement writes Codex's config files

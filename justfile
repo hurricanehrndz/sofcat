@@ -477,7 +477,7 @@ tapas_vm_dir := manual_test_dir / "tapas" / "vm"
 
 # Zip-item manual-test assets for the Tapas Test fixture brand under
 # build/manual-test/tapas/: its binaries and a repository whose zip items
-# makecatalogs zip-item packs from test/manual/fixtures/tapas/item-trees, plus
+# makecatalogs build packs from test/manual/fixtures/tapas/item-trees, plus
 # the hand-written package-info files in packages-info/ (an exe item the
 # zip-only brand must reject). The VM gate is test/manual/run-tapas-smoke.ps1.
 bootstrap-tapas base_url="": manual-test-server _tapas-repo
@@ -524,34 +524,19 @@ bootstrap-tapas-macos base_url="http://127.0.0.1:8080/": _require-macos manual-t
     @echo "Then: sudo installer -pkg build/{{tapas_app}}-{{version}}.pkg -target / && sudo install -m 600 -o root -g wheel {{tapas_mac_dir}}/config.yaml '/Library/Application Support/{{tapas_product}}/config.yaml' && sudo launchctl kickstart -k system/{{tapas_identifier}} && sudo test/manual/run-tapas-smoke.sh"
 
 # The Tapas fixture repository under build/manual-test/tapas/server-root,
-# without binaries: placements.yaml, its template files, the manifests and
-# the zip items makecatalogs zip-item packs from
-# test/manual/fixtures/tapas/item-trees (a windows and a darwin variant per
-# placement), plus the hand-written package-info files in packages-info/.
+# without binaries: what makecatalogs build makes of
+# test/manual/fixtures/tapas, a windows and a darwin zip per placement of each
+# item, plus the hand-written package-info files in packages-info/.
 _tapas-repo: (_fixture-repo tapas_fixtures tapas_server_root "packages/tapas")
 
-# A fixture directory laid out as a repository under root: placements.yaml,
-# templates/, manifests/, the zip items packed from items/ and item-trees/ into
-# prefix, any hand-written package-info files and the condition scripts under
-# conditions/, which makecatalogs indexes.
+# A fixture directory built as a repository under root by makecatalogs build:
+# placements.yaml, templates/, manifests/, the zip items packed from items/
+# and item-trees/ into prefix, any hand-written package-info files and the
+# condition scripts under conditions/, compiled and checked.
 _fixture-repo fixtures root prefix:
     go build -ldflags "-X github.com/hurricanehrndz/sofcat/pkg/version.version={{version}}" \
         -o build/makecatalogs ./cmd/makecatalogs
-    rm -rf {{quote(root)}}
-    mkdir -p {{quote(root)}}/manifests {{quote(root)}}/packages-info
-    cp {{quote(fixtures)}}/placements.yaml {{quote(root)}}/
-    cp -R {{quote(fixtures)}}/templates {{quote(root)}}/
-    cp {{quote(fixtures)}}/manifests/*.yaml {{quote(root)}}/manifests/
-    if [ -d {{quote(fixtures)}}/packages-info ]; then cp {{quote(fixtures)}}/packages-info/*.yaml {{quote(root)}}/packages-info/; fi
-    if [ -d {{quote(fixtures)}}/conditions ]; then cp -R {{quote(fixtures)}}/conditions {{quote(root)}}/; fi
-    for item in {{quote(fixtures)}}/items/*.yaml; do \
-      name=$(basename "$item" .yaml); \
-      build/makecatalogs zip-item --placements {{quote(fixtures)}}/placements.yaml --item "$item" \
-        --trees {{quote(fixtures)}}/item-trees/$name --location-prefix {{prefix}} \
-        -o {{quote(root)}} > {{quote(root)}}/packages-info/$name.yaml || exit 1; \
-    done
-    build/makecatalogs {{quote(root)}}
-    build/makecatalogs -check {{quote(root)}}
+    build/makecatalogs build {{quote(fixtures)}} -o {{quote(root)}} --location-prefix {{prefix}}
 
 harness_fixtures := "test/manual/fixtures/harness"
 harness_server_root := manual_test_dir / "harness" / "server-root"

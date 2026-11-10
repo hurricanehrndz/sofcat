@@ -294,21 +294,26 @@ $(cd "$expected" && find . -type f | sed 's/^\.//')
 EOF
 	synced_scripts
 
-	# item-trees/<item>/<placement>/darwin is the tree as packed; the receipt
+	# item-trees/<item_name> is the tree as packed for every placement its
+	# item file lists, in the one-line form placements: [a, b]; the receipt
 	# says where the daemon placed it. The Codex model catalog is one of them.
-	for tree in "$FIXTURE"/item-trees/*/*/darwin; do
-		placement=$(basename "$(dirname "$tree")")
-		item=$(basename "$(dirname "$(dirname "$tree")")")
-		rc="$RECEIPT_DIR/$placement/$item.json"
-		[ -f "$rc" ] || fail "receipt $rc is missing"
-		placed=$(jq -r .path "$rc")
-		while IFS= read -r rel; do
-			[ -f "$placed/$rel" ] || fail "$placed/$rel is missing"
-			[ "$(sha "$placed/$rel")" = "$(sha "$tree/$rel")" ] || fail "$placed/$rel differs from $tree/$rel"
-		done <<EOF
+	for itemfile in "$FIXTURE"/items/*.yaml; do
+		item=$(sed -n 's/^item_name: *//p' "$itemfile")
+		placements=$(sed -n 's/^placements: *\[\(.*\)\] *$/\1/p' "$itemfile" | tr ',' ' ')
+		[ -n "$item" ] && [ -n "$placements" ] || fail "$itemfile: no item_name or one-line placements: [...]"
+		tree="$FIXTURE/item-trees/$item"
+		for placement in $placements; do
+			rc="$RECEIPT_DIR/$placement/$item.json"
+			[ -f "$rc" ] || fail "receipt $rc is missing"
+			placed=$(jq -r .path "$rc")
+			while IFS= read -r rel; do
+				[ -f "$placed/$rel" ] || fail "$placed/$rel is missing"
+				[ "$(sha "$placed/$rel")" = "$(sha "$tree/$rel")" ] || fail "$placed/$rel differs from $tree/$rel"
+			done <<EOF
 $(cd "$tree" && find . -type f | sed 's/^\.\///')
 EOF
-		pass "$item placed intact under $placed"
+			pass "$item placed intact in $placement under $placed"
+		done
 	done
 done
 

@@ -11,7 +11,8 @@
 check_facts:
   site: east
 placements:
-  # The key is the placement name. Catalog variants and item trees use it.
+  # The key is the placement name. Item files list it under placements: and
+  # catalog variants use it.
   # Every placement is a directory: one tree per item at <path>/<item_name>.
   wallpapers:
     # The placement root per OS. Only darwin and windows. Windows paths may use

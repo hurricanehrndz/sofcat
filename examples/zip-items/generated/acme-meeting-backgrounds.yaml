@@ -1,0 +1,17 @@
+item_name: acme-meeting-backgrounds
+display_name: Acme Meeting Backgrounds
+description: Company backgrounds for video calls
+catalog: branding
+version: 1.0.0
+installer:
+  type: zip
+  variants:
+    meeting-backgrounds:
+      darwin:
+        location: packages/wallpapers/acme-meeting-backgrounds-1.0.0-833d426b1c16.zip
+        hash: 1b2aa3d46e3873fddb3d9aa5282dda31a9a948dc2b703728182f83a68d9adfa7
+        tree_hash: sha256:833d426b1c1635aaebe425ee542f7a6e9f2f3aa4637a8948c73d54d70336a903
+      windows:
+        location: packages/wallpapers/acme-meeting-backgrounds-1.0.0-833d426b1c16.zip
+        hash: 1b2aa3d46e3873fddb3d9aa5282dda31a9a948dc2b703728182f83a68d9adfa7
+        tree_hash: sha256:833d426b1c1635aaebe425ee542f7a6e9f2f3aa4637a8948c73d54d70336a903

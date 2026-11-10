@@ -29,7 +29,7 @@ placements:
     scope: {windows: user}
 `
 
-const testItem = "item_name: hello\ncatalog: skills\nversion: 1.0.0\ndisplay_name: Hello\n"
+const testItem = "item_name: hello\ncatalog: skills\nversion: 1.0.0\nplacements: [claude-code-skills, codex-skills]\ndisplay_name: Hello\n"
 
 // writeFiles writes files (slash paths relative to root) and returns root.
 func writeFiles(t *testing.T, root string, files map[string]string) string {
@@ -47,15 +47,13 @@ func writeFiles(t *testing.T, root string, files map[string]string) string {
 }
 
 // zipItemFixture lays out a valid zip-item input in a temp dir and returns
-// it. Paths under it: placements.yaml, item.yaml, item-trees/.
+// it. Paths under it: placements.yaml, item.yaml, item-tree/.
 func zipItemFixture(t *testing.T) string {
 	t.Helper()
 	return writeFiles(t, t.TempDir(), map[string]string{
-		"placements.yaml": testPlacements,
-		"item.yaml":       testItem,
-		"item-trees/claude-code-skills/darwin/SKILL.md":  "claude\n",
-		"item-trees/claude-code-skills/windows/SKILL.md": "claude\n",
-		"item-trees/codex-skills/windows/SKILL.md":       "codex\n",
+		"placements.yaml":    testPlacements,
+		"item.yaml":          testItem,
+		"item-tree/SKILL.md": "hello\n",
 	})
 }
 
@@ -65,7 +63,7 @@ func runZipItemIn(dir, out string) (code int, stdout, stderr string) {
 		"zip-item",
 		"--placements", filepath.Join(dir, "placements.yaml"),
 		"--item", filepath.Join(dir, "item.yaml"),
-		"--trees", filepath.Join(dir, "item-trees"),
+		"--tree", filepath.Join(dir, "item-tree"),
 		"--location-prefix", "packages/skills",
 		"-o", out,
 	}, &o, &e)
@@ -130,64 +128,66 @@ func TestZipItemRefusals(t *testing.T) {
 			t.Helper()
 			writeFiles(t, dir, map[string]string{"item.yaml": testItem + "installer: {type: msi, location: x.msi}\n"})
 		}, "already has an installer"},
+		"placements missing": {func(t *testing.T, dir string) {
+			t.Helper()
+			writeFiles(t, dir, map[string]string{"item.yaml": strings.Replace(testItem, "placements: [claude-code-skills, codex-skills]\n", "", 1)})
+		}, "placements must list"},
+		"placements empty": {func(t *testing.T, dir string) {
+			t.Helper()
+			writeFiles(t, dir, map[string]string{"item.yaml": strings.Replace(testItem, "[claude-code-skills, codex-skills]", "[]", 1)})
+		}, "placements must list"},
+		"placement listed twice": {func(t *testing.T, dir string) {
+			t.Helper()
+			writeFiles(t, dir, map[string]string{"item.yaml": strings.Replace(testItem, "codex-skills]", "codex-skills, claude-code-skills]", 1)})
+		}, `placement "claude-code-skills" is listed twice`},
 		"placement not in placements.yaml": {func(t *testing.T, dir string) {
 			t.Helper()
-			writeFiles(t, dir, map[string]string{"item-trees/cursor-skills/darwin/SKILL.md": "x"})
+			writeFiles(t, dir, map[string]string{"item.yaml": strings.Replace(testItem, "codex-skills]", "cursor-skills]", 1)})
 		}, `placement "cursor-skills" is not in`},
-		"OS directory not darwin or windows": {func(t *testing.T, dir string) {
+		"placement has no path for any OS": {func(t *testing.T, dir string) {
 			t.Helper()
-			writeFiles(t, dir, map[string]string{"item-trees/claude-code-skills/linux/SKILL.md": "x"})
-		}, "must be darwin or windows"},
-		"placement has no path for the OS": {func(t *testing.T, dir string) {
-			t.Helper()
-			writeFiles(t, dir, map[string]string{"item-trees/codex-skills/darwin/SKILL.md": "x"})
-		}, "has no darwin path"},
+			writeFiles(t, dir, map[string]string{
+				"placements.yaml": testPlacements + "  cursor-skills:\n    paths: {}\n",
+				"item.yaml":       strings.Replace(testItem, "codex-skills]", "cursor-skills]", 1),
+			})
+		}, `placement "cursor-skills": no paths`},
 		"empty tree": {func(t *testing.T, dir string) {
 			t.Helper()
-			if err := os.MkdirAll(filepath.Join(dir, "item-trees", "codex-skills", "windows", "empty"), 0o755); err != nil {
+			if err := os.MkdirAll(filepath.Join(dir, "item-tree", "empty"), 0o755); err != nil {
 				t.Fatal(err)
 			}
-			if err := os.Remove(filepath.Join(dir, "item-trees", "codex-skills", "windows", "SKILL.md")); err != nil {
+			if err := os.Remove(filepath.Join(dir, "item-tree", "SKILL.md")); err != nil {
 				t.Fatal(err)
 			}
 		}, "no files"},
 		"tree wrapped in a directory named after the item": {func(t *testing.T, dir string) {
 			t.Helper()
-			if err := os.RemoveAll(filepath.Join(dir, "item-trees", "codex-skills", "windows")); err != nil {
+			if err := os.Remove(filepath.Join(dir, "item-tree", "SKILL.md")); err != nil {
 				t.Fatal(err)
 			}
-			writeFiles(t, dir, map[string]string{"item-trees/codex-skills/windows/hello/SKILL.md": "x"})
+			writeFiles(t, dir, map[string]string{"item-tree/hello/SKILL.md": "x"})
 		}, "wrapped in a hello/ directory"},
 		"x beside x.tmpl": {func(t *testing.T, dir string) {
 			t.Helper()
-			writeFiles(t, dir, map[string]string{"item-trees/codex-skills/windows/x": "shipped", "item-trees/codex-skills/windows/x.tmpl": "rendered"})
+			writeFiles(t, dir, map[string]string{"item-tree/x": "shipped", "item-tree/x.tmpl": "rendered"})
 		}, "x.tmpl: the tree also ships x"},
 		"directory x beside x.tmpl": {func(t *testing.T, dir string) {
 			t.Helper()
-			writeFiles(t, dir, map[string]string{"item-trees/codex-skills/windows/x/y": "shipped", "item-trees/codex-skills/windows/x.tmpl": "rendered"})
+			writeFiles(t, dir, map[string]string{"item-tree/x/y": "shipped", "item-tree/x.tmpl": "rendered"})
 		}, "x.tmpl: the tree also ships a directory x"},
 		"bare .tmpl": {func(t *testing.T, dir string) {
 			t.Helper()
-			writeFiles(t, dir, map[string]string{"item-trees/codex-skills/windows/.tmpl": "x"})
+			writeFiles(t, dir, map[string]string{"item-tree/.tmpl": "x"})
 		}, ".tmpl: a template needs a name"},
 		"template reads a missing fact": {func(t *testing.T, dir string) {
 			t.Helper()
-			writeFiles(t, dir, map[string]string{"item-trees/claude-code-skills/darwin/NOTE.md.tmpl": `{{ fact "missing" }}`})
+			writeFiles(t, dir, map[string]string{"item-tree/NOTE.md.tmpl": `{{ fact "missing" }}`})
 		}, `fact "missing": no such fact`},
 		"template file missing beside placements.yaml": {func(t *testing.T, dir string) {
 			t.Helper()
 			writeFiles(t, dir, map[string]string{"placements.yaml": testPlacements +
 				"    files:\n      - path: index.json\n        template_file: templates/index.json.tmpl\n"})
 		}, `placement "codex-skills": files[0]: template_file "templates/index.json.tmpl"`},
-		"no placement directories": {func(t *testing.T, dir string) {
-			t.Helper()
-			if err := os.RemoveAll(filepath.Join(dir, "item-trees")); err != nil {
-				t.Fatal(err)
-			}
-			if err := os.Mkdir(filepath.Join(dir, "item-trees"), 0o755); err != nil {
-				t.Fatal(err)
-			}
-		}, "no placement directories"},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -208,10 +208,10 @@ func TestZipItemRefusals(t *testing.T) {
 	}
 }
 
-// Trees that hash the same pack to the same bytes, so they share one zip.
+// The one tree is packed for every listed placement on every OS it has a
+// path for, and variants that hash the same share one zip.
 func TestZipItemSharesIdenticalTrees(t *testing.T) {
 	dir := zipItemFixture(t)
-	writeFiles(t, dir, map[string]string{"item-trees/codex-skills/windows/SKILL.md": "claude\n"})
 	out := t.TempDir()
 	code, stdout, stderr := runZipItemIn(dir, out)
 	if code != 0 {
@@ -229,6 +229,10 @@ func TestZipItemSharesIdenticalTrees(t *testing.T) {
 	// Without executable bits the darwin tree hashes the same too.
 	if variants["claude-code-skills"]["darwin"] != claude {
 		t.Errorf("darwin %+v, windows %+v", variants["claude-code-skills"]["darwin"], claude)
+	}
+	// codex-skills has no darwin path, so it gets no darwin variant.
+	if _, ok := variants["codex-skills"]["darwin"]; ok || len(variants) != 2 {
+		t.Errorf("variants %+v, want claude-code-skills on both OSes and codex-skills on windows", variants)
 	}
 	zips, _ := filepath.Glob(filepath.Join(out, "packages", "skills", "*.zip"))
 	if len(zips) != 1 {
@@ -263,6 +267,10 @@ func TestZipItemKeepsAuthorKeys(t *testing.T) {
 	if got.Labels["install"] != "Add" || got.Note != "keep me" {
 		t.Errorf("author keys lost: %+v in\n%s", got, stdout)
 	}
+	// placements is zip-item input; the variants already name them.
+	if strings.Contains(stdout, "placements:") {
+		t.Errorf("output keeps placements:\n%s", stdout)
+	}
 }
 
 // zip-item output is a package-info file the repo's -check gate accepts.
@@ -281,37 +289,12 @@ func TestZipItemRoundTripPassesCheck(t *testing.T) {
 	}
 }
 
-// The examples are generated by zip-item from the checked-in item tree;
+// The examples are generated by zip-item from the checked-in item trees;
 // regenerating them must reproduce them byte for byte.
 func TestExampleZipItemsMatchGenerator(t *testing.T) {
 	examples := filepath.Join("..", "..", "examples")
 	itemDir := filepath.Join(examples, "zip-items")
 	generated := filepath.Join(itemDir, "generated")
-	out := t.TempDir()
-	var stdout, stderr bytes.Buffer
-	code := run([]string{
-		"zip-item",
-		"--placements", filepath.Join(examples, "placements.yaml"),
-		"--item", filepath.Join(itemDir, "acme-wallpapers.yaml"),
-		"--trees", filepath.Join(itemDir, "item-trees", "acme-wallpapers"),
-		"--location-prefix", "packages/wallpapers",
-		"-o", out,
-	}, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("exit %d: %s", code, stderr.String())
-	}
-	want, err := os.ReadFile(filepath.Join(generated, "acme-wallpapers.yaml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if stdout.String() != string(want) {
-		t.Errorf("examples/zip-items/generated/acme-wallpapers.yaml is stale; regenerate it (see site/src/content/docs/zip-items/building.md). Got:\n%s", stdout.String())
-	}
-	// example_catalog.yaml shows the same item as a compiled catalog entry.
-	var info admin.PackageInfo
-	if err = yaml.Unmarshal(stdout.Bytes(), &info); err != nil {
-		t.Fatal(err)
-	}
 	body, err := os.ReadFile(filepath.Join(examples, "example_catalog.yaml"))
 	if err != nil {
 		t.Fatal(err)
@@ -320,8 +303,35 @@ func TestExampleZipItemsMatchGenerator(t *testing.T) {
 	if err := yaml.Unmarshal(body, &exampleCatalog); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(exampleCatalog["acme-wallpapers"].Installer, info.Item.Installer) {
-		t.Errorf("examples/example_catalog.yaml acme-wallpapers installer is stale")
+	out := t.TempDir()
+	for _, name := range []string{"acme-wallpapers", "acme-meeting-backgrounds"} {
+		var stdout, stderr bytes.Buffer
+		code := run([]string{
+			"zip-item",
+			"--placements", filepath.Join(examples, "placements.yaml"),
+			"--item", filepath.Join(itemDir, name+".yaml"),
+			"--tree", filepath.Join(itemDir, "item-trees", name),
+			"--location-prefix", "packages/wallpapers",
+			"-o", out,
+		}, &stdout, &stderr)
+		if code != 0 {
+			t.Fatalf("%s: exit %d: %s", name, code, stderr.String())
+		}
+		want, err := os.ReadFile(filepath.Join(generated, name+".yaml"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if stdout.String() != string(want) {
+			t.Errorf("examples/zip-items/generated/%s.yaml is stale; regenerate it (see site/src/content/docs/zip-items/building.md). Got:\n%s", name, stdout.String())
+		}
+		// example_catalog.yaml shows the same item as a compiled catalog entry.
+		var info admin.PackageInfo
+		if err = yaml.Unmarshal(stdout.Bytes(), &info); err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(exampleCatalog[name].Installer, info.Item.Installer) {
+			t.Errorf("examples/example_catalog.yaml %s installer is stale", name)
+		}
 	}
 
 	got, _ := filepath.Glob(filepath.Join(out, "packages", "wallpapers", "*.zip"))
@@ -410,9 +420,10 @@ func TestZipItemChecksTemplates(t *testing.T) {
 	dir := zipItemFixture(t)
 	writeFiles(t, dir, map[string]string{
 		"placements.yaml": "check_facts: {assigned_user: jdoe}\n" + testPlacements,
-		"item-trees/codex-skills/windows/NOTE.md.tmpl": `{{ .Item.Name }} {{ .Item.Version }} for {{ .User }} ({{ fact "assigned_user" }}, {{ fact "os" }}) managed={{ .Item.Managed }}` +
-			`{{ if cond "os == \"windows\" && os_build > 1" }} win{{ end }}`,
-		"item-trees/claude-code-skills/darwin/.claude-plugin/plugin.json.tmpl": `{"installationPreference": {{ if .Item.Managed }}"auto_install"{{ else }}"available"{{ end }}, "user": {{ json .User }}}`,
+		"item-tree/NOTE.md.tmpl": `{{ .Item.Name }} {{ .Item.Version }} for {{ .User }} ({{ fact "assigned_user" }}, {{ fact "os" }}) managed={{ .Item.Managed }}` +
+			// The tree renders on darwin too, which has no os_build fact.
+			`{{ if eq (fact "os") "windows" }}{{ if cond "os_build > 1" }} win{{ end }}{{ end }}`,
+		"item-tree/.claude-plugin/plugin.json.tmpl": `{"installationPreference": {{ if .Item.Managed }}"auto_install"{{ else }}"available"{{ end }}, "user": {{ json .User }}}`,
 	})
 	if code, _, stderr := runZipItemIn(dir, t.TempDir()); code != 0 {
 		t.Fatalf("exit %d: %s", code, stderr)
@@ -420,7 +431,7 @@ func TestZipItemChecksTemplates(t *testing.T) {
 
 	// A fact only one managed branch reads still fails: both are rendered.
 	writeFiles(t, dir, map[string]string{
-		"item-trees/claude-code-skills/darwin/.claude-plugin/plugin.json.tmpl": `{{ if .Item.Managed }}{}{{ else }}{{ fact "missing" }}{{ end }}`,
+		"item-tree/.claude-plugin/plugin.json.tmpl": `{{ if .Item.Managed }}{}{{ else }}{{ fact "missing" }}{{ end }}`,
 	})
 	out := filepath.Join(t.TempDir(), "repo")
 	code, _, stderr := runZipItemIn(dir, out)

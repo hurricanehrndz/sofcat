@@ -30,7 +30,9 @@ acme-wallpapers:
   when the placement sets `items_dir`.
 - A zip item needs no `check` block and no `uninstaller`.
 
-Do not write the `installer` block by hand. `makecatalogs zip-item` writes it.
+Do not write the `installer` block by hand. `makecatalogs build` writes it
+from an item file that lists the item's placements and a tree that goes to
+all of them ([Building a repository](/zip-items/building/#building-a-repository)).
 
 These pages are the reference for zip items and use a small wallpaper example.
 sofcat only places the files; choosing a wallpaper is left to a configuration

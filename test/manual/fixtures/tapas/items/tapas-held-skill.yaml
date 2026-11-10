@@ -1,5 +1,6 @@
-# Input to makecatalogs zip-item; just bootstrap-tapas packs item-trees/tapas-held-skill.
+# Input to makecatalogs build; just bootstrap-tapas packs item-trees/tapas-held-skill.
 item_name: tapas-held-skill
+placements: [claude-skills]
 display_name: Tapas Held Skill
 section: Skills
 description: A managed skill under a held condition

@@ -295,14 +295,16 @@ func TestCheckRejectsBadTemplates(t *testing.T) {
 }
 
 // examples/placements.yaml carries the guide's templates; they must pass the
-// check they document, against the example zip item.
+// check they document, against the example zip items.
 func TestCheckExamples(t *testing.T) {
 	examples := filepath.Join("..", "..", "examples")
+	generated := filepath.Join(examples, "zip-items", "generated")
 	repo := t.TempDir()
 	for src, dst := range map[string]string{
-		filepath.Join(examples, "placements.yaml"):                                "placements.yaml",
-		filepath.Join(examples, "templates", "wallpapers-index.json.tmpl"):        filepath.Join("templates", "wallpapers-index.json.tmpl"),
-		filepath.Join(examples, "zip-items", "generated", "acme-wallpapers.yaml"): filepath.Join("packages-info", "acme-wallpapers.yaml"),
+		filepath.Join(examples, "placements.yaml"):                         "placements.yaml",
+		filepath.Join(examples, "templates", "wallpapers-index.json.tmpl"): filepath.Join("templates", "wallpapers-index.json.tmpl"),
+		filepath.Join(generated, "acme-wallpapers.yaml"):                   filepath.Join("packages-info", "acme-wallpapers.yaml"),
+		filepath.Join(generated, "acme-meeting-backgrounds.yaml"):          filepath.Join("packages-info", "acme-meeting-backgrounds.yaml"),
 	} {
 		body, err := os.ReadFile(src)
 		if err != nil {

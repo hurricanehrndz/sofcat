@@ -24,7 +24,7 @@ placements:
 
 | Field | Meaning |
 |---|---|
-| key | The placement name. Variants and item trees use it. |
+| key | The placement name. Variants and the `placements` list of an item file use it. |
 | `paths` | The placement root, keyed by `darwin` and `windows`. Every placement is a directory: one tree per item at `<root>/<item_name>`. |
 | `scope` | `machine` or `user`, keyed like `paths`. An OS left out is `machine`. In `user` scope the per-user helper places the trees and writes the `files`. |
 | `applies_to` | Display names, such as `[Desktop]`. The storefront shows a line such as "Applies to: Desktop" for an item (see Storefront labels). Display only: it does not limit where an item is placed. |

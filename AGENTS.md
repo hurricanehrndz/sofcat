@@ -335,7 +335,9 @@ daemon with the harness config yourself, for the same reason.
    directory (default the generic one) and a base URL (default
    `http://127.0.0.1:8080/`). A fixture directory holds `placements.yaml`,
    `templates/`, `manifests/` (`harness_manifest` and
-   `harness_empty_manifest`), `items/`, `item-trees/`, `conditions/darwin/` and
+   `harness_empty_manifest`), `items/` (each item's placements on one line,
+   `placements: [...]`, which the smoke reads), `item-trees/<item_name>/`,
+   `conditions/darwin/` and
    `cases/<case>/` with an optional `facts.json` and the expected files under
    `expected/`, mirrored by absolute path.
 2. Serve it on the Mac:

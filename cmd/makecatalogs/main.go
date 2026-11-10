@@ -1,6 +1,6 @@
 // Command makecatalogs compiles a SofCat repository's packages-info files
 // into its catalogs, like Munki's makecatalogs. It runs on any platform and
-// reads no agent configuration. Its pack, tree-hash and zip-item subcommands
+// reads no agent configuration. Its build, pack, tree-hash and zip-item subcommands
 // build zip items (see site/src/content/docs/zip-items/building.md).
 package main
 
@@ -17,7 +17,7 @@ import (
 )
 
 const usage = `Usage: makecatalogs [options] <repo_path>
-       makecatalogs pack|tree-hash|zip-item ... (-h for each)
+       makecatalogs build|pack|tree-hash|zip-item ... (-h for each)
 
 Compiles <repo_path>/packages-info/*.yaml into <repo_path>/catalogs/.
 
@@ -27,6 +27,7 @@ Options:
 // subcommands are matched on the first argument only, so a repo path never
 // collides with one unless it is spelled exactly like it; use ./pack then.
 var subcommands = map[string]func(args []string, stdout, stderr io.Writer) int{
+	"build":     runBuild,
 	"pack":      runPack,
 	"tree-hash": runTreeHash,
 	"zip-item":  runZipItem,
@@ -67,8 +68,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 		flags.Usage()
 		return 2
 	}
-	repoPath := flags.Arg(0)
+	return compileCatalogs(flags.Arg(0), *check, stdout, stderr)
+}
 
+// compileCatalogs writes repoPath's catalogs, or with check validates the
+// repo and writes nothing, and returns the exit code.
+func compileCatalogs(repoPath string, check bool, stdout, stderr io.Writer) int {
 	set, err := admin.CollectCatalogs(repoPath)
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, "makecatalogs:", err)
@@ -76,7 +81,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 
 	verb := "Wrote"
-	if *check {
+	if check {
 		verb = "Would write"
 		set.Problems = append(set.Problems, admin.CheckConditionsIndex(repoPath, set)...)
 	} else {
@@ -95,7 +100,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintf(stdout, "%s %s (%d condition scripts)\n", verb, conditions.IndexPath, len(set.Conditions))
 	}
 
-	if *check && len(set.Problems) > 0 {
+	if check && len(set.Problems) > 0 {
 		for _, problem := range set.Problems {
 			_, _ = fmt.Fprintln(stderr, "error:", problem)
 		}

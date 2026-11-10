@@ -1,8 +1,9 @@
-# Input to makecatalogs zip-item; just bootstrap-tapas packs item-trees/tapas-user-skill.
+# Input to makecatalogs build; just bootstrap-tapas packs item-trees/tapas-user-skill.
 # Placed per user on Windows by the helper (run-tapas-user-sync.ps1), which
 # renders NOTE.md.tmpl with the user's login name and the managed flag; per
 # machine on macOS, where .User is empty.
 item_name: tapas-user-skill
+placements: [codex-skills]
 display_name: Tapas User Skill
 section: Skills
 description: A managed Codex skill whose note names the user it was placed for

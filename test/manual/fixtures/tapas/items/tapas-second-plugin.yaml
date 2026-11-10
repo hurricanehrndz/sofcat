@@ -1,5 +1,6 @@
-# Input to makecatalogs zip-item; just bootstrap-tapas packs item-trees/tapas-second-plugin.
+# Input to makecatalogs build; just bootstrap-tapas packs item-trees/tapas-second-plugin.
 item_name: tapas-second-plugin
+placements: [tapas-marketplace]
 display_name: Tapas Second Plugin
 section: Plugins
 description: A self-service plugin with no labels of its own, so tapas-marketplace's apply
