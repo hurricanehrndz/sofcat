@@ -1,0 +1,7 @@
+# Input to makecatalogs zip-item; just bootstrap-harness-macos packs rendered/codex-models.
+item_name: codex-models
+display_name: Codex Models
+section: Harness
+description: The Codex model catalog; its placement writes Codex's config files
+catalog: harness
+version: 1.0.0

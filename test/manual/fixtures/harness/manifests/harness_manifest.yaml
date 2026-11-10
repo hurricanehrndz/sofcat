@@ -1,0 +1,6 @@
+name: harness_manifest
+catalogs:
+  - harness
+managed_installs:
+  - claude-code-config
+  - codex-models

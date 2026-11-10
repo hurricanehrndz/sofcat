@@ -143,8 +143,10 @@ the run, so a held or failed item keeps its entry. Every run also rewrites
 them, so a deleted or refused file is restored on the next run. The files
 have no receipts: sofcat owns them, and status and scope exit ignore them.
 
-Each entry has a `template` (see Templates for placement files) and exactly
-one of:
+Each entry has a template (see Templates for placement files): either
+`template`, the text inline, or `template_file`, the path of a file in the
+repository that holds it. Set exactly one of the two. Each entry also has
+exactly one of:
 
 - `path`, relative to the placement root and slash-separated, written on
   every OS the placement has a path on. Every segment must be one Windows
@@ -270,14 +272,42 @@ renders nothing and sofcat removes the file.
 
 ### Templates for placement files
 
-Every file a placement lists is rendered from its template in
-`placements.yaml`. Each is rendered from the placement's receipts after every change
-there and once per run, and removed when the output is empty. Templates are
+Every file a placement lists is rendered from its template. Each is
+rendered from the placement's receipts after every change there and once
+per run, and removed when the output is empty. Templates are
 Go [`text/template`](https://pkg.go.dev/text/template) with
 `missingkey=error`, so a field the context lacks fails the render instead of
 printing `<no value>`. A template cannot read files, include other files or
-reach the network. Templates live inline in `placements.yaml` as block
-scalars (`|`).
+reach the network.
+
+A template lives inline in `placements.yaml`, as a block scalar (`|`) under
+`template`, or in a file of its own that the entry names with
+`template_file`:
+
+```yaml
+files:
+  - path: .claude-plugin/marketplace.json
+    template_file: templates/marketplace.json.tmpl
+```
+
+`template_file` is a path relative to the repository root, the directory
+that holds `placements.yaml`. It is slash-separated, with no leading `/`, no
+`\` and no `.` or `..` segment, and every segment must be one Windows can
+hold. Publish the file with the repository: a device fetches
+`<url><template_file>` each time it reads `placements.yaml`, once per
+distinct path, and `makecatalogs` reads it from the repository on disk. The
+file's text is the entry's template, under every rule on this page, and the
+same text inline writes the same bytes.
+
+The reference is resolved when the table is read, not at render time, so a
+template still cannot read or include a file. A template file that cannot be
+fetched, a 404 included, that is empty or that exceeds 256 KiB makes the
+whole table invalid, as an invalid `placements.yaml` does: the run fails and
+no placement file changes. The error names the placement, the entry and the
+URL. `makecatalogs -check` reports a missing or unreadable template file the
+same way and renders a template file with the same samples as an inline
+template. In user scope the service resolves the reference and the stored
+plan carries the text, so the per-user helper never fetches.
 
 The context is:
 
@@ -786,7 +816,7 @@ placements:
 | `exclusive` | Optional. When true, sofcat does not write into an existing, non-empty root it did not create. |
 | `items_dir` | Optional. Item trees go to `<root>/<items_dir>/<item_name>` instead. A clean relative path, slash-separated, each segment one Windows can hold, whose first segment does not start with `.`. |
 | `vars` | Optional. Any mapping, read by the placement's templates as `.Placement.Vars`. |
-| `files` | Optional. Files rendered from the placement's receipts, each a `template` with a relative `path` or per-OS `paths` (Placement files). |
+| `files` | Optional. Files rendered from the placement's receipts, each a `template` or a `template_file` with a relative `path` or per-OS `paths` (Placement files). |
 | `files_atomic` | Optional, with `files`. When true, no file is written unless every one renders and passes its checks; otherwise each is written on its own. |
 | `check_facts` | Top level, beside `placements`: facts for `makecatalogs -check` over the built-in samples, for the admin facts templates read. |
 

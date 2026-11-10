@@ -1,0 +1,7 @@
+# Input to makecatalogs zip-item; just bootstrap-harness-macos packs rendered/claude-code-config.
+item_name: claude-code-config
+display_name: Claude Code Config
+section: Harness
+description: Holds the harness-claude-code placement, which writes Claude Code's managed settings
+catalog: harness
+version: 1.0.0

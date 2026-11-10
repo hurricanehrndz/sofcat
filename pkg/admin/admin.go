@@ -210,8 +210,8 @@ type repoPlacements struct {
 	problem string // why it cannot be used; empty when it is valid or absent
 }
 
-// readPlacements reads and validates <repo>/placements.yaml. A repo without one
-// is fine until it has a zip item.
+// readPlacements reads and validates <repo>/placements.yaml, with its template
+// files read from the repo. A repo without one is fine until it has a zip item.
 func readPlacements(repoPath string) repoPlacements {
 	path := filepath.Join(repoPath, "placements.yaml")
 	body, err := os.ReadFile(path)
@@ -221,7 +221,9 @@ func readPlacements(repoPath string) repoPlacements {
 	if err != nil {
 		return repoPlacements{path: path, present: true, problem: fmt.Sprintf("%s: %v", path, err)}
 	}
-	table, err := placement.Parse(body)
+	table, err := placement.Parse(body, func(rel string) ([]byte, error) {
+		return fs.ReadFile(os.DirFS(repoPath), rel)
+	})
 	if err != nil {
 		return repoPlacements{path: path, present: true, problem: fmt.Sprintf("%s: %v", path, err)}
 	}

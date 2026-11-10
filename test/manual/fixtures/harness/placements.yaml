@@ -1,0 +1,37 @@
+# Placements of the generic harness fixture (AGENTS.md, "Harness validation
+# loop"): the machine-wide config files of two coding-agent harnesses, written
+# by the Tapas Test fixture brand on macOS. Each placement holds one item,
+# whose tree lands under the brand's own directory, and owns its harness
+# files through `files` entries outside the root, which the brand's
+# write-roots.yaml allows. Every entry names its template with
+# template_file and renders nothing once its placement is empty, so the file
+# goes with the item. Every value is made up.
+#
+# makecatalogs -check renders the templates with these admin facts; on the
+# Mac conditions/10-harness-facts provides them.
+check_facts:
+  assigned_user: jdoe
+  memberof: [staff, harness-beta]
+placements:
+  # Claude Code's managed settings: a profile picked from the memberof fact.
+  harness-claude-code:
+    paths:
+      darwin: /Library/Application Support/Tapas Test/harness/claude-code
+    applies_to: [Claude Code]
+    files:
+      - paths:
+          darwin: /Library/Application Support/ClaudeCode/managed-settings.json
+        template_file: templates/managed-settings.json.tmpl
+  # Codex's two config files. Its item tree carries the model catalog, and
+  # config.toml points at the placed copy.
+  harness-codex:
+    paths:
+      darwin: /Library/Application Support/Tapas Test/harness/codex
+    applies_to: [Codex]
+    files:
+      - paths:
+          darwin: /etc/codex/config.toml
+        template_file: templates/codex-config.toml.tmpl
+      - paths:
+          darwin: /etc/codex/managed_config.toml
+        template_file: templates/codex-managed-config.toml.tmpl

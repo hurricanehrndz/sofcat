@@ -1,0 +1,14 @@
+{
+  "models": [
+    {
+      "slug": "example-codex",
+      "display_name": "Example Codex",
+      "context_window": 200000
+    },
+    {
+      "slug": "example-codex-mini",
+      "display_name": "Example Codex Mini",
+      "context_window": 100000
+    }
+  ]
+}

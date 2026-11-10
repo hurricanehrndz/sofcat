@@ -129,7 +129,7 @@ func (r *tapasRepo) servePlacements(paths map[string]string, exclusive, user []s
 			fmt.Fprintf(&b, "    scope: {%s: user}\n", tapasOS)
 		}
 	}
-	if _, err := placement.Parse([]byte(b.String())); err != nil {
+	if _, err := placement.Parse([]byte(b.String()), nil); err != nil {
 		r.t.Fatalf("fixture placements.yaml invalid: %v\n%s", err, b.String())
 	}
 	r.put("placements.yaml", []byte(b.String()))
@@ -1062,7 +1062,10 @@ func tempDir(t *testing.T) string {
 // drop-in templates, the ones the zip-items guide shows.
 func fixtureClaudeTemplates(t *testing.T) (catalog, dropIn string) {
 	t.Helper()
-	table, err := placement.Parse([]byte(readFile(t, filepath.Join("..", "..", "test", "manual", "fixtures", "tapas", "placements.yaml"))))
+	dir := filepath.Join("..", "..", "test", "manual", "fixtures", "tapas")
+	table, err := placement.Parse([]byte(readFile(t, filepath.Join(dir, "placements.yaml"))), func(rel string) ([]byte, error) {
+		return os.ReadFile(filepath.Join(dir, filepath.FromSlash(rel)))
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

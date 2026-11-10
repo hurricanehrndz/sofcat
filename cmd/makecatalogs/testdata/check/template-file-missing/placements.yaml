@@ -1,0 +1,10 @@
+# A template_file the repository does not hold.
+placements:
+  market:
+    paths:
+      darwin: /Library/Application Support/Demo/marketplace
+      windows: ${ProgramData}\Demo\marketplace
+    items_dir: plugins
+    files:
+      - path: .agents/plugins/marketplace.json
+        template_file: templates/absent.json.tmpl

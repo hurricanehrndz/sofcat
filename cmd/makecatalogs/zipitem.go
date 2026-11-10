@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
@@ -80,7 +81,10 @@ func planZipItem(placementsPath, itemPath, rendered, prefix string) (admin.Packa
 	if err != nil {
 		return admin.PackageInfo{}, nil, nil, err
 	}
-	table, err := placement.Parse(body)
+	// Template files sit beside placements.yaml, at the repository root.
+	table, err := placement.Parse(body, func(rel string) ([]byte, error) {
+		return fs.ReadFile(os.DirFS(filepath.Dir(placementsPath)), rel)
+	})
 	if err != nil {
 		return admin.PackageInfo{}, nil, nil, fmt.Errorf("%s: %w", placementsPath, err)
 	}

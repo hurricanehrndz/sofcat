@@ -1,0 +1,9 @@
+# Written by sofcat from the harness fixture. Do not edit.
+model = "example-codex"
+model_provider = "example-gateway"
+model_catalog_json = "/Library/Application Support/Tapas Test/harness/codex/codex-models/model_catalog.json"
+
+[model_providers.example-gateway]
+name = "Example gateway"
+base_url = "https://ai.example.com/codex/v1"
+http_headers = { "x-example-user" = "jdoe" }

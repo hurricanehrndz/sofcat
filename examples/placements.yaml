@@ -32,6 +32,9 @@ placements:
     # Files sofcat renders from the placement's receipts (.Items) after every
     # change to it; see the guide, "Placement files". An entry has a template
     # and either path, relative to the placement root, or paths, one per OS.
+    # The template is inline, as template, or in a file of its own, named by
+    # template_file relative to this directory: this one is
+    # templates/skills-index.json.tmpl.
     # An empty output removes the file, so {{ if .Items }} decides whether it
     # stays with nothing placed. fact and cond read the machine's facts. A
     # .json file is rewritten in canonical form, so only the values matter.
@@ -39,14 +42,7 @@ placements:
       - paths:
           darwin: /Library/Application Support/ClaudeCode/skills-index.json
           windows: ${ProgramData}\ClaudeCode\skills-index.json
-        template: |
-          {{- if .Items }}
-          {
-            "os": {{ json (fact "os") }},
-            "root": {{ json .Placement.Root }},
-            "skills": {{ json .Items }}
-          }
-          {{- end }}
+        template_file: templates/skills-index.json.tmpl
   codex-skills:
     paths:
       darwin: /etc/codex/skills

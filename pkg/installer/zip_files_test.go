@@ -30,11 +30,14 @@ type marketTest struct {
 // templates, which the zip-items guide shows for brands to copy.
 func claudeTemplates(t *testing.T) (catalog, dropIn string) {
 	t.Helper()
-	body, err := os.ReadFile(filepath.Join("..", "..", "test", "manual", "fixtures", "tapas", "placements.yaml"))
+	dir := filepath.Join("..", "..", "test", "manual", "fixtures", "tapas")
+	body, err := os.ReadFile(filepath.Join(dir, "placements.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	table, err := placement.Parse(body)
+	table, err := placement.Parse(body, func(rel string) ([]byte, error) {
+		return os.ReadFile(filepath.Join(dir, filepath.FromSlash(rel)))
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +69,7 @@ func newMarketTest(t *testing.T, settings string) marketTest {
       - {path: .claude-plugin/marketplace.json, template: x}
       - {path: .agents/plugins/marketplace.json, template: x}
       - {paths: {%[1]s: '%[3]s'}, template: x}
-`, testOS(), root, settings))
+`, testOS(), root, settings), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -545,4 +548,43 @@ func readFile(t *testing.T, path string) string {
 func exists(path string) bool {
 	_, err := os.Lstat(path)
 	return err == nil
+}
+
+// TestTemplateFileRendersLikeInline: a template read from a template_file
+// writes the same bytes as the same text inline, for a .json output and a
+// raw one.
+func TestTemplateFileRendersLikeInline(t *testing.T) {
+	templates := map[string]string{
+		"templates/index.json.tmpl": `{{ if .Items }}{"skills": [{{ range $i, $p := .Items }}{{ if $i }},{{ end }}{{ json $p.Name }}{{ end }}]}{{ end }}` + "\n",
+		"templates/index.txt.tmpl":  "{{ range .Items }}{{ .Name }} {{ .Version }} {{ .Managed }}\n{{ end }}",
+	}
+	render := func(jsonEntry, textEntry string) (string, string) {
+		m := newMarketTest(t, "")
+		table, err := placement.Parse(fmt.Appendf(nil, `placements:
+  market:
+    paths: {%s: '%s'}
+    items_dir: plugins
+    files:
+      - {path: .index.json, %s}
+      - {path: .index.txt, %s}
+`, testOS(), m.root, jsonEntry, textEntry), func(rel string) ([]byte, error) {
+			return []byte(templates[rel]), nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		m.z.Table = table
+		m.install(t, "one", true)
+		return readFile(t, filepath.Join(m.root, ".index.json")), readFile(t, filepath.Join(m.root, ".index.txt"))
+	}
+	inlineJSON, inlineText := render(
+		"template: "+jsonString(t, templates["templates/index.json.tmpl"]),
+		"template: "+jsonString(t, templates["templates/index.txt.tmpl"]))
+	fileJSON, fileText := render("template_file: templates/index.json.tmpl", "template_file: templates/index.txt.tmpl")
+	if inlineJSON != fileJSON || inlineText != fileText {
+		t.Errorf("inline wrote %q and %q, template_file wrote %q and %q", inlineJSON, inlineText, fileJSON, fileText)
+	}
+	if inlineText != "one 1.0.0 true\n" {
+		t.Errorf(".index.txt = %q", inlineText)
+	}
 }

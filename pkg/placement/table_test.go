@@ -1,7 +1,9 @@
 package placement
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -19,7 +21,9 @@ func TestExampleTableParses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	table, err := Parse(body)
+	table, err := Parse(body, func(rel string) ([]byte, error) {
+		return os.ReadFile(filepath.Join("..", "..", "examples", filepath.FromSlash(rel)))
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +60,7 @@ placements:
         template: x
       - paths: {windows: 'C:\drop-in.json'}
         template: '{{ if .Items }}{}{{ end }}'
-`))
+`), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +86,7 @@ placements:
 	if table.CheckFacts["site"] != "east" || len(table.CheckFacts) != 2 {
 		t.Errorf("check_facts = %v", table.CheckFacts)
 	}
-	if empty, err := Parse(nil); err != nil || len(empty.Placements) != 0 {
+	if empty, err := Parse(nil, nil); err != nil || len(empty.Placements) != 0 {
 		t.Errorf("empty file: %v, %v", empty, err)
 	}
 }
@@ -110,7 +114,7 @@ func TestSpecJSONRoundTrip(t *testing.T) {
     vars: {name: acme, count: 3, whole: 2.0, ratio: 1.5, enabled: true, owner: {name: Acme IT, ids: [1, 2.5, x]}}
     files: [{path: .x.json, template: x}, {paths: {windows: '${USERPROFILE}\y.json'}, template: y}]
     files_atomic: true
-`))
+`), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +153,7 @@ placements:
   zed: {paths: {darwin: /z}}
   alpha: {paths: {darwin: /a}}
   mid: {paths: {darwin: /m}}
-`))
+`), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +166,7 @@ placements:
 placements:
   p: {paths: {darwin: /a}}
   p: {paths: {darwin: /b}}
-`))
+`), nil)
 	if err == nil || !strings.Contains(err.Error(), `"p"`) {
 		t.Errorf("duplicate placement: error %v", err)
 	}
@@ -201,7 +205,7 @@ placements:
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			_, err := Parse([]byte(tc.yaml))
+			_, err := Parse([]byte(tc.yaml), nil)
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("error %v, want one containing %q", err, tc.want)
 			}
@@ -223,7 +227,7 @@ func TestParseRejectsRemovedFields(t *testing.T) {
 	}
 	for name, body := range tests {
 		t.Run(name, func(t *testing.T) {
-			if _, err := Parse([]byte("placements:\n  " + body + "\n")); err == nil {
+			if _, err := Parse([]byte("placements:\n  "+body+"\n"), nil); err == nil {
 				t.Fatal("parsed")
 			}
 		})
@@ -234,12 +238,12 @@ func TestParseRejectsRemovedFields(t *testing.T) {
 // a relative files path could also name.
 func TestParseItemsDir(t *testing.T) {
 	for _, dir := range []string{"plugins", "a/b"} {
-		if _, err := Parse([]byte("placements:\n  p: {paths: {darwin: /p}, items_dir: '" + dir + "'}\n")); err != nil {
+		if _, err := Parse([]byte("placements:\n  p: {paths: {darwin: /p}, items_dir: '"+dir+"'}\n"), nil); err != nil {
 			t.Errorf("items_dir %q: %v", dir, err)
 		}
 	}
 	for _, dir := range []string{"../x", "/abs", `a\b`, "a/../b", "a/", ".", ".hidden", "./plugins", "con", "plugins.", "a:b"} {
-		_, err := Parse([]byte("placements:\n  p: {paths: {darwin: /p}, items_dir: '" + dir + "'}\n"))
+		_, err := Parse([]byte("placements:\n  p: {paths: {darwin: /p}, items_dir: '"+dir+"'}\n"), nil)
 		if err == nil || !strings.Contains(err.Error(), "items_dir") {
 			t.Errorf("items_dir %q: error %v", dir, err)
 		}
@@ -257,21 +261,21 @@ func TestParseUserScopeSpec(t *testing.T) {
 		"vars":        "vars: {name: x}",
 	} {
 		t.Run(name, func(t *testing.T) {
-			if _, err := Parse([]byte("placements:\n  p: {paths: {windows: '${USERPROFILE}\\p'}, scope: {windows: user}, " + extra + "}\n")); err != nil {
+			if _, err := Parse([]byte("placements:\n  p: {paths: {windows: '${USERPROFILE}\\p'}, scope: {windows: user}, "+extra+"}\n"), nil); err != nil {
 				t.Errorf("error %v", err)
 			}
 		})
 	}
 	_, err := Parse([]byte(`placements:
   p: {paths: {windows: 'C:\p'}, files: [{paths: {windows: '${USERPROFILE}\x.json'}, template: x}]}
-`))
+`), nil)
 	if err == nil || !strings.Contains(err.Error(), "not user scope") {
 		t.Errorf("${USERPROFILE} in a machine-scope files path: error %v", err)
 	}
 	_, err = Parse([]byte(`placements:
   p: {paths: {darwin: '${HOME}/.agents/skills'}, scope: {darwin: user}, items_dir: plugins,
       files: [{paths: {darwin: '${HOME}/x.json'}, template: x}]}
-`))
+`), nil)
 	if err != nil {
 		t.Errorf("darwin user scope: error %v", err)
 	}
@@ -291,7 +295,7 @@ func TestParseRejectsFiles(t *testing.T) {
 			`{paths: {darwin: /p}, files: [{paths: {}, template: x}]}`, "files[0]: needs path or paths",
 		},
 		"no template": {
-			`{paths: {darwin: /p}, files: [{path: .x}]}`, "files[0]: needs a template",
+			`{paths: {darwin: /p}, files: [{path: .x}]}`, "files[0]: needs template or template_file",
 		},
 		"files_atomic without files": {
 			`{paths: {darwin: /p}, files_atomic: true}`, "files_atomic: set without files",
@@ -353,7 +357,7 @@ func TestParseRejectsFiles(t *testing.T) {
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			_, err := Parse([]byte("placements:\n  p: " + tc.placement + "\n"))
+			_, err := Parse([]byte("placements:\n  p: "+tc.placement+"\n"), nil)
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Errorf("error %v, want %q", err, tc.want)
 			}
@@ -372,7 +376,7 @@ func TestParseAcceptsFiles(t *testing.T) {
 	}
 	for name, placement := range tests {
 		t.Run(name, func(t *testing.T) {
-			if _, err := Parse([]byte("placements:\n  p: " + placement + "\n")); err != nil {
+			if _, err := Parse([]byte("placements:\n  p: "+placement+"\n"), nil); err != nil {
 				t.Error(err)
 			}
 		})
@@ -397,7 +401,7 @@ placements:
     paths: {darwin: /skills}
     applies_to: [Cursor]
     action_labels: {cancel: Stop}
-`))
+`), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -436,14 +440,7 @@ placements:
 // to copy.
 func claudeTemplates(t *testing.T) (catalog, dropIn string) {
 	t.Helper()
-	body, err := os.ReadFile(filepath.Join("..", "..", "test", "manual", "fixtures", "tapas", "placements.yaml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	table, err := Parse(body)
-	if err != nil {
-		t.Fatal(err)
-	}
+	table, _ := parseFixture(t, "tapas")
 	files := table.Placements["tapas-marketplace"].Files
 	if len(files) != 3 || files[0].Path != ".claude-plugin/marketplace.json" || files[2].Paths == nil {
 		t.Fatalf("tapas-marketplace files = %+v", files)
@@ -579,7 +576,7 @@ func TestGuideShowsClaudeTemplates(t *testing.T) {
 			block = body
 		}
 	}
-	table, err := Parse([]byte(block))
+	table, err := Parse([]byte(block), nil)
 	if err != nil {
 		t.Fatalf("%s: the Claude marketplace example: %v", guide, err)
 	}
@@ -587,5 +584,103 @@ func TestGuideShowsClaudeTemplates(t *testing.T) {
 	files := table.Placements["acme-marketplace"].Files
 	if len(files) != 2 || files[0].Template != catalog || files[1].Template != dropIn {
 		t.Errorf("%s: the Claude marketplace example's templates differ from the Tapas fixture's", guide)
+	}
+}
+
+// TestParseTemplateFile: a files entry's template_file is read once per
+// distinct path and becomes the entry's template, so everything after Parse
+// sees an inline template.
+func TestParseTemplateFile(t *testing.T) {
+	reads := map[string]int{}
+	table, err := Parse([]byte(`placements:
+  a:
+    paths: {darwin: /a}
+    files:
+      - {path: .one.json, template_file: templates/index.json.tmpl}
+      - {path: .two.json, template_file: templates/index.json.tmpl}
+      - {path: .three.json, template: inline}
+  b:
+    paths: {darwin: /b}
+    files:
+      - {path: .one.json, template_file: templates/index.json.tmpl}
+      - {path: .other, template_file: other.tmpl}
+`), func(rel string) ([]byte, error) {
+		reads[rel]++
+		return []byte("text of " + rel), nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := map[string]int{"templates/index.json.tmpl": 1, "other.tmpl": 1}; !reflect.DeepEqual(reads, want) {
+		t.Errorf("reads = %v, want %v", reads, want)
+	}
+	want := []File{
+		{Path: ".one.json", Template: "text of templates/index.json.tmpl"},
+		{Path: ".two.json", Template: "text of templates/index.json.tmpl"},
+		{Path: ".three.json", Template: "inline"},
+	}
+	if got := table.Placements["a"].Files; !reflect.DeepEqual(got, want) {
+		t.Errorf("a files = %+v, want %+v", got, want)
+	}
+	if got, want := table.Placements["b"].Files[1], (File{Path: ".other", Template: "text of other.tmpl"}); !reflect.DeepEqual(got, want) {
+		t.Errorf("b files[1] = %+v", got)
+	}
+}
+
+// TestParseRejectsTemplateFile: every way a template_file fails names the
+// placement and the entry, and a bad path is refused before anything is
+// read.
+func TestParseRejectsTemplateFile(t *testing.T) {
+	failing := func(err error) func(string) ([]byte, error) {
+		return func(string) ([]byte, error) { return nil, err }
+	}
+	body := func(n int) func(string) ([]byte, error) {
+		return func(string) ([]byte, error) { return bytes.Repeat([]byte("x"), n), nil }
+	}
+	unread := func(rel string) ([]byte, error) {
+		t.Errorf("read %q", rel)
+		return []byte("x"), nil
+	}
+	tests := map[string]struct {
+		entry string
+		read  func(string) ([]byte, error)
+		want  string
+	}{
+		"both":           {`template: x, template_file: a.tmpl`, unread, "set template or template_file, not both"},
+		"neither":        {``, unread, "needs template or template_file"},
+		"empty":          {`template_file: ''`, unread, "needs template or template_file"},
+		"absolute":       {`template_file: /a.tmpl`, unread, `template_file "/a.tmpl" is not a clean relative path`},
+		"backslash":      {`template_file: 'a\b.tmpl'`, unread, "is not a clean relative path"},
+		"dot segment":    {`template_file: ./a.tmpl`, unread, "is not a clean relative path"},
+		"inner dot":      {`template_file: a/./b.tmpl`, unread, "is not a clean relative path"},
+		"dot dot":        {`template_file: ../a.tmpl`, unread, "is not a clean relative path"},
+		"inner dot dot":  {`template_file: a/../b.tmpl`, unread, "is not a clean relative path"},
+		"no reader":      {`template_file: a.tmpl`, nil, `template_file "a.tmpl": no repository to read it from`},
+		"read error":     {`template_file: a.tmpl`, failing(errors.New("boom")), `template_file "a.tmpl": boom`},
+		"oversize":       {`template_file: a.tmpl`, body(render.MaxTemplate + 1), "over the 262144-byte limit"},
+		"empty file":     {`template_file: a.tmpl`, body(0), `template_file "a.tmpl" is empty`},
+		"does not parse": {`template_file: a.tmpl`, func(string) ([]byte, error) { return []byte("{{ .Items"), nil }, "unclosed action"},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			_, err := Parse([]byte("placements:\n  p: {paths: {darwin: /p}, files: [{path: .x, "+tc.entry+"}]}\n"), tc.read)
+			if err == nil || !strings.Contains(err.Error(), `placement "p": files[0]`) || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error %v, want placement, entry and %q", err, tc.want)
+			}
+		})
+	}
+	// At the limit is fine.
+	if _, err := Parse([]byte("placements:\n  p: {paths: {darwin: /p}, files: [{path: .x, template_file: a.tmpl}]}\n"), body(render.MaxTemplate)); err != nil {
+		t.Errorf("template of MaxTemplate bytes: %v", err)
+	}
+
+	// A table that did not come through Parse cannot validate with a
+	// reference still in it.
+	table := Table{
+		Placements: map[string]Spec{"p": {Paths: map[string]string{Darwin: "/p"}, Files: []File{{Path: ".x", TemplateFile: "a.tmpl"}}}},
+		Order:      []string{"p"},
+	}
+	if err := table.Validate(); err == nil || !strings.Contains(err.Error(), "not resolved") {
+		t.Errorf("unresolved table: error %v", err)
 	}
 }
