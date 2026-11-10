@@ -57,8 +57,9 @@ file to sign and runs it.
 
 - `just build` runs it once, after the three `go build`s, with `build/<slug>.exe`,
   `build/<slug>-ui.exe` and `build/<slug>-useragent.exe` appended, and fails if the command fails.
-- `just makecatalogs` runs it on the two Windows builds,
-  `build/makecatalogs-windows-amd64.exe` and `-arm64.exe`.
+- `just makecatalogs` runs it once, after its builds, with
+  `build/makecatalogs-windows-amd64.exe` and
+  `build/makecatalogs-windows-arm64.exe` appended.
 - `just setup`, which depends on `build`, appends a `[sign.windows]` section
   with `command = "<SIGN_CMD> $f"` to the `embala.toml` it renders into
   `build/setup/`, so embala runs the same command on the uninstaller stub it
@@ -95,8 +96,8 @@ same for `setup.exe`.
 `.github/workflows/build_release.yml` signs every release with Azure Trusted
 Signing. It downloads a pinned `jsign` jar, logs the Azure CLI in as a service
 principal, takes a token for `https://codesigning.azure.net` and sets
-`SIGN_CMD` for the build step, so the three executables, the two Windows makecatalogs
-executables, the uninstaller stub and `setup.exe` are signed and timestamped, with the description `SofCat` and
+`SIGN_CMD` for the build step, so the three executables, the uninstaller stub,
+`setup.exe` and the two Windows `makecatalogs` are signed and timestamped, with the description `SofCat` and
 the URL `https://sofcat.app`. Provenance attestation runs afterwards, so it
 covers the signed bytes. The repository needs:
 

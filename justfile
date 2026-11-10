@@ -37,8 +37,9 @@ _subst := "-e 's|@APP@|" + app + "|g' -e 's|@PRODUCT@|" + product + "|g' -e 's|@
 _identity := "-X github.com/hurricanehrndz/sofcat/pkg/identity.Slug=" + app + " -X 'github.com/hurricanehrndz/sofcat/pkg/identity.Name=" + product + "' -X github.com/hurricanehrndz/sofcat/pkg/identity.Identifier=" + identifier
 version := `git describe --tags --always --dirty 2>/dev/null || echo dev`
 # Signing hook (site/src/content/docs/reference/code-signing.md): a shell
-# command line that `build` runs with the three executables appended and `setup`
-# hands to embala as [sign.windows] for setup.exe and the uninstaller stub.
+# command line that `build` runs with the three executables appended,
+# `makecatalogs` with its two Windows ones, and `setup` hands to embala as
+# [sign.windows] for setup.exe and the uninstaller stub.
 # Unset, nothing is signed.
 SIGN_CMD := env("SIGN_CMD", "")
 # macOS signing (same page). With CODESIGN_IDENTITY set, `build-macos`
@@ -393,8 +394,8 @@ brand-check:
     [ -z {{quote(icon_png)}} ] || [ "$(head -c 8 {{quote(icon_png)}} | od -An -tx1 | tr -d ' \n')" = 89504e470d0a1a0a ] || fail "{{icon_png}} is not a PNG"
 
 # Standalone makecatalogs for every admin platform (pure Go, no cgo)
-# -> build/makecatalogs-<os>-<arch>[.exe]. With SIGN_CMD set, it signs the two
-# Windows ones.
+# -> build/makecatalogs-<os>-<arch>[.exe]. With SIGN_CMD set, the two Windows
+# ones are signed.
 makecatalogs:
     mkdir -p build
     for os in linux darwin windows; do \
