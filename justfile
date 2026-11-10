@@ -192,6 +192,12 @@ setup: build
       printf '\n[sign.windows]\ncommand = "%s $f"\n' "$sign_cmd" >> build/setup/embala.toml; fi
     embala build --config build/setup/embala.toml --formats setup --out-dir build
 
+# Release archive of the three Windows executables ->
+# build/<app>-<version>-windows-amd64.zip (needs zip). amd64 only, like `setup`.
+archive-windows: build
+    rm -f build/{{app}}-{{version}}-windows-amd64.zip
+    cd build && zip -X {{app}}-{{version}}-windows-amd64.zip {{app}}.exe {{app}}-ui.exe {{app}}-useragent.exe
+
 # The oldest macOS the app and the cgo objects in it are built for.
 macos_min := "13.0"
 _app_bundle := "build/" + product + ".app"
@@ -344,6 +350,17 @@ notarize pkg: _require-macos
     xcrun stapler staple {{quote(pkg)}}
     xcrun stapler validate {{quote(pkg)}}
 
+# macOS release archive -> build/<app>-<version>-darwin-<arch>.tar.gz, for the
+# host architecture: the CLI, the per-user helper and the app, as `pkg`
+# installs them. It follows `pkg` because a tar.gz cannot carry a notarization
+# ticket: with NOTARIZE=1 the pkg's notarization covers the code inside it, so
+# the app's ticket is stapled to the bundle here (the two bare executables
+# cannot hold one; Gatekeeper looks theirs up online). COPYFILE_DISABLE keeps
+# AppleDouble `._` files out of the archive.
+archive-macos: pkg
+    {{ if NOTARIZE == "1" { "xcrun stapler staple " + quote(_app_bundle) } else { "true" } }}
+    COPYFILE_DISABLE=1 tar -czf "build/{{app}}-{{version}}-darwin-$(go env GOARCH).tar.gz" -C build {{app}} {{app}}-useragent "{{product}}.app"
+
 # Reject brand values that would break a template or collide with a stock
 # install. SLUG, NAME and IDENTIFIER must all keep or all change the stock
 # values: the service, pipe, ProgramData folder, policy key and installer
@@ -390,6 +407,27 @@ makecatalogs:
       done; \
     done
     {{ if SIGN_CMD == "" { "true" } else { SIGN_CMD + " build/makecatalogs-windows-amd64.exe build/makecatalogs-windows-arm64.exe" } }}
+
+# Release archives of those, each holding one binary named makecatalogs[.exe]
+# -> build/makecatalogs-<os>-<arch>.tar.gz, or .zip for Windows (needs zip).
+makecatalogs-archives: makecatalogs
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd build
+    rm -rf makecatalogs-archive
+    for os in linux darwin windows; do
+      for arch in amd64 arm64; do
+        name=makecatalogs-$os-$arch
+        mkdir -p makecatalogs-archive/$name
+        if [ "$os" = windows ]; then
+          cp $name.exe makecatalogs-archive/$name/makecatalogs.exe
+          rm -f $name.zip && (cd makecatalogs-archive/$name && zip -X ../../$name.zip makecatalogs.exe)
+        else
+          cp $name makecatalogs-archive/$name/makecatalogs
+          tar -czf $name.tar.gz -C makecatalogs-archive/$name makecatalogs
+        fi
+      done
+    done
 
 # Static file server for the manual-test loop -> build/manual-test-server
 manual-test-server:

@@ -56,18 +56,19 @@ Nothing is code signed yet. See [Code signing](/reference/code-signing/).
 
 ## Install on macOS
 
-Releases do not ship a macOS package yet, so build one on a Mac from a
-checkout (see [Developer notes](/contributing/dev/) for the toolchain):
+Download `sofcat-<tag>.pkg` from the
+[releases page](https://github.com/hurricanehrndz/sofcat/releases). It is signed
+with a Developer ID and notarized, and built for Apple silicon (arm64) only.
+For an Intel Mac, build one on that Mac from a checkout with `just pkg` (see
+[Developer notes](/contributing/dev/) for the toolchain); it is unsigned
+unless you set the [signing variables](/reference/code-signing/). The release
+also has `sofcat-<tag>-darwin-arm64.tar.gz`, the same CLI, per-user helper and
+app without the installer.
+
+Install the pkg, write the config and restart the daemon:
 
 ```sh
-just build-macos   # the CLI and build/SofCat.app
-just pkg           # build/sofcat-<version>.pkg, unsigned
-```
-
-Then install it, write the config and restart the daemon:
-
-```sh
-sudo installer -pkg build/sofcat-<version>.pkg -target /
+sudo installer -pkg sofcat-<tag>.pkg -target /
 sudo install -m 600 -o root -g wheel config.yaml "/Library/Application Support/SofCat/config.yaml"
 sudo launchctl kickstart -k system/ca.hrndz.sofcat
 ```

@@ -187,5 +187,29 @@ identities in the keychain):
 
     CODESIGN_IDENTITY='Developer ID Application: Name (TEAMID)' PRODUCTSIGN_IDENTITY='Developer ID Installer: Name (TEAMID)' NOTARIZE=1 NOTARY_AUTH=api-key NOTARY_API_KEY_PATH=~/AuthKey_ABC123DEF.p8 NOTARY_API_KEY_ID=ABC123DEF NOTARY_API_ISSUER_ID=<issuer uuid> just pkg
 
-No macOS signing credential exists for this project yet either; it needs the
-maintainer's Apple Developer account.
+`just archive-macos` follows `pkg` and writes
+`build/<slug>-<version>-darwin-<arch>.tar.gz` with the CLI, the helper and
+the app. A tar.gz cannot carry a notarization ticket, so with `NOTARIZE=1` it
+first runs `xcrun stapler staple` on the app: notarizing the pkg also covers
+the code inside it. The two bare executables cannot hold a ticket; Gatekeeper
+looks theirs up online.
+
+## macOS release signing in CI
+
+The `macos` job of `.github/workflows/build_release.yml` runs on a macOS
+runner (arm64). It imports the two certificates into a keychain made for the
+job, runs `just archive-macos` with `NOTARIZE=1`, then checks the result with
+`codesign --verify`, `stapler validate` and `spctl --assess`. Nothing is
+released if any of that fails. The repository needs:
+
+| Kind | Name | Value |
+| --- | --- | --- |
+| Secret | `APPLE_CODESIGN_P12_BASE64` | The Developer ID Application certificate and its private key, as a base64 `.p12`. |
+| Secret | `APPLE_CODESIGN_P12_PASSWORD` | That file's password. |
+| Secret | `APPLE_INSTALLER_P12_BASE64` | The Developer ID Installer certificate and key, the same way. |
+| Secret | `APPLE_INSTALLER_P12_PASSWORD` | That file's password. |
+| Secret | `NOTARY_API_KEY_P8` | The App Store Connect API key, the contents of the `.p8` file. |
+| Secret | `NOTARY_API_KEY_ID` | The key ID. |
+| Secret | `NOTARY_API_ISSUER_ID` | The issuer ID. |
+| Variable | `CODESIGN_IDENTITY` | `Developer ID Application: Name (TEAMID)`. |
+| Variable | `PRODUCTSIGN_IDENTITY` | `Developer ID Installer: Name (TEAMID)`. |

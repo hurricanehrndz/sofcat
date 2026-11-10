@@ -56,10 +56,23 @@ that is on `main`:
 git fetch origin && git tag v1.11.0 origin/main && git push origin v1.11.0
 ```
 
-Build Release (`.github/workflows/build_release.yml`) builds the executables,
-`setup.exe` and makecatalogs at that tag, attaches them with a signed provenance bundle
-(`sofcat-<tag>.sigstore.json`) to a prerelease, then runs the released-binary
-integration tests on Windows. It refuses a tag whose commit is not on `main`.
+Build Release (`.github/workflows/build_release.yml`) builds and signs
+everything at that tag: on Linux the Windows executables, `setup.exe` and
+makecatalogs, and on a macOS runner the arm64 CLI, helper, app and pkg. A
+last job attaches the files below, with a signed provenance bundle
+(`sofcat-<tag>.sigstore.json`), to a prerelease, and the released-binary
+integration tests run on Windows.
+
+| File | Holds |
+| --- | --- |
+| `sofcat-<version>-x86_64-setup.exe` | The Windows installer. |
+| `sofcat-<tag>-windows-amd64.zip` | `sofcat.exe`, `sofcat-ui.exe` and `sofcat-useragent.exe`. |
+| `sofcat-<tag>.pkg` | The macOS installer, arm64, notarized. |
+| `sofcat-<tag>-darwin-arm64.tar.gz` | `sofcat`, `sofcat-useragent` and `SofCat.app`. |
+| `makecatalogs-<os>-<arch>.tar.gz`, `.zip` for Windows | One `makecatalogs` binary, for Linux, macOS and Windows on amd64 and arm64. |
+
+`just archive-windows`, `just archive-macos` and `just makecatalogs-archives`
+build the archives; the two that write a `.zip` need `zip`. It refuses a tag whose commit is not on `main`.
 
 ## Cross-compilation: pure Go, no cgo
 

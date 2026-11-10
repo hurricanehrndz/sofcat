@@ -132,8 +132,9 @@ makecatalogs [--check] <repo_path>
 - Exit codes are `0` for success, `1` for any error (or any problem under
   `--check`) and `2` for a usage error.
 
-Releases publish `makecatalogs-<os>-<arch>[.exe]` for Linux, macOS and Windows
-on amd64 and arm64. See
+Releases publish `makecatalogs-<os>-<arch>.tar.gz` (`.zip` for Windows) for
+Linux, macOS and Windows on amd64 and arm64, each holding one binary named
+`makecatalogs`. See
 [examples/example_package-info.yaml](examples/example_package-info.yaml).
 
 `sofcat -build`/`-b` and `-import`/`-i` are gone, along with the `repo_path`
