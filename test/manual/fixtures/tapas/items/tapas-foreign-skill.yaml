@@ -1,4 +1,4 @@
-# Input to makecatalogs zip-item; just bootstrap-tapas packs rendered/tapas-foreign-skill.
+# Input to makecatalogs zip-item; just bootstrap-tapas packs item-trees/tapas-foreign-skill.
 item_name: tapas-foreign-skill
 display_name: Tapas Foreign Skill
 section: Skills

@@ -1,4 +1,4 @@
-# Input to makecatalogs zip-item; just bootstrap-tapas packs rendered/tapas-depends-skill.
+# Input to makecatalogs zip-item; just bootstrap-tapas packs item-trees/tapas-depends-skill.
 # run-tapas-smoke.ps1 installs it before and after creating the marker file
 # its Windows depends_check script looks for; run-tapas-smoke.sh before and
 # after writing a Munki report that lists DemoTool.

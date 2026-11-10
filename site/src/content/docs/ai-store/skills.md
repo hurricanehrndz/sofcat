@@ -52,7 +52,7 @@ version: 1.0.0
 and one tree for each placement and OS it goes to:
 
 ```
-rendered/example-skill/
+item-trees/example-skill/
   claude-code-skills/darwin/SKILL.md
   claude-code-skills/windows/SKILL.md
   codex-skills/darwin/SKILL.md

@@ -1,4 +1,4 @@
-# Input to makecatalogs zip-item; just bootstrap-harness-macos packs rendered/claude-code-config.
+# Input to makecatalogs zip-item; just bootstrap-harness-macos packs item-trees/claude-code-config.
 item_name: claude-code-config
 display_name: Claude Code Config
 section: Harness

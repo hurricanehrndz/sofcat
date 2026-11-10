@@ -1,4 +1,4 @@
-# Input to makecatalogs zip-item; just bootstrap-tapas packs rendered/tapas-optional-plugin.
+# Input to makecatalogs zip-item; just bootstrap-tapas packs item-trees/tapas-optional-plugin.
 item_name: tapas-optional-plugin
 display_name: Tapas Optional Plugin
 section: Plugins

@@ -31,13 +31,13 @@ root. The example keeps its sources like this:
 placements.yaml       where items land, and the files sofcat renders beside them
 templates/            one template per rendered file
 items/<item>.yaml     a package-info file without an installer block
-rendered/<item>/<placement>/<darwin|windows>/
+item-trees/<item>/<placement>/<darwin|windows>/
                       the tree an item places
 manifests/            which items are managed and which are optional
 conditions/           the fact script the config templates need
 ```
 
-`items/` and `rendered/` are inputs. The build turns them into the zips,
+`items/` and `item-trees/` are inputs. The build turns them into the zips,
 `packages-info/` and `catalogs/` a device reads.
 
 ## Build and publish
@@ -55,7 +55,7 @@ cp manifests/*.yaml "$out/manifests/"
 for item in items/*.yaml; do
   name=$(basename "$item" .yaml)
   makecatalogs zip-item --placements placements.yaml --item "$item" \
-    --rendered "rendered/$name" --location-prefix packages/harness \
+    --trees "item-trees/$name" --location-prefix packages/harness \
     -o "$out" > "$out/packages-info/$name.yaml"
 done
 makecatalogs "$out"

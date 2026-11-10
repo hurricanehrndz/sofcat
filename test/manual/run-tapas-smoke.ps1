@@ -594,7 +594,7 @@ Pass "tree and receipt gone; $demoToolMarker removed"
 # --- Adoption --------------------------------------------------------------------
 
 Write-Step "A catalog-equal tree placed by hand is adopted without being rewritten"
-# Must equal test/manual/fixtures/tapas/rendered/tapas-adopt-skill/claude-skills/windows/SKILL.md byte for byte.
+# Must equal test/manual/fixtures/tapas/item-trees/tapas-adopt-skill/claude-skills/windows/SKILL.md byte for byte.
 $adoptText = "---`nname: tapas-adopt-skill`ndescription: A self-service skill placed by hand and adopted`n---`n"
 $adoptTree = Join-Path $claudeRoot "tapas-adopt-skill"
 $adoptFile = Join-Path $adoptTree "SKILL.md"

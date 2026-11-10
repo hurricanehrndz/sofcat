@@ -556,7 +556,7 @@ pass "tree and receipt gone; $MUNKI_DIR removed"
 # --- Adoption --------------------------------------------------------------------
 
 step "A catalog-equal tree placed by hand is adopted without being rewritten"
-# Must equal test/manual/fixtures/tapas/rendered/tapas-adopt-skill/claude-skills/darwin/SKILL.md
+# Must equal test/manual/fixtures/tapas/item-trees/tapas-adopt-skill/claude-skills/darwin/SKILL.md
 # byte for byte, with mode 0644.
 adopt_tree="$CLAUDE_ROOT/tapas-adopt-skill"
 adopt_file="$adopt_tree/SKILL.md"

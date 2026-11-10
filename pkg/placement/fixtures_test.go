@@ -58,9 +58,9 @@ func TestHarnessFixtureCases(t *testing.T) {
 				spec := table.Placements[name]
 				root, _ := spec.Path(Darwin)
 				ctx := render.FileContext{OS: Darwin, Scope: ScopeMachine, Placement: spec.View(name, root)}
-				trees, _ := filepath.Glob(filepath.Join(dir, "rendered", "*", name, Darwin))
+				trees, _ := filepath.Glob(filepath.Join(dir, "item-trees", "*", name, Darwin))
 				if len(trees) != 1 {
-					t.Fatalf("placement %q: %d items under rendered/, want 1", name, len(trees))
+					t.Fatalf("placement %q: %d items under item-trees/, want 1", name, len(trees))
 				}
 				item := filepath.Base(filepath.Dir(filepath.Dir(trees[0])))
 				ctx.Items = []render.Item{{Name: item, Version: "1.0.0", Managed: true, Path: root + "/" + item}}
