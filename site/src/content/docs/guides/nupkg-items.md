@@ -186,8 +186,7 @@ Chocolatey's state. What happens to such an item depends on its status:
   the item over the Chocolatey install.
 
 Either way, `%ProgramData%\chocolatey\lib\<id>` and Chocolatey's shims stay
-behind. That stale `lib` directory still satisfies `requires_software` with
-`chocolatey: <id>` on other items.
+behind.
 
 For a clean switch, remove the Chocolatey install first with a
 `preinstall_script`. It runs before each install or update sofcat makes of
@@ -210,11 +209,10 @@ and 3010 mean Chocolatey's uninstall wants a restart, and the install goes on.
 
 ## Required software
 
-`requires_software` with `chocolatey: <id>` still checks for
-`%ProgramData%\chocolatey\lib\<id>` ([zip-items.md](/guides/zip-items/#required-software)).
-It names software sofcat never installs, so a package sofcat installed does
-not satisfy it. For an item that needs a nupkg item, list the nupkg item
-under `dependencies`, and sofcat installs it first.
+For an item that needs a nupkg item, list the nupkg item under
+`dependencies`, and sofcat installs it first. To have the item wait for a
+nupkg item without installing it, use `depends_check` with
+`sofcat: <item name>`. To check for other software, see [Required software](/guides/zip-items/#required-software).
 
 ## Zip-only builds
 

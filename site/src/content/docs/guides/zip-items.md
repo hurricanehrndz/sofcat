@@ -550,11 +550,10 @@ zip item with `placement_refused`.
 
 A brand whose `brand.env` sets `INSTALLERS=zip` builds all three binaries with the
 `zip_only` Go build tag. Such a binary has no code for the `msi`, `exe`, `ps1`,
-`msix` and `nupkg` installers or for catalog scripts. It treats a catalog item
-as invalid when it has an `installer.type` other than `zip`, an
-`uninstaller.type` set to anything but `zip`, or any of `preinstall_script`,
-`postinstall_script`, `preuninstall_script`, `postuninstall_script` and
-`check.script`. It logs the reason (`rejected by this zip-only build`) once per
+`msix` and `nupkg` installers. It treats a catalog item as invalid when it has
+an `installer.type` other than `zip` or an `uninstaller.type` set to anything
+but `zip`. Catalog scripts are in every build, so `depends_check` scripts run
+in a zip-only build. It logs the reason (`rejected by this zip-only build`) once per
 item and reason for the life of the process, the run neither installs nor
 removes the item, `ListOptionalInstalls` leaves it out and `InstallItem` refuses it with `item_not_available`. Admin
 fact scripts (`<data dir>/conditions`) still run.
@@ -562,26 +561,45 @@ fact scripts (`<data dir>/conditions`) still run.
 ## Required software
 
 Any catalog item, a zip item or not, can list software it needs and sofcat
-never installs:
+does not install for it:
 
 ```yaml
-requires_software:
+depends_check:
   - display_name: Demo Tool
-    chocolatey: demo-tool
+    sofcat: demo-tool
     munki: DemoTool
+    script:
+      windows: |
+        if (Get-Command demo-tool -ErrorAction SilentlyContinue) { exit 0 }
+        exit 1
+      darwin: |
+        #!/bin/sh
+        command -v demo-tool
 ```
 
 - `display_name` is required. It names the software in the deferral message.
-- `chocolatey` is a package id, checked on Windows: present when
-  `%ProgramData%\chocolatey\lib\<id>` is a directory. A nupkg item that
-  sofcat installed does not count ([Nupkg items](/guides/nupkg-items/#required-software)).
-- `munki` is a Munki item name, checked on macOS: present when it is listed
-  under `InstalledItems` in `/Library/Managed Installs/ManagedInstallReport.plist`.
-  A missing, unreadable or binary report counts as missing. The macOS smoke
-  points sofcat at its own report with the `SOFCAT_TEST_MUNKI_REPORT`
-  environment variable in the daemon's plist; it is a test hook, not a
-  setting.
-- An entry with no key for the OS sofcat runs on is skipped.
+- `sofcat` is a catalog item name, checked on every OS: present when sofcat
+  finds that item installed on this machine, by the same status check a
+  removal uses (its `check` block, or its receipts for a zip item). Unlike
+  `dependencies`, sofcat does not install it; the item waits. A name no
+  catalog offers this machine counts as missing.
+- `munki` is a Munki item name, checked on macOS only: present when it is
+  listed under `InstalledItems` in
+  `/Library/Managed Installs/ManagedInstallReport.plist`. A missing,
+  unreadable or binary report counts as missing. The macOS smoke points
+  sofcat at its own report with the `SOFCAT_TEST_MUNKI_REPORT` environment
+  variable in the daemon's plist; it is a test hook, not a setting.
+- `script` holds one script per OS, under the keys `windows` and `darwin`.
+  Exit 0 means present; any other exit, or a script that cannot be run,
+  means missing. On Windows it runs in Windows PowerShell as SYSTEM. On
+  macOS sofcat writes it to a temporary file only root can read and runs it
+  as root, so it must start with a `#!` line. Like the other catalog
+  scripts it has no time limit. Its output is not used: it goes to the debug
+  log, and the stderr of a failing script is logged.
+- An entry is present when any of its checks that apply on this OS passes.
+  They are tried in the order `sofcat`, `munki`, `script`, stopping at the
+  first that passes. To require several things, list several entries. An
+  entry with no check for this OS is skipped.
 
 Before an install or update does anything (download, placement, scripts),
 sofcat checks the entries. If any is missing, it defers the item with code
@@ -592,8 +610,14 @@ depend on it are deferred with the same code and message. Nothing is
 recorded as failed, and the next run checks again. Removals are never
 checked.
 
-`makecatalogs -check` reports an entry without `display_name` or with neither
-`chocolatey` nor `munki`.
+`makecatalogs -check` reports an entry with no `display_name`, with none of
+`sofcat`, `munki` and `script`, or with a `script` key other than `windows`
+or `darwin`, an empty script, or a `darwin` script that does not start with
+`#!`.
+
+A zip item still does not run `preinstall_script`, `postinstall_script`,
+`preuninstall_script`, `postuninstall_script` or `check.script`. Only the
+`depends_check` scripts run for it.
 
 ## The archive
 

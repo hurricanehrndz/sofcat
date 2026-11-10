@@ -32,13 +32,20 @@ ColorPrinter:
     installing: Adding printer…
     installed: Printer added
     pending_install: Printer will be added
-  # requires_software: software the item needs and sofcat never installs.
+  # depends_check: software the item needs and sofcat does not install for it.
   # While any entry is missing on this OS, installs and updates are deferred
-  # (missing_software). macOS checks munki, Windows checks chocolatey.
-  requires_software:
+  # (missing_software). An entry is present when any check that applies on
+  # this OS passes: sofcat (a catalog item name, every OS), munki (a Munki item
+  # name, macOS) or script (windows: PowerShell as SYSTEM; darwin: runs as
+  # root, must start with #!). Exit 0 means present.
+  depends_check:
     - display_name: Print Spooler Tools
-      chocolatey: print-spooler-tools
+      sofcat: print-spooler-tools
       munki: PrintSpoolerTools
+      script:
+        windows: |
+          if (Get-Command print-spooler-tools -ErrorAction SilentlyContinue) { exit 0 }
+          exit 1
   installer:
     hash: a8b4ff8bc7d77036644c1ed04713c550550f180e08da786fbca784818b918dac
     location: packages/colorprinter.1.0.nupkg

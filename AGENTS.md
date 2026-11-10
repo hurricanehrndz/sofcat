@@ -87,9 +87,10 @@ directory (the default `app_data_path`, SYSTEM and Administrators only
 except `Data\user-artifacts`, which Users read) and any placement of its own
 (`site/src/content/docs/reference/data-directory.md`).
 A brand with `INSTALLERS=zip` in its `brand.env` adds the `zip_only` tag to all
-three binaries, which compiles out the command installers and catalog scripts
-(`*_command.go`/`*_script.go` versus their `*_zip_only.go` twins); test that
-set with `just test-zip-only` and
+three binaries, which compiles out the command installers (`pkg/installer/installer_command.go`
+and `nupkg*.go` versus `installer_zip_only.go`); catalog scripts
+(`pkg/status/status_script.go`, `pkg/installer/script.go`) are in every build.
+Test that set with `just test-zip-only` and
 `golangci-lint run --build-tags zip_only ./...`.
 
 On a Mac, `just build-macos` builds the CLI and the per-user helper for the

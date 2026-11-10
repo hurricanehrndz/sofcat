@@ -9,11 +9,18 @@ restart_action: None
 # blocking_apps: process image names, case-insensitive, trailing `.exe` optional
 # installable_condition: install only where this expression is true; see site/src/content/docs/guides/conditions.md
 # installable_condition: arch == "amd64" && os_build >= 19045
-# requires_software: software this item needs and sofcat never installs; see site/src/content/docs/guides/zip-items.md
-# requires_software:
+# depends_check: software this item needs and sofcat does not install for it; see site/src/content/docs/guides/zip-items.md
+# depends_check:
 #   - display_name: Demo Tool   # shown in "Needs Demo Tool. Install it first, then try again."
-#     chocolatey: demo-tool     # Windows: %ProgramData%\chocolatey\lib\demo-tool exists
+#     sofcat: demo-tool         # a catalog item name, installed on this machine (every OS)
 #     munki: DemoTool           # macOS: InstalledItems in Munki's ManagedInstallReport.plist
+#     script:                   # exit 0 means present
+#       windows: |
+#         if (Get-Command demo-tool -ErrorAction SilentlyContinue) { exit 0 }
+#         exit 1
+#       darwin: |
+#         #!/bin/sh
+#         command -v demo-tool
 # A zip item (installer.type zip, with variants per placement and OS) is not
 # written by hand: makecatalogs zip-item generates it from rendered trees. See
 # site/src/content/docs/guides/zip-items.md and examples/zip-items/.
