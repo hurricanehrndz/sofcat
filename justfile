@@ -477,7 +477,7 @@ tapas_vm_dir := manual_test_dir / "tapas" / "vm"
 
 # Zip-item manual-test assets for the Tapas Test fixture brand under
 # build/manual-test/tapas/: its binaries and a repository whose zip items
-# makecatalogs zip-item packs from test/manual/fixtures/tapas/rendered, plus
+# makecatalogs zip-item packs from test/manual/fixtures/tapas/item-trees, plus
 # the hand-written package-info files in packages-info/ (an exe item the
 # zip-only brand must reject). The VM gate is test/manual/run-tapas-smoke.ps1.
 bootstrap-tapas base_url="": manual-test-server _tapas-repo
@@ -526,12 +526,12 @@ bootstrap-tapas-macos base_url="http://127.0.0.1:8080/": _require-macos manual-t
 # The Tapas fixture repository under build/manual-test/tapas/server-root,
 # without binaries: placements.yaml, its template files, the manifests and
 # the zip items makecatalogs zip-item packs from
-# test/manual/fixtures/tapas/rendered (a windows and a darwin variant per
+# test/manual/fixtures/tapas/item-trees (a windows and a darwin variant per
 # placement), plus the hand-written package-info files in packages-info/.
 _tapas-repo: (_fixture-repo tapas_fixtures tapas_server_root "packages/tapas")
 
 # A fixture directory laid out as a repository under root: placements.yaml,
-# templates/, manifests/, the zip items packed from items/ and rendered/ into
+# templates/, manifests/, the zip items packed from items/ and item-trees/ into
 # prefix, any hand-written package-info files and the condition scripts under
 # conditions/, which makecatalogs indexes.
 _fixture-repo fixtures root prefix:
@@ -547,7 +547,7 @@ _fixture-repo fixtures root prefix:
     for item in {{quote(fixtures)}}/items/*.yaml; do \
       name=$(basename "$item" .yaml); \
       build/makecatalogs zip-item --placements {{quote(fixtures)}}/placements.yaml --item "$item" \
-        --rendered {{quote(fixtures)}}/rendered/$name --location-prefix {{prefix}} \
+        --trees {{quote(fixtures)}}/item-trees/$name --location-prefix {{prefix}} \
         -o {{quote(root)}} > {{quote(root)}}/packages-info/$name.yaml || exit 1; \
     done
     build/makecatalogs {{quote(root)}}

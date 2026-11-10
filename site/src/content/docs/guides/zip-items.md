@@ -650,7 +650,7 @@ OS computes the hash. Empty directories do not count.
 makecatalogs pack [--os darwin|windows] <dir> -o <file.zip>
 makecatalogs tree-hash [--os darwin|windows] <dir>
 makecatalogs zip-item --placements <placements.yaml> --item <item.yaml> \
-  --rendered <dir> --location-prefix <prefix> -o <repo>
+  --trees <dir> --location-prefix <prefix> -o <repo>
 ```
 
 - `pack` writes the zip and prints `{"hash":"<hex>","tree_hash":"sha256:<hex>"}`.
@@ -658,12 +658,12 @@ makecatalogs zip-item --placements <placements.yaml> --item <item.yaml> \
   compare a placed tree with the catalog.
 - Without `--os`, both use the OS they run on: executable bits are kept,
   except on Windows. Pack every `windows` tree with `--os windows`.
-- `zip-item` turns rendered trees into a package-info file. `<item.yaml>` is
+- `zip-item` turns item trees into a package-info file. `<item.yaml>` is
   a package-info file without `installer`. `<dir>` holds one tree per
-  placement and OS, at `<dir>/<placement>/<darwin|windows>/`. CI renders
-  those variants with any template engine; a `.tmpl` file a tree ships is
-  rendered on the device instead (Tree templates), and `zip-item`
-  test-renders it. Each tree is packed, `windows` trees with
+  placement and OS, at `<dir>/<placement>/<darwin|windows>/`. Write the
+  trees by hand, or generate them in CI with any template engine; a `.tmpl`
+  file a tree ships is rendered on the device instead (Tree templates), and
+  `zip-item` test-renders it. Each tree is packed, `windows` trees with
   `--os windows`, to `<repo>/<prefix>/<item_name>-<version>-<12 hex of
   tree_hash>.zip`. Trees that hash the same share one zip. The package-info
   file, with `installer` filled in, goes to stdout.
@@ -684,13 +684,13 @@ nothing, when:
   `.Item.Managed` either way or with the sample user (Tree templates,
   Validation); the error names the item, the OS and the template
 
-[examples/zip-items/](https://github.com/hurricanehrndz/sofcat/tree/main/examples/zip-items) holds a rendered tree, the
+[examples/zip-items/](https://github.com/hurricanehrndz/sofcat/tree/main/examples/zip-items) holds an item tree, the
 input, and the output. To regenerate the output:
 
 ```sh
 makecatalogs zip-item --placements examples/placements.yaml \
   --item examples/zip-items/hello-world.yaml \
-  --rendered examples/zip-items/rendered/hello-world \
+  --trees examples/zip-items/item-trees/hello-world \
   --location-prefix packages/skills -o examples/zip-items/generated \
   > examples/zip-items/generated/hello-world.yaml
 ```
@@ -713,7 +713,7 @@ placements:
 
 | Field | Meaning |
 |---|---|
-| key | The placement name. Variants and rendered trees use it. |
+| key | The placement name. Variants and item trees use it. |
 | `paths` | The placement root, keyed by `darwin` and `windows`. Every placement is a directory: one tree per item at `<root>/<item_name>`. |
 | `scope` | `machine` or `user`, keyed like `paths`. An OS left out is `machine`. In `user` scope the per-user helper places the trees and writes the `files`. |
 | `applies_to` | Display names, such as `[Claude Code]`. The storefront shows a line such as "Applies to: Claude Code" for an item (see Storefront labels). Display only: it does not limit where an item is placed. |

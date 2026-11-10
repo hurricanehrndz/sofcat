@@ -22,7 +22,7 @@ restart_action: None
 #         #!/bin/sh
 #         command -v demo-tool
 # A zip item (installer.type zip, with variants per placement and OS) is not
-# written by hand: makecatalogs zip-item generates it from rendered trees. See
+# written by hand: makecatalogs zip-item generates it from item trees. See
 # site/src/content/docs/guides/zip-items.md and examples/zip-items/.
 blocking_apps:
   - hello

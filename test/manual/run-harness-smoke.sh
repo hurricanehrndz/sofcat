@@ -294,9 +294,9 @@ $(cd "$expected" && find . -type f | sed 's/^\.//')
 EOF
 	synced_scripts
 
-	# rendered/<item>/<placement>/darwin is the tree as packed; the receipt
+	# item-trees/<item>/<placement>/darwin is the tree as packed; the receipt
 	# says where the daemon placed it. The Codex model catalog is one of them.
-	for tree in "$FIXTURE"/rendered/*/*/darwin; do
+	for tree in "$FIXTURE"/item-trees/*/*/darwin; do
 		placement=$(basename "$(dirname "$tree")")
 		item=$(basename "$(dirname "$(dirname "$tree")")")
 		rc="$RECEIPT_DIR/$placement/$item.json"

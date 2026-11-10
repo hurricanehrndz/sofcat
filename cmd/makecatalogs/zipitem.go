@@ -19,7 +19,7 @@ import (
 )
 
 const zipItemUsage = `Usage: makecatalogs zip-item --placements <placements.yaml> --item <item.yaml>
-       --rendered <dir> --location-prefix <prefix> -o <out>
+       --trees <dir> --location-prefix <prefix> -o <out>
 
 Packs <dir>/<placement>/<darwin|windows>/ trees into zips under
 <out>/<prefix>/ and prints <item.yaml> with installer.type zip and its
@@ -28,7 +28,7 @@ variants filled in. It checks everything first and writes nothing on failure.
 Options:
 `
 
-// zipVariant is one rendered tree, checked and hashed, waiting to be packed.
+// zipVariant is one item tree, checked and hashed, waiting to be packed.
 type zipVariant struct {
 	placement, goos, dir, treeHash string
 }
@@ -37,18 +37,18 @@ func runZipItem(args []string, stdout, stderr io.Writer) int {
 	flags := newFlagSet("zip-item", zipItemUsage, stderr)
 	placementsPath := flags.String("placements", "", "placements.yaml (required)")
 	itemPath := flags.String("item", "", "package-info file without installer (required)")
-	rendered := flags.String("rendered", "", "rendered trees, laid out <placement>/<os>/ (required)")
+	trees := flags.String("trees", "", "item trees, laid out <placement>/<os>/ (required)")
 	prefix := flags.String("location-prefix", "", "repo-relative directory for the zips, such as packages/skills (required)")
 	out := flags.String("o", "", "repo root to write <prefix>/*.zip under (required)")
 	if _, code := parseArgs(flags, args, 0); code >= 0 {
 		return code
 	}
-	if *placementsPath == "" || *itemPath == "" || *rendered == "" || *prefix == "" || *out == "" {
+	if *placementsPath == "" || *itemPath == "" || *trees == "" || *prefix == "" || *out == "" {
 		flags.Usage()
 		return 2
 	}
 
-	info, doc, variants, err := planZipItem(*placementsPath, *itemPath, *rendered, *prefix)
+	info, doc, variants, err := planZipItem(*placementsPath, *itemPath, *trees, *prefix)
 	if err != nil {
 		return fail(stderr, err)
 	}
@@ -73,10 +73,10 @@ func runZipItem(args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
-// planZipItem checks the inputs and hashes every rendered tree without
+// planZipItem checks the inputs and hashes every item tree without
 // writing anything. It returns the item file's top-level mapping for
 // runZipItem to complete.
-func planZipItem(placementsPath, itemPath, rendered, prefix string) (admin.PackageInfo, *yaml.Node, []zipVariant, error) {
+func planZipItem(placementsPath, itemPath, trees, prefix string) (admin.PackageInfo, *yaml.Node, []zipVariant, error) {
 	body, err := os.ReadFile(placementsPath)
 	if err != nil {
 		return admin.PackageInfo{}, nil, nil, err
@@ -97,19 +97,19 @@ func planZipItem(placementsPath, itemPath, rendered, prefix string) (admin.Packa
 		return info, nil, nil, fmt.Errorf("--location-prefix %q must be a relative slash path inside the repo", prefix)
 	}
 
-	placements, err := subdirs(rendered)
+	placements, err := subdirs(trees)
 	if err != nil {
 		return info, nil, nil, err
 	}
 	if len(placements) == 0 {
-		return info, nil, nil, fmt.Errorf("%s: no placement directories", rendered)
+		return info, nil, nil, fmt.Errorf("%s: no placement directories", trees)
 	}
 	var variants []zipVariant
 	for _, placement := range placements {
 		if _, ok := table.Placements[placement]; !ok {
-			return info, nil, nil, fmt.Errorf("%s: placement %q is not in %s", rendered, placement, placementsPath)
+			return info, nil, nil, fmt.Errorf("%s: placement %q is not in %s", trees, placement, placementsPath)
 		}
-		found, err := planPlacement(filepath.Join(rendered, placement), placement, table, info)
+		found, err := planPlacement(filepath.Join(trees, placement), placement, table, info)
 		if err != nil {
 			return info, nil, nil, err
 		}
@@ -163,7 +163,7 @@ func stripComments(n *yaml.Node) {
 }
 
 // planPlacement checks, hashes and test-renders the <os>/ trees under dir,
-// one placement's rendered output for info's item.
+// one placement's item trees for info's item.
 func planPlacement(dir, name string, table placement.Table, info admin.PackageInfo) ([]zipVariant, error) {
 	osDirs, err := subdirs(dir)
 	if err != nil {

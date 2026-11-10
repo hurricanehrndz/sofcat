@@ -1,4 +1,4 @@
-# Input to makecatalogs zip-item; just bootstrap-tapas packs rendered/tapas-desktop-managed.
+# Input to makecatalogs zip-item; just bootstrap-tapas packs item-trees/tapas-desktop-managed.
 # Its tree ships two templates (site/src/content/docs/guides/zip-items.md, "Tree templates"):
 # plugin.json.tmpl, which the managed flag renders to auto_install, and
 # .mcp.json.tmpl, which reads the assigned_user admin fact and branches on os.

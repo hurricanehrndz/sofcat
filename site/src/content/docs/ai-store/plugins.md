@@ -98,7 +98,7 @@ does that.
 A plugin's tree goes under the placement like any item's:
 
 ```
-rendered/example-plugin/acme-marketplace/darwin/
+item-trees/example-plugin/acme-marketplace/darwin/
   .claude-plugin/plugin.json
   skills/release-notes/SKILL.md
 ```

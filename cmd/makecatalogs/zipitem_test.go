@@ -47,15 +47,15 @@ func writeFiles(t *testing.T, root string, files map[string]string) string {
 }
 
 // zipItemFixture lays out a valid zip-item input in a temp dir and returns
-// it. Paths under it: placements.yaml, item.yaml, rendered/.
+// it. Paths under it: placements.yaml, item.yaml, item-trees/.
 func zipItemFixture(t *testing.T) string {
 	t.Helper()
 	return writeFiles(t, t.TempDir(), map[string]string{
 		"placements.yaml": testPlacements,
 		"item.yaml":       testItem,
-		"rendered/claude-code-skills/darwin/SKILL.md":  "claude\n",
-		"rendered/claude-code-skills/windows/SKILL.md": "claude\n",
-		"rendered/codex-skills/windows/SKILL.md":       "codex\n",
+		"item-trees/claude-code-skills/darwin/SKILL.md":  "claude\n",
+		"item-trees/claude-code-skills/windows/SKILL.md": "claude\n",
+		"item-trees/codex-skills/windows/SKILL.md":       "codex\n",
 	})
 }
 
@@ -65,7 +65,7 @@ func runZipItemIn(dir, out string) (code int, stdout, stderr string) {
 		"zip-item",
 		"--placements", filepath.Join(dir, "placements.yaml"),
 		"--item", filepath.Join(dir, "item.yaml"),
-		"--rendered", filepath.Join(dir, "rendered"),
+		"--trees", filepath.Join(dir, "item-trees"),
 		"--location-prefix", "packages/skills",
 		"-o", out,
 	}, &o, &e)
@@ -132,47 +132,47 @@ func TestZipItemRefusals(t *testing.T) {
 		}, "already has an installer"},
 		"placement not in placements.yaml": {func(t *testing.T, dir string) {
 			t.Helper()
-			writeFiles(t, dir, map[string]string{"rendered/cursor-skills/darwin/SKILL.md": "x"})
+			writeFiles(t, dir, map[string]string{"item-trees/cursor-skills/darwin/SKILL.md": "x"})
 		}, `placement "cursor-skills" is not in`},
 		"OS directory not darwin or windows": {func(t *testing.T, dir string) {
 			t.Helper()
-			writeFiles(t, dir, map[string]string{"rendered/claude-code-skills/linux/SKILL.md": "x"})
+			writeFiles(t, dir, map[string]string{"item-trees/claude-code-skills/linux/SKILL.md": "x"})
 		}, "must be darwin or windows"},
 		"placement has no path for the OS": {func(t *testing.T, dir string) {
 			t.Helper()
-			writeFiles(t, dir, map[string]string{"rendered/codex-skills/darwin/SKILL.md": "x"})
+			writeFiles(t, dir, map[string]string{"item-trees/codex-skills/darwin/SKILL.md": "x"})
 		}, "has no darwin path"},
 		"empty tree": {func(t *testing.T, dir string) {
 			t.Helper()
-			if err := os.MkdirAll(filepath.Join(dir, "rendered", "codex-skills", "windows", "empty"), 0o755); err != nil {
+			if err := os.MkdirAll(filepath.Join(dir, "item-trees", "codex-skills", "windows", "empty"), 0o755); err != nil {
 				t.Fatal(err)
 			}
-			if err := os.Remove(filepath.Join(dir, "rendered", "codex-skills", "windows", "SKILL.md")); err != nil {
+			if err := os.Remove(filepath.Join(dir, "item-trees", "codex-skills", "windows", "SKILL.md")); err != nil {
 				t.Fatal(err)
 			}
 		}, "no files"},
 		"tree wrapped in a directory named after the item": {func(t *testing.T, dir string) {
 			t.Helper()
-			if err := os.RemoveAll(filepath.Join(dir, "rendered", "codex-skills", "windows")); err != nil {
+			if err := os.RemoveAll(filepath.Join(dir, "item-trees", "codex-skills", "windows")); err != nil {
 				t.Fatal(err)
 			}
-			writeFiles(t, dir, map[string]string{"rendered/codex-skills/windows/hello/SKILL.md": "x"})
+			writeFiles(t, dir, map[string]string{"item-trees/codex-skills/windows/hello/SKILL.md": "x"})
 		}, "wrapped in a hello/ directory"},
 		"x beside x.tmpl": {func(t *testing.T, dir string) {
 			t.Helper()
-			writeFiles(t, dir, map[string]string{"rendered/codex-skills/windows/x": "shipped", "rendered/codex-skills/windows/x.tmpl": "rendered"})
+			writeFiles(t, dir, map[string]string{"item-trees/codex-skills/windows/x": "shipped", "item-trees/codex-skills/windows/x.tmpl": "rendered"})
 		}, "x.tmpl: the tree also ships x"},
 		"directory x beside x.tmpl": {func(t *testing.T, dir string) {
 			t.Helper()
-			writeFiles(t, dir, map[string]string{"rendered/codex-skills/windows/x/y": "shipped", "rendered/codex-skills/windows/x.tmpl": "rendered"})
+			writeFiles(t, dir, map[string]string{"item-trees/codex-skills/windows/x/y": "shipped", "item-trees/codex-skills/windows/x.tmpl": "rendered"})
 		}, "x.tmpl: the tree also ships a directory x"},
 		"bare .tmpl": {func(t *testing.T, dir string) {
 			t.Helper()
-			writeFiles(t, dir, map[string]string{"rendered/codex-skills/windows/.tmpl": "x"})
+			writeFiles(t, dir, map[string]string{"item-trees/codex-skills/windows/.tmpl": "x"})
 		}, ".tmpl: a template needs a name"},
 		"template reads a missing fact": {func(t *testing.T, dir string) {
 			t.Helper()
-			writeFiles(t, dir, map[string]string{"rendered/claude-code-skills/darwin/NOTE.md.tmpl": `{{ fact "missing" }}`})
+			writeFiles(t, dir, map[string]string{"item-trees/claude-code-skills/darwin/NOTE.md.tmpl": `{{ fact "missing" }}`})
 		}, `fact "missing": no such fact`},
 		"template file missing beside placements.yaml": {func(t *testing.T, dir string) {
 			t.Helper()
@@ -181,10 +181,10 @@ func TestZipItemRefusals(t *testing.T) {
 		}, `placement "codex-skills": files[0]: template_file "templates/index.json.tmpl"`},
 		"no placement directories": {func(t *testing.T, dir string) {
 			t.Helper()
-			if err := os.RemoveAll(filepath.Join(dir, "rendered")); err != nil {
+			if err := os.RemoveAll(filepath.Join(dir, "item-trees")); err != nil {
 				t.Fatal(err)
 			}
-			if err := os.Mkdir(filepath.Join(dir, "rendered"), 0o755); err != nil {
+			if err := os.Mkdir(filepath.Join(dir, "item-trees"), 0o755); err != nil {
 				t.Fatal(err)
 			}
 		}, "no placement directories"},
@@ -211,7 +211,7 @@ func TestZipItemRefusals(t *testing.T) {
 // Trees that hash the same pack to the same bytes, so they share one zip.
 func TestZipItemSharesIdenticalTrees(t *testing.T) {
 	dir := zipItemFixture(t)
-	writeFiles(t, dir, map[string]string{"rendered/codex-skills/windows/SKILL.md": "claude\n"})
+	writeFiles(t, dir, map[string]string{"item-trees/codex-skills/windows/SKILL.md": "claude\n"})
 	out := t.TempDir()
 	code, stdout, stderr := runZipItemIn(dir, out)
 	if code != 0 {
@@ -281,7 +281,7 @@ func TestZipItemRoundTripPassesCheck(t *testing.T) {
 	}
 }
 
-// The examples are generated by zip-item from the checked-in rendered tree;
+// The examples are generated by zip-item from the checked-in item tree;
 // regenerating them must reproduce them byte for byte.
 func TestExampleZipItemsMatchGenerator(t *testing.T) {
 	examples := filepath.Join("..", "..", "examples")
@@ -293,7 +293,7 @@ func TestExampleZipItemsMatchGenerator(t *testing.T) {
 		"zip-item",
 		"--placements", filepath.Join(examples, "placements.yaml"),
 		"--item", filepath.Join(itemDir, "hello-world.yaml"),
-		"--rendered", filepath.Join(itemDir, "rendered", "hello-world"),
+		"--trees", filepath.Join(itemDir, "item-trees", "hello-world"),
 		"--location-prefix", "packages/skills",
 		"-o", out,
 	}, &stdout, &stderr)
@@ -410,9 +410,9 @@ func TestZipItemChecksTemplates(t *testing.T) {
 	dir := zipItemFixture(t)
 	writeFiles(t, dir, map[string]string{
 		"placements.yaml": "check_facts: {assigned_user: jdoe}\n" + testPlacements,
-		"rendered/codex-skills/windows/NOTE.md.tmpl": `{{ .Item.Name }} {{ .Item.Version }} for {{ .User }} ({{ fact "assigned_user" }}, {{ fact "os" }}) managed={{ .Item.Managed }}` +
+		"item-trees/codex-skills/windows/NOTE.md.tmpl": `{{ .Item.Name }} {{ .Item.Version }} for {{ .User }} ({{ fact "assigned_user" }}, {{ fact "os" }}) managed={{ .Item.Managed }}` +
 			`{{ if cond "os == \"windows\" && os_build > 1" }} win{{ end }}`,
-		"rendered/claude-code-skills/darwin/.claude-plugin/plugin.json.tmpl": `{"installationPreference": {{ if .Item.Managed }}"auto_install"{{ else }}"available"{{ end }}, "user": {{ json .User }}}`,
+		"item-trees/claude-code-skills/darwin/.claude-plugin/plugin.json.tmpl": `{"installationPreference": {{ if .Item.Managed }}"auto_install"{{ else }}"available"{{ end }}, "user": {{ json .User }}}`,
 	})
 	if code, _, stderr := runZipItemIn(dir, t.TempDir()); code != 0 {
 		t.Fatalf("exit %d: %s", code, stderr)
@@ -420,7 +420,7 @@ func TestZipItemChecksTemplates(t *testing.T) {
 
 	// A fact only one managed branch reads still fails: both are rendered.
 	writeFiles(t, dir, map[string]string{
-		"rendered/claude-code-skills/darwin/.claude-plugin/plugin.json.tmpl": `{{ if .Item.Managed }}{}{{ else }}{{ fact "missing" }}{{ end }}`,
+		"item-trees/claude-code-skills/darwin/.claude-plugin/plugin.json.tmpl": `{{ if .Item.Managed }}{}{{ else }}{{ fact "missing" }}{{ end }}`,
 	})
 	out := filepath.Join(t.TempDir(), "repo")
 	code, _, stderr := runZipItemIn(dir, out)
