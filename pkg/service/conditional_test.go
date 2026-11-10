@@ -62,7 +62,7 @@ func TestListAndRunAgreeOnConditionalItems(t *testing.T) {
 	// The managed run: the same manifests and facts, through the run's list
 	// building. A user who selected every optional name gets only the
 	// authorized ones.
-	runManifests, held := manifest.Expand(raw, facts.Collect(facts.Dir(appData), false))
+	runManifests, held := manifest.Expand(raw, facts.Collect(facts.Dirs(appData), false))
 	installs, uninstalls, updates := process.Manifests(runManifests, catalogs)
 	var selfServe manifest.Item
 	for name := range catalogs[1] {

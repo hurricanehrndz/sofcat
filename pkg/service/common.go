@@ -527,7 +527,7 @@ func adminManifests(cfg config.Configuration) (manifests []manifest.Item, newCat
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	machineFacts = facts.Collect(facts.Dir(cfg.AppDataPath), false)
+	machineFacts = facts.Collect(facts.Dirs(cfg.AppDataPath), false)
 	manifests, _ = manifest.Expand(manifests, machineFacts)
 	return manifests, newCatalogs, machineFacts, nil
 }

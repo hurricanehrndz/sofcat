@@ -8,7 +8,7 @@
 # goes with the item. Every value is made up.
 #
 # makecatalogs -check renders the templates with these admin facts; on the
-# Mac conditions/10-harness-facts provides them.
+# Mac conditions/darwin/10-harness-facts provides them.
 check_facts:
   assigned_user: jdoe
   memberof: [staff, harness-beta]

@@ -258,3 +258,19 @@ func Check(condition string) error {
 	_, err := expr.Compile(condition, append(versionOptions(), expr.AllowUndefinedVariables())...)
 	return err
 }
+
+// IndexPath is where makecatalogs writes the repository's index of condition
+// scripts, relative to the repository root, and where agents fetch it.
+const IndexPath = "catalogs/conditions.yaml"
+
+// Script is one entry of that index: a condition script the repository
+// delivers to every device running OS.
+type Script struct {
+	// Path is the script's slash-separated path in the repository,
+	// conditions/<os>/<name>.
+	Path string `yaml:"path"`
+	// OS is darwin or windows.
+	OS string `yaml:"os"`
+	// SHA256 is the hex digest of the script's bytes.
+	SHA256 string `yaml:"sha256"`
+}

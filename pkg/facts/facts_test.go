@@ -40,7 +40,7 @@ func TestCollectAdminFacts(t *testing.T) {
 	}, func() conditions.Facts { return conditions.Facts{"hostname": "real"} })
 	defer restore()
 
-	facts := Collect(dir, true)
+	facts := Collect([]string{dir}, true)
 	if facts["site"] != "west" {
 		t.Errorf("site = %v, want west (the later script wins)", facts["site"])
 	}
@@ -56,7 +56,7 @@ func TestCollectAdminFacts(t *testing.T) {
 
 	// Without refresh the scripts do not run again.
 	ran = nil
-	if Collect(dir, false)["site"] != "west" || ran != nil {
+	if Collect([]string{dir}, false)["site"] != "west" || ran != nil {
 		t.Errorf("Collect without refresh ran %v", ran)
 	}
 }
@@ -64,7 +64,7 @@ func TestCollectAdminFacts(t *testing.T) {
 func TestCollectMissingDir(t *testing.T) {
 	restore := stub(t, func(string) ([]byte, error) { t.Fatal("ran a script"); return nil, nil }, func() conditions.Facts { return conditions.Facts{"arch": "amd64"} })
 	defer restore()
-	facts := Collect(filepath.Join(t.TempDir(), "absent"), true)
+	facts := Collect([]string{filepath.Join(t.TempDir(), "absent")}, true)
 	if len(facts) != 1 || facts["arch"] != "amd64" {
 		t.Errorf("facts = %v", facts)
 	}

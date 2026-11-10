@@ -335,7 +335,7 @@ daemon with the harness config yourself, for the same reason.
    directory (default the generic one) and a base URL (default
    `http://127.0.0.1:8080/`). A fixture directory holds `placements.yaml`,
    `templates/`, `manifests/` (`harness_manifest` and
-   `harness_empty_manifest`), `items/`, `item-trees/`, `conditions/` and
+   `harness_empty_manifest`), `items/`, `item-trees/`, `conditions/darwin/` and
    `cases/<case>/` with an optional `facts.json` and the expected files under
    `expected/`, mirrored by absolute path.
 2. Serve it on the Mac:
@@ -344,8 +344,9 @@ daemon with the harness config yourself, for the same reason.
    `sudo installer -pkg build/tapas-test-<version>.pkg -target /`, then
    `sudo install -m 600 -o root -g wheel build/manual-test/harness/mac/config.yaml "/Library/Application Support/Tapas Test/config.yaml"`.
 4. Gate: `sudo test/manual/run-harness-smoke.sh [fixture-dir]` must exit 0 and
-   print `HARNESS SMOKE PASSED`. It installs the fixture's condition scripts,
-   then for each case provides the facts, restarts the daemon and compares
+   print `HARNESS SMOKE PASSED`. The repository delivers the fixture's
+   condition scripts, and the smoke checks the daemon synced them. For each
+   case it provides the facts, restarts the daemon and compares
    what its startup run wrote with the expected files (`.json` parsed, others
    byte for byte), owner `root:wheel` and mode 0644, and the placed item trees
    with the fixture's by hash. Last it switches the daemon to

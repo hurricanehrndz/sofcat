@@ -95,9 +95,21 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 		return nil, fmt.Errorf("unable to retrieve placement table: %w", err)
 	}
 
+	// Bring the condition scripts the repository delivers up to date before
+	// they run, so a device's first run already has their facts. An index that
+	// cannot be fetched leaves the synced scripts as they are: an unreachable
+	// repository must not take facts away and hold every conditional item.
+	if scripts, syncErr := manifest.GetConditions(cfg); syncErr != nil {
+		slog.Warn("unable to retrieve the condition script index; keeping the synced scripts", "err", syncErr)
+	} else {
+		facts.Sync(facts.SyncedDir(cfg.AppDataPath), scripts, func(repoPath string) ([]byte, error) {
+			return manifest.GetConditionScript(cfg, repoPath)
+		})
+	}
+
 	// Decide which catalog items this machine may install (installable_condition).
 	// The run refreshes the admin condition scripts' facts.
-	machineFacts := facts.Collect(facts.Dir(cfg.AppDataPath), true)
+	machineFacts := facts.Collect(facts.Dirs(cfg.AppDataPath), true)
 	conditions.Apply(catalogs, machineFacts)
 	plan.conditions = machineFacts
 
