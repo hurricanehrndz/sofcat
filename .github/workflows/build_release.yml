@@ -40,7 +40,8 @@ jobs:
           curl -fsSL -o "$RUNNER_TEMP/jsign.jar" \
             "https://github.com/ebourg/jsign/releases/download/$JSIGN_VERSION/jsign-$JSIGN_VERSION.jar"
           echo "$JSIGN_SHA256  $RUNNER_TEMP/jsign.jar" | sha256sum -c -
-      # SIGN_CMD makes `just` sign the three executables, and embala the
+      # SIGN_CMD makes `just` sign the three executables and the two Windows
+      # makecatalogs, and embala the
       # uninstaller stub and setup.exe. Its variables expand when the command
       # runs, so the token stays out of the log. A release is never cut
       # unsigned: a missing variable or secret fails this step.
