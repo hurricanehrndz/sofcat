@@ -48,6 +48,8 @@ SOCKET="/var/run/$SLUG/$SLUG-service.sock"
 # test/manual/fixtures/tapas/brand/write-roots.yaml and placements.yaml.
 SMOKE_ROOT="$SUPPORT"
 OUTSIDE_ROOT="/Library/Application Support/tapas-test-outside"
+# The managed preferences file whose WriteRoots dictionary adds write roots.
+POLICY_PLIST="/Library/Managed Preferences/$LABEL.plist"
 MUNKI_DIR="/Library/Application Support/tapas-test-munki"
 MUNKI_REPORT="$MUNKI_DIR/ManagedInstallReport.plist"
 TIMEOUT_SEC="${TIMEOUT_SEC:-120}"
@@ -627,6 +629,70 @@ assert_failed_with InstallItem:tapas-outside-skill placement_refused "outside th
 assert_succeeded RemoveItem:tapas-outside-skill
 wait_pruned
 pass "Failed/placement_refused; $OUTSIDE_ROOT not created"
+
+# restart_daemon restarts the daemon, which reads the policy once at startup.
+restart_daemon() {
+	launchctl kickstart -k "system/$LABEL" >/dev/null || fail "could not restart system/$LABEL"
+	wait_for "system/$LABEL to be running" running
+	wait_for "the daemon to answer on $SOCKET" answers
+}
+
+# The user-scope placement outside the brand's user root, in the console
+# user's home, and its receipt.
+POLICY_USER_ROOT="$CONSOLE_HOME/.tapas-policy"
+POLICY_USER_TREE="$POLICY_USER_ROOT/skills/tapas-policy-user-skill"
+POLICY_USER_RECEIPT="$CONSOLE_HOME/Library/Application Support/$PRODUCT/receipts/policy-user-skills/tapas-policy-user-skill.json"
+policy_user_placed() { [ -f "$POLICY_USER_TREE/SKILL.md" ] && [ -f "$POLICY_USER_RECEIPT" ]; }
+agent_idle() { ! launchctl print "$AGENT_TARGET" 2>/dev/null | grep -q 'state = running'; }
+
+# rerun_helper makes the next run start the console user's helper again, by
+# forgetting the plan it was last started for and what it placed, then waits
+# for that run of the helper to end.
+rerun_helper() {
+	rm -f "$DATA_DIR/user-plan.json.started" "$USER_RECEIPT" "$POLICY_USER_RECEIPT"
+	rm -rf "$USER_TREE" "$POLICY_USER_ROOT"
+	invoke_run
+	wait_for "$CONSOLE_USER's helper to place tapas-user-plugin again" user_placed
+	wait_for "$AGENT_TARGET to finish" agent_idle
+}
+
+step "A write root from managed policy admits it after a restart"
+[ ! -e "$POLICY_PLIST" ] || fail "$POLICY_PLIST exists before the smoke wrote it (not a clean Mac?)"
+# The helper has run (it placed tapas-user-plugin) and refused this one.
+[ ! -e "$POLICY_USER_ROOT" ] || fail "$POLICY_USER_ROOT exists without the policy"
+mkdir -p "$(dirname "$POLICY_PLIST")"
+# Binary, as MDM writes managed preferences. The user root keeps ${HOME}
+# unexpanded, as an administrator would write it.
+plutil -create binary1 "$POLICY_PLIST" &&
+	plutil -insert WriteRoots -json "{\"Machine\":[\"$OUTSIDE_ROOT\"],\"User\":[\"\${HOME}/.tapas-policy\"]}" "$POLICY_PLIST" &&
+	plutil -convert binary1 "$POLICY_PLIST" || fail "could not write $POLICY_PLIST"
+chown root:wheel "$POLICY_PLIST" && chmod 644 "$POLICY_PLIST"
+restart_daemon
+assert_succeeded InstallItem:tapas-outside-skill
+assert_placed "$OUTSIDE_ROOT/skills" outside-skills tapas-outside-skill
+assert_succeeded RemoveItem:tapas-outside-skill
+wait_removed "$OUTSIDE_ROOT/skills" outside-skills tapas-outside-skill
+wait_pruned
+pass "placed under $OUTSIDE_ROOT/skills with the policy, then removed"
+
+step "The helper places under a user root from managed policy"
+rerun_helper
+policy_user_placed || fail "$POLICY_USER_TREE or its receipt is missing with the policy's user root"
+[ "$(stat -f %u "$POLICY_USER_TREE/SKILL.md")" = "$CONSOLE_UID" ] || fail "$POLICY_USER_TREE is not $CONSOLE_USER's"
+pass "$POLICY_USER_TREE placed by $CONSOLE_USER's helper"
+
+step "A policy file others can write is ignored"
+chmod 666 "$POLICY_PLIST"
+restart_daemon
+assert_failed_with InstallItem:tapas-outside-skill placement_refused "outside the write roots"
+assert_succeeded RemoveItem:tapas-outside-skill
+wait_pruned
+rerun_helper
+[ ! -e "$POLICY_USER_ROOT" ] || fail "the helper placed under $POLICY_USER_ROOT with $POLICY_PLIST at mode 666"
+rm -f "$POLICY_PLIST"
+rm -rf "$OUTSIDE_ROOT"
+restart_daemon
+pass "service and helper refuse with $POLICY_PLIST at mode 666; file removed"
 
 # --- Scope exit -------------------------------------------------------------------
 

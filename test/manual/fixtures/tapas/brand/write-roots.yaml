@@ -1,7 +1,8 @@
 # Where the Tapas Test build may place zip items (site/src/content/docs/guides/zip-items.md). Each
 # OS's machine root covers every placement in ../placements.yaml except
 # outside-skills, which lies outside it on purpose; its user root covers the
-# user-scope ones. The two harness config directories are for the harness
+# user-scope ones except policy-user-skills, likewise outside. The smokes add
+# both by managed policy. The two harness config directories are for the harness
 # fixture (../../harness/placements.yaml), which this brand also runs.
 darwin:
   - /Library/Application Support/Tapas Test

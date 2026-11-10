@@ -49,6 +49,15 @@ To ship SofCat under your own name, icon, service and installer instead,
 build a rebrand from
 [`examples/brand/`](https://github.com/hurricanehrndz/sofcat/tree/main/examples/brand).
 
+## Write roots
+
+Zip items are placed only under write roots, which the build sets. Policy can
+add more, never through `config.yaml`: on Windows the `REG_MULTI_SZ` values
+`Machine` and `User` under `HKLM\SOFTWARE\Policies\SofCat\WriteRoots`, on
+macOS the `WriteRoots` dictionary in
+`/Library/Managed Preferences/ca.hrndz.sofcat.plist`. See
+[Write roots](/guides/zip-items/#write-roots).
+
 ## Conditions
 
 Items can be limited to machines whose facts match an expression, in a

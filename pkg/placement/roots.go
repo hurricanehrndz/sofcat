@@ -1,9 +1,9 @@
 // Package placement declares placements.yaml, the repository file that
 // defines where zip items are placed (see
 // site/src/content/docs/guides/zip-items.md), and decides where they may be
-// written: the write roots compiled into the build, and the checks every
-// placement path passes before sofcat writes under it. It is portable and
-// holds no service state, so the service and a per-user helper share it.
+// written: the write roots of the build and of managed policy, and the checks
+// every placement path passes before sofcat writes under it. It is portable
+// and holds no service state, so the service and a per-user helper share it.
 package placement
 
 import (
@@ -17,8 +17,9 @@ import (
 )
 
 // Roots are the directories a build may place trees under. They come from the
-// build only (a brand's write-roots.yaml, or the stock defaults), never from
-// runtime config or the placement table.
+// build (a brand's write-roots.yaml, or the stock defaults), plus any that
+// managed policy adds (Roots.WithPolicy, pkg/placement/policy), never from
+// config.yaml or the placement table.
 type Roots struct {
 	// Darwin and Windows are the machine-scope roots on each OS. Windows
 	// roots may use ${ProgramFiles} and ${ProgramData}.

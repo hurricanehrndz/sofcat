@@ -656,7 +656,61 @@ darwin_user: ['${HOME}/.agents']
 
 Without the file, a build uses `${ProgramData}\<NAME>` on Windows and
 `/Library/Application Support/<NAME>` on macOS, the directory holding its
-config and `Data`, and has no user roots. Runtime config cannot change them.
+config and `Data`, and has no user roots.
+
+Managed policy can add roots to any build, stock or brand. It cannot remove
+the build's. On Windows the policy is the key
+`HKLM\SOFTWARE\Policies\<NAME>\WriteRoots`, with the `REG_MULTI_SZ` values
+`Machine` and `User`:
+
+```powershell
+$key = 'HKLM:\SOFTWARE\Policies\SofCat\WriteRoots'
+New-Item -Path $key -Force
+New-ItemProperty -Path $key -Name Machine -PropertyType MultiString -Value '${ProgramData}\Acme', 'C:\Tools\Acme'
+New-ItemProperty -Path $key -Name User -PropertyType MultiString -Value '${USERPROFILE}\.claude'
+```
+
+The single quotes keep PowerShell from expanding `${ProgramData}` itself.
+
+On macOS it is the `WriteRoots` dictionary, with `Machine` and `User` arrays
+of strings, in `/Library/Managed Preferences/<IDENTIFIER>.plist`. A
+configuration profile delivers it as a payload of type `<IDENTIFIER>`:
+
+```xml
+<dict>
+  <key>PayloadType</key><string>ca.hrndz.sofcat</string>
+  <key>PayloadIdentifier</key><string>com.acme.sofcat.writeroots</string>
+  <key>PayloadUUID</key><string>5D0C6A52-0E0B-4C8E-9F43-6B1E0C4A2F10</string>
+  <key>PayloadVersion</key><integer>1</integer>
+  <key>WriteRoots</key>
+  <dict>
+    <key>Machine</key>
+    <array>
+      <string>/Library/Application Support/ClaudeCode</string>
+      <string>/etc/codex</string>
+    </array>
+    <key>User</key>
+    <array><string>${HOME}/.claude</string></array>
+  </dict>
+</dict>
+```
+
+sofcat reads only the machine-level file, never the per-user ones under
+`/Library/Managed Preferences/<user>`, and ignores it unless root owns it and
+neither its group nor others can write it.
+
+Policy entries follow the rules of `write-roots.yaml`: a machine root is an
+absolute path (on Windows it may use `${ProgramFiles}` and `${ProgramData}`),
+and a user root starts with `${USERPROFILE}` or `${HOME}` or is relative to
+the user's home. sofcat drops an entry that breaks them and logs a warning
+naming it; a policy it cannot read or parse adds no roots. The service and the
+per-user helper read the policy once when they start, and log the roots it
+adds, so restart the service after changing it.
+
+Writing either location takes an administrator or root. sofcat cannot tell a
+policy MDM or Group Policy delivered from one a local administrator wrote, and
+trusts both. `config.yaml` and the repository cannot add roots.
+
 sofcat resolves symlinks in a placement path, then refuses it
 (`placement_refused`) when it is outside every root for its scope, inside
 sofcat's data directory, or inside, equal to or around a directory holding
