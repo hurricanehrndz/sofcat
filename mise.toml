@@ -11,6 +11,8 @@ yamlfmt = "0.21"
 "github:hurricanehrndz/embala" = "0.10.0"
 prek = "0.5.7"
 actionlint = "1.7.12"
+# actionlint runs it on the workflows' `run:` scripts.
+shellcheck = "0.11.0"
 
 # On Linux with nix, also load flake.nix (GTK/WebKit for the UI); see the script.
 [env]
