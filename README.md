@@ -36,7 +36,7 @@ machine gets, catalogs say what exists, and both are plain YAML.
 | | Today | Planned |
 | --- | --- | --- |
 | Agent | Windows service, macOS launchd daemon | Linux |
-| Item types | `.msi`, `.exe`, `.ps1`, `.nupkg` (runs the package's own scripts, see [Nupkg items](site/src/content/docs/guides/nupkg-items.md)), zip items (directory trees such as AI skills and plugins) | Files and scripts on any platform, native packages |
+| Item types | `.msi`, `.exe`, `.ps1`, `.nupkg` (runs the package's own scripts, see [Nupkg items](site/src/content/docs/guides/nupkg-items.md)), zip items (directory trees, from wallpapers to AI skills and plugins) | Files and scripts on any platform, native packages |
 | Self-service app | Windows, macOS | Linux |
 | `makecatalogs` | Linux, macOS, Windows | |
 
@@ -55,7 +55,7 @@ What already works:
 - **Installable conditions.** An item can require an architecture, Windows
   build, model or a fact your own scripts provide, as with Munki's
   `installable_condition`. See [Installable conditions](site/src/content/docs/guides/conditions.md).
-- **Zip items.** Package directory trees, such as AI skills, as deterministic
+- **Zip items.** Package directory trees, from wallpapers to AI skills, as deterministic
   zips with `makecatalogs`. On Windows a per-user helper
   (`<slug>-useragent.exe`, started at logon and on every plan change) places them in each user's
   profile. See [Zip items](site/src/content/docs/zip-items/overview.md).

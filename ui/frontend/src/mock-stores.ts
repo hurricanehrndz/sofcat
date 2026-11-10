@@ -335,7 +335,7 @@ export const STORES: Record<StoreName, MockStore> = {
     branding: {
       title: "Acme AI Skills",
       tagline: "Skills and plugins for Claude Code and Codex, on macOS and Windows.",
-      helpUrl: "https://sofcat.app/guides/zip-items/",
+      helpUrl: "https://sofcat.app/ai-store/overview/",
       helpLabel: "Guidelines",
       accent: "#6d28d9",
       logoMime: "image/svg+xml",
