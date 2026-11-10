@@ -125,10 +125,13 @@ makecatalogs [--check] <repo_path>
   one that differs from another only by case, and warns. A duplicate item
   name within a catalog warns, and the later file wins. If nothing is left to
   write it fails and leaves `catalogs/` alone. It ignores dotfiles such as
-  `._foo.yaml`.
+  `._foo.yaml`. When the repo has fact scripts under `conditions/darwin` or
+  `conditions/windows`, it also writes their index, `catalogs/conditions.yaml`,
+  which devices sync them from.
 - `--check` validates the repo, prints what it would write, and writes
-  nothing. It fails on those warnings too, which makes it a good pull-request
-  gate for a package repo.
+  nothing. It fails on those warnings too, and on a stale
+  `catalogs/conditions.yaml`, which makes it a good pull-request gate for a
+  package repo.
 - Exit codes are `0` for success, `1` for any error (or any problem under
   `--check`) and `2` for a usage error.
 

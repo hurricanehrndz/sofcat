@@ -16,7 +16,7 @@
 # the real harness config paths, such as /etc/codex/config.toml. The smoke
 # saves every file already at one of them under the data directory and its
 # exit trap puts them back, pass or fail, and removes what the smoke wrote:
-# the fixture's condition scripts, the facts file and the config change. The
+# the synced condition scripts, the facts file and the config change. The
 # trap also leaves the daemon stopped, because a later run would rewrite or
 # remove the restored files. Remove the fixture brand before the Mac next
 # restarts (AGENTS.md, "Harness validation loop").
@@ -45,7 +45,8 @@ SOCKET="/var/run/$SLUG/$SLUG-service.sock"
 TIMEOUT_SEC="${TIMEOUT_SEC:-120}"
 
 RECEIPT_DIR="$DATA_DIR/receipts"
-CONDITIONS_DIR="$DATA_DIR/conditions"
+# Where the daemon keeps the condition scripts the repository delivers.
+SYNCED_DIR="$DATA_DIR/conditions-synced"
 # The generic fixture's fact script prints this file; the smoke fills it from
 # cases/<case>/facts.json. Root-only, as the data directory is.
 FACTS_FILE="$DATA_DIR/harness-facts.json"
@@ -180,9 +181,7 @@ EOF
 	if [ -f "$SAVE_DIR/config.yaml" ]; then
 		cat "$SAVE_DIR/config.yaml" >"$CONFIG" || restored=no
 	fi
-	while IFS= read -r target; do
-		[ -z "$target" ] || rm -f "$CONDITIONS_DIR/$target"
-	done <"$SAVE_DIR/condition-scripts"
+	rm -rf "$SYNCED_DIR"
 	rm -f "$FACTS_FILE"
 	if [ "$restored" = yes ]; then
 		rm -rf "$SAVE_DIR"
@@ -209,9 +208,11 @@ FIXTURE=$(cd "$FIXTURE" && pwd)
 TARGETS=$(targets)
 [ -n "$TARGETS" ] || fail "$FIXTURE/cases holds no expected file"
 [ ! -e "$SAVE_DIR" ] || fail "$SAVE_DIR exists: an earlier run did not restore the target files. Put its files/ back by hand, then remove it"
-for script in "$FIXTURE"/conditions/*; do
-	[ -f "$script" ] || fail "$FIXTURE/conditions holds no fact script"
-	[ ! -e "$CONDITIONS_DIR/$(basename "$script")" ] || fail "$CONDITIONS_DIR/$(basename "$script") exists before the smoke wrote it"
+# The facts must come from the scripts the repository delivers, so none of
+# them may already be installed by hand.
+for script in "$FIXTURE"/conditions/darwin/*; do
+	[ -f "$script" ] || fail "$FIXTURE/conditions/darwin holds no fact script"
+	[ ! -e "$DATA_DIR/conditions/$(basename "$script")" ] || fail "$DATA_DIR/conditions/$(basename "$script") is installed by hand (not a clean Mac?)"
 done
 
 # --- Save the target files ------------------------------------------------------
@@ -219,7 +220,6 @@ done
 step "Stop the daemon and save the files at the target paths"
 stop_daemon
 mkdir -p "$SAVE_DIR/files" || fail "could not create $SAVE_DIR"
-: >"$SAVE_DIR/condition-scripts"
 : >"$SAVE_DIR/created-dirs"
 # Until every file is saved nothing has changed, so a failure here only drops
 # the partial copies. cleanup removes target files, so it must not run yet.
@@ -242,16 +242,19 @@ EOF
 trap cleanup EXIT
 pass "$saved of $(printf '%s\n' "$TARGETS" | wc -l | tr -d ' ') target files existed; saved under $SAVE_DIR"
 
-step "Install the fixture's condition scripts, root-owned and executable"
-mkdir -p "$CONDITIONS_DIR"
-for script in "$FIXTURE"/conditions/*; do
-	name=$(basename "$script")
-	printf '%s\n' "$name" >>"$SAVE_DIR/condition-scripts"
-	cp "$script" "$CONDITIONS_DIR/$name" || fail "could not install $name"
-	chown root:wheel "$CONDITIONS_DIR/$name"
-	chmod 0755 "$CONDITIONS_DIR/$name"
-done
-pass "$(tr '\n' ' ' <"$SAVE_DIR/condition-scripts")in $CONDITIONS_DIR"
+# synced_scripts asserts the daemon synced every fact script of the fixture
+# from the repository: the same bytes, root-owned and 0755, which the macOS
+# script rule needs before it runs one.
+synced_scripts() {
+	for script in "$FIXTURE"/conditions/darwin/*; do
+		synced="$SYNCED_DIR/$(basename "$script")"
+		[ -f "$synced" ] || fail "$synced was not synced from the repository; see $DATA_DIR/sofcat.log"
+		cmp -s "$script" "$synced" || fail "$synced differs from $script"
+		perm=$(stat -f '%Su %Lp' "$synced")
+		[ "$perm" = "root 755" ] || fail "$synced is $perm, want root 755"
+		pass "$synced synced from the repository, $perm"
+	done
+}
 
 # --- The cases --------------------------------------------------------------------
 
@@ -289,6 +292,7 @@ $(diff "$expected$target" "$target")"
 	done <<EOF
 $(cd "$expected" && find . -type f | sed 's/^\.//')
 EOF
+	synced_scripts
 
 	# item-trees/<item>/<placement>/darwin is the tree as packed; the receipt
 	# says where the daemon placed it. The Codex model catalog is one of them.

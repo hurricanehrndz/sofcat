@@ -1,5 +1,0 @@
-#!/bin/sh
-# Admin fact script of the generic harness fixture. run-harness-smoke.sh
-# installs it in the daemon's conditions directory and copies each case's
-# facts.json to harness-facts.json in the data directory above it.
-cat "$(dirname "$0")/../harness-facts.json"

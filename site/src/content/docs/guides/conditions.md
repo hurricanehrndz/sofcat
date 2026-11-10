@@ -181,7 +181,8 @@ standard user may not see, and a value a machine-scope template writes lands
 in a machine-wide directory every user can read.
 
 - Keys from all scripts are merged. When two scripts print the same key, the
-  later one wins.
+  later one wins. Scripts [from the repository](#scripts-from-the-repository)
+  run before the ones in this folder.
 - A built-in fact always wins over a script's key of the same name, so a
   script can't spoof `hostname`.
 - A script that exits non-zero, runs longer than 60 seconds, or prints
@@ -198,6 +199,51 @@ as well.
 The scripts run at the start of each managed run. The self-service app's
 list reuses the facts from the last run, so opening the app does not run
 them. The first list call after the service starts runs them once.
+
+### Scripts from the repository
+
+The repository can deliver the scripts itself, so nothing else has to put
+them on a device. Keep them in `conditions/` at the repository root, one
+folder per OS:
+
+```text
+conditions/
+  darwin/10-assigned-user
+  windows/10-assigned-user.ps1
+```
+
+`makecatalogs` lists them in `catalogs/conditions.yaml` with each script's
+path, OS and sha256. That index is generated: never write it by hand, and
+publish `conditions/` next to `catalogs/`. `makecatalogs -check` fails when:
+
+- the index is stale, or lists a script that is gone;
+- a file sits outside `conditions/darwin` and `conditions/windows`, or in a
+  subfolder of one;
+- a Windows script is not a `.ps1` or `.exe`;
+- two names in one folder differ only by case.
+
+A catalog cannot be named `conditions`, since the index has that file name.
+
+Every device gets every script for its OS. At the start of each managed
+run, before the scripts run, the service fetches the index and brings
+`Data\conditions-synced` up to it:
+
+- A script is fetched only when the copy on the device does not have the
+  listed sha256. The fetched bytes must have it too. On macOS the copy is
+  root-owned with mode 0755, so the rule above lets it run.
+- A script the index no longer lists is deleted. A repository with no index
+  has no scripts, so the folder is emptied.
+- A script that cannot be fetched, or fails its sha256, keeps the copy from
+  the last sync. When the index itself cannot be fetched, the folder is left
+  as it is. An unreachable repository therefore does not take facts away.
+
+The synced scripts run first, then the ones in `conditions`, each folder in
+name order. A script installed by hand wins a key both print. SofCat never
+writes to `conditions`.
+
+Whoever can publish to the repository can run code as SYSTEM or root on
+every device, as they already can through a catalog item's installer.
+Review changes to `conditions/` accordingly.
 
 ## Seeing the facts
 

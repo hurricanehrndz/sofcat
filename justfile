@@ -532,7 +532,8 @@ _tapas-repo: (_fixture-repo tapas_fixtures tapas_server_root "packages/tapas")
 
 # A fixture directory laid out as a repository under root: placements.yaml,
 # templates/, manifests/, the zip items packed from items/ and item-trees/ into
-# prefix, and any hand-written package-info files.
+# prefix, any hand-written package-info files and the condition scripts under
+# conditions/, which makecatalogs indexes.
 _fixture-repo fixtures root prefix:
     go build -ldflags "-X github.com/hurricanehrndz/sofcat/pkg/version.version={{version}}" \
         -o build/makecatalogs ./cmd/makecatalogs
@@ -542,6 +543,7 @@ _fixture-repo fixtures root prefix:
     cp -R {{quote(fixtures)}}/templates {{quote(root)}}/
     cp {{quote(fixtures)}}/manifests/*.yaml {{quote(root)}}/manifests/
     if [ -d {{quote(fixtures)}}/packages-info ]; then cp {{quote(fixtures)}}/packages-info/*.yaml {{quote(root)}}/packages-info/; fi
+    if [ -d {{quote(fixtures)}}/conditions ]; then cp -R {{quote(fixtures)}}/conditions {{quote(root)}}/; fi
     for item in {{quote(fixtures)}}/items/*.yaml; do \
       name=$(basename "$item" .yaml); \
       build/makecatalogs zip-item --placements {{quote(fixtures)}}/placements.yaml --item "$item" \

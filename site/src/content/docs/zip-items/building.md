@@ -115,4 +115,5 @@ but `zip`. Catalog scripts are in every build, so `depends_check` scripts run
 in a zip-only build. It logs the reason (`rejected by this zip-only build`) once per
 item and reason for the life of the process, the run neither installs nor
 removes the item, `ListOptionalInstalls` leaves it out and `InstallItem` refuses it with `item_not_available`. Admin
-fact scripts (`<data dir>/conditions`) still run.
+fact scripts still run, both the ones in `<data dir>/conditions` and the ones
+[the repository delivers](/guides/conditions/#scripts-from-the-repository).

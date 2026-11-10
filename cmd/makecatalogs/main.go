@@ -12,6 +12,7 @@ import (
 	"os"
 
 	"github.com/hurricanehrndz/sofcat/pkg/admin"
+	"github.com/hurricanehrndz/sofcat/pkg/conditions"
 	"github.com/hurricanehrndz/sofcat/pkg/version"
 )
 
@@ -77,6 +78,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	verb := "Wrote"
 	if *check {
 		verb = "Would write"
+		set.Problems = append(set.Problems, admin.CheckConditionsIndex(repoPath, set)...)
 	} else {
 		for _, problem := range set.Problems {
 			_, _ = fmt.Fprintln(stderr, "warning:", problem)
@@ -88,6 +90,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 	for _, name := range set.Names() {
 		_, _ = fmt.Fprintf(stdout, "%s catalogs/%s.yaml (%d items)\n", verb, name, len(set.Catalogs[name]))
+	}
+	if len(set.Conditions) > 0 {
+		_, _ = fmt.Fprintf(stdout, "%s %s (%d condition scripts)\n", verb, conditions.IndexPath, len(set.Conditions))
 	}
 
 	if *check && len(set.Problems) > 0 {
