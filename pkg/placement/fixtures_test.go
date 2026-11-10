@@ -10,6 +10,7 @@ import (
 
 	"github.com/hurricanehrndz/sofcat/pkg/conditions"
 	"github.com/hurricanehrndz/sofcat/pkg/render"
+	"go.yaml.in/yaml/v4"
 )
 
 // parseFixture parses the placements.yaml of a fixture under
@@ -31,6 +32,34 @@ func parseFixture(t *testing.T, name string) (Table, string) {
 	return table, dir
 }
 
+// itemsByPlacement maps each placement to the item_name of every item file
+// under the fixture's items/ whose placements: lists it.
+func itemsByPlacement(t *testing.T, dir string) map[string][]string {
+	t.Helper()
+	paths, err := filepath.Glob(filepath.Join(dir, "items", "*.yaml"))
+	if err != nil || len(paths) == 0 {
+		t.Fatalf("no item files under %s: %v", dir, err)
+	}
+	byPlacement := map[string][]string{}
+	for _, path := range paths {
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var item struct {
+			Name       string   `yaml:"item_name"`
+			Placements []string `yaml:"placements"`
+		}
+		if err := yaml.Unmarshal(body, &item); err != nil {
+			t.Fatalf("%s: %v", path, err)
+		}
+		for _, name := range item.Placements {
+			byPlacement[name] = append(byPlacement[name], item.Name)
+		}
+	}
+	return byPlacement
+}
+
 // The harness smoke (test/manual/run-harness-smoke.sh) compares what the
 // daemon writes on a Mac with each case's expected files. This renders the
 // same templates with the same facts on the host, so the expected files are
@@ -39,6 +68,7 @@ func parseFixture(t *testing.T, name string) (Table, string) {
 // entry a guarded darwin file, and each target file in one placement only.
 func TestHarnessFixtureCases(t *testing.T) {
 	table, dir := parseFixture(t, "harness")
+	byPlacement := itemsByPlacement(t, dir)
 	cases, err := filepath.Glob(filepath.Join(dir, "cases", "*"))
 	if err != nil || len(cases) == 0 {
 		t.Fatalf("no cases under %s: %v", dir, err)
@@ -58,11 +88,11 @@ func TestHarnessFixtureCases(t *testing.T) {
 				spec := table.Placements[name]
 				root, _ := spec.Path(Darwin)
 				ctx := render.FileContext{OS: Darwin, Scope: ScopeMachine, Placement: spec.View(name, root)}
-				trees, _ := filepath.Glob(filepath.Join(dir, "item-trees", "*", name, Darwin))
-				if len(trees) != 1 {
-					t.Fatalf("placement %q: %d items under item-trees/, want 1", name, len(trees))
+				items := byPlacement[name]
+				if len(items) != 1 {
+					t.Fatalf("placement %q: %d items under items/ list it, want 1", name, len(items))
 				}
-				item := filepath.Base(filepath.Dir(filepath.Dir(trees[0])))
+				item := items[0]
 				ctx.Items = []render.Item{{Name: item, Version: "1.0.0", Managed: true, Path: root + "/" + item}}
 				for _, f := range spec.Files {
 					out := f.Paths[Darwin]

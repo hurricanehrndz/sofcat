@@ -1,9 +1,10 @@
-# Input to makecatalogs zip-item; just bootstrap-tapas packs item-trees/tapas-user-plugin.
+# Input to makecatalogs build; just bootstrap-tapas packs item-trees/tapas-user-plugin.
 # Placed per user by the helper under the exclusive
 # tapas-user-plugins root, in its plugins items_dir, with the generated
 # index.json beside it (run-tapas-user-sync.ps1); the same in ~/.agents on
 # macOS (run-tapas-user-sync.sh).
 item_name: tapas-user-plugin
+placements: [tapas-user-plugins]
 display_name: Tapas User Plugin
 section: Plugins
 description: A managed plugin the per-user helper places in an exclusive profile directory

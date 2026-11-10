@@ -1,5 +1,6 @@
-# Input to makecatalogs zip-item; just bootstrap-tapas packs item-trees/tapas-optional-plugin.
+# Input to makecatalogs build; just bootstrap-tapas packs item-trees/tapas-optional-plugin.
 item_name: tapas-optional-plugin
+placements: [tapas-marketplace]
 display_name: Tapas Optional Plugin
 section: Plugins
 description: A self-service plugin, offered but not enabled

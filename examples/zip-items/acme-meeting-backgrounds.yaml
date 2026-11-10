@@ -1,0 +1,9 @@
+# Input to makecatalogs zip-item, like acme-wallpapers.yaml. Its tree,
+# item-trees/acme-meeting-backgrounds/, goes to a different placement, so it
+# is an item of its own.
+item_name: acme-meeting-backgrounds
+display_name: Acme Meeting Backgrounds
+description: Company backgrounds for video calls
+catalog: branding
+version: 1.0.0
+placements: [meeting-backgrounds]

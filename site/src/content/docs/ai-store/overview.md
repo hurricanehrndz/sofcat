@@ -30,9 +30,9 @@ root. The example keeps its sources like this:
 ```
 placements.yaml       where items land, and the files sofcat renders beside them
 templates/            one template per rendered file
-items/<item>.yaml     a package-info file without an installer block
-item-trees/<item>/<placement>/<darwin|windows>/
-                      the tree an item places
+items/<item>.yaml     a package-info file without an installer block, with the
+                      placements the item goes to
+item-trees/<item>/    the tree the item places, its files at the root
 manifests/            which items are managed and which are optional
 conditions/           the fact script the config templates need
 ```
@@ -42,28 +42,18 @@ conditions/           the fact script the config templates need
 
 ## Build and publish
 
-For each item, `makecatalogs zip-item` packs its trees and prints its
-package-info file with the `installer` block filled in. Then `makecatalogs`
-compiles the catalogs, and `makecatalogs -check` validates the result:
+`makecatalogs build` builds the whole repository from the source directory:
 
 ```sh
-out=public
-mkdir -p "$out/manifests" "$out/packages-info"
-cp placements.yaml "$out/"
-cp -R templates "$out/"
-cp manifests/*.yaml "$out/manifests/"
-for item in items/*.yaml; do
-  name=$(basename "$item" .yaml)
-  makecatalogs zip-item --placements placements.yaml --item "$item" \
-    --trees "item-trees/$name" --location-prefix packages/harness \
-    -o "$out" > "$out/packages-info/$name.yaml"
-done
-makecatalogs "$out"
-makecatalogs -check "$out"
+makecatalogs build . -o public --location-prefix packages/harness
 ```
 
-`placements.yaml` and `templates/` go into the published directory too. A
-device fetches both.
+It packs each item's tree for every placement the item lists, writes its
+package-info file with the `installer` block filled in, copies
+`placements.yaml`, `templates/`, `manifests/` and `conditions/`, compiles the
+catalogs and runs `makecatalogs -check` on the result. A device fetches
+`placements.yaml` and `templates/` too. `public` is wiped and rebuilt on
+every run; see [Building a repository](/zip-items/building/#building-a-repository).
 
 `-check` renders every template without a device. It needs a value for each
 fact your own scripts provide, under `check_facts` in `placements.yaml`

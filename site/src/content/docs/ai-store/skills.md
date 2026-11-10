@@ -4,8 +4,8 @@ description: Ship a skill to Claude Code and Codex as one zip item, per machine 
 ---
 
 A skill is a directory with a `SKILL.md` in it. As a zip item it needs a
-placement for each directory a tool reads skills from, and one tree per
-placement and OS.
+placement for each directory a tool reads skills from, and one tree that
+goes to all of them.
 
 ## Placements
 
@@ -37,7 +37,8 @@ per-user helper places it in each signed-in user's profile, under a
 
 ## The item
 
-The item's source is a package-info file with no `installer` block:
+The item's source is a package-info file with no `installer` block, and
+`placements` naming where it goes:
 
 ```yaml
 # items/example-skill.yaml
@@ -47,24 +48,24 @@ section: Skills
 description: A skill for Claude Code and Codex
 catalog: harness
 version: 1.0.0
+placements: [claude-code-skills, codex-skills]
 ```
 
-and one tree for each placement and OS it goes to:
+and one tree:
 
 ```
 item-trees/example-skill/
-  claude-code-skills/darwin/SKILL.md
-  claude-code-skills/windows/SKILL.md
-  codex-skills/darwin/SKILL.md
-  codex-skills/windows/SKILL.md
+  SKILL.md
 ```
 
-One item covers both tools. The trees may differ, so a skill can word its
-instructions for each tool or OS. Trees with the same contents share one zip.
-The tree holds the skill's files directly, with no `example-skill/` folder
-around them.
+One item covers both tools. The whole tree goes to every placement the item
+lists, on every OS the placement has a path for. To word a skill differently
+for each tool or OS, ship `SKILL.md.tmpl`, a
+[tree template](/zip-items/tree-templates/) that reads `.Placement.Name` and
+`.OS`. The tree holds the skill's files directly, with no `example-skill/`
+folder around them.
 
-`makecatalogs zip-item` packs the trees and writes the `installer` block
+`makecatalogs build` packs the tree and writes the `installer` block
 ([Build and publish](/ai-store/overview/#build-and-publish)).
 
 ## Changing a skill

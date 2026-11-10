@@ -15,7 +15,7 @@ refuses the tree with `placement_refused`, writes nothing, and the next run
 retries. A template whose output is empty or only whitespace writes an empty
 file for a path that does not end in `.json`, and is refused for a `.json`
 path. A tree that ships both `x` and `x.tmpl`, a file named just `.tmpl`,
-or an `x.tmpl.tmpl` is refused by `makecatalogs zip-item`, by
+or an `x.tmpl.tmpl` is refused by `makecatalogs build` and `zip-item`, by
 `makecatalogs -check` and by the device.
 
 The context is:
@@ -78,7 +78,7 @@ engine.
 
 ### Validation
 
-`makecatalogs zip-item` renders every `.tmpl` in each tree it packs, per OS
+`makecatalogs build` and `zip-item` render every `.tmpl` in each tree they pack, per OS
 variant, with `.Item.Managed` true and false, `.User` a sample name in user
 scope, and the sample built-in facts of that OS overlaid with `check_facts`
 (a template that reads `fact "assigned_user"` needs

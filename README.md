@@ -134,6 +134,9 @@ makecatalogs [--check] <repo_path>
   package repo.
 - Exit codes are `0` for success, `1` for any error (or any problem under
   `--check`) and `2` for a usage error.
+- `makecatalogs build <source> -o <out>` builds a whole repo, zip items
+  included, from item files and trees, then compiles and checks it. See
+  [Building zip items](site/src/content/docs/zip-items/building.md).
 
 Releases publish `makecatalogs-<os>-<arch>.tar.gz` (`.zip` for Windows) for
 Linux, macOS and Windows on amd64 and arm64, each holding one binary named

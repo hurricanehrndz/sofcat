@@ -1,8 +1,10 @@
 # Input to makecatalogs zip-item: a package-info file without installer.
-# zip-item adds installer.type zip and its variants; see
+# zip-item packs item-trees/acme-wallpapers/ for each placement listed under
+# placements: and adds installer.type zip and its variants; see
 # generated/acme-wallpapers.yaml and site/src/content/docs/zip-items/building.md.
 item_name: acme-wallpapers
 display_name: Acme Wallpapers
-description: Company wallpapers and meeting backgrounds
+description: Company desktop wallpapers
 catalog: branding
 version: 1.0.0
+placements: [wallpapers]
