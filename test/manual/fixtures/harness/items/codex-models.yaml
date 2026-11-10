@@ -1,4 +1,4 @@
-# Input to makecatalogs zip-item; just bootstrap-harness-macos packs rendered/codex-models.
+# Input to makecatalogs zip-item; just bootstrap-harness-macos packs item-trees/codex-models.
 item_name: codex-models
 display_name: Codex Models
 section: Harness

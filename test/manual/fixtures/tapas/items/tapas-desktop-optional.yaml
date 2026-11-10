@@ -1,4 +1,4 @@
-# Input to makecatalogs zip-item; just bootstrap-tapas packs rendered/tapas-desktop-optional.
+# Input to makecatalogs zip-item; just bootstrap-tapas packs item-trees/tapas-desktop-optional.
 # Its plugin.json.tmpl renders installationPreference from the managed flag:
 # available when placed by self-service, auto_install once the smokes' fact
 # moves it into managed_installs (manifests/tapas_manifest.yaml).

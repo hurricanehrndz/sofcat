@@ -33,7 +33,7 @@ every key.
 | [`example_catalog.yaml`](https://github.com/hurricanehrndz/sofcat/blob/main/examples/example_catalog.yaml) | A catalog as `makecatalogs` writes it: installers, checks, dependencies, action labels and required software. |
 | [`example_package-info.yaml`](https://github.com/hurricanehrndz/sofcat/blob/main/examples/example_package-info.yaml) | One item's package info, the input to `makecatalogs`. |
 | [`placements.yaml`](https://github.com/hurricanehrndz/sofcat/blob/main/examples/placements.yaml) | Placements for zip items. See [Zip items](/guides/zip-items/). |
-| [`zip-items/`](https://github.com/hurricanehrndz/sofcat/tree/main/examples/zip-items) | A zip item's source, rendered tree and generated catalog entry. |
+| [`zip-items/`](https://github.com/hurricanehrndz/sofcat/tree/main/examples/zip-items) | A zip item's source, item tree and generated catalog entry. |
 | [`brand/`](https://github.com/hurricanehrndz/sofcat/tree/main/examples/brand) | A rebrand: your own name, icon, service and installer. |
 
 ## Branding
