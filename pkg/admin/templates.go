@@ -33,7 +33,8 @@ func checkFacts(table placement.Table, goos string) conditions.Facts {
 
 // checkPlacementTemplates renders every files entry in the table for each
 // OS it has a path on, with .Items built from the catalog items that target
-// the placement, managed both ways. A template that fails is a problem; a
+// the placement, managed both ways. A rootless placement renders with no
+// root and no items, as on a device. A template that fails is a problem; a
 // repository without a usable table has none to check.
 func checkPlacementTemplates(h repoPlacements, catalogs map[string]map[string]catalog.Item) []string {
 	if !h.present || h.problem != "" {
@@ -44,24 +45,37 @@ func checkPlacementTemplates(h repoPlacements, catalogs map[string]map[string]ca
 		p := h.table.Placements[name]
 		for _, goos := range []string{placement.Darwin, placement.Windows} {
 			root, ok := p.Path(goos)
-			if !ok {
+			if !ok && !p.Rootless() {
 				continue
 			}
-			facts := checkFacts(h.table, goos)
-			ctx := render.FileContext{OS: goos, Scope: p.ScopeFor(goos), Placement: p.View(name, root)}
-			items := targetingItems(catalogs, name, p, goos, root)
-			for i, f := range p.Files {
-				out := f.Path
-				if out == "" {
-					if out, ok = f.Paths[goos]; !ok {
-						continue
-					}
-				}
-				field := fmt.Sprintf("files[%d]", i)
-				for _, err := range renderBothWays(field, f.Template, out, ctx, items, facts) {
-					problems = append(problems, fmt.Sprintf("%s: placement %q: %s %q on %s: %v", h.path, name, field, out, goos, err))
-				}
+			items := []render.Item{}
+			if !p.Rootless() {
+				items = targetingItems(catalogs, name, p, goos, root)
 			}
+			problems = append(problems, checkFileTemplates(h, name, goos, root, items)...)
+		}
+	}
+	return problems
+}
+
+// checkFileTemplates renders the files entries of placement name with a
+// path on goos, at root with items, as checkPlacementTemplates does.
+func checkFileTemplates(h repoPlacements, name, goos, root string, items []render.Item) []string {
+	p := h.table.Placements[name]
+	facts := checkFacts(h.table, goos)
+	ctx := render.FileContext{OS: goos, Scope: p.ScopeFor(goos), Placement: p.View(name, root)}
+	var problems []string
+	for i, f := range p.Files {
+		out := f.Path
+		if out == "" {
+			out = f.Paths[goos]
+		}
+		if out == "" || f.Absent() {
+			continue
+		}
+		field := fmt.Sprintf("files[%d]", i)
+		for _, err := range renderBothWays(field, f.Template, out, ctx, items, facts) {
+			problems = append(problems, fmt.Sprintf("%s: placement %q: %s %q on %s: %v", h.path, name, field, out, goos, err))
 		}
 	}
 	return problems

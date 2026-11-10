@@ -12,11 +12,14 @@ assigned to, or which groups they are in.
 These placements run on macOS in sofcat's own test loop. Nobody has tested
 the Windows config paths, so add `windows` paths at your own risk.
 
-## One placement and one item per tool
+## One placement per tool
 
-A placement file exists while its placement holds an item. So each tool gets
-a placement that lists its config files, and a small item whose only job is
-to be placed there:
+Each tool gets a placement that lists its config files. Claude Code's needs
+nothing else, so its placement is
+[rootless](/zip-items/placements/#rootless-placements): no `paths`, no item,
+and every device that reads this `placements.yaml` gets the file on every
+managed run. Codex's config points at a model catalog too big to render, so
+its placement holds an item that ships it:
 
 ```yaml
 # placements.yaml
@@ -25,9 +28,6 @@ check_facts:
   memberof: [staff, harness-beta]
 placements:
   harness-claude-code:
-    paths:
-      darwin: /Library/Application Support/Acme/harness/claude-code
-    applies_to: [Claude Code]
     files:
       - paths:
           darwin: /Library/Application Support/ClaudeCode/managed-settings.json
@@ -45,23 +45,25 @@ placements:
         template_file: templates/codex-managed-config.toml.tmpl
 ```
 
-The placement's own path is a directory under the brand's root, where the
-item's tree lands. The config files are `paths` entries outside it, which
-the build's [write roots](/ai-store/overview/#write-roots) must allow.
+The config files are `paths` entries, which the build's
+[write roots](/ai-store/overview/#write-roots) must allow. `harness-codex`'s
+own path is a directory under the brand's root, where the item's tree lands.
 
-The items are ordinary zip items. `claude-code-config` holds a README, and
-`codex-models` holds Codex's model catalog. Put both in `managed_installs`.
+`codex-models` is an ordinary zip item that holds Codex's model catalog. Put
+it in `managed_installs`. The Codex templates start with `{{ if .Items }}`:
+with the item placed, the template renders and sofcat writes the file. Take
+the item out of the manifest and the template renders nothing, so sofcat
+removes the file.
 
-Every template starts with `{{ if .Items }}`. With the item placed, the
-template renders and sofcat writes the file. Take the item out of the
-manifest and the template renders nothing, so sofcat removes the file.
+The Claude Code file has no item to follow. It stays until its entry is
+marked `ensure: absent` ([Removing a file](/zip-items/placement-files/#removing-a-file)).
+Per-device differences come from the template, through `cond` and `fact`.
 
 ## A template that picks a profile
 
 ```
 {{- /* One profile per group, in priority order: labs, beta, early. A user
        in none of them gets the default. */ -}}
-{{- if .Items }}
 {{- $profile := "default" }}
 {{- $baseURL := "https://ai.example.com/claude" }}
 {{- $model := "example-standard" }}
@@ -87,7 +89,6 @@ manifest and the template renders nothing, so sofcat removes the file.
     "deny": ["Read(./.env)"]
   }
 }
-{{- end }}
 ```
 
 `cond` evaluates a [condition expression](/guides/conditions/#expressions)
@@ -173,5 +174,7 @@ is readable by every user of the device.
   first.
 - Add every admin fact a template reads to `check_facts`, so
   `makecatalogs -check` can render it in CI.
-- Edits made on the device do not last. sofcat rewrites placement files on
-  every run.
+- Edits made on the device do not last. sofcat rewrites a placement file
+  that differs from its render on every run.
+- Dropping an entry from `placements.yaml` leaves its file on the device.
+  Mark it `ensure: absent` first, and delete it after the devices have run.

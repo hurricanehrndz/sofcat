@@ -195,6 +195,13 @@ func TestBuildRefusals(t *testing.T) {
 			t.Helper()
 			writeFiles(t, source, map[string]string{"item-trees/helo/SKILL.md": "typo\n"})
 		}, `has item_name "helo"`},
+		"item in a placement without paths": {func(t *testing.T, source string) {
+			t.Helper()
+			writeFiles(t, source, map[string]string{
+				"placements.yaml":  testPlacements + rootlessPlacement,
+				"items/hello.yaml": strings.Replace(testItem, "codex-skills]", "harness]", 1),
+			})
+		}, `placement "harness" has no paths`},
 		"item with no tree": {func(t *testing.T, source string) {
 			t.Helper()
 			if err := os.RemoveAll(filepath.Join(source, "item-trees", "hello")); err != nil {

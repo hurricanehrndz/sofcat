@@ -15,11 +15,14 @@ flag changed), sofcat rewrites them from that placement's receipts, not from
 the run, so a held or failed item keeps its entry. Every run also rewrites
 them, so a deleted or refused file is restored on the next run. The files
 have no receipts: sofcat owns them, and status and scope exit ignore them.
+A [rootless placement](/zip-items/placements/#rootless-placements) has no
+receipts and no root, and every managed run writes its files.
 
-Each entry has a template (see Templates for placement files): either
+Each entry has `ensure`, `present` (the default) or `absent`. A present
+entry has a template (see Templates for placement files): either
 `template`, the text inline, or `template_file`, the path of a file in the
-repository that holds it. Set exactly one of the two. Each entry also has
-exactly one of:
+repository that holds it. Set exactly one of the two. An absent entry has
+neither (see Removing a file). Each entry also has exactly one of:
 
 - `path`, relative to the placement root and slash-separated, written on
   every OS the placement has a path on. Every segment must be one Windows
@@ -28,13 +31,17 @@ exactly one of:
   starts with a `.` segment, which no item name has. A first segment
   starting with `.<slug>-` or `.sofcat-` is sofcat's own and refused.
 - `paths`, one path per OS, like the placement's own `paths`, for a file
-  outside the root. Its OSes must be among the placement's; an OS left out
-  gets no file. A path that resolves inside the root is held to the rules
-  for `path`. Two entries may not name the same file.
+  outside the root. Its OSes must be among the placement's, unless the
+  placement is rootless; an OS left out gets no file. A path that resolves
+  inside the root is held to the rules for `path`. Two entries may not name
+  the same file.
 
 sofcat checks and renders every entry with a path on this OS, then writes
 each through a temporary file in the same directory, creating the directory
-if needed, or removes the file when the output is empty. Each path passes the
+if needed, or removes the file when the output is empty. A file that already
+holds the output with mode 0644 is left alone, so it is not rewritten on
+every run; one edited, deleted or with another mode is written again. Each
+path passes the
 same write-root and data and binary directory checks as a placement path. An
 entry whose path is refused or whose template fails to render keeps its file
 as it was, and the other entries are still written. Set `files_atomic: true`
@@ -61,10 +68,32 @@ directory is empty again. The user sees nothing; the only sign is a warning
 in the service log. Point an exclusive user-scope placement at a directory
 nothing else uses, not at a directory another program owns.
 
+### Removing a file
+
+An empty output or `ensure: absent` removes the file, on every run where it
+exists. It works with `path` and with `paths`:
+
+```yaml
+files:
+  - paths:
+      darwin: /etc/acme/old-settings.json
+    ensure: absent
+```
+
+sofcat removes only a regular file. It never follows a symlink at the path
+to remove what it points to, and never removes a directory: anything at the
+path but a regular file is left alone and refused (`placement_refused`). A
+missing file is no failure.
+
+sofcat keeps no record of the files it wrote. An entry dropped from
+`placements.yaml` leaves its file on the device as it last was. To retire a
+file, mark its entry `ensure: absent`, let the devices run, then delete the
+entry.
+
 [Plugins and marketplaces](/ai-store/plugins/) has complete placements that
 write a marketplace catalog and a settings drop-in.
-[Config files](/ai-store/config/) writes a tool's machine-wide config the
-same way.
+[Config files](/ai-store/config/) writes a tool's machine-wide config from a
+rootless placement.
 
 ## Templates for placement files
 
@@ -113,8 +142,8 @@ The context is:
 |---|---|
 | `.OS` | `windows` or `darwin`. |
 | `.Scope` | `machine` or `user`: `user` when the per-user helper writes the file. |
-| `.Placement` | The placement the file belongs to: `.Name`, `.Root` (the expanded placement root, whichever path the file has) and `.Vars`, the placement's `vars` as written in `placements.yaml` (`.Vars.owner.name` reads a key of a map; `index .Placement.Vars "key"` reads a key that may be missing). |
-| `.Items` | The receipts of the placement, sorted by item: `.Name`, `.Version`, `.Managed`, `.Path`, `.TreeHash`, `.PlacedHash`. `{{ json .Items }}` emits them with the receipt's field names (`name`, `version`, `managed`, `path`, `tree_hash`, `placed_hash`). |
+| `.Placement` | The placement the file belongs to: `.Name`, `.Root` (the expanded placement root, whichever path the file has; empty for a rootless placement) and `.Vars`, the placement's `vars` as written in `placements.yaml` (`.Vars.owner.name` reads a key of a map; `index .Placement.Vars "key"` reads a key that may be missing). |
+| `.Items` | The receipts of the placement, none for a rootless one, sorted by item: `.Name`, `.Version`, `.Managed`, `.Path`, `.TreeHash`, `.PlacedHash`. `{{ json .Items }}` emits them with the receipt's field names (`name`, `version`, `managed`, `path`, `tree_hash`, `placed_hash`). |
 | `.User` | In user scope, the login name of the account the helper runs as, without domain, as for tree templates; empty in machine scope. |
 
 `.PlacedHash` is the hash of the tree as placed, rendered files included, so

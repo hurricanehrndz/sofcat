@@ -1,12 +1,14 @@
 package installer
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 
@@ -22,13 +24,14 @@ import (
 // helper for user scope). Each is rendered from its entry's template.
 
 // RegenerateAll regenerates every machine-scope placement in the placement
-// table that has files and a path on this OS, and returns a failed Result
-// per placement that failed. A managed run calls it once, after scope exit,
-// so a file deleted, refused or left stale by an earlier failure is restored
-// even when no tree changes. A placement whose root does not exist is
-// skipped: nothing was ever placed there, and an empty catalog would only be
-// clutter. A user-scope placement is skipped too: the service has no user to
-// expand its root for, and the per-user helper regenerates it.
+// table that has files and a path on this OS, or is rootless, and returns a
+// failed Result per placement that failed. A managed run calls it once,
+// after scope exit, so a file deleted, refused or left stale by an earlier
+// failure is restored even when no tree changes. A placement whose root does
+// not exist is skipped: nothing was ever placed there, and an empty catalog
+// would only be clutter. A rootless placement has no root and is always
+// regenerated. A user-scope placement is skipped too: the service has no
+// user to expand its root for, and the per-user helper regenerates it.
 func (z *ZipInstaller) RegenerateAll() []Result {
 	names := slices.DeleteFunc(z.Table.Names(), func(name string) bool {
 		return z.Table.Placements[name].ScopeFor(z.Guard.GOOS) == placement.ScopeUser
@@ -44,7 +47,16 @@ func (z *ZipInstaller) Regenerate(names []string) []Result {
 	var failed []Result
 	for _, name := range names {
 		spec := z.Table.Placements[name]
-		if _, ok := spec.Path(z.Guard.GOOS); !ok || !generates(spec) {
+		if !generates(spec) {
+			continue
+		}
+		if spec.Rootless() {
+			if err := z.regenerate(name); err != nil {
+				failed = append(failed, fail(Target{Placement: name}, "", err))
+			}
+			continue
+		}
+		if _, ok := spec.Path(z.Guard.GOOS); !ok {
 			continue
 		}
 		root, err := z.resolve(name, spec)
@@ -71,36 +83,29 @@ func generates(spec placement.Spec) bool {
 // this OS is resolved and rendered first. One that is refused or fails to
 // render keeps its file as it was and the rest are written, unless the
 // placement sets files_atomic, when none is. Two entries naming one file
-// stop them all. An empty render removes the file. Every write passes the
-// guard; a refused path or a failed render wraps placement.ErrRefused, and
-// the errors are joined. Apply and Remove call it after each change, so the
-// files are current at once, and RegenerateAll once per run, so a file
-// deleted or refused on one run is restored on the next.
+// stop them all. An empty render or ensure: absent removes the file
+// (removeFile). A file already holding the render is not rewritten. Every
+// write passes the guard; a refused path or a failed render wraps
+// placement.ErrRefused, and the errors are joined. Apply and Remove call it
+// after each change, so the files are current at once, and RegenerateAll
+// once per run, so a file deleted or refused on one run is restored on the
+// next. A rootless placement renders with no root and no items.
 func (z *ZipInstaller) regenerate(name string) error {
 	spec, ok := z.Table.Placements[name]
 	if !ok || !generates(spec) {
 		return nil
 	}
-	root, err := z.resolve(name, spec)
+	root, rcs, err := z.fileInputs(name, spec)
 	if err != nil {
 		return err
 	}
-	all, err := receipt.List(z.ReceiptDir)
-	if err != nil {
-		return fmt.Errorf("placement %q: unable to read receipts: %w", name, err)
-	}
-	rcs := slices.DeleteFunc(all, func(rc receipt.Receipt) bool { return rc.Placement != name })
 	ctx := z.fileContext(name, spec, root, rcs)
 
-	type output struct {
-		path string
-		data []byte
-	}
-	outputs := make([]output, 0, len(spec.Files))
+	outputs := make([]fileOutput, 0, len(spec.Files))
 	var errs []error
 	seen := map[string]bool{}
 	for i, f := range spec.Files {
-		path, ok, err := z.filePath(name, spec, f, root)
+		path, leaf, ok, err := z.filePath(name, spec, f, root)
 		if err != nil {
 			errs = append(errs, err)
 			continue
@@ -108,70 +113,178 @@ func (z *ZipInstaller) regenerate(name string) error {
 		if !ok {
 			continue
 		}
-		// Two entries writing one file would overwrite each other every run.
-		key := strings.ToLower(path)
-		if seen[key] {
-			return fmt.Errorf("%w: placement %q: %s is named by two files entries", placement.ErrRefused, name, path)
+		if !claim(seen, leaf, path) {
+			return fmt.Errorf("%w: placement %q: %s is named by two files entries", placement.ErrRefused, name, leaf)
 		}
-		seen[key] = true
+		if f.Absent() {
+			outputs = append(outputs, fileOutput{leaf: leaf})
+			continue
+		}
 		data, err := renderFile(fmt.Sprintf("files[%d]", i), f.Template, ctx, z.Facts, path)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("%w: placement %q: %w", placement.ErrRefused, name, err))
 			continue
 		}
-		outputs = append(outputs, output{path, data})
+		outputs = append(outputs, fileOutput{path, leaf, data})
 	}
 	if spec.FilesAtomic && len(errs) > 0 {
 		return errors.Join(errs...)
 	}
 	for _, o := range outputs {
-		if o.data == nil {
-			if err := os.Remove(o.path); err != nil && !errors.Is(err, fs.ErrNotExist) {
-				errs = append(errs, fmt.Errorf("placement %q: %w", name, err))
-				continue
-			}
-			slog.Info("Removed placement file: the template rendered nothing", "placement", name, "path", o.path)
-			continue
-		}
-		if err := writeFileAtomic(o.path, o.data, 0o644); err != nil {
+		if err := o.apply(name, len(rcs)); err != nil {
 			errs = append(errs, fmt.Errorf("placement %q: %w", name, err))
-			continue
 		}
-		slog.Info("Wrote placement file", "placement", name, "path", o.path, "items", len(rcs))
 	}
 	return errors.Join(errs...)
 }
 
-// filePath resolves and checks where files entry f of placement name is
-// written on this OS: under root for a relative path, else its own path
-// here. ok is false when the entry has no path on this OS.
-func (z *ZipInstaller) filePath(name string, spec placement.Spec, f placement.File, root string) (path string, ok bool, err error) {
+// fileInputs returns placement name's resolved root and its receipts, what
+// its files render from. A rootless placement has neither.
+func (z *ZipInstaller) fileInputs(name string, spec placement.Spec) (string, []receipt.Receipt, error) {
+	if spec.Rootless() {
+		return "", nil, nil
+	}
+	root, err := z.resolve(name, spec)
+	if err != nil {
+		return "", nil, err
+	}
+	all, err := receipt.List(z.ReceiptDir)
+	if err != nil {
+		return "", nil, fmt.Errorf("placement %q: unable to read receipts: %w", name, err)
+	}
+	return root, slices.DeleteFunc(all, func(rc receipt.Receipt) bool { return rc.Placement != name }), nil
+}
+
+// claim records the paths a files entry names in seen, its leaf and,
+// through a symlink, maybe another path, and reports false when an earlier
+// entry named one: two entries writing one file would overwrite each other
+// every run.
+func claim(seen map[string]bool, leaf, path string) bool {
+	keys := []string{strings.ToLower(leaf), strings.ToLower(path)}
+	for _, key := range keys {
+		if seen[key] {
+			return false
+		}
+	}
+	for _, key := range keys {
+		seen[key] = key != ""
+	}
+	return true
+}
+
+// fileOutput is one rendered files entry: data for path, or, when data is
+// nil, the removal of leaf.
+type fileOutput struct {
+	path, leaf string
+	data       []byte
+}
+
+// apply writes or removes o's file for placement name, rendered from items
+// receipts, logging only what changed on disk.
+func (o fileOutput) apply(name string, items int) error {
+	if o.data == nil {
+		removed, err := removeFile(o.leaf)
+		if removed {
+			slog.Info("Removed placement file", "placement", name, "path", o.leaf)
+		}
+		return err
+	}
+	if unchanged(o.path, o.data, 0o644) {
+		return nil
+	}
+	if err := writeFileAtomic(o.path, o.data, 0o644); err != nil {
+		return err
+	}
+	slog.Info("Wrote placement file", "placement", name, "path", o.path, "items", items)
+	return nil
+}
+
+// filePath resolves and checks files entry f of placement name on this OS,
+// under root for a relative path, else at its own path here: path is where
+// it is written, with every symlink resolved, and leaf where it is removed,
+// with only its parent's resolved (placement.Guard.CheckLeaf). An absent
+// entry has no path. ok is false when the entry has no path on this OS.
+func (z *ZipInstaller) filePath(name string, spec placement.Spec, f placement.File, root string) (path, leaf string, ok bool, err error) {
 	scope := spec.ScopeFor(z.Guard.GOOS)
 	if f.Path != "" {
 		local := filepath.FromSlash(f.Path)
 		if !filepath.IsLocal(local) {
-			return "", false, fmt.Errorf("%w: placement %q: file %q is not a path inside the placement", placement.ErrRefused, name, f.Path)
+			return "", "", false, fmt.Errorf("%w: placement %q: file %q is not a path inside the placement", placement.ErrRefused, name, f.Path)
 		}
-		path, err = z.Guard.Check(filepath.Join(root, local), scope)
+		abs := filepath.Join(root, local)
+		leaf, err = z.Guard.CheckLeaf(abs, scope)
+		if err == nil && !f.Absent() {
+			path, err = z.Guard.Check(abs, scope)
+		}
 	} else {
 		raw, has := f.Paths[z.Guard.GOOS]
 		if !has || raw == "" {
-			return "", false, nil
+			return "", "", false, nil
 		}
-		path, err = z.Guard.Resolve(raw, scope)
+		leaf, err = z.Guard.ResolveLeaf(raw, scope)
+		if err == nil && !f.Absent() {
+			path, err = z.Guard.Resolve(raw, scope)
+		}
 	}
 	if err != nil {
-		return "", false, fmt.Errorf("placement %q: %w", name, err)
+		return "", "", false, fmt.Errorf("placement %q: %w", name, err)
 	}
 	// A path that resolves inside the root, through its own spelling or a
 	// symlink, is held to the rules for a relative path, so it never lands
-	// in an item tree or on sofcat's own entries.
-	if rel, in := z.Guard.RelativeTo(path, root); in {
-		if err := spec.CheckFile(rel); err != nil {
-			return "", false, fmt.Errorf("%w: placement %q: %w", placement.ErrRefused, name, err)
+	// in an item tree or on sofcat's own entries. A rootless placement has
+	// no root.
+	for _, p := range []string{leaf, path} {
+		if p == "" || root == "" {
+			continue
+		}
+		if rel, in := z.Guard.RelativeTo(p, root); in {
+			if err := spec.CheckFile(rel); err != nil {
+				return "", "", false, fmt.Errorf("%w: placement %q: %w", placement.ErrRefused, name, err)
+			}
 		}
 	}
-	return path, true, nil
+	return path, leaf, true, nil
+}
+
+// removeFile removes the regular file at path. It never follows a final
+// symlink and never removes a directory: anything at path but a regular
+// file is left alone and refused. A missing file is success. removed
+// reports whether a file was removed.
+func removeFile(path string) (removed bool, err error) {
+	info, err := os.Lstat(path)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return false, nil
+	case err != nil:
+		return false, err
+	case !info.Mode().IsRegular():
+		return false, fmt.Errorf("%w: %s is not a regular file; leaving it alone", placement.ErrRefused, path)
+	}
+	if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return false, err
+	}
+	return true, nil
+}
+
+// unchanged reports whether path is a regular file that holds data with
+// mode, so a write would change nothing. It always compares with the file
+// on disk, so an edited file is rewritten.
+func unchanged(path string, data []byte, mode fs.FileMode) bool {
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Size() != int64(len(data)) {
+		return false
+	}
+	if runtime.GOOS == "windows" {
+		// Windows keeps only a read-only bit, which writeFileAtomic clears
+		// for a writable mode.
+		if info.Mode().Perm()&0o200 != mode&0o200 {
+			return false
+		}
+	} else if info.Mode() != mode {
+		return false
+	}
+	current, err := os.ReadFile(path)
+	return err == nil && bytes.Equal(current, data)
 }
 
 // fileContext is what a placement file template of placement name sees:

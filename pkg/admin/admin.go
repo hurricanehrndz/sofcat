@@ -299,7 +299,8 @@ func checkActionLabels(path string, labels map[string]string) []string {
 
 // checkZipItem reports what makes a zip installer unusable: no variants, a
 // variant without location, hash or tree_hash, an OS other than darwin or
-// windows, or a placement that placements.yaml does not define.
+// windows, or a placement that placements.yaml does not define or that has
+// no paths.
 func checkZipItem(path string, inst catalog.InstallerItem, h repoPlacements) []string {
 	var problems []string
 	if len(inst.Variants) == 0 {
@@ -316,8 +317,13 @@ func checkZipItem(path string, inst catalog.InstallerItem, h repoPlacements) []s
 	for _, name := range placements {
 		// An invalid table is reported once on its own; checking names
 		// against it would only add noise.
-		if _, ok := h.table.Placements[name]; h.present && h.problem == "" && !ok {
-			problems = append(problems, fmt.Sprintf("%s: variant placement %q is not in placements.yaml", path, name))
+		if p, ok := h.table.Placements[name]; h.present && h.problem == "" {
+			switch {
+			case !ok:
+				problems = append(problems, fmt.Sprintf("%s: variant placement %q is not in placements.yaml", path, name))
+			case p.Rootless():
+				problems = append(problems, fmt.Sprintf("%s: variant placement %q has no paths, so it holds no item trees", path, name))
+			}
 		}
 		for goos, v := range inst.Variants[name] {
 			if goos != placement.Darwin && goos != placement.Windows {

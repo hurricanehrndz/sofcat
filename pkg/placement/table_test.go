@@ -27,14 +27,18 @@ func TestExampleTableParses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var files, itemsDir, vars bool
+	var files, itemsDir, vars, rootless, absent bool
 	for _, p := range table.Placements {
 		files = files || len(p.Files) > 0
 		itemsDir = itemsDir || p.ItemsDir != ""
 		vars = vars || p.Vars != nil
+		rootless = rootless || p.Rootless()
+		for _, f := range p.Files {
+			absent = absent || f.Absent()
+		}
 	}
-	if !files || !itemsDir || !vars {
-		t.Errorf("example shows files=%v items_dir=%v vars=%v, want all", files, itemsDir, vars)
+	if !files || !itemsDir || !vars || !rootless || !absent {
+		t.Errorf("example shows files=%v items_dir=%v vars=%v rootless=%v absent=%v, want all", files, itemsDir, vars, rootless, absent)
 	}
 }
 
@@ -180,7 +184,19 @@ placements:
 		"unknown top-level field": {"placement: {}\n", "placement"},
 		"no paths": {`
 placements:
-  p: {exclusive: true}`, "no paths"},
+  p: {vars: {a: b}}`, "needs paths or files"},
+		"rootless with exclusive": {`
+placements:
+  p: {exclusive: true, files: [{paths: {darwin: /x}, template: x}]}`, "exclusive: set without paths"},
+		"rootless with items_dir": {`
+placements:
+  p: {items_dir: plugins, files: [{paths: {darwin: /x}, template: x}]}`, "items_dir: set without paths"},
+		"rootless in user scope": {`
+placements:
+  p: {scope: {darwin: user}, files: [{paths: {darwin: /x}, template: x}]}`, "scope: darwin is user"},
+		"rootless with a relative files path": {`
+placements:
+  p: {files: [{path: .x, template: x}]}`, `files[0]: path ".x" needs the placement's paths`},
 		"unknown path OS": {`
 placements:
   p: {paths: {linux: /p}}`, "unknown OS"},
@@ -354,6 +370,15 @@ func TestParseRejectsFiles(t *testing.T) {
 		"path over sofcat's own files": {
 			`{paths: {darwin: /p}, files: [{path: .SOFCAT-owned, template: x}]}`, "sofcat keeps for its own files",
 		},
+		"unknown ensure": {
+			`{paths: {darwin: /p}, files: [{path: .x, ensure: gone}]}`, `files[0]: ensure: "gone", want present or absent`,
+		},
+		"absent with a template": {
+			`{paths: {darwin: /p}, files: [{path: .x, ensure: absent, template: x}]}`, "files[0]: ensure: absent takes no template",
+		},
+		"absent with a template_file": {
+			`{files: [{paths: {darwin: /x}, ensure: absent, template_file: t}]}`, "files[0]: ensure: absent takes no template",
+		},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -373,6 +398,9 @@ func TestParseAcceptsFiles(t *testing.T) {
 		"any path beside items_dir":    `{paths: {darwin: /p}, items_dir: plugins, files: [{path: catalog.toml, template: x}, {path: plugins.json, template: x}]}`,
 		"per-OS paths on a subset":     `{paths: {darwin: /p, windows: 'C:\p'}, files: [{paths: {darwin: /etc/x.json}, template: x}]}`,
 		"same path, relative and OS'd": `{paths: {darwin: /p}, files: [{path: .x, template: x}, {paths: {darwin: /p/.x}, template: y}]}`,
+		"rootless, any OS":             `{files: [{paths: {darwin: /etc/x.json, windows: 'C:\x.json'}, template: x}], files_atomic: true}`,
+		"absent, either form":          `{paths: {darwin: /p}, files: [{path: .x, ensure: absent}, {paths: {darwin: /y}, ensure: absent}, {path: .z, ensure: present, template: x}]}`,
+		"rootless absent":              `{files: [{paths: {darwin: /x}, ensure: absent}]}`,
 	}
 	for name, placement := range tests {
 		t.Run(name, func(t *testing.T) {

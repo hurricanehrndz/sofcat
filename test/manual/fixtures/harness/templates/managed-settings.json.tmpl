@@ -1,6 +1,5 @@
 {{- /* One profile per group, in priority order: labs, beta, early. A user
        in none of them gets the default. */ -}}
-{{- if .Items }}
 {{- $profile := "default" }}
 {{- $baseURL := "https://ai.example.com/claude" }}
 {{- $model := "example-standard" }}
@@ -26,4 +25,3 @@
     "deny": ["Read(./.env)"]
   }
 }
-{{- end }}

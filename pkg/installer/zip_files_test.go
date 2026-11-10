@@ -588,3 +588,165 @@ func TestTemplateFileRendersLikeInline(t *testing.T) {
 		t.Errorf(".index.txt = %q", inlineText)
 	}
 }
+
+// addRootless adds rootless placement "harness" with files to z's table,
+// last in order.
+func addRootless(z *ZipInstaller, files ...placement.File) {
+	z.Table.Placements["harness"] = placement.Spec{Files: files}
+	z.Table.Order = append(z.Table.Order, "harness")
+}
+
+// TestRootlessPlacementRenders: a rootless placement's files are written on
+// every run, though no root exists to gate them, with no root and no items;
+// a refused one fails under the placement's name.
+func TestRootlessPlacementRenders(t *testing.T) {
+	z, roots := newTestZip(t)
+	settings := filepath.Join(roots, "etc", "harness", "settings.json")
+	other := placement.Darwin
+	if testOS() == placement.Darwin {
+		other = placement.Windows
+	}
+	addRootless(z,
+		placement.File{Paths: map[string]string{testOS(): settings}, Template: `{"root": {{ json .Placement.Root }}, "items": {{ len .Items }}}`},
+		placement.File{Paths: map[string]string{other: "/elsewhere.json"}, Template: "{}"},
+	)
+	if failed := z.RegenerateAll(); len(failed) != 0 {
+		t.Fatalf("RegenerateAll = %+v", failed)
+	}
+	if got := readFile(t, settings); got != "{\n  \"items\": 0,\n  \"root\": \"\"\n}\n" {
+		t.Errorf("settings.json = %q", got)
+	}
+
+	outside := filepath.Join(tempDir(t), "settings.json")
+	z.Table.Placements["harness"] = placement.Spec{Files: []placement.File{{Paths: map[string]string{testOS(): outside}, Template: "{}"}}}
+	failed := z.RegenerateAll()
+	if len(failed) != 1 || failed[0].Placement != "harness" || failed[0].Code() != report.CodePlacementRefused {
+		t.Errorf("RegenerateAll outside the roots = %+v, want one refusal for harness", failed)
+	}
+	if exists(outside) {
+		t.Error("wrote outside the write roots")
+	}
+}
+
+// TestEnsureAbsent: an absent entry removes its file on every run where it
+// exists, at a relative path as at its own, rootless or not, and a missing
+// file is no failure.
+func TestEnsureAbsent(t *testing.T) {
+	z, roots := newTestZip(t)
+	old := filepath.Join(roots, "skills", ".old.json")
+	retired := filepath.Join(roots, "etc", "retired.json")
+	spec := z.Table.Placements["skills"]
+	spec.Files = []placement.File{{Path: ".old.json", Ensure: placement.EnsureAbsent}}
+	z.Table.Placements["skills"] = spec
+	addRootless(z, placement.File{Paths: map[string]string{testOS(): retired}, Ensure: placement.EnsureAbsent})
+	for run := range 2 {
+		for _, path := range []string{old, retired} {
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if run == 0 {
+				if err := os.WriteFile(path, []byte("{}"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+		if failed := z.RegenerateAll(); len(failed) != 0 {
+			t.Fatalf("run %d: RegenerateAll = %+v", run, failed)
+		}
+		if exists(old) || exists(retired) {
+			t.Errorf("run %d: absent files kept", run)
+		}
+	}
+}
+
+// TestRemoveLeavesLinksAndDirectories: removal, absent or an empty render,
+// deletes only a regular file. A symlink stays, with its target, and so
+// does a directory, empty or not; each is refused.
+func TestRemoveLeavesLinksAndDirectories(t *testing.T) {
+	for _, absent := range []bool{true, false} {
+		for name, setup := range map[string]func(t *testing.T, path, target string){
+			"symlink": func(t *testing.T, path, target string) {
+				t.Helper()
+				if err := os.Symlink(target, path); err != nil {
+					t.Skipf("no symlinks here: %v", err)
+				}
+			},
+			"directory": func(t *testing.T, path, _ string) {
+				t.Helper()
+				if err := os.Mkdir(path, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			},
+		} {
+			t.Run(fmt.Sprintf("%s absent=%t", name, absent), func(t *testing.T) {
+				z, roots := newTestZip(t)
+				dir := filepath.Join(roots, "etc")
+				path, target := filepath.Join(dir, "x.json"), filepath.Join(dir, "target.json")
+				if err := os.MkdirAll(dir, 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(target, []byte("{}"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				setup(t, path, target)
+				f := placement.File{Paths: map[string]string{testOS(): path}, Template: `{{ if false }}{}{{ end }}`}
+				if absent {
+					f = placement.File{Paths: f.Paths, Ensure: placement.EnsureAbsent}
+				}
+				addRootless(z, f)
+				failed := z.RegenerateAll()
+				if len(failed) != 1 || failed[0].Code() != report.CodePlacementRefused || !strings.Contains(failed[0].Err.Error(), "not a regular file") {
+					t.Errorf("RegenerateAll = %+v, want one refusal", failed)
+				}
+				if !exists(path) || !exists(target) {
+					t.Errorf("removed: path %t, target %t", !exists(path), !exists(target))
+				}
+			})
+		}
+	}
+}
+
+// TestUnchangedFileNotRewritten: a file that already holds the render is
+// left as it is, the same file on disk, so its watchers see no change. One
+// edited, or whose mode drifted, is replaced whole.
+func TestUnchangedFileNotRewritten(t *testing.T) {
+	z, roots := newTestZip(t)
+	path := filepath.Join(roots, "etc", "settings.json")
+	addRootless(z, placement.File{Paths: map[string]string{testOS(): path}, Template: `{"a": 1}`})
+	regenerate := func(step string) os.FileInfo {
+		t.Helper()
+		if failed := z.RegenerateAll(); len(failed) != 0 {
+			t.Fatalf("%s: RegenerateAll = %+v", step, failed)
+		}
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return info
+	}
+	first := regenerate("first")
+	if again := regenerate("again"); !os.SameFile(first, again) {
+		t.Error("an unchanged file was rewritten")
+	}
+	want := readFile(t, path)
+	if err := os.WriteFile(path, []byte(`{"a": 2}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if regenerate("edited"); readFile(t, path) != want {
+		t.Errorf("edited file = %q, want %q", readFile(t, path), want)
+	}
+	if !osHasModes() {
+		return
+	}
+	if err := os.Chmod(path, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	after := regenerate("mode drift")
+	if after.Mode() != 0o644 || os.SameFile(before, after) {
+		t.Errorf("after mode drift: mode %v, same file %t; want 0644 through a rewrite", after.Mode(), os.SameFile(before, after))
+	}
+}

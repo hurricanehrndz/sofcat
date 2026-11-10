@@ -3,6 +3,7 @@ package placement
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -61,11 +62,14 @@ func itemsByPlacement(t *testing.T, dir string) map[string][]string {
 }
 
 // The harness smoke (test/manual/run-harness-smoke.sh) compares what the
-// daemon writes on a Mac with each case's expected files. This renders the
-// same templates with the same facts on the host, so the expected files are
-// known to be what the templates emit before a Mac is involved, byte for
-// byte. It also holds the fixture to its shape: one item per placement, every
-// entry a guarded darwin file, and each target file in one placement only.
+// daemon writes on a Mac with each case's expected files, then, under
+// harness_empty_manifest, with empty/expected: there only a rootless
+// placement's files remain. This renders the same templates with the same
+// facts on the host, so the expected files are known to be what the
+// templates emit before a Mac is involved, byte for byte. It also holds the
+// fixture to its shape: one item per placement with paths, none for a
+// rootless one, every entry a darwin file, and each target file in one
+// placement only.
 func TestHarnessFixtureCases(t *testing.T) {
 	table, dir := parseFixture(t, "harness")
 	byPlacement := itemsByPlacement(t, dir)
@@ -73,7 +77,8 @@ func TestHarnessFixtureCases(t *testing.T) {
 	if err != nil || len(cases) == 0 {
 		t.Fatalf("no cases under %s: %v", dir, err)
 	}
-	for _, caseDir := range cases {
+	for _, caseDir := range append(cases, filepath.Join(dir, "empty")) {
+		placed := filepath.Base(caseDir) != "empty"
 		t.Run(filepath.Base(caseDir), func(t *testing.T) {
 			body, err := os.ReadFile(filepath.Join(caseDir, "facts.json"))
 			if err != nil {
@@ -84,16 +89,18 @@ func TestHarnessFixtureCases(t *testing.T) {
 				t.Fatalf("facts.json: %v", err)
 			}
 			owner := map[string]string{}
+			written := 0
 			for _, name := range table.Names() {
 				spec := table.Placements[name]
 				root, _ := spec.Path(Darwin)
 				ctx := render.FileContext{OS: Darwin, Scope: ScopeMachine, Placement: spec.View(name, root)}
 				items := byPlacement[name]
-				if len(items) != 1 {
-					t.Fatalf("placement %q: %d items under items/ list it, want 1", name, len(items))
+				if want := map[bool]int{true: 0, false: 1}[spec.Rootless()]; len(items) != want {
+					t.Fatalf("placement %q: %d items under items/ list it, want %d", name, len(items), want)
 				}
-				item := items[0]
-				ctx.Items = []render.Item{{Name: item, Version: "1.0.0", Managed: true, Path: root + "/" + item}}
+				if placed && len(items) == 1 {
+					ctx.Items = []render.Item{{Name: items[0], Version: "1.0.0", Managed: true, Path: root + "/" + items[0]}}
+				}
 				for _, f := range spec.Files {
 					out := f.Paths[Darwin]
 					if out == "" {
@@ -112,16 +119,18 @@ func TestHarnessFixtureCases(t *testing.T) {
 						t.Fatal(err)
 					}
 					want, err := os.ReadFile(filepath.Join(caseDir, "expected", filepath.FromSlash(out)))
-					if err != nil {
+					switch {
+					case got == nil && placed:
+						t.Errorf("%s renders nothing with its item placed", out)
+					case got == nil && !errors.Is(err, fs.ErrNotExist):
+						t.Errorf("%s renders nothing, so the file is removed, but is expected (%v)", out, err)
+					case got == nil:
+					case err != nil:
 						t.Fatal(err)
-					}
-					if !bytes.Equal(got, want) {
+					case !bytes.Equal(got, want):
 						t.Errorf("%s renders\n%s\nwant\n%s", out, got, want)
-					}
-					empty := ctx
-					empty.Items = nil
-					if got, _, err := tmpl.Render(empty, facts, out); err != nil || got != nil {
-						t.Errorf("%s with nothing placed renders %q, %v; want nothing, so the file is removed", out, got, err)
+					default:
+						written++
 					}
 				}
 			}
@@ -132,8 +141,8 @@ func TestHarnessFixtureCases(t *testing.T) {
 				}
 				return nil
 			})
-			if expected != len(owner) {
-				t.Errorf("%d expected files for %d placement files", expected, len(owner))
+			if expected != written {
+				t.Errorf("%d expected files for %d written placement files", expected, written)
 			}
 		})
 	}

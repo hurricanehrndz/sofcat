@@ -90,7 +90,44 @@ func (g Guard) Check(path, scope string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("%w: %s: %w", ErrRefused, path, err)
 	}
+	if err := g.checkResolved(resolved, scope); err != nil {
+		return "", err
+	}
+	return resolved, nil
+}
 
+// ResolveLeaf is Resolve without following the final element: see
+// CheckLeaf.
+func (g Guard) ResolveLeaf(raw, scope string) (string, error) {
+	path, err := g.expand(raw, scope)
+	if err != nil {
+		return "", err
+	}
+	return g.CheckLeaf(path, scope)
+}
+
+// CheckLeaf is Check for a path that is to be removed: it resolves the
+// symlinks of the parent directory only, so a final symlink is checked and
+// returned as itself, never as its target.
+func (g Guard) CheckLeaf(path, scope string) (string, error) {
+	if !filepath.IsAbs(path) {
+		return "", fmt.Errorf("%w: %s is not an absolute path", ErrRefused, path)
+	}
+	path = filepath.Clean(path)
+	parent, err := resolve(filepath.Dir(path))
+	if err != nil {
+		return "", fmt.Errorf("%w: %s: %w", ErrRefused, path, err)
+	}
+	leaf := filepath.Join(parent, filepath.Base(path))
+	if err := g.checkResolved(leaf, scope); err != nil {
+		return "", err
+	}
+	return leaf, nil
+}
+
+// checkResolved applies Check's refusals to resolved, a path whose symlinks
+// are already resolved.
+func (g Guard) checkResolved(resolved, scope string) error {
 	inRoot := false
 	for _, raw := range g.Roots.For(g.GOOS, scope) {
 		root, err := g.root(raw, scope)
@@ -103,15 +140,15 @@ func (g Guard) Check(path, scope string) (string, error) {
 		}
 	}
 	if !inRoot {
-		return "", fmt.Errorf("%w: %s is outside the write roots for %s scope", ErrRefused, resolved, scope)
+		return fmt.Errorf("%w: %s is outside the write roots for %s scope", ErrRefused, resolved, scope)
 	}
 	if g.DataDir != "" {
 		if data, err := resolve(g.DataDir); err == nil && g.within(resolved, data) {
-			return "", fmt.Errorf("%w: %s is inside the data directory", ErrRefused, resolved)
+			return fmt.Errorf("%w: %s is inside the data directory", ErrRefused, resolved)
 		}
 		// On macOS the staged archives sit beside Data, under the stock root.
 		if staged, err := resolve(identity.UserArtifactsDirFor(g.GOOS, g.DataDir)); err == nil && g.within(resolved, staged) {
-			return "", fmt.Errorf("%w: %s is inside the user-artifacts directory", ErrRefused, resolved)
+			return fmt.Errorf("%w: %s is inside the user-artifacts directory", ErrRefused, resolved)
 		}
 	}
 	for _, dir := range g.BinaryDirs {
@@ -120,10 +157,10 @@ func (g Guard) Check(path, scope string) (string, error) {
 			continue
 		}
 		if g.within(resolved, bin) || g.within(bin, resolved) {
-			return "", fmt.Errorf("%w: %s overlaps the binary directory %s", ErrRefused, resolved, bin)
+			return fmt.Errorf("%w: %s overlaps the binary directory %s", ErrRefused, resolved, bin)
 		}
 	}
-	return resolved, nil
+	return nil
 }
 
 // root expands and resolves one write root.

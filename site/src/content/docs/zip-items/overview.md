@@ -21,7 +21,8 @@ acme-wallpapers:
 ```
 
 - `variants` maps a placement name from `placements.yaml` to an OS, `darwin` or
-  `windows`, to one zip.
+  `windows`, to one zip. A rootless placement, which only writes files, holds
+  no items and cannot be one.
 - `location` is the zip's path in the repository, `hash` its sha256 and
   `tree_hash` the tree hash of its contents.
 - The zip's root holds the item's files directly, such as `acme-blue.png`, with
@@ -43,7 +44,7 @@ complete store for Claude Code, Codex and Claude Desktop. It uses zip items to
 their full extent, with placements for skills and plugin marketplaces,
 placement files, tree templates and per-user scope.
 
-- [Placements](/zip-items/placements/): `placements.yaml`, storefront labels and write roots.
+- [Placements](/zip-items/placements/): `placements.yaml`, rootless placements, storefront labels and write roots.
 - [Placement files](/zip-items/placement-files/): files sofcat renders from a placement's receipts, and their templates.
 - [Tree templates](/zip-items/tree-templates/): files rendered inside a tree on the device.
 - [Building zip items](/zip-items/building/): packing, the tree hash, `makecatalogs` commands and checks.

@@ -29,6 +29,14 @@ placements:
     scope: {windows: user}
 `
 
+// rootlessPlacement extends testPlacements with a placement that has only a
+// file at its own path.
+const rootlessPlacement = `  harness:
+    files:
+      - paths: {darwin: /etc/harness.json}
+        template: '{}'
+`
+
 const testItem = "item_name: hello\ncatalog: skills\nversion: 1.0.0\nplacements: [claude-code-skills, codex-skills]\ndisplay_name: Hello\n"
 
 // writeFiles writes files (slash paths relative to root) and returns root.
@@ -150,7 +158,14 @@ func TestZipItemRefusals(t *testing.T) {
 				"placements.yaml": testPlacements + "  cursor-skills:\n    paths: {}\n",
 				"item.yaml":       strings.Replace(testItem, "codex-skills]", "cursor-skills]", 1),
 			})
-		}, `placement "cursor-skills": no paths`},
+		}, `placement "cursor-skills": needs paths or files`},
+		"placement without paths": {func(t *testing.T, dir string) {
+			t.Helper()
+			writeFiles(t, dir, map[string]string{
+				"placements.yaml": testPlacements + rootlessPlacement,
+				"item.yaml":       strings.Replace(testItem, "codex-skills]", "harness]", 1),
+			})
+		}, `placement "harness" has no paths, so it holds no item trees`},
 		"empty tree": {func(t *testing.T, dir string) {
 			t.Helper()
 			if err := os.MkdirAll(filepath.Join(dir, "item-tree", "empty"), 0o755); err != nil {
@@ -373,6 +388,14 @@ func TestCheckZipItems(t *testing.T) {
 		"zip item without placements.yaml": {
 			"", item("  type: zip\n  variants: {claude-code-skills: {darwin: " + variant + "}}\n"),
 			"no placements.yaml",
+		},
+		"variant placement without paths": {
+			testPlacements + rootlessPlacement, item("  type: zip\n  variants: {harness: {darwin: " + variant + "}}\n"),
+			`placement "harness" has no paths, so it holds no item trees`,
+		},
+		"template of a placement without paths": {
+			testPlacements + strings.Replace(rootlessPlacement, "'{}'", `'{{ fact "missing" }}'`, 1), chromeInfo,
+			`placement "harness": files[0] "/etc/harness.json" on darwin`,
 		},
 		"invalid placements.yaml without zip items": {
 			"placements:\n  p: {kind: directory, paths: {darwin: /p}}\n", chromeInfo, "field kind not found",

@@ -1,5 +1,6 @@
-# Manages nothing: run-harness-smoke.sh switches the daemon to it, so both
-# items leave scope and their placements' files are removed.
+# Manages nothing: run-harness-smoke.sh switches the daemon to it, so the
+# item leaves scope and its placement's files are removed. The rootless
+# placement's file stays, as empty/expected has it.
 name: harness_empty_manifest
 catalogs:
   - harness
