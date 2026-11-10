@@ -31,6 +31,12 @@ hello-world:
 - A zip item needs no `check` block and no `uninstaller`.
 
 Do not write the `installer` block by hand. `makecatalogs zip-item` writes it.
+
+This page is the reference for zip items, whatever they hold. To put them to
+work for Claude Code, Codex and Claude Desktop, with worked placements for
+skills, plugin marketplaces and config files, see
+[Build an AI store](/ai-store/overview/).
+
 ## Installing
 
 sofcat installs a zip item by placing one tree per placement for the OS it
@@ -189,86 +195,10 @@ in the service log. Point an exclusive user-scope placement at a directory
 nothing else uses, not at a tool's own directory such as
 `%USERPROFILE%\.codex`.
 
-#### A Claude Code marketplace
-
-Claude Code reads a local marketplace from a directory: a catalog at
-`.claude-plugin/marketplace.json` and one tree per plugin, here under
-`plugins/`. A managed-settings drop-in registers the marketplace and enables
-its managed plugins. This placement writes both; copy it and change the
-names and paths:
-
-```yaml
-placements:
-  acme-marketplace:
-    paths:
-      darwin: /Library/Application Support/Acme/marketplace
-      windows: ${ProgramData}\Acme\marketplace
-    applies_to: [Claude Code]
-    exclusive: true
-    items_dir: plugins
-    vars:
-      name: acme
-      owner: {name: Acme IT}
-      # renames: {old-plugin: new-plugin}
-      # allowCrossMarketplaceDependenciesOn: [other-marketplace]
-    files:
-      - path: .claude-plugin/marketplace.json
-        template: |
-          {
-            "name": {{ json .Placement.Vars.name }},
-            "owner": {{ json .Placement.Vars.owner }},
-            {{- if ne (index .Placement.Vars "renames") nil }}
-            "renames": {{ json .Placement.Vars.renames }},
-            {{- end }}
-            {{- if ne (index .Placement.Vars "allowCrossMarketplaceDependenciesOn") nil }}
-            "allowCrossMarketplaceDependenciesOn": {{ json .Placement.Vars.allowCrossMarketplaceDependenciesOn }},
-            {{- end }}
-            "plugins": [
-              {{- range $i, $p := .Items }}{{ if $i }},{{ end }}
-              {
-                "name": {{ json $p.Name }},
-                "source": {{ json (printf "./plugins/%s" $p.Name) }},
-                "version": {{ json $p.Version }},
-                "defaultEnabled": {{ $p.Managed }}
-              }
-              {{- end }}
-            ]
-          }
-      - paths:
-          darwin: /Library/Application Support/ClaudeCode/managed-settings.d/50-acme.json
-          windows: ${ProgramData}\ClaudeCode\managed-settings.d\50-acme.json
-        template: |
-          {{- if .Items }}
-          {
-            "extraKnownMarketplaces": {
-              {{ json .Placement.Vars.name }}: {"source": {"source": "directory", "path": {{ json .Placement.Root }}}}
-            },
-            "enabledPlugins": {
-              {{- $first := true }}
-              {{- range .Items }}{{ if .Managed }}{{ if not $first }},{{ end }}{{ $first = false }}
-              {{ json (printf "%s@%s" .Name $.Placement.Vars.name) }}: true
-              {{- end }}{{ end }}
-            }
-          }
-          {{- end }}
-```
-
-`vars` is free data the templates read as `.Placement.Vars`. The catalog
-copies `owner`, and `renames` and `allowCrossMarketplaceDependenciesOn` when
-`vars` sets them. The output is canonical JSON, so map keys come out sorted.
-Plugins are sorted by name. `version` is the catalog version the receipt
-records. Bump it when a plugin's files change, because a harness may not
-reload them otherwise. `defaultEnabled` is the receipt's `managed` flag:
-true when a manifest lists the item in `managed_installs`. A run updates the
-flag only for items it decides. An item held by an unknown
-`conditional_items` condition keeps its recorded flag. With no plugin left,
-the catalog still lists `"plugins": []`. The `source` of each plugin names
-`./plugins/`, the `items_dir`: change both together.
-
-In the drop-in, `path` is `.Placement.Root`, the marketplace's resolved
-path. `enabledPlugins` lists only the managed plugins, keyed
-`<plugin>@<name>`. When the marketplace holds no plugin, the template
-renders nothing and sofcat removes the file.
+[Plugins and marketplaces](/ai-store/plugins/) has complete placements that
+write a Claude Code marketplace catalog, its settings drop-in and a
+Codex-format catalog. [Config files](/ai-store/config/) writes a tool's
+machine-wide config the same way.
 
 ### Templates for placement files
 
@@ -366,67 +296,6 @@ indent, numbers kept as written, a trailing newline and no HTML escaping, so
 the bytes do not depend on the template's whitespace. Any other path is
 written as rendered. An output that is empty or only whitespace counts as
 empty, and sofcat removes the file.
-
-#### A Codex-format catalog
-
-Codex reads `.agents/plugins/marketplace.json` from a local marketplace in
-its own format. This entry writes it beside the Claude catalog above,
-with each plugin's version stamped from its placed hash so Codex reloads a
-plugin whose rendered files changed (the fixture in
-`test/manual/fixtures/tapas/placements.yaml` and `examples/placements.yaml`
-carry the same template):
-
-```yaml
-    files:
-      - path: .agents/plugins/marketplace.json
-        template: |
-          {
-            "name": {{ json .Placement.Vars.name }},
-            "interface": {"displayName": {{ json .Placement.Vars.owner.name }}},
-            "plugins": [
-              {{- range $i, $p := .Items }}{{ if $i }},{{ end }}
-              {
-                "name": {{ json $p.Name }},
-                "version": "{{ $p.Version }}+{{ slice $p.PlacedHash 7 19 }}",
-                "source": {"source": "local", "path": "./plugins/{{ $p.Name }}"},
-                "policy": {
-                  "installation": {{ if $p.Managed }}"INSTALLED_BY_DEFAULT"{{ else }}"AVAILABLE"{{ end }},
-                  "authentication": "ON_INSTALL"
-                }
-              }
-              {{- end }}
-            ]
-          }
-```
-
-`slice $p.PlacedHash 7 19` takes twelve hex digits after the `sha256:`
-prefix. With two plugins placed, one managed, the file comes out as:
-
-```json
-{
-  "interface": {
-    "displayName": "Acme IT"
-  },
-  "name": "acme",
-  "plugins": [
-    {
-      "name": "hello-plugin",
-      "policy": {
-        "authentication": "ON_INSTALL",
-        "installation": "INSTALLED_BY_DEFAULT"
-      },
-      "source": {
-        "path": "./plugins/hello-plugin",
-        "source": "local"
-      },
-      "version": "1.0.0+ffaa66a85382"
-    }
-  ]
-}
-```
-
-`codex plugin marketplace add <placement root>` then lists the plugins with
-those policies and versions.
 
 #### An index of a directory placement
 
@@ -544,50 +413,6 @@ input: a new IP address or hostname changes nothing. A record whose fact the
 machine no longer has re-renders and fails, naming the fact, until the fact
 is back.
 
-#### A Claude Desktop plugin
-
-Claude Desktop reads each organization plugin's install behaviour from
-`installationPreference` in its `.claude-plugin/plugin.json`. One template
-serves managed and self-service plugins alike (the Tapas fixture's
-`tapas-desktop-managed` and `tapas-desktop-optional` carry it):
-
-```json
-{
-  "name": {{ json .Item.Name }},
-  "version": {{ json .Item.Version }},
-  "description": "A managed Claude Desktop plugin",
-  "installationPreference": {{ if .Item.Managed }}"auto_install"{{ else }}"available"{{ end }}
-}
-```
-
-Moving the item between `optional_installs` and `managed_installs` flips
-`.Item.Managed`, and the next run re-renders `plugin.json` in place with the
-same `tree_hash` and a new `placed_hash`. sofcat knows nothing of Claude
-Desktop's values; the template does.
-
-An MCP server configuration that attributes requests to the device's user
-reads a fact an admin script provides and branches on a built-in
-(`.mcp.json.tmpl`):
-
-```json
-{
-  "mcpServers": {
-    "chatproxy": {
-      "type": "http",
-      "url": "https://chatproxy.example.com/mcp",
-      "headers": {
-        "x-litellm-api-key": "Bearer {{ fact "assigned_user" }}/claudecode",
-        "x-platform": {{ if cond "os == \"windows\"" }}"windows"{{ else }}"macos"{{ end }}
-      }
-    }
-  }
-}
-```
-
-Its record's `facts` is `{"assigned_user": "jdoe", "os": "windows"}`; a new
-`assigned_user` from the script re-renders `.mcp.json` and nothing else. In
-user scope, `{{ .User }}` gives the login name without a script.
-
 #### Rendering in CI
 
 A brand repository that renders its own variants of a tree in CI with a
@@ -603,7 +428,8 @@ engine.
 `makecatalogs zip-item` renders every `.tmpl` in each tree it packs, per OS
 variant, with `.Item.Managed` true and false, `.User` a sample name in user
 scope, and the sample built-in facts of that OS overlaid with `check_facts`
-(the `.mcp.json` above needs `check_facts: {assigned_user: jdoe}`). A
+(a template that reads `fact "assigned_user"` needs
+`check_facts: {assigned_user: jdoe}`). A
 failure fails the pack, naming the item, the OS and the template, and
 nothing is written. `makecatalogs -check` opens every zip the repository
 holds and renders its `.tmpl` entries the same way.
@@ -898,7 +724,7 @@ placements:
   tapas-marketplace:
     applies_to: [Claude Code]
     action_labels: {install: Make available, remove: Withdraw, applies_to: Works in}
-    # paths, items_dir, vars and files as above
+    # paths, items_dir, vars and files left out
 
 # packages-info/tapas-optional-plugin.yaml
 custom_action_labels: {install: Enable for me}

@@ -30,6 +30,10 @@ export default defineConfig({
           items: ["guides/zip-items", "guides/nupkg-items", "guides/conditions", "guides/osquery-inventory"],
         },
         {
+          label: "AI store",
+          items: ["ai-store/overview", "ai-store/skills", "ai-store/plugins", "ai-store/config"],
+        },
+        {
           label: "Reference",
           items: ["reference/data-directory", "reference/event-log", "reference/code-signing"],
         },

@@ -562,7 +562,7 @@ func TestClaudeTemplates(t *testing.T) {
 // to copy, so it must parse and carry the fixture's templates, which the
 // golden test above pins.
 func TestGuideShowsClaudeTemplates(t *testing.T) {
-	const guide = "../../site/src/content/docs/guides/zip-items.md"
+	const guide = "../../site/src/content/docs/ai-store/plugins.md"
 	data, err := os.ReadFile(guide)
 	if os.IsNotExist(err) {
 		t.Skipf("%s is not in this checkout", guide)
