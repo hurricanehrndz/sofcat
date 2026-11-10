@@ -117,7 +117,7 @@ placements:
   # a Codex-format catalog whose versions carry each plugin's placed hash,
   # and the managed-settings drop-in that registers the marketplace and
   # enables its managed plugins. The Claude catalog and drop-in are the
-  # zip-items guide's examples, byte for byte.
+  # AI store guide's examples (ai-store/plugins.md), byte for byte.
   tapas-marketplace:
     paths:
       darwin: /Library/Application Support/Tapas Test/marketplace
