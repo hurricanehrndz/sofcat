@@ -300,9 +300,9 @@ func TestCheckExamples(t *testing.T) {
 	examples := filepath.Join("..", "..", "examples")
 	repo := t.TempDir()
 	for src, dst := range map[string]string{
-		filepath.Join(examples, "placements.yaml"):                            "placements.yaml",
-		filepath.Join(examples, "templates", "skills-index.json.tmpl"):        filepath.Join("templates", "skills-index.json.tmpl"),
-		filepath.Join(examples, "zip-items", "generated", "hello-world.yaml"): filepath.Join("packages-info", "hello-world.yaml"),
+		filepath.Join(examples, "placements.yaml"):                                "placements.yaml",
+		filepath.Join(examples, "templates", "wallpapers-index.json.tmpl"):        filepath.Join("templates", "wallpapers-index.json.tmpl"),
+		filepath.Join(examples, "zip-items", "generated", "acme-wallpapers.yaml"): filepath.Join("packages-info", "acme-wallpapers.yaml"),
 	} {
 		body, err := os.ReadFile(src)
 		if err != nil {

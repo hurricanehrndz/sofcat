@@ -3,13 +3,13 @@ title: Placement files
 description: Files sofcat renders from a placement's receipts, and the templates that produce them.
 ---
 
-These are the files a placement's `files` list writes, such as a marketplace catalog or a settings drop-in, and the templates that render them.
+These are the files a placement's `files` list writes, such as an index of the placed packs, and the templates that render them.
 
 ## Placement files
 
 A placement may list `files`: files sofcat renders from the placement's
-receipts, such as a marketplace catalog or a settings drop-in that tells a
-harness where the trees are. After every change to the placement (an
+receipts, such as an index or a catalog that tells another tool where the
+trees are. After every change to the placement (an
 install, an upgrade, an adoption, a removal, or a receipt whose `managed`
 flag changed), sofcat rewrites them from that placement's receipts, not from
 the run, so a held or failed item keeps its entry. Every run also rewrites
@@ -59,13 +59,12 @@ their own in the root before the helper has created and marked it, the
 helper refuses that placement on every sync, for that user, until the
 directory is empty again. The user sees nothing; the only sign is a warning
 in the service log. Point an exclusive user-scope placement at a directory
-nothing else uses, not at a tool's own directory such as
-`%USERPROFILE%\.codex`.
+nothing else uses, not at a directory another program owns.
 
 [Plugins and marketplaces](/ai-store/plugins/) has complete placements that
-write a Claude Code marketplace catalog, its settings drop-in and a
-Codex-format catalog. [Config files](/ai-store/config/) writes a tool's
-machine-wide config the same way.
+write a marketplace catalog and a settings drop-in.
+[Config files](/ai-store/config/) writes a tool's machine-wide config the
+same way.
 
 ## Templates for placement files
 
@@ -83,8 +82,10 @@ A template lives inline in `placements.yaml`, as a block scalar (`|`) under
 
 ```yaml
 files:
-  - path: .claude-plugin/marketplace.json
-    template_file: templates/marketplace.json.tmpl
+  - paths:
+      darwin: /Library/Application Support/Acme/wallpapers-index.json
+      windows: ${ProgramData}\Acme\wallpapers-index.json
+    template_file: templates/wallpapers-index.json.tmpl
 ```
 
 `template_file` is a path relative to the repository root, the directory
@@ -118,7 +119,7 @@ The context is:
 
 `.PlacedHash` is the hash of the tree as placed, rendered files included, so
 a catalog template can stamp a version that changes when a rendered file
-does, for harnesses that reload a plugin only on a version change.
+does, for tools that reload a pack only on a version change.
 
 Facts are reached through functions, not a field. Three functions join
 `text/template`'s own (`printf`, `slice`, `index`, `len`, `range`, `if`,
@@ -168,30 +169,23 @@ empty, and sofcat removes the file.
 
 A file can describe any placement. The template decides with
 `{{ if .Items }}` whether the file persists with nothing placed; here the
-file is an index of the skills in `claude-code-skills`, with the OS fact:
+file is an index of the packs in `wallpapers`, with the OS fact. The entry
+is the one above; its template file, `templates/wallpapers-index.json.tmpl`,
+reads:
 
-```yaml
-  claude-code-skills:
-    paths:
-      darwin: /Library/Application Support/ClaudeCode/.claude/skills
-      windows: ${ProgramData}\ClaudeCode\.claude\skills
-    files:
-      - paths:
-          darwin: /Library/Application Support/ClaudeCode/skills-index.json
-          windows: ${ProgramData}\ClaudeCode\skills-index.json
-        template: |
-          {{- if .Items }}
-          {
-            "os": {{ json (fact "os") }},
-            "root": {{ json .Placement.Root }},
-            "skills": {{ json .Items }}
-          }
-          {{- end }}
+```
+{{- if .Items }}
+{
+  "os": {{ json (fact "os") }},
+  "root": {{ json .Placement.Root }},
+  "packs": {{ json .Items }}
+}
+{{- end }}
 ```
 
-With one skill placed the file reads
-`{"os": "windows", "root": "C:\\ProgramData\\ClaudeCode\\.claude\\skills", "skills": [{"name": "hello-world", "version": "1.0.0", "managed": true, …}]}`,
-canonically indented; when the last skill is removed the template renders
+With one pack placed the file reads
+`{"os": "windows", "root": "C:\\ProgramData\\Acme\\Wallpapers", "packs": [{"name": "acme-wallpapers", "version": "1.0.0", "managed": true, …}]}`,
+canonically indented; when the last pack is removed the template renders
 nothing and sofcat removes the file.
 
 ### check_facts

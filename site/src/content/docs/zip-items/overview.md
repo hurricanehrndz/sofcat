@@ -1,22 +1,22 @@
 ---
 title: Zip items
-description: Place directory trees such as AI skills and plugins from deterministic zips, per user or per machine.
+description: Place directory trees such as company wallpapers from deterministic zips, per user or per machine.
 ---
 
-A zip item places a directory tree, such as an AI skill or plugin, instead of
+A zip item places a directory tree, such as a pack of company wallpapers, instead of
 running an installer. The catalog lists one zip per placement and OS:
 
 ```yaml
-hello-world:
+acme-wallpapers:
   version: 1.0.0
   installer:
     type: zip
     variants:
-      claude-code-skills:
+      wallpapers:
         darwin:
-          location: packages/skills/hello-world-1.0.0-ffaa66a85382.zip
-          hash: f035805d1c8f3571a7622db7be1a968b65eb815fc7c82afcdb16926a64654e91
-          tree_hash: sha256:ffaa66a853824549c6f1e1047d0fc3ffd1d3e4c33919cfa4ce15c3d3ef94d9b0
+          location: packages/wallpapers/acme-wallpapers-1.0.0-7f654b4f9bcd.zip
+          hash: 8f1b121ca72cfda3d952aa0578f383a64837a6b67fab192dbda3e82d3e512331
+          tree_hash: sha256:7f654b4f9bcd94696c9026e404f741050a2898def06e152495e7207126bcebfd
         windows: {location: ..., hash: ..., tree_hash: ...}
 ```
 
@@ -24,7 +24,7 @@ hello-world:
   `windows`, to one zip.
 - `location` is the zip's path in the repository, `hash` its sha256 and
   `tree_hash` the tree hash of its contents.
-- The zip's root holds the item's files directly, such as `SKILL.md`, with
+- The zip's root holds the item's files directly, such as `acme-blue.png`, with
   no `<item>/` folder around them. The tree is placed at
   `<placement path>/<item_name>`, or `<placement path>/<items_dir>/<item_name>`
   when the placement sets `items_dir`.
@@ -32,10 +32,14 @@ hello-world:
 
 Do not write the `installer` block by hand. `makecatalogs zip-item` writes it.
 
-These pages are the reference for zip items, whatever they hold. To put them to
-work for Claude Code, Codex and Claude Desktop, with worked placements for
-skills, plugin marketplaces and config files, see
-[Build an AI store](/ai-store/overview/).
+These pages are the reference for zip items and use a small wallpaper example.
+sofcat only places the files; choosing a wallpaper is left to a configuration
+profile, a policy or the user.
+
+[Build an AI store](/ai-store/overview/) is the fully worked example: a
+complete store for Claude Code, Codex and Claude Desktop. It uses zip items to
+their full extent, with placements for skills and plugin marketplaces,
+placement files, tree templates and per-user scope.
 
 - [Placements](/zip-items/placements/): `placements.yaml`, storefront labels and write roots.
 - [Placement files](/zip-items/placement-files/): files sofcat renders from a placement's receipts, and their templates.
@@ -150,12 +154,12 @@ Each placed tree has a JSON receipt at
 
 ```json
 {
-  "item": "hello",
+  "item": "acme-wallpapers",
   "version": "1.0.0",
-  "placement": "claude-skills",
-  "path": "C:\\ProgramData\\Acme\\skills\\hello",
-  "tree_hash": "sha256:ffaa66a8…",
-  "placed_hash": "sha256:ffaa66a8…",
+  "placement": "wallpapers",
+  "path": "C:\\ProgramData\\Acme\\Wallpapers\\acme-wallpapers",
+  "tree_hash": "sha256:7f654b4f…",
+  "placed_hash": "sha256:7f654b4f…",
   "rendered": [],
   "managed": true,
   "installed_at_utc": "2026-11-06T12:00:00Z"

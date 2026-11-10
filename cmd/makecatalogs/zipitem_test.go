@@ -292,20 +292,20 @@ func TestExampleZipItemsMatchGenerator(t *testing.T) {
 	code := run([]string{
 		"zip-item",
 		"--placements", filepath.Join(examples, "placements.yaml"),
-		"--item", filepath.Join(itemDir, "hello-world.yaml"),
-		"--trees", filepath.Join(itemDir, "item-trees", "hello-world"),
-		"--location-prefix", "packages/skills",
+		"--item", filepath.Join(itemDir, "acme-wallpapers.yaml"),
+		"--trees", filepath.Join(itemDir, "item-trees", "acme-wallpapers"),
+		"--location-prefix", "packages/wallpapers",
 		"-o", out,
 	}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, stderr.String())
 	}
-	want, err := os.ReadFile(filepath.Join(generated, "hello-world.yaml"))
+	want, err := os.ReadFile(filepath.Join(generated, "acme-wallpapers.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if stdout.String() != string(want) {
-		t.Errorf("examples/zip-items/generated/hello-world.yaml is stale; regenerate it (see site/src/content/docs/zip-items/building.md). Got:\n%s", stdout.String())
+		t.Errorf("examples/zip-items/generated/acme-wallpapers.yaml is stale; regenerate it (see site/src/content/docs/zip-items/building.md). Got:\n%s", stdout.String())
 	}
 	// example_catalog.yaml shows the same item as a compiled catalog entry.
 	var info admin.PackageInfo
@@ -320,12 +320,12 @@ func TestExampleZipItemsMatchGenerator(t *testing.T) {
 	if err := yaml.Unmarshal(body, &exampleCatalog); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(exampleCatalog["hello-world"].Installer, info.Item.Installer) {
-		t.Errorf("examples/example_catalog.yaml hello-world installer is stale")
+	if !reflect.DeepEqual(exampleCatalog["acme-wallpapers"].Installer, info.Item.Installer) {
+		t.Errorf("examples/example_catalog.yaml acme-wallpapers installer is stale")
 	}
 
-	got, _ := filepath.Glob(filepath.Join(out, "packages", "skills", "*.zip"))
-	checkedIn, _ := filepath.Glob(filepath.Join(generated, "packages", "skills", "*.zip"))
+	got, _ := filepath.Glob(filepath.Join(out, "packages", "wallpapers", "*.zip"))
+	checkedIn, _ := filepath.Glob(filepath.Join(generated, "packages", "wallpapers", "*.zip"))
 	if len(got) != len(checkedIn) {
 		t.Fatalf("generated %d zips, %d checked in", len(got), len(checkedIn))
 	}

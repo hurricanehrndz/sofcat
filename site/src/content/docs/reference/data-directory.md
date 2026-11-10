@@ -10,7 +10,7 @@ On Windows, everything SofCat writes after install lives under
 - `config.yaml`, which management tooling writes.
 - `Data\`, the app data directory (`app_data_path` in `config.yaml`, default
   `C:\ProgramData\SofCat\Data`), which holds SofCat's state.
-- Any placement of SofCat's own, such as a marketplace, beside them: the
+- Any placement of SofCat's own, such as a wallpaper library, beside them: the
   stock write root is `${ProgramData}\SofCat`
   ([Zip items](/zip-items/placements/#write-roots)).
 

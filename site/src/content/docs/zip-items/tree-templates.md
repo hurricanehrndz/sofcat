@@ -44,13 +44,13 @@ Each rendered file gets a `rendered` record in the receipt ([Receipts](/zip-item
 
 ```json
 {
-  "file": ".mcp.json",
-  "template": ".mcp.json.tmpl",
+  "file": "pack.json",
+  "template": "pack.json.tmpl",
   "inputs": {
     "os": "windows",
     "scope": "machine",
     "user": "",
-    "item": {"name": "acme-desktop", "version": "1.0.0", "managed": true},
+    "item": {"name": "acme-wallpapers", "version": "1.0.0", "managed": true},
     "facts": {"assigned_user": "jdoe", "os": "windows"}
   }
 }

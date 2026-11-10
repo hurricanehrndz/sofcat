@@ -73,10 +73,10 @@ input, and the output. To regenerate the output:
 
 ```sh
 makecatalogs zip-item --placements examples/placements.yaml \
-  --item examples/zip-items/hello-world.yaml \
-  --trees examples/zip-items/item-trees/hello-world \
-  --location-prefix packages/skills -o examples/zip-items/generated \
-  > examples/zip-items/generated/hello-world.yaml
+  --item examples/zip-items/acme-wallpapers.yaml \
+  --trees examples/zip-items/item-trees/acme-wallpapers \
+  --location-prefix packages/wallpapers -o examples/zip-items/generated \
+  > examples/zip-items/generated/acme-wallpapers.yaml
 ```
 
 ## makecatalogs -check

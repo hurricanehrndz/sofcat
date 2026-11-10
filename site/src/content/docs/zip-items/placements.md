@@ -13,12 +13,13 @@ A placement says where a zip item's tree goes. A build may write only under its 
 
 ```yaml
 placements:
-  codex-skills:
+  meeting-backgrounds:
     paths:
-      darwin: /etc/codex/skills
-      windows: ${USERPROFILE}\.agents\skills
-    scope: {windows: user}
-    applies_to: [Codex]
+      darwin: /Library/Application Support/Acme/Meeting Backgrounds
+      windows: ${USERPROFILE}\Pictures\Acme Meeting Backgrounds
+    scope:
+      windows: user
+    applies_to: [Video calls]
 ```
 
 | Field | Meaning |
@@ -26,7 +27,7 @@ placements:
 | key | The placement name. Variants and item trees use it. |
 | `paths` | The placement root, keyed by `darwin` and `windows`. Every placement is a directory: one tree per item at `<root>/<item_name>`. |
 | `scope` | `machine` or `user`, keyed like `paths`. An OS left out is `machine`. In `user` scope the per-user helper places the trees and writes the `files`. |
-| `applies_to` | Display names, such as `[Claude Code]`. The storefront shows a line such as "Applies to: Claude Code" for an item (see Storefront labels). Display only: it does not limit where an item is placed. |
+| `applies_to` | Display names, such as `[Desktop]`. The storefront shows a line such as "Applies to: Desktop" for an item (see Storefront labels). Display only: it does not limit where an item is placed. |
 | `action_labels` | Optional storefront label overrides for the placement's items. Keys: `install`, `installing`, `installed`, `remove`, `removing`, `update`, `cancel`, `pending_install`, `pending_remove`, `applies_to`. |
 | `exclusive` | Optional. When true, sofcat does not write into an existing, non-empty root it did not create. |
 | `items_dir` | Optional. Item trees go to `<root>/<items_dir>/<item_name>` instead. A clean relative path, slash-separated, each segment one Windows can hold, whose first segment does not start with `.`. |
@@ -56,19 +57,19 @@ the item is meant to be used and never scopes the item, so a label such as
 ```yaml
 # placements.yaml
 placements:
-  tapas-marketplace:
-    applies_to: [Claude Code]
+  wallpapers:
+    applies_to: [Desktop]
     action_labels: {install: Make available, remove: Withdraw, applies_to: Works in}
     # paths, items_dir, vars and files left out
 
-# packages-info/tapas-optional-plugin.yaml
+# packages-info/acme-wallpapers.yaml
 custom_action_labels: {install: Enable for me}
 ```
 
 The storefront shows "Enable for me" from the item, "Withdraw" from the
 placement, and the built-in "Cancel", since neither sets `cancel`. The remove
 label stays "Remove" unless a layer sets `remove`. The applies-to line reads
-"Works in: Claude Code", from the placement.
+"Works in: Desktop", from the placement.
 
 `pending_install` and `pending_remove` word the status of a request waiting
 for the next run ("Will be installed", "Will be removed"), which the card
@@ -83,8 +84,8 @@ A build writes only under its write roots. A brand sets them in
 ```yaml
 darwin: [/Library/Application Support/Acme]
 windows: ['${ProgramData}\Acme']
-windows_user: ['${USERPROFILE}\.agents']
-darwin_user: ['${HOME}/.agents']
+windows_user: ['${USERPROFILE}\Pictures']
+darwin_user: ['${HOME}/Pictures']
 ```
 
 Without the file, a build uses `${ProgramData}\<NAME>` on Windows and
@@ -100,7 +101,7 @@ the build's. On Windows the policy is the key
 $key = 'HKLM:\SOFTWARE\Policies\SofCat\WriteRoots'
 New-Item -Path $key -Force
 New-ItemProperty -Path $key -Name Machine -PropertyType MultiString -Value '${ProgramData}\Acme', 'C:\Tools\Acme'
-New-ItemProperty -Path $key -Name User -PropertyType MultiString -Value '${USERPROFILE}\.claude'
+New-ItemProperty -Path $key -Name User -PropertyType MultiString -Value '${USERPROFILE}\Pictures'
 ```
 
 The single quotes keep PowerShell from expanding `${ProgramData}` itself.
@@ -119,11 +120,11 @@ configuration profile delivers it as a payload of type `<IDENTIFIER>`:
   <dict>
     <key>Machine</key>
     <array>
-      <string>/Library/Application Support/ClaudeCode</string>
-      <string>/etc/codex</string>
+      <string>/Library/Application Support/Acme</string>
+      <string>/opt/acme</string>
     </array>
     <key>User</key>
-    <array><string>${HOME}/.claude</string></array>
+    <array><string>${HOME}/Pictures</string></array>
   </dict>
 </dict>
 ```
