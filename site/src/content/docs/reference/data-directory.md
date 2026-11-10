@@ -33,6 +33,11 @@ these its own ACL.
   user's helper with the user-placement plan (`Data\user-plan.json`), so it
   must hold nothing a standard user may not see
   ([Conditions](/guides/conditions/#admin-provided-facts)).
+- `Data\conditions-synced\` holds the fact scripts the repository delivers,
+  which run as SYSTEM too. The service owns it: each run fetches what the
+  repository's index lists, verifies it and deletes the rest, so a file put
+  there by hand does not survive
+  ([Conditions](/guides/conditions/#scripts-from-the-repository)).
 - `Data\nupkg\` holds the kept copy of each installed nupkg, whose
   before-modify and uninstall scripts run as SYSTEM
   ([Nupkg items](/guides/nupkg-items/#the-kept-copy)).
