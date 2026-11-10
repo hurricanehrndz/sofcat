@@ -10,10 +10,6 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write # cut the release
-      id-token: write # sign the provenance with Sigstore
-      attestations: write # store the provenance attestation
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -40,11 +36,12 @@ jobs:
           curl -fsSL -o "$RUNNER_TEMP/jsign.jar" \
             "https://github.com/ebourg/jsign/releases/download/$JSIGN_VERSION/jsign-$JSIGN_VERSION.jar"
           echo "$JSIGN_SHA256  $RUNNER_TEMP/jsign.jar" | sha256sum -c -
-      # SIGN_CMD makes `just` sign the three executables, and embala the
+      # SIGN_CMD makes `just` sign the three executables and the Windows
+      # makecatalogs ones, and embala the
       # uninstaller stub and setup.exe. Its variables expand when the command
       # runs, so the token stays out of the log. A release is never cut
       # unsigned: a missing variable or secret fails this step.
-      - name: Build and sign executables and setup.exe, build makecatalogs
+      - name: Build and sign executables, setup.exe and makecatalogs, archive them
         env:
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
@@ -64,24 +61,9 @@ jobs:
           AZURE_TOKEN=$(az account get-access-token --resource https://codesigning.azure.net --query accessToken --output tsv)
           echo "::add-mask::$AZURE_TOKEN"
           export AZURE_TOKEN
-          just version="$GITHUB_REF_NAME" setup makecatalogs
-      # SLSA build provenance for every release file, also attached to the
-      # release so it can be checked offline:
-      #   gh attestation verify <file> -R hurricanehrndz/sofcat --bundle sofcat-<tag>.sigstore.json
-      - name: Attest build provenance
-        id: attest
-        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
-        with:
-          subject-path: |
-            build/sofcat.exe
-            build/sofcat-ui.exe
-            build/sofcat-useragent.exe
-            build/sofcat-*-setup.exe
-            build/makecatalogs-*
-      - name: Stage provenance bundle
-        env:
-          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
-        run: cp "$BUNDLE" "build/sofcat-${GITHUB_REF_NAME}.sigstore.json"
+          just version="$GITHUB_REF_NAME" setup archive-windows makecatalogs-archives
+      # The raw executables, for the Windows integration job to test and to
+      # check their signatures.
       - name: Upload executables workflow artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -91,14 +73,124 @@ jobs:
             ./build/sofcat-ui.exe
             ./build/sofcat-useragent.exe
             ./build/sofcat-*-setup.exe
-            ./build/makecatalogs-*
+            ./build/makecatalogs-windows-*.exe
           if-no-files-found: error
+      - name: Upload release files
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-assets
+          path: |
+            ./build/sofcat-*-windows-amd64.zip
+            ./build/sofcat-*-setup.exe
+            ./build/makecatalogs-*.tar.gz
+            ./build/makecatalogs-*.zip
+          if-no-files-found: error
+  # The macOS app needs cgo, so it builds on a Mac, for that runner's
+  # architecture (arm64). Signed with the Developer ID certificates and
+  # notarized (site/src/content/docs/reference/code-signing.md); like the
+  # Windows build, it fails rather than release anything unsigned.
+  macos:
+    name: Build macOS
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install toolchain
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
+        with:
+          cache: false
+          install_args: go node just # all this build needs from mise.toml
+      # A throwaway keychain holds the two certificates for this job only.
+      - name: Import signing certificates
+        env:
+          APPLE_CODESIGN_P12_BASE64: ${{ secrets.APPLE_CODESIGN_P12_BASE64 }}
+          APPLE_CODESIGN_P12_PASSWORD: ${{ secrets.APPLE_CODESIGN_P12_PASSWORD }}
+          APPLE_INSTALLER_P12_BASE64: ${{ secrets.APPLE_INSTALLER_P12_BASE64 }}
+          APPLE_INSTALLER_P12_PASSWORD: ${{ secrets.APPLE_INSTALLER_P12_PASSWORD }}
+          NOTARY_API_KEY_P8: ${{ secrets.NOTARY_API_KEY_P8 }}
+        run: |
+          for v in APPLE_CODESIGN_P12_BASE64 APPLE_CODESIGN_P12_PASSWORD \
+            APPLE_INSTALLER_P12_BASE64 APPLE_INSTALLER_P12_PASSWORD NOTARY_API_KEY_P8; do
+            [ -n "${!v}" ] || { echo "::error::$v is not set; see code-signing.md"; exit 1; }
+          done
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          keychain_password=$(openssl rand -hex 16)
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          for cert in CODESIGN INSTALLER; do
+            p12="APPLE_${cert}_P12_BASE64"; password="APPLE_${cert}_P12_PASSWORD"
+            printf %s "${!p12}" | base64 --decode > "$RUNNER_TEMP/$cert.p12"
+            security import "$RUNNER_TEMP/$cert.p12" -P "${!password}" -f pkcs12 -k "$keychain" \
+              -T /usr/bin/codesign -T /usr/bin/productbuild
+            rm "$RUNNER_TEMP/$cert.p12"
+          done
+          security set-key-partition-list -S apple-tool:,apple: -k "$keychain_password" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" login.keychain-db
+          security find-identity -v "$keychain"
+          printf '%s\n' "$NOTARY_API_KEY_P8" > "$RUNNER_TEMP/AuthKey.p8"
+      # `just pkg` refuses to start when an identity or a notary variable is
+      # missing (_sign-check), and stops if Apple rejects the submission.
+      - name: Build, sign and notarize the app, the pkg and the archive
+        env:
+          CODESIGN_IDENTITY: ${{ vars.CODESIGN_IDENTITY }}
+          PRODUCTSIGN_IDENTITY: ${{ vars.PRODUCTSIGN_IDENTITY }}
+          NOTARIZE: "1"
+          NOTARY_AUTH: api-key
+          NOTARY_API_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
+          NOTARY_API_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
+          NOTARY_API_ISSUER_ID: ${{ secrets.NOTARY_API_ISSUER_ID }}
+        run: just version="$GITHUB_REF_NAME" archive-macos
+      - name: Verify signatures and notarization
+        run: |
+          codesign --verify --strict build/sofcat build/sofcat-useragent
+          codesign --verify --strict --deep build/SofCat.app
+          xcrun stapler validate build/SofCat.app
+          spctl --assess --type execute -v build/SofCat.app
+          spctl --assess --type install -v build/sofcat-*.pkg
+      - name: Upload release files
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-assets-macos
+          path: |
+            ./build/sofcat-*-darwin-*.tar.gz
+            ./build/sofcat-*.pkg
+          if-no-files-found: error
+  release:
+    name: Cut release
+    needs: [build, macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # cut the release
+      id-token: write # sign the provenance with Sigstore
+      attestations: write # store the provenance attestation
+    steps:
+      - name: Download release files
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: release-assets*
+          merge-multiple: true
+          path: dist
+      # SLSA build provenance for every release file, also attached to the
+      # release so it can be checked offline:
+      #   gh attestation verify <file> -R hurricanehrndz/sofcat --bundle sofcat-<tag>.sigstore.json
+      - name: Attest build provenance
+        id: attest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: dist/*
+      - name: Stage provenance bundle
+        env:
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        run: cp "$BUNDLE" "dist/sofcat-${GITHUB_REF_NAME}.sigstore.json"
       - name: Cut release
         uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1.21.0
         with:
           allowUpdates: false
           prerelease: true
-          artifacts: "./build/sofcat.exe,./build/sofcat-ui.exe,./build/sofcat-useragent.exe,./build/sofcat-*-setup.exe,./build/makecatalogs-*,./build/sofcat-*.sigstore.json"
+          artifacts: "dist/*"
           tag: ${{ github.ref_name }}
           token: ${{ secrets.GITHUB_TOKEN }}
   integration:

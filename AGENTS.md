@@ -41,8 +41,9 @@ Guidance for coding agents working in this repository.
   - `just bootstrap-nupkg`: build `sofcat.exe` and an embala-built nupkg repository for the nupkg smoke on a Windows VM
   - `just build-macos`: build the CLI, the per-user helper and `.app` for the host Mac
   - `just pkg`: wrap those into an unsigned `.pkg`
+  - `just archive-windows`, `just archive-macos`, `just makecatalogs-archives`: the release archives (`.zip` for Windows, `.tar.gz` for macOS and Linux); `archive-macos` follows `pkg`
 
-`just build-macos`, `just pkg` and `just bootstrap-tapas-macos` run only on macOS.
+`just build-macos`, `just pkg`, `just archive-macos` and `just bootstrap-tapas-macos` run only on macOS.
 
 Prefer `just test` as the default local validation step, even for small changes.
 When changes include SofCat UI code, run `just ui-lint` and `just ui-test`.
