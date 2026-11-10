@@ -12,7 +12,7 @@ On Windows, everything SofCat writes after install lives under
   `C:\ProgramData\SofCat\Data`), which holds SofCat's state.
 - Any placement of SofCat's own, such as a marketplace, beside them: the
   stock write root is `${ProgramData}\SofCat`
-  ([Zip items](/guides/zip-items/#write-roots)).
+  ([Zip items](/zip-items/placements/#write-roots)).
 
 Under the default `ProgramData` ACL, standard users can read everything there
 and create files and folders in it, and they own what they create. That would
@@ -39,7 +39,7 @@ these its own ACL.
 - `Data\sofcat.log` may name paths and items.
 
 `Data\user-artifacts\` is the one entry users read: the staged archives the
-per-user helper places into each profile ([Zip items](/guides/zip-items/#installing)).
+per-user helper places into each profile ([Zip items](/zip-items/overview/#installing)).
 On macOS, where `Data` is root-only (0700) and no ACL can open one entry of
 it, the archives sit beside it instead, in
 `/Library/Application Support/SofCat/user-artifacts/` (root-owned, 0755).

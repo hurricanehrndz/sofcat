@@ -32,7 +32,7 @@ every key.
 | [`example_manifest.yaml`](https://github.com/hurricanehrndz/sofcat/blob/main/examples/example_manifest.yaml) | A manifest: managed, optional and default installs, updates, uninstalls and `conditional_items`. |
 | [`example_catalog.yaml`](https://github.com/hurricanehrndz/sofcat/blob/main/examples/example_catalog.yaml) | A catalog as `makecatalogs` writes it: installers, checks, dependencies, action labels and required software. |
 | [`example_package-info.yaml`](https://github.com/hurricanehrndz/sofcat/blob/main/examples/example_package-info.yaml) | One item's package info, the input to `makecatalogs`. |
-| [`placements.yaml`](https://github.com/hurricanehrndz/sofcat/blob/main/examples/placements.yaml) | Placements for zip items. See [Zip items](/guides/zip-items/). |
+| [`placements.yaml`](https://github.com/hurricanehrndz/sofcat/blob/main/examples/placements.yaml) | Placements for zip items. See [Zip items](/zip-items/overview/). |
 | [`zip-items/`](https://github.com/hurricanehrndz/sofcat/tree/main/examples/zip-items) | A zip item's source, item tree and generated catalog entry. |
 | [`brand/`](https://github.com/hurricanehrndz/sofcat/tree/main/examples/brand) | A rebrand: your own name, icon, service and installer. |
 
@@ -56,7 +56,7 @@ add more, never through `config.yaml`: on Windows the `REG_MULTI_SZ` values
 `Machine` and `User` under `HKLM\SOFTWARE\Policies\SofCat\WriteRoots`, on
 macOS the `WriteRoots` dictionary in
 `/Library/Managed Preferences/ca.hrndz.sofcat.plist`. See
-[Write roots](/guides/zip-items/#write-roots).
+[Write roots](/zip-items/placements/#write-roots).
 
 ## Conditions
 

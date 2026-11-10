@@ -171,7 +171,7 @@ if ($env:COMPUTERNAME -like 'LAB-*') { $groups += 'lab' }
 Then `"lab" in machine_groups` and `site == "east"` work in conditions.
 
 Templates read the same facts: a placement file template or a tree template
-([Zip items](/guides/zip-items/#tree-templates)) calls `fact "site"` or
+([Zip items](/zip-items/tree-templates/)) calls `fact "site"` or
 `cond "site == \"east\""`, so a value management tooling wants in a rendered
 file comes from a script here, not from a new setting. The service also
 hands the whole facts map to every logged-on user's helper with the

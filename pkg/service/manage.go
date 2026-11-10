@@ -9,7 +9,7 @@ import (
 )
 
 // userSyncRunValue is the HKLM Run value that starts the per-user helper,
-// <slug>-useragent.exe, at every logon (site/src/content/docs/guides/zip-items.md).
+// <slug>-useragent.exe, at every logon (site/src/content/docs/zip-items/overview.md).
 // -serviceinstall writes it and -serviceremove removes it, so the installer
 // never touches it. agentExe is the helper's full path. The value keeps the
 // name it had when the storefront was the helper (<slug>-ui.exe --user-sync),

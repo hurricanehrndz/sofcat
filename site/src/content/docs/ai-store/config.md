@@ -5,7 +5,7 @@ description: Write the machine-wide config files of Claude Code and Codex from t
 
 sofcat can own a tool's machine-wide config file, such as Claude Code's
 `managed-settings.json` or Codex's `/etc/codex/config.toml`. The file is a
-[placement file](/guides/zip-items/#placement-files) rendered from a
+[placement file](/zip-items/placement-files/) rendered from a
 template, so its values can depend on the device's facts: who the device is
 assigned to, or which groups they are in.
 

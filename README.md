@@ -58,7 +58,7 @@ What already works:
 - **Zip items.** Package directory trees, such as AI skills, as deterministic
   zips with `makecatalogs`. On Windows a per-user helper
   (`<slug>-useragent.exe`, started at logon and on every plan change) places them in each user's
-  profile. See [Zip items](site/src/content/docs/guides/zip-items.md).
+  profile. See [Zip items](site/src/content/docs/zip-items/overview.md).
 - **macOS.** A launchd daemon and a self-service app bundle, installed by the
   `.pkg` from `just pkg`, with the same features.
 - **Zip-only brands.** `INSTALLERS=zip` in a brand compiles out the command

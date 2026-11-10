@@ -7,6 +7,7 @@ const repo = "https://github.com/hurricanehrndz/sofcat";
 
 export default defineConfig({
   site: "https://sofcat.app",
+  redirects: { "/guides/zip-items": "/zip-items/overview/" },
   integrations: [
     starlight({
       title: "SofCat",
@@ -27,7 +28,11 @@ export default defineConfig({
         },
         {
           label: "Guides",
-          items: ["guides/zip-items", "guides/nupkg-items", "guides/conditions", "guides/osquery-inventory"],
+          items: ["guides/nupkg-items", "guides/required-software", "guides/conditions", "guides/osquery-inventory"],
+        },
+        {
+          label: "Zip items",
+          items: ["zip-items/overview", "zip-items/placements", "zip-items/placement-files", "zip-items/tree-templates", "zip-items/building"],
         },
         {
           label: "AI store",

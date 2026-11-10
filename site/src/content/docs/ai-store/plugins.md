@@ -6,7 +6,7 @@ description: Ship plugins as zip items and let sofcat write the marketplace cata
 A plugin is a zip item like a skill. What it adds is a catalog: the tool
 reads a marketplace file that lists the plugins, and sofcat writes that file
 from whatever plugins are placed. The catalog is a
-[placement file](/guides/zip-items/#placement-files), rendered again after
+[placement file](/zip-items/placement-files/), rendered again after
 every install and removal.
 
 ## A Claude Code marketplace
@@ -91,7 +91,7 @@ path. `enabledPlugins` lists only the managed plugins, keyed
 renders nothing and sofcat removes the file.
 
 The templates can also live in files of their own, named by `template_file`
-([Templates for placement files](/guides/zip-items/#templates-for-placement-files)).
+([Templates for placement files](/zip-items/placement-files/#templates-for-placement-files)).
 The [example repository](https://github.com/hurricanehrndz/sofcat-harness-example)
 does that.
 
@@ -208,6 +208,6 @@ Its record's `facts` is `{"assigned_user": "jdoe", "os": "windows"}`; a new
 `assigned_user` from the script re-renders `.mcp.json` and nothing else. In
 user scope, `{{ .User }}` gives the login name without a script.
 
-Both files are [tree templates](/guides/zip-items/#tree-templates): they
+Both files are [tree templates](/zip-items/tree-templates/): they
 ship in the plugin's tree with a `.tmpl` suffix and sofcat renders them on
 the device.

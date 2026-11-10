@@ -18,12 +18,12 @@ just brand=branding/acme setup   # -> build/acme-apps-<version>-x86_64-setup.exe
 | `brand.env` | yes | Names, publisher, identifier and installer allowlist; see the comments in [`brand.env`](brand.env). |
 | `icon.ico` | no | Exe icon (Explorer, Start menu, Add/Remove Programs). Defaults to `assets/sofcat.ico`. |
 | `icon.png` | no | Window and taskbar icon (256x256 is best) and the app-bar mark when no runtime logo is set. Defaults to the SofCat icon. |
-| `write-roots.yaml` | no | Where zip items may be placed, compiled in; see [Zip items](../../site/src/content/docs/guides/zip-items.md#write-roots). Defaults to `${ProgramData}\<NAME>` (Windows) and `/Library/Application Support/<NAME>` (macOS), the directory holding the config and `Data`. Managed policy can add more. |
+| `write-roots.yaml` | no | Where zip items may be placed, compiled in; see [Zip items](../../site/src/content/docs/zip-items/placements.md#write-roots). Defaults to `${ProgramData}\<NAME>` (Windows) and `/Library/Application Support/<NAME>` (macOS), the directory holding the config and `Data`. Managed policy can add more. |
 
 Setting `INSTALLERS=zip` in `brand.env` makes all three binaries zip-only: they
 contain no command installer (`msi`, `exe`, `ps1`, `msix`, `nupkg`) and reject
 catalog items that need one; see
-[Zip items](../../site/src/content/docs/guides/zip-items.md#zip-only-builds). `brand-check`
+[Zip items](../../site/src/content/docs/zip-items/building.md#zip-only-builds). `brand-check`
 rejects any other value.
 
 `just brand-check` validates the values on its own; every brand build runs it

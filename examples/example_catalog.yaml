@@ -26,7 +26,7 @@ ColorPrinter:
   # installing, installed, remove, removing, update, cancel, pending_install,
   # pending_remove, applies_to).
   # A key left out falls back to the item's placements (zip items, see
-  # site/src/content/docs/guides/zip-items.md), then the built-in label. Shown as plain text.
+  # site/src/content/docs/zip-items/placements.md), then the built-in label. Shown as plain text.
   custom_action_labels:
     install: Add printer
     installing: Adding printer…
@@ -181,7 +181,7 @@ hello-world:
   # A zip item places a directory tree, such as an AI skill, instead of running
   # an installer. variants maps a placement in placements.yaml to an OS (darwin
   # or windows) to one zip. makecatalogs zip-item writes this block; see
-  # site/src/content/docs/guides/zip-items.md. A zip item needs no check block or uninstaller.
+  # site/src/content/docs/zip-items/overview.md. A zip item needs no check block or uninstaller.
   installer:
     type: zip
     variants:
