@@ -31,6 +31,7 @@ const scriptTimeout = 60 * time.Second
 
 // Dir is the admin conditions directory under the app data path. It inherits
 // the app data ACL, so only SYSTEM and Administrators can add scripts to it.
+// The scripts the repository delivers are kept apart, in SyncedDir.
 func Dir(appDataPath string) string {
 	return filepath.Join(appDataPath, "conditions")
 }
@@ -51,15 +52,19 @@ var errSkipped = errors.New("not run")
 
 // Collect returns this machine's facts. Built-in facts are gathered every
 // call and override admin facts of the same name, so a script cannot spoof
-// them. refresh runs the admin scripts in dir again; otherwise the admin facts
-// from the last refresh are reused, so a self-service list call does not run
-// scripts. The first call runs them either way.
-func Collect(dir string, refresh bool) conditions.Facts {
+// them. refresh runs the admin scripts in dirs again, a later directory
+// winning a shared name (see Dirs); otherwise the admin facts from the last
+// refresh are reused, so a self-service list call does not run scripts. The
+// first call runs them either way.
+func Collect(dirs []string, refresh bool) conditions.Facts {
 	builtins := builtinFacts()
 
 	mu.Lock()
 	if refresh || !haveAdmin {
-		adminCache = adminFacts(dir)
+		adminCache = conditions.Facts{}
+		for _, dir := range dirs {
+			maps.Copy(adminCache, adminFacts(dir))
+		}
 		haveAdmin = true
 		for name := range adminCache {
 			if _, ok := builtins[name]; ok {
