@@ -63,7 +63,7 @@ placements:
   # exclusive on a fresh directory nothing else uses, so the helper creates
   # and marks it; items_dir; and a generated index.json under the root that
   # reads .User, the vars and the items (run-tapas-user-sync.ps1 and
-  # run-tapas-user-sync.sh). The only user-scope placement on macOS.
+  # run-tapas-user-sync.sh).
   tapas-user-plugins:
     paths:
       darwin: ${HOME}/.agents/tapas-plugins
@@ -96,7 +96,17 @@ placements:
       darwin: /Library/Application Support/Tapas Test/desktop/org-plugins
       windows: ${ProgramData}\tapas-test-smoke\desktop\org-plugins
     applies_to: [Claude Desktop]
-  # Outside every write root: refused.
+  # Per user, outside the brand's user root: the helper refuses it until
+  # managed policy adds the root (the smokes' policy steps).
+  policy-user-skills:
+    paths:
+      darwin: ${HOME}/.tapas-policy/skills
+      windows: ${USERPROFILE}\.tapas-policy\skills
+    scope:
+      darwin: user
+      windows: user
+    applies_to: [Claude Code]
+  # Outside every write root: refused, until managed policy adds the root.
   outside-skills:
     paths:
       darwin: /Library/Application Support/tapas-test-outside/skills

@@ -671,12 +671,32 @@ Assert-Succeeded "RemoveItem:tapas-outside-skill"
 Wait-Pruned
 Pass "Failed/placement_refused; $OutsideRoot not created"
 
+# The user-scope placement outside the brand's user root, in this user's
+# profile (the signed-in user's, as for $codexTree above), and its receipt.
+$policyUserRoot    = Join-Path $env:USERPROFILE ".tapas-policy"
+$policyUserTree    = Join-Path $policyUserRoot "skills\tapas-policy-user-skill"
+$policyUserReceipt = Join-Path $env:LOCALAPPDATA "Tapas Test\receipts\policy-user-skills\tapas-policy-user-skill.json"
+$codexReceipt      = Join-Path $env:LOCALAPPDATA "Tapas Test\receipts\codex-skills\tapas-managed-skill.json"
+
+# Invoke-Helper makes the next run start the signed-in user's helper again,
+# by forgetting the plan it was last started for and what it placed, then
+# waits for that run of the helper to end.
+function Invoke-Helper {
+    Remove-Item -LiteralPath (Join-Path $DataDir "user-plan.json.started"), $codexReceipt, $policyUserReceipt -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $codexTree, $policyUserRoot -Recurse -Force -ErrorAction SilentlyContinue
+    Invoke-Run
+    Wait-For { Test-Path (Join-Path $codexTree "SKILL.md") } "the helper to place tapas-managed-skill again"
+    Wait-For { -not (Get-Process -Name "$Slug-useragent" -ErrorAction SilentlyContinue) } "the helper to exit"
+}
+
 Write-Step "A write root from managed policy admits it after a restart"
-# The service reads the policy once, when it starts. The value keeps
-# ${ProgramData} unexpanded, as an administrator would write it.
+# The service reads the policy once, when it starts. The values keep
+# ${ProgramData} and ${USERPROFILE} unexpanded, as an administrator would
+# write them.
 if (Test-Path $PolicyKey) { Fail "$PolicyKey exists before the smoke wrote it (not a clean VM?)" }
 New-Item -Path $PolicyKey -Force | Out-Null
 New-ItemProperty -Path $PolicyKey -Name Machine -PropertyType MultiString -Value @('${ProgramData}\tapas-test-outside') | Out-Null
+New-ItemProperty -Path $PolicyKey -Name User -PropertyType MultiString -Value @('${USERPROFILE}\.tapas-policy') | Out-Null
 Restart-Service $Slug
 Wait-For { (Invoke-SofCat "GetServiceInfo" -AllowFail).Code -eq 0 } "the service to answer after the restart"
 Assert-Succeeded "InstallItem:tapas-outside-skill"
@@ -686,15 +706,23 @@ Wait-Removed $outsideRoot "outside-skills" "tapas-outside-skill"
 Wait-Pruned
 Pass "placed under $outsideRoot with the policy, then removed"
 
-Write-Step "Without the policy it is refused again"
+Write-Step "The helper places under a user root from managed policy"
+Invoke-Helper
+if (-not (Test-Path (Join-Path $policyUserTree "SKILL.md"))) { Fail "$policyUserTree is missing with the policy's user root" }
+if (-not (Test-Path $policyUserReceipt)) { Fail "receipt $policyUserReceipt is missing" }
+Pass "$policyUserTree placed by the helper"
+
+Write-Step "Without the policy both are refused again"
 Remove-Item -Path $PolicyKey -Force
 Restart-Service $Slug
 Wait-For { (Invoke-SofCat "GetServiceInfo" -AllowFail).Code -eq 0 } "the service to answer after the restart"
 Assert-FailedWith "InstallItem:tapas-outside-skill" "placement_refused" "outside the write roots" | Out-Null
 Assert-Succeeded "RemoveItem:tapas-outside-skill"
 Wait-Pruned
+Invoke-Helper
+if (Test-Path $policyUserRoot) { Fail "the helper placed under $policyUserRoot without the policy" }
 Remove-Item -LiteralPath $OutsideRoot -Recurse -Force -ErrorAction SilentlyContinue
-Pass "Failed/placement_refused once $PolicyKey is gone"
+Pass "service and helper refuse once $PolicyKey is gone"
 
 # --- Scope exit -------------------------------------------------------------------
 

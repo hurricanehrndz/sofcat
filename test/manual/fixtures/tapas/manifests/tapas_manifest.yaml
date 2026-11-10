@@ -8,6 +8,7 @@ managed_installs:
   - tapas-desktop-managed
   - tapas-user-skill
   - tapas-user-plugin
+  - tapas-policy-user-skill
 optional_installs:
   - tapas-optional-skill
   - tapas-adopt-skill
