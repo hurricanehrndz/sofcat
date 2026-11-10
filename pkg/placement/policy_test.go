@@ -12,12 +12,14 @@ import (
 // could not use (relative machine root, user root outside the home, a
 // variable this scope lacks) is dropped while its neighbours are kept.
 func TestWithPolicy(t *testing.T) {
+	// Absolute on the host: the guard expands with the host's path rules.
+	abs := filepath.Join(t.TempDir(), "codex")
 	compiled := Roots{Darwin: []string{"/Library/Application Support/SofCat"}, Windows: []string{`${ProgramData}\SofCat`}}
 	got := compiled.WithPolicy(Darwin,
-		[]string{"/etc/codex", "codex", "${ProgramFiles}/X", "${HOME}/x", ""},
-		[]string{"${HOME}/.claude", ".agents", "/etc", "${HOME}/../other", "${HOME}x/y"})
+		[]string{abs, "codex", "${ProgramFiles}/X", "${HOME}/x", ""},
+		[]string{"${HOME}/.claude", ".agents", abs, "${HOME}/../other", "${HOME}x/y"})
 	want := Roots{
-		Darwin:     []string{"/Library/Application Support/SofCat", "/etc/codex"},
+		Darwin:     []string{"/Library/Application Support/SofCat", abs},
 		Windows:    []string{`${ProgramData}\SofCat`},
 		DarwinUser: []string{"${HOME}/.claude", ".agents"},
 	}
