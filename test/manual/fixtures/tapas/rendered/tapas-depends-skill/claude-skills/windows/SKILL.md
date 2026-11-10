@@ -1,4 +1,4 @@
 ---
-name: tapas-choco-skill
-description: A self-service skill that needs a Chocolatey package
+name: tapas-depends-skill
+description: A self-service skill that needs Demo Tool installed first
 ---

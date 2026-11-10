@@ -1,6 +1,6 @@
 #!/bin/bash
 # Zip-item end-to-end smoke test for the Tapas Test fixture brand on macOS:
-# the twin of run-tapas-smoke.ps1 without the Chocolatey steps. The per-user
+# the twin of run-tapas-smoke.ps1, with Munki in place of its marker file. The per-user
 # helper part checks the daemon starts it through its LaunchAgent for the user
 # signed in to the GUI; run-tapas-user-sync.sh checks what it places.
 #
@@ -13,11 +13,11 @@
 # exclusive-root marker and refusal, a placement outside the write roots, the
 # marketplace plugins with the generated marketplace.json, the templated Codex
 # catalog and skills index and the settings drop-in, a skill deferred until a
-# Munki report lists its required software, a held
+# Munki report lists its depends_check software, a held
 # conditional item, scope exit, the Claude Desktop plugins whose trees ship
 # templates (plugin.json from the managed flag, .mcp.json from an admin fact,
 # re-rendered in place when either changes), and the zip-only build's
-# rejection of an exe item and a skill with a postinstall_script.
+# rejection of an exe item.
 #
 # Run once on a clean Mac as root, with a user signed in to the GUI,
 # after installing the fixture brand's .pkg,
@@ -78,7 +78,6 @@ DROP_IN="$SMOKE_ROOT/claude/managed-settings.d/50-tapas-test.json"
 CODEX_JSON="$MARKET_ROOT/.agents/plugins/marketplace.json"
 SKILLS_INDEX="$SMOKE_ROOT/claude/skills-index.json"
 EXCLUSIVE_INDEX="$SMOKE_ROOT/claude/exclusive-index.json"
-SCRIPTED_MARKER="$SMOKE_ROOT/scripted-skill-ran.txt"
 # The per-user helper's LaunchAgent and what it places for the user signed in
 # in a GUI session: tapas-user-plugins is the user-scope placement on macOS.
 USER_ARTIFACTS="$SUPPORT/user-artifacts"
@@ -428,20 +427,6 @@ line=$(assert_logged_rejection tapas-exe-item) || exit 1
 printf '%s' "$line" | grep -Eq 'installer\.type .{1,4}exe.{1,4} is not zip' || fail "the rejection does not give the reason: $line"
 pass "tapas-exe-item not installed; log: $line"
 
-step "The zip-only build neither lists nor installs the skill with a postinstall_script"
-[ -z "$(optional_item tapas-scripted-skill)" ] || fail "ListOptionalInstalls lists tapas-scripted-skill"
-[ -n "$(optional_item tapas-optional-skill)" ] || fail "ListOptionalInstalls no longer lists tapas-optional-skill"
-sofcat InstallItem:tapas-scripted-skill allow-fail
-[ "$CODE" -ne 0 ] || fail "InstallItem:tapas-scripted-skill was accepted"
-printf '%s' "$OUT" | grep -Eq 'item_not_available|not available for self-service' ||
-	fail "InstallItem:tapas-scripted-skill was not refused as item_not_available: $OUT"
-! selected tapas-scripted-skill || fail "the refused tapas-scripted-skill is in the self-serve managed_installs"
-assert_not_placed "$CLAUDE_ROOT" claude-skills tapas-scripted-skill
-[ ! -e "$SCRIPTED_MARKER" ] || fail "tapas-scripted-skill's postinstall_script ran: $SCRIPTED_MARKER exists"
-line=$(assert_logged_rejection tapas-scripted-skill) || exit 1
-printf '%s' "$line" | grep -q postinstall_script || fail "the rejection does not give the reason: $line"
-pass "not listed, InstallItem refused, nothing placed; log: $line"
-
 # --- Self-service ---------------------------------------------------------------
 
 step "ListOptionalInstalls offers the optional skill with a real status"
@@ -531,16 +516,16 @@ pass "tree, receipt and both catalog entries gone; the managed plugin stays enab
 
 # --- Required software -------------------------------------------------------------
 
-# tapas-choco-skill requires_software Demo Tool, Munki item DemoTool.
+# tapas-depends-skill depends_check Demo Tool, Munki item DemoTool.
 step "A skill whose required Munki item is missing is deferred and nothing is written"
-operation InstallItem:tapas-choco-skill
+operation InstallItem:tapas-depends-skill
 if [ "$(terminal .state)" != Deferred ] || [ "$(terminal .errorCode)" != missing_software ]; then
-	fail "InstallItem:tapas-choco-skill expected Deferred/missing_software, got $TERMINAL"
+	fail "InstallItem:tapas-depends-skill expected Deferred/missing_software, got $TERMINAL"
 fi
 want_message="Needs Demo Tool. Install it first, then try again."
 terminal .errorMessage | grep -qF "$want_message" || fail "the deferral message is not '$want_message': $(terminal .errorMessage)"
-assert_not_placed "$CLAUDE_ROOT" claude-skills tapas-choco-skill
-selected tapas-choco-skill || fail "the deferred tapas-choco-skill left the self-serve managed_installs, so no later run retries it"
+assert_not_placed "$CLAUDE_ROOT" claude-skills tapas-depends-skill
+selected tapas-depends-skill || fail "the deferred tapas-depends-skill left the self-serve managed_installs, so no later run retries it"
 pass "Deferred/missing_software: $(terminal .errorMessage); nothing placed; still selected"
 
 step "Once the Munki report lists DemoTool, the next run places the skill"
@@ -557,13 +542,13 @@ cat >"$MUNKI_REPORT" <<'EOF'
 </dict>
 </plist>
 EOF
-assert_succeeded InstallItem:tapas-choco-skill
-assert_placed "$CLAUDE_ROOT" claude-skills tapas-choco-skill
-pass "tapas-choco-skill placed with a receipt"
+assert_succeeded InstallItem:tapas-depends-skill
+assert_placed "$CLAUDE_ROOT" claude-skills tapas-depends-skill
+pass "tapas-depends-skill placed with a receipt"
 
 step "RemoveItem removes the skill that needed Demo Tool"
-assert_succeeded RemoveItem:tapas-choco-skill
-wait_removed "$CLAUDE_ROOT" claude-skills tapas-choco-skill
+assert_succeeded RemoveItem:tapas-depends-skill
+wait_removed "$CLAUDE_ROOT" claude-skills tapas-depends-skill
 wait_pruned
 rm -rf "$MUNKI_DIR"
 pass "tree and receipt gone; $MUNKI_DIR removed"
@@ -720,12 +705,10 @@ wait_removed "$CLAUDE_ROOT" claude-skills tapas-scoped-skill
 assert_placed "$CLAUDE_ROOT" claude-skills tapas-held-skill
 warned_held tapas_smoke_held || fail "inventory does not warn that the tapas_smoke_held block is held: $(jq -c '.Warnings' "$INVENTORY")"
 assert_placed "$CLAUDE_ROOT" claude-skills tapas-managed-skill
-assert_not_placed "$CLAUDE_ROOT" claude-skills tapas-scripted-skill
-[ ! -e "$SCRIPTED_MARKER" ] || fail "tapas-scripted-skill's postinstall_script ran: $SCRIPTED_MARKER exists"
 # claude-skills never empties: tapas-managed-skill stays, so the index stays
 # and follows the receipts. Its removal with the last skill is a unit test.
 assert_skills_index tapas-managed-skill tapas-adopt-skill tapas-held-skill
-pass "tapas-scoped-skill removed, from the skills index too; tapas-held-skill and tapas-managed-skill kept; tapas-scripted-skill never placed"
+pass "tapas-scoped-skill removed, from the skills index too; tapas-held-skill and tapas-managed-skill kept"
 
 step "A condition script a user could change is skipped"
 write_condition_script '{"tapas_smoke_scope": "in", "tapas_smoke_held": "yes"}'
