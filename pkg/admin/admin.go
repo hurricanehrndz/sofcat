@@ -37,8 +37,12 @@ type CatalogSet struct {
 	// items with unusable variants, nupkg items the agent would refuse or
 	// cannot check, an invalid placements.yaml, and manifests
 	// whose conditional_items conditions do not compile.
+	// Unusable files under <repo>/conditions are listed too.
 	// A normal makecatalogs run warns about them and carries on; --check fails on them.
 	Problems []string
+	// Conditions are the repo's condition scripts, for the index WriteCatalogs
+	// writes to conditions.IndexPath.
+	Conditions []conditions.Script
 }
 
 // Names returns the catalog names in sorted order.
@@ -122,6 +126,11 @@ func CollectCatalogs(repoPath string) (CatalogSet, error) { //nolint:gocognit //
 			set.Problems = append(set.Problems, fmt.Sprintf("%s: catalog %q differs from %q only by case; skipped", packageInfoPath, parsed.Catalog, first))
 			continue
 		}
+		// catalogs/conditions.yaml is the condition script index, which every
+		// agent fetches; a catalog there would be read as one.
+		if strings.EqualFold(parsed.Catalog, conditionsIndexName) {
+			return CatalogSet{}, fmt.Errorf("%s: catalog %q is reserved for the condition script index (%s)", packageInfoPath, parsed.Catalog, conditions.IndexPath)
+		}
 		folded[strings.ToLower(parsed.Catalog)] = parsed.Catalog
 
 		itemName := strings.TrimSpace(parsed.ItemName)
@@ -166,10 +175,18 @@ func CollectCatalogs(repoPath string) (CatalogSet, error) { //nolint:gocognit //
 	set.Problems = append(set.Problems, checkPlacementTemplates(placements, set.Catalogs)...)
 	set.Problems = append(set.Problems, checkZipTemplates(repoPath, placements, set.Catalogs)...)
 	set.Problems = append(set.Problems, checkManifests(repoPath)...)
+
+	scripts, problems, scriptsErr := collectConditionScripts(repoPath)
+	if scriptsErr != nil {
+		return CatalogSet{}, scriptsErr
+	}
+	set.Conditions = scripts
+	set.Problems = append(set.Problems, problems...)
 	return set, nil
 }
 
-// WriteCatalogs replaces <repo>/catalogs with one YAML file per catalog in set.
+// WriteCatalogs replaces <repo>/catalogs with one YAML file per catalog in set
+// and, when the repo has condition scripts, their index.
 func WriteCatalogs(repoPath string, set CatalogSet) error {
 	catalogsPath := filepath.Join(repoPath, "catalogs")
 
@@ -181,6 +198,10 @@ func WriteCatalogs(repoPath string, set CatalogSet) error {
 			return fmt.Errorf("marshal catalog %s: %w", catalogName, err)
 		}
 		rendered[catalogName] = catalogYAML
+	}
+	index, err := conditionsIndex(set.Conditions)
+	if err != nil {
+		return fmt.Errorf("marshal the condition script index: %w", err)
 	}
 
 	// CEILING: not atomic. A write error after RemoveAll (disk full, file lock)
@@ -196,6 +217,12 @@ func WriteCatalogs(repoPath string, set CatalogSet) error {
 		catalogPath := filepath.Join(catalogsPath, catalogName+".yaml")
 		if err := os.WriteFile(catalogPath, catalogYAML, 0o644); err != nil {
 			return fmt.Errorf("write catalog %s: %w", catalogPath, err)
+		}
+	}
+	if index != nil {
+		indexPath := filepath.Join(repoPath, filepath.FromSlash(conditions.IndexPath))
+		if err := os.WriteFile(indexPath, index, 0o644); err != nil {
+			return fmt.Errorf("write the condition script index %s: %w", indexPath, err)
 		}
 	}
 
