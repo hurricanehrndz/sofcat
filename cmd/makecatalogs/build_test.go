@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -55,7 +56,8 @@ func TestBuild(t *testing.T) {
 		}
 	}
 	// A device runs the condition script as served: it must stay executable.
-	if fi, err := os.Stat(filepath.Join(out, "conditions", "darwin", "10-facts")); err != nil || fi.Mode()&0o111 == 0 {
+	// Windows has no executable bit to keep.
+	if fi, err := os.Stat(filepath.Join(out, "conditions", "darwin", "10-facts")); err != nil || (runtime.GOOS != "windows" && fi.Mode()&0o111 == 0) {
 		t.Errorf("condition script not copied executable: %v %v", fi, err)
 	}
 
@@ -198,7 +200,7 @@ func TestBuildRefusals(t *testing.T) {
 			if err := os.RemoveAll(filepath.Join(source, "item-trees", "hello")); err != nil {
 				t.Fatal(err)
 			}
-		}, "item-trees/hello"},
+		}, filepath.Join("item-trees", "hello")},
 		"item without placements": {func(t *testing.T, source string) {
 			t.Helper()
 			writeFiles(t, source, map[string]string{"items/hello.yaml": strings.Replace(testItem, "placements: [claude-code-skills, codex-skills]\n", "", 1)})
