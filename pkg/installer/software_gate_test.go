@@ -2,17 +2,21 @@ package installer
 
 import (
 	"errors"
+	"os"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
 	"github.com/hurricanehrndz/sofcat/pkg/report"
+	"github.com/hurricanehrndz/sofcat/pkg/software"
 )
 
 // stubMissingSoftware makes every item lack names until the test ends.
 func stubMissingSoftware(t *testing.T, names ...string) {
 	t.Helper()
 	orig := missingSoftware
-	missingSoftware = func(catalog.Item) []string { return names }
+	missingSoftware = func(catalog.Item, software.Checks) []string { return names }
 	t.Cleanup(func() { missingSoftware = orig })
 }
 
@@ -51,7 +55,7 @@ func softwareItem() catalog.Item {
 	item.Name = "NeedsTools"
 	item.DisplayName = statusActionNoError
 	item.PreScript = "Write-Host pre"
-	item.RequiresSoftware = []catalog.RequiredSoftware{{DisplayName: "Demo Tool", Chocolatey: "demo-tool"}}
+	item.DependsCheck = []catalog.DependsCheck{{DisplayName: "Demo Tool", Munki: "DemoTool"}}
 	return item
 }
 
@@ -131,5 +135,78 @@ func TestSoftwareGateOnlyWhenActionNeeded(t *testing.T) {
 	}
 	if len(r.Report.DeferredItems) != 0 {
 		t.Errorf("installed item deferred: %#v", r.Report.DeferredItems)
+	}
+}
+
+// TestSoftwareGateRunsChecks: the gate hands the entry's script for this OS
+// to the script runner, with the run's cache path, and its sofcat item name
+// to ItemInstalled. Either passing lets the item through; neither defers it.
+func TestSoftwareGateRunsChecks(t *testing.T) {
+	origFunc, origGOOS := dependsScriptFunc, software.GOOS
+	t.Cleanup(func() { dependsScriptFunc, software.GOOS = origFunc, origGOOS })
+	software.GOOS = "windows"
+
+	item := softwareItem()
+	item.DependsCheck = []catalog.DependsCheck{{
+		DisplayName: "Demo Tool",
+		Sofcat:      "demo-tool",
+		Script:      map[string]string{"windows": "exit 1", "darwin": "#!/bin/sh\nexit 1"},
+	}}
+	for _, tc := range []struct {
+		name              string
+		installed, script bool
+		deferred          bool
+	}{
+		{"neither", false, false, true},
+		{"sofcat item installed", true, false, false},
+		{"script passes", false, true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dependsScriptFunc = func(script, cachePath string) error {
+				if script != "exit 1" || cachePath != "testdata/cache" {
+					t.Errorf("script runner got %q in %q", script, cachePath)
+				}
+				if tc.script {
+					return nil
+				}
+				return errors.New("exit status 1")
+			}
+			r := newTestRunner()
+			r.CachePath = "testdata/cache"
+			r.ItemInstalled = func(name string) bool {
+				if name != "demo-tool" {
+					t.Errorf("ItemInstalled(%q), want demo-tool", name)
+				}
+				return tc.installed
+			}
+			err := r.softwareGate(item, "install")
+			if tc.deferred != errors.Is(err, ErrMissingSoftware) {
+				t.Errorf("softwareGate = %v, want deferred %v", err, tc.deferred)
+			}
+			if tc.deferred && (len(r.Report.DeferredItems) != 1 ||
+				r.Report.DeferredItems[0].Reason != "Needs Demo Tool. Install it first, then try again.") {
+				t.Errorf("deferred = %#v", r.Report.DeferredItems)
+			}
+		})
+	}
+}
+
+// TestRunDependsScript: off Windows a depends_check script runs as an
+// executable through its #! line, its exit status decides, and the temporary
+// file is removed either way.
+func TestRunDependsScript(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("runs the script through its #! line")
+	}
+	cache := t.TempDir()
+	if err := runDependsScript("#!/bin/sh\nexit 0\n", cache); err != nil {
+		t.Errorf("passing script: %v", err)
+	}
+	err := runDependsScript("#!/bin/sh\necho no demo-tool >&2\nexit 3\n", cache)
+	if err == nil || !strings.Contains(err.Error(), "exit status 3") || !strings.Contains(err.Error(), "no demo-tool") {
+		t.Errorf("failing script: err = %v, want its exit status and stderr", err)
+	}
+	if left, _ := os.ReadDir(cache); len(left) != 0 {
+		t.Errorf("temporary scripts left behind: %v", left)
 	}
 }

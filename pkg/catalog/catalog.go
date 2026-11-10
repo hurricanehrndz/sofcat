@@ -26,9 +26,9 @@ type Item struct {
 	// InstallableCondition is an expression over this machine's facts that
 	// must be true for the item to be installed here (see site/src/content/docs/guides/conditions.md).
 	InstallableCondition string `yaml:"installable_condition,omitempty"`
-	// RequiresSoftware lists software the item needs and sofcat never
-	// installs. While any is missing, installs and updates are deferred.
-	RequiresSoftware []RequiredSoftware `yaml:"requires_software,omitempty"`
+	// DependsCheck lists software the item needs and sofcat does not install
+	// for it. While any is missing, installs and updates are deferred.
+	DependsCheck []DependsCheck `yaml:"depends_check,omitempty"`
 	// CustomActionLabels replaces the storefront's button and status labels,
 	// keyed by ActionLabelKeys (Munki's keys plus cancel, pending_install and
 	// pending_remove). A key it leaves out falls back to the item's
@@ -40,15 +40,23 @@ type Item struct {
 	NotInstallable string `yaml:"-"`
 }
 
-// RequiredSoftware is one requires_software entry. Each OS checks its own key:
-// Munki on macOS, Chocolatey on Windows; an OS with no key skips the entry.
-type RequiredSoftware struct {
+// DependsCheck is one depends_check entry: software named DisplayName, which
+// is present when any of its checks that apply on this OS passes. An entry
+// with no check for this OS is skipped.
+type DependsCheck struct {
 	DisplayName string `yaml:"display_name,omitempty"`
-	// Munki is a Munki item name, present when Munki's report lists it as installed.
+	// Sofcat is a catalog item name, present when sofcat finds that item installed.
+	Sofcat string `yaml:"sofcat,omitempty"`
+	// Munki is a Munki item name, checked on macOS: present when Munki's
+	// report lists it as installed.
 	Munki string `yaml:"munki,omitempty"`
-	// Chocolatey is a package id, present when %ProgramData%\chocolatey\lib\<id> exists.
-	Chocolatey string `yaml:"chocolatey,omitempty"`
+	// Script holds a script per OS (DependsCheckScriptOS); exit 0 means present.
+	Script map[string]string `yaml:"script,omitempty"`
 }
+
+// DependsCheckScriptOS are the keys of a depends_check script: Windows
+// PowerShell under windows, an executable with a #! line under darwin.
+var DependsCheckScriptOS = []string{"darwin", "windows"}
 
 // InstallerItem holds information about how to install a catalog item
 type InstallerItem struct {

@@ -29,7 +29,7 @@ var ErrMissingSoftware = fmt.Errorf("%w: required software missing", ErrDeferred
 // runningBlockingApps is a seam so tests can stub the process snapshot.
 var runningBlockingApps = status.RunningBlockingApps
 
-// missingSoftware is a seam so tests can stub the requires_software check.
+// missingSoftware is a seam so tests can stub the depends_check check.
 var missingSoftware = software.Missing
 
 // ProgressFn receives coarse per-item progress events. States emitted per
@@ -57,6 +57,9 @@ type Runner struct {
 	Zip *ZipInstaller
 	// NupkgPath is the root of the kept nupkg copies (config.NupkgPath).
 	NupkgPath string
+	// ItemInstalled reports whether sofcat finds the named catalog item
+	// installed, for a depends_check sofcat entry; nil means none is.
+	ItemInstalled func(itemName string) bool
 
 	// PulledBy names the items, outermost first, whose install is pulling in
 	// the current one as a dependency or updater; empty for a top-level item.
@@ -118,12 +121,21 @@ func (r *Runner) blockingGate(item catalog.Item, action string) error {
 	return ErrBlockingApps
 }
 
-// softwareGate defers an install or update while software the item requires
-// is missing: it records a DeferredItem with code missing_software and returns
-// ErrMissingSoftware. sofcat never installs that software; the next run
-// retries.
+// softwareGate defers an install or update while software the item's
+// depends_check names is missing: it records a DeferredItem with code
+// missing_software and returns ErrMissingSoftware. sofcat does not install
+// that software for the item; the next run retries.
 func (r *Runner) softwareGate(item catalog.Item, action string) error {
-	missing := missingSoftware(item)
+	missing := missingSoftware(item, software.Checks{
+		Sofcat: r.ItemInstalled,
+		Script: func(script string) bool {
+			err := dependsScriptFunc(script, r.CachePath)
+			if err != nil {
+				slog.Info("depends_check script did not pass", "item", item.DisplayName, "err", err)
+			}
+			return err == nil
+		},
+	})
 	if len(missing) == 0 {
 		return nil
 	}

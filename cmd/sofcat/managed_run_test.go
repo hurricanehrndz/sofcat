@@ -18,7 +18,6 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/manifest"
 	"github.com/hurricanehrndz/sofcat/pkg/report"
 	"github.com/hurricanehrndz/sofcat/pkg/sofcatlog"
-	"github.com/hurricanehrndz/sofcat/pkg/software"
 )
 
 // TestManagedRunReconcilesSelfServe verifies the run loads, reconciles, and
@@ -240,11 +239,6 @@ func TestRouteCheckOnlyPrintsInventoryOnly(t *testing.T) {
 	defer resetMainHooks()
 	// Deferred so the log closes before t.TempDir cleanup (see above).
 	defer sofcatlog.Close()
-	origOS, origLib := software.GOOS, software.ChocolateyLib
-	lib := t.TempDir()
-	software.GOOS = "windows"
-	software.ChocolateyLib = func() string { return lib }
-	t.Cleanup(func() { software.GOOS, software.ChocolateyLib = origOS, origLib })
 
 	const manifestYAML = `name: wiretest_manifest
 catalogs:
@@ -257,9 +251,9 @@ managed_installs:
   check:
     file:
       - path: C:\does-not-exist\needstool.txt
-  requires_software:
+  depends_check:
     - display_name: Demo Tool
-      chocolatey: demo-tool
+      sofcat: demo-tool
   installer:
     type: ps1
     location: packages/needstool.ps1

@@ -881,26 +881,25 @@ conditional_items:
 	check("last plugin removed", map[string]entry{}, nil)
 }
 
-// TestTapasRequiresSoftware: a zip item whose required Chocolatey package is
-// absent is deferred with missing_software and nothing is written, not even
-// the skills root; its dependent waits with it. Once the package directory
-// exists, the next run places both.
-func TestTapasRequiresSoftware(t *testing.T) {
+// TestTapasDependsCheck: a zip item whose depends_check names a sofcat item
+// that is not installed is deferred with missing_software and nothing is
+// written, not even the skills root; its dependent waits with it. Once
+// sofcat has installed that item, the same run places both.
+func TestTapasDependsCheck(t *testing.T) {
 	e := newTapasEnv(t)
-	lib := filepath.Join(tempDir(t), "chocolatey", "lib")
-	origOS, origLib := software.GOOS, software.ChocolateyLib
+	origOS := software.GOOS
 	software.GOOS = tapasOS
-	software.ChocolateyLib = func() string { return lib }
-	t.Cleanup(func() { software.GOOS, software.ChocolateyLib = origOS, origLib })
+	t.Cleanup(func() { software.GOOS = origOS })
 
 	skills := filepath.Join(e.roots, "skills")
 	e.servePlacements(map[string]string{"skills": skills}, nil, nil)
 	e.zipItem("needs-tool", "1.0", map[string]map[string]string{"skills": {"SKILL.md": "needs tool"}})
 	e.zipItem("rider", "1.0", map[string]map[string]string{"skills": {"SKILL.md": "rider"}})
+	e.zipItem("demo-tool", "1.0", map[string]map[string]string{"skills": {"SKILL.md": "demo tool"}})
 	needs := e.items["needs-tool"]
-	needs.RequiresSoftware = []catalog.RequiredSoftware{
-		{DisplayName: "Demo Tool", Chocolatey: "demo-tool"},
-		{DisplayName: "Mac Tool", Munki: "MacTool"}, // no Windows key: skipped
+	needs.DependsCheck = []catalog.DependsCheck{
+		{DisplayName: "Demo Tool", Sofcat: "demo-tool"},
+		{DisplayName: "Mac Tool", Munki: "MacTool"}, // no check for Windows: skipped
 	}
 	e.items["needs-tool"] = needs
 	rider := e.items["rider"]
@@ -927,9 +926,7 @@ func TestTapasRequiresSoftware(t *testing.T) {
 		t.Errorf("receipts = %+v, %v", rcs, err)
 	}
 
-	if err := os.MkdirAll(filepath.Join(lib, "demo-tool"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	e.put("manifests/tapas.yaml", []byte("name: tapas\ncatalogs: [tapas]\nmanaged_installs: [demo-tool, rider]\n"))
 	rep = e.run()
 	if len(rep.DeferredItems) != 0 || len(rep.FailedItems) != 0 {
 		t.Errorf("after installing Demo Tool: deferred %+v, failed %+v", rep.DeferredItems, rep.FailedItems)
@@ -941,22 +938,21 @@ func TestTapasRequiresSoftware(t *testing.T) {
 	}
 }
 
-// TestTapasUserScopeRequiresSoftware: a user-scope-only zip item whose
+// TestTapasUserScopeDependsCheck: a user-scope-only zip item whose
 // required software is absent is deferred by the machine run, and the user
 // plan holds it, so its archive is not staged and the helper places nothing.
 // Once the software is installed the next run plans, stages and places it.
-func TestTapasUserScopeRequiresSoftware(t *testing.T) {
+func TestTapasUserScopeDependsCheck(t *testing.T) {
 	e := newTapasEnv(t)
-	lib := filepath.Join(tempDir(t), "chocolatey", "lib")
-	origOS, origLib := software.GOOS, software.ChocolateyLib
-	software.GOOS = tapasOS
-	software.ChocolateyLib = func() string { return lib }
-	t.Cleanup(func() { software.GOOS, software.ChocolateyLib = origOS, origLib })
+	origOS, origReport := software.GOOS, software.MunkiReport
+	software.GOOS = "darwin"
+	software.MunkiReport = filepath.Join(tempDir(t), "ManagedInstallReport.plist")
+	t.Cleanup(func() { software.GOOS, software.MunkiReport = origOS, origReport })
 
 	e.servePlacements(map[string]string{"codex": "${USERPROFILE}/.agents/skills"}, nil, []string{"codex"})
 	e.zipItem("needs-tool", "1.0", map[string]map[string]string{"codex": {"SKILL.md": "needs tool"}})
 	needs := e.items["needs-tool"]
-	needs.RequiresSoftware = []catalog.RequiredSoftware{{DisplayName: "Demo Tool", Chocolatey: "demo-tool"}}
+	needs.DependsCheck = []catalog.DependsCheck{{DisplayName: "Demo Tool", Munki: "DemoTool"}}
 	e.items["needs-tool"] = needs
 	e.publishCatalog()
 	e.put("manifests/tapas.yaml", []byte("name: tapas\ncatalogs: [tapas]\nmanaged_installs: [needs-tool]\n"))
@@ -1001,7 +997,7 @@ func TestTapasUserScopeRequiresSoftware(t *testing.T) {
 		t.Errorf("helper acted on a deferred item: %+v", results)
 	}
 
-	if err := os.MkdirAll(filepath.Join(lib, "demo-tool"), 0o755); err != nil {
+	if err := os.WriteFile(software.MunkiReport, []byte(`<plist><dict><key>InstalledItems</key><array><string>DemoTool</string></array></dict></plist>`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	rep = e.run()

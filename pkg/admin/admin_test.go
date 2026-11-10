@@ -122,10 +122,11 @@ func TestCollectCatalogsInvalidCondition(t *testing.T) {
 	}
 }
 
-// A requires_software entry the agent cannot use is caught by -check: without
-// display_name the deferral message has no name, and without munki or
-// chocolatey no OS checks it.
-func TestCollectCatalogsRequiresSoftware(t *testing.T) {
+// A depends_check entry the agent cannot use is caught by -check: without
+// display_name the deferral message has no name, without sofcat, munki or
+// script nothing checks it, and a script under an unknown OS, an empty one or
+// a darwin one without #! never passes.
+func TestCollectCatalogsDependsCheck(t *testing.T) {
 	repoPath := t.TempDir()
 	dir := filepath.Join(repoPath, "packages-info")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -134,11 +135,18 @@ func TestCollectCatalogsRequiresSoftware(t *testing.T) {
 	info := `item_name: tool
 catalog: base
 installer: {type: msi, location: x.msi}
-requires_software:
-  - {display_name: Demo Tool, chocolatey: demo-tool}
+depends_check:
+  - display_name: Demo Tool
+    sofcat: demo-tool
+    munki: DemoTool
+    script:
+      windows: exit 0
+      darwin: "#!/bin/sh\nexit 0\n"
   - {display_name: Mac Tool, munki: MacTool}
-  - {chocolatey: nameless}
+  - {sofcat: nameless}
   - {display_name: Nowhere}
+  - display_name: Bad Scripts
+    script: {linux: exit 0, windows: " ", darwin: exit 0}
 `
 	if err := os.WriteFile(filepath.Join(dir, "tool.yaml"), []byte(info), 0o644); err != nil {
 		t.Fatal(err)
@@ -147,7 +155,13 @@ requires_software:
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"requires_software[2] has no display_name", "requires_software[3] needs munki or chocolatey"}
+	want := []string{
+		"depends_check[2] has no display_name",
+		"depends_check[3] needs sofcat, munki or script",
+		"depends_check[4] script for darwin does not start with #!",
+		`depends_check[4] script key "linux" is not one of darwin, windows`,
+		"depends_check[4] script for windows is empty",
+	}
 	if len(set.Problems) != len(want) {
 		t.Fatalf("problems = %v, want %v", set.Problems, want)
 	}
@@ -156,8 +170,9 @@ requires_software:
 			t.Errorf("problem %d = %q, want it to mention %q", i, set.Problems[i], w)
 		}
 	}
-	if got := set.Catalogs["base"]["tool"].RequiresSoftware; len(got) != 4 || got[0].Chocolatey != "demo-tool" {
-		t.Errorf("requires_software = %+v, want it carried into the catalog", got)
+	got := set.Catalogs["base"]["tool"].DependsCheck
+	if len(got) != 5 || got[0].Sofcat != "demo-tool" || got[0].Script["windows"] != "exit 0" {
+		t.Errorf("depends_check = %+v, want it carried into the catalog", got)
 	}
 }
 

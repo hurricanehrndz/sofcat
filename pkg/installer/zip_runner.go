@@ -29,7 +29,7 @@ func (r *Runner) recordPlacement(item catalog.Item, action string, res Result) {
 }
 
 // installZip is Install for a zip item. Its inspect step, not the status
-// checker, decides whether anything needs doing. The requires_software and
+// checker, decides whether anything needs doing. The depends_check and
 // blocking-app gates and check-only mode apply as for any other item; pre- and
 // post-scripts do not.
 func (r *Runner) installZip(item catalog.Item, installerType string) (string, error) {

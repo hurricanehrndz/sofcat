@@ -1,5 +1,3 @@
-//go:build !zip_only
-
 package status
 
 import (

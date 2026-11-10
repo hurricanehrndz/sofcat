@@ -1,5 +1,6 @@
-// Package software checks a catalog item's requires_software entries: software
-// sofcat needs on the machine but never installs (see site/src/content/docs/guides/zip-items.md).
+// Package software checks a catalog item's depends_check entries: software
+// sofcat needs on the machine but does not install for the item (see
+// site/src/content/docs/guides/zip-items.md).
 package software
 
 import (
@@ -8,16 +9,14 @@ import (
 	"encoding/xml"
 	"errors"
 	"os"
-	"path/filepath"
 	"runtime"
-	"strings"
 
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
 )
 
 var (
-	// GOOS is the OS whose entries are checked: munki on darwin, chocolatey
-	// on windows. Tests set it.
+	// GOOS is the OS whose checks apply: munki on darwin, and the script
+	// under this key. Tests set it.
 	GOOS = runtime.GOOS
 	// MunkiReport is Munki's run report, which lists every installed managed
 	// item under InstalledItems. Tests point it at a fixture. The
@@ -25,51 +24,43 @@ var (
 	// smoke (test/manual/run-tapas-smoke.sh), which must not touch the rig's
 	// real Munki report; only root can set a daemon's environment.
 	MunkiReport = cmp.Or(os.Getenv("SOFCAT_TEST_MUNKI_REPORT"), "/Library/Managed Installs/ManagedInstallReport.plist")
-	// ChocolateyLib returns Chocolatey's package directory, which holds one
-	// directory per installed package id. Tests replace it.
-	ChocolateyLib = func() string {
-		dir := os.Getenv("ProgramData")
-		if dir == "" {
-			dir = `C:\ProgramData`
-		}
-		return filepath.Join(dir, "chocolatey", "lib")
-	}
 
-	// munkiInstalled and chocolateyInstalled are the per-OS checks.
-	munkiInstalled      = munkiReportLists
-	chocolateyInstalled = chocolateyLibHas
+	// munkiInstalled is the Munki check.
+	munkiInstalled = munkiReportLists
 )
 
-// Missing returns the display names of item's required software that is
-// absent on this OS, in catalog order. An entry with no key for this OS is
-// skipped.
-func Missing(item catalog.Item) []string {
+// Checks are the checks the caller runs for Missing. A nil one never passes.
+type Checks struct {
+	// Sofcat reports whether sofcat finds the catalog item installed.
+	Sofcat func(itemName string) bool
+	// Script runs a depends_check script for this OS and reports whether it
+	// exited 0.
+	Script func(script string) bool
+}
+
+// Missing returns the display names of item's depends_check software that is
+// absent, in catalog order. An entry is present when any of its checks that
+// apply on this OS passes: sofcat everywhere, munki on darwin, and the script
+// for this OS, tried in that order. An entry with none is skipped.
+func Missing(item catalog.Item, checks Checks) []string {
 	var missing []string
-	for _, req := range item.RequiresSoftware {
-		var present bool
-		switch {
-		case GOOS == "darwin" && req.Munki != "":
-			present = munkiInstalled(req.Munki)
-		case GOOS == "windows" && req.Chocolatey != "":
-			present = chocolateyInstalled(req.Chocolatey)
-		default:
+	for _, dep := range item.DependsCheck {
+		script := dep.Script[GOOS]
+		munki := ""
+		if GOOS == "darwin" {
+			munki = dep.Munki
+		}
+		if dep.Sofcat == "" && munki == "" && script == "" {
 			continue
 		}
+		present := dep.Sofcat != "" && checks.Sofcat != nil && checks.Sofcat(dep.Sofcat) ||
+			munki != "" && munkiInstalled(munki) ||
+			script != "" && checks.Script != nil && checks.Script(script)
 		if !present {
-			missing = append(missing, req.DisplayName)
+			missing = append(missing, dep.DisplayName)
 		}
 	}
 	return missing
-}
-
-// chocolateyLibHas reports whether Chocolatey's lib directory holds id. An id
-// that is not a single path element never matches.
-func chocolateyLibHas(id string) bool {
-	if id == "" || id == "." || id == ".." || strings.ContainsAny(id, `/\:`) {
-		return false
-	}
-	info, err := os.Stat(filepath.Join(ChocolateyLib(), id))
-	return err == nil && info.IsDir()
 }
 
 // munkiReportLists reports whether MunkiReport's InstalledItems names name.

@@ -1,8 +1,9 @@
 //go:build !zip_only
 
-// The command installers (msi, exe, ps1, msix, nupkg) and catalog scripts.
-// A zip-only build (the zip_only tag) leaves this file out, so its binary
-// cannot run them; installer_zip_only.go stands in for what Install calls.
+// The command installers (msi, exe, ps1, msix, nupkg). A zip-only build (the
+// zip_only tag) leaves this file out, so its binary cannot run them;
+// installer_zip_only.go stands in for what Install calls. Catalog scripts are
+// in script.go, which every build compiles.
 
 package installer
 
@@ -13,7 +14,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -26,10 +26,8 @@ import (
 var (
 	// Base command for each installer type
 	commandMsi = filepath.Join(os.Getenv("WINDIR"), "system32/", "msiexec.exe")
-	commandPs1 = filepath.Join(os.Getenv("WINDIR"), "system32/", "WindowsPowershell", "v1.0", "powershell.exe")
 
 	// These abstractions allows us to override when testing
-	execCommand  = exec.Command
 	runCommand   = runCMD
 	runCommandIn = runCMDIn
 )
@@ -78,23 +76,6 @@ func runCMDIn(dir, command string, arguments []string) (string, error) {
 	}
 
 	return output, err
-}
-
-// maxStderrTail bounds how much of a failed command's stderr goes into its
-// error: enough for a PowerShell error record, not a whole installer log.
-const maxStderrTail = 2048
-
-// withStderr adds the end of a failed command's stderr to its error, so the
-// log and the report say why it failed, not only its exit status.
-func withStderr(err error, stderr []byte) error {
-	msg := bytes.TrimSpace(stderr)
-	if err == nil || len(msg) == 0 {
-		return err
-	}
-	if len(msg) > maxStderrTail {
-		msg = append([]byte("..."), msg[len(msg)-maxStderrTail:]...)
-	}
-	return fmt.Errorf("%w: %s", err, strings.ToValidUTF8(string(msg), ""))
 }
 
 // exitCoder is the part of *exec.ExitError acceptedExitCode needs; tests use
@@ -374,51 +355,9 @@ func (r *Runner) uninstallItem(item catalog.Item, itemURL string) (string, error
 	return r.actionItem(item, itemURL, "uninstall")
 }
 
-// runScript writes the script to a unique temporary .ps1 under cachePath,
-// executes it, and removes it. kind distinguishes the temp file names.
-func runScript(script, kind, cachePath string) error {
-	if err := os.MkdirAll(cachePath, 0o755); err != nil {
-		return err
-	}
-
-	// Write the script to disk as a Powershell file
-	tmpFile, err := os.CreateTemp(cachePath, "sofcat-"+kind+"-*.ps1")
-	if err != nil {
-		return err
-	}
-	tmpScript := tmpFile.Name()
-	defer func() {
-		if removeErr := os.Remove(tmpScript); removeErr != nil && !os.IsNotExist(removeErr) {
-			slog.Warn("Unable to remove temporary script", "path", tmpScript, "err", removeErr)
-		}
-	}()
-	_, writeErr := tmpFile.WriteString(script)
-	closeErr := tmpFile.Close()
-	if writeErr != nil {
-		return writeErr
-	}
-	if closeErr != nil {
-		return closeErr
-	}
-
-	// Execute the script
-	psArgs := []string{"-NoProfile", "-NoLogo", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", tmpScript}
-	cmd := execCommand(commandPs1, psArgs...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err = cmd.Run()
-
-	// Log results
-	slog.Debug("Script results", "err", err, "stdout", stdout.String(), "stderr", stderr.String())
-
-	return withStderr(err, stderr.Bytes())
-}
-
 var (
 	// By putting the functions in a variable, we can override later in tests.
 	// installer_zip_only.go defines the zip-only stand-ins.
 	installItemFunc   = (*Runner).installItem
 	uninstallItemFunc = (*Runner).uninstallItem
-	itemScriptFunc    = runScript
 )
