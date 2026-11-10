@@ -64,6 +64,8 @@ CONDITION_SCRIPT="$CONDITIONS_DIR/10-tapas-smoke"
 # tapas_desktop_managed conditional block read; written before the daemon
 # restarts, so its startup run has it.
 DESKTOP_SCRIPT="$CONDITIONS_DIR/20-tapas-desktop"
+# The fact script the fixture repository delivers, where the daemon syncs it.
+SYNCED_SCRIPT="$DATA_DIR/conditions-synced/05-tapas-synced"
 
 CLAUDE_ROOT="$SMOKE_ROOT/claude/skills"
 CODEX_ROOT="$SMOKE_ROOT/codex/skills"
@@ -243,7 +245,7 @@ assert_placed() {
 # tapas-desktop-optional into managed_installs. Root-owned, 0755.
 write_desktop_script() {
 	mkdir -p "$CONDITIONS_DIR"
-	printf '#!/bin/sh\necho %s\n' "'{\"assigned_user\": \"$1\", \"tapas_desktop_managed\": \"$2\"}'" >"$DESKTOP_SCRIPT"
+	printf '#!/bin/sh\necho %s\n' "'{\"assigned_user\": \"$1\", \"tapas_desktop_managed\": \"$2\", \"tapas_shared\": \"admin\"}'" >"$DESKTOP_SCRIPT"
 	chown root:wheel "$DESKTOP_SCRIPT"
 	chmod 0755 "$DESKTOP_SCRIPT"
 }
@@ -696,6 +698,17 @@ assert_placed "$CLAUDE_ROOT" claude-skills tapas-scoped-skill
 assert_placed "$CLAUDE_ROOT" claude-skills tapas-held-skill
 assert_skills_index tapas-managed-skill tapas-adopt-skill tapas-scoped-skill tapas-held-skill
 pass "tapas-scoped-skill and tapas-held-skill placed and in the skills index"
+
+step "The repository's condition script is synced, and a hand-installed script wins a shared fact"
+# The fixture repository delivers conditions/darwin/05-tapas-synced; nothing
+# here installed it. It and $DESKTOP_SCRIPT both print tapas_shared.
+[ -f "$SYNCED_SCRIPT" ] || fail "$SYNCED_SCRIPT was not synced from the repository; see $LOG_PATH"
+perm=$(stat -f '%Su %Lp' "$SYNCED_SCRIPT")
+[ "$perm" = "root 755" ] || fail "$SYNCED_SCRIPT is $perm, want root 755"
+[ ! -e "$CONDITIONS_DIR/$(basename "$SYNCED_SCRIPT")" ] || fail "the sync wrote into $CONDITIONS_DIR, which belongs to the admin"
+synced_facts() { jq -e '.Conditions.tapas_synced == "repository" and .Conditions.tapas_shared == "admin"' "$INVENTORY" >/dev/null; }
+wait_for "inventory Conditions with tapas_synced=repository and tapas_shared=admin (now $(jq -c '.Conditions | {tapas_synced, tapas_shared}' "$INVENTORY"))" synced_facts
+pass "$SYNCED_SCRIPT is $perm; tapas_synced=repository, tapas_shared=admin"
 
 step "Scope exit removes the item that left the desired set and keeps the held one"
 # tapas_smoke_scope turns false; tapas_smoke_held goes missing, so its block is held.

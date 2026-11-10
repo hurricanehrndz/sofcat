@@ -1,0 +1,6 @@
+#!/bin/sh
+# Fact script of the generic harness fixture. The repository delivers it: the
+# daemon syncs it into conditions-synced in its data directory, and
+# run-harness-smoke.sh copies each case's facts.json to harness-facts.json in
+# the data directory above it.
+cat "$(dirname "$0")/../harness-facts.json"

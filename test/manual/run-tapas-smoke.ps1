@@ -61,6 +61,8 @@ $conditionScript = Join-Path $conditionsDir "10-tapas-smoke.ps1"
 # The admin fact script the Desktop plugins' templates and the
 # tapas_desktop_managed conditional block read; written first thing.
 $desktopScript = Join-Path $conditionsDir "20-tapas-desktop.ps1"
+# The fact script the fixture repository delivers, where the service syncs it.
+$syncedScript = Join-Path $DataDir "conditions-synced\05-tapas-synced.ps1"
 
 # Placement roots from placements.yaml.
 $claudeRoot    = Join-Path $SmokeRoot "claude\skills"
@@ -277,7 +279,7 @@ function Write-DesktopScript {
     param([string]$AssignedUser, [string]$Managed)
     New-Item -ItemType Directory -Path $conditionsDir -Force | Out-Null
     Set-Content -LiteralPath $desktopScript -Encoding ASCII -Value `
-        ('@{{ assigned_user = "{0}"; tapas_desktop_managed = "{1}" }} | ConvertTo-Json -Compress' -f $AssignedUser, $Managed)
+        ('@{{ assigned_user = "{0}"; tapas_desktop_managed = "{1}"; tapas_shared = "admin" }} | ConvertTo-Json -Compress' -f $AssignedUser, $Managed)
 }
 
 # Get-ReceiptTimes maps every receipt's path to its modification time.
@@ -717,6 +719,17 @@ Assert-Placed $claudeRoot "claude-skills" "tapas-scoped-skill" | Out-Null
 Assert-Placed $claudeRoot "claude-skills" "tapas-held-skill" | Out-Null
 Assert-SkillsIndex @("tapas-managed-skill", "tapas-adopt-skill", "tapas-scoped-skill", "tapas-held-skill")
 Pass "tapas-scoped-skill and tapas-held-skill placed and in the skills index"
+
+Write-Step "The repository's condition script is synced, and a hand-installed script wins a shared fact"
+# The fixture repository delivers conditions/windows/05-tapas-synced.ps1;
+# nothing here installed it. It and $desktopScript both print tapas_shared.
+if (-not (Test-Path -LiteralPath $syncedScript)) { Fail "$syncedScript was not synced from the repository; see sofcat.log" }
+if (Test-Path -LiteralPath (Join-Path $conditionsDir (Split-Path $syncedScript -Leaf))) { Fail "the sync wrote into $conditionsDir, which belongs to the admin" }
+Wait-For {
+    $c = (Read-Inventory).Conditions
+    $c.tapas_synced -eq "repository" -and $c.tapas_shared -eq "admin"
+} "inventory Conditions with tapas_synced=repository and tapas_shared=admin"
+Pass "$syncedScript synced; tapas_synced=repository, tapas_shared=admin"
 
 Write-Step "Scope exit removes the item that left the desired set and keeps the held one"
 # tapas_smoke_scope turns false; tapas_smoke_held goes missing, so its block is held.

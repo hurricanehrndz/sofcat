@@ -1,0 +1,5 @@
+#!/bin/sh
+# Fact script the Tapas fixture repository delivers; the smokes check that the
+# daemon syncs and runs it. Their hand-installed Desktop script also prints
+# tapas_shared, and must win.
+echo '{"tapas_synced": "repository", "tapas_shared": "repository"}'
