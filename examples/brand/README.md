@@ -39,5 +39,5 @@ policy key derive from `SLUG` and `NAME` (`pkg/identity`), so it installs beside
 stock SofCat or another brand without sharing any of them, as long as each
 brand's `SLUG`, `NAME` and `IDENTIFIER` differ. Its runtime branding (title,
 logo, accent, help link) still comes from `config.yaml` or
-`HKLM\SOFTWARE\Policies\<NAME>\Branding`, as described in
+`HKLM\SOFTWARE\Policies\<NAME>\branding` (macOS: managed preferences), as described in
 [ui/README.md](../../ui/README.md#branding).

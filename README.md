@@ -46,7 +46,7 @@ What already works:
   with per-item progress and an Activity log. The app talks to the agent over
   a local named pipe, so nobody needs to elevate.
 - **Your branding.** Set the app's title, logo, accent colour and help link
-  with policy registry values or `config.yaml`. See
+  with MDM or Group Policy managed settings or `config.yaml`. See
   [ui/README.md](ui/README.md#branding). To ship it under your own name, icon,
   service and installer, build a rebrand; see
   [examples/brand/README.md](examples/brand/README.md).

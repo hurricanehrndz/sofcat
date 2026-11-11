@@ -8,8 +8,9 @@ app_data_path: c:/cpe/sofcat/cache
 # service_name: sofcat
 # service_interval: 1h
 # service_pipe_name: sofcat-service
-# Optional organisation branding for SofCat UI. Policy values under
-# HKLM\SOFTWARE\Policies\SofCat\Branding override each field. Leave the block
+# Optional organisation branding for SofCat UI. Managed settings (registry key
+# HKLM\SOFTWARE\Policies\SofCat\branding, or the `branding` dict in the macOS
+# managed preferences plist) override each field. Leave the block
 # out to keep the default look.
 # branding:
 #   title: Acme Software Center

@@ -351,11 +351,14 @@ refresh keeps the prior data and marks it stale.
 ## Branding
 
 Branding is admin configuration, not catalog data. The SYSTEM service resolves
-it on each `GetBranding` call, field by field, first match wins:
+it field by field, first match wins. It reads managed settings once, at start,
+so a policy change needs a service restart:
 
-1. REG_SZ values under `HKLM\SOFTWARE\Policies\SofCat\Branding` (`Title`,
-   `Tagline`, `LogoPath`, `HelpUrl`, `HelpLabel`, `Accent`, `ListHeading`), for
-   MDM and GPO.
+1. Managed settings, for MDM and GPO: values under
+   `HKLM\SOFTWARE\Policies\SofCat\branding` on Windows, or the `branding` dict of
+   `/Library/Managed Preferences/<IDENTIFIER>.plist` on macOS. The names are the
+   `config.yaml` keys (`title`, `tagline`, `logo`, `help_url`, `help_label`,
+   `accent`, `list_heading`, `sections`; `sections` is a REG_MULTI_SZ).
 2. The `branding:` block in `config.yaml`.
 3. Nothing, and the UI keeps its default look.
 

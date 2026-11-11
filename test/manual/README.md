@@ -165,9 +165,9 @@ copies the selfserve fixtures and the three executables into `build/e2e-repo/`).
 - `run-selfserve-smoke.ps1` (prints `SELF-SERVE SMOKE PASSED`), reached here
   through `included_manifests`.
 - `run-chrome-e2e.ps1` (prints `CHROME E2E PASSED`): `GetBranding` returns
-  the config branding, a policy `Title` under
-  `HKLM\SOFTWARE\Policies\SofCat\Branding` wins over it and removing it
-  restores the config; then metadata and NotInstalled
+  the config branding, a policy `title` under
+  `HKLM\SOFTWARE\Policies\SofCat\branding` wins over it after a service restart
+  and removing it plus a restart restores the config; then metadata and NotInstalled
   status, a `CancelOperation` of a Chrome install queued behind a busy run
   (ends `Canceled` by the user, nothing installed, selection reverted, a second
   cancel refused), `Restart-Service` within 30 s while a run is busy,

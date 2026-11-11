@@ -7,8 +7,8 @@ through the service pipe and assert every observable side effect.
 Drives the running SofCat service (via `sofcat.exe -S ...`) against the e2e
 fixture set built by build-e2e-repo.sh and asserts, in order:
   - GetBranding returns the config.yaml branding block e2e-chrome.sh appended, a
-    policy Title under HKLM\SOFTWARE\Policies\SofCat\Branding wins over it, and
-    removing the policy brings the config title back
+    policy title under HKLM\SOFTWARE\Policies\SofCat\branding wins over it after
+    a service restart, and removing the policy and restarting brings the config title back
   - the item is offered with its catalog metadata and an honest NotInstalled status
   - DemoRequired, an admin managed_installs item, is listed isRequired and RemoveItem
     of it is refused with item_not_removable
@@ -226,6 +226,12 @@ function Stop-Chrome {
     } "chrome to stop"
 }
 
+# The service reads managed settings once, at start, so a policy change needs a restart.
+function Restart-ForPolicy {
+    Restart-Service sofcat
+    Wait-For { (Invoke-SofCat "GetBranding" -AllowFail).Code -eq 0 } "the service to answer after the policy restart"
+}
+
 function Get-Branding {
     $res = Invoke-SofCat "GetBranding"
     foreach ($l in $res.Out) {
@@ -236,8 +242,8 @@ function Get-Branding {
 }
 
 # --- Branding: config block, then a policy value that wins over it
-Write-Step "GetBranding returns the config branding; a policy Title wins, and removing it restores the config"
-$PolicyKey = 'HKLM:\SOFTWARE\Policies\SofCat\Branding'
+Write-Step "GetBranding returns the config branding; a policy title wins after a restart, and removing it restores the config"
+$PolicyKey = 'HKLM:\SOFTWARE\Policies\SofCat\branding'
 $b = Get-Branding
 if ($b.title -ne $BrandingTitle)   { Fail "branding title '$($b.title)', expected '$BrandingTitle' from config.yaml" }
 if ($b.logoMime -ne "image/png")   { Fail "branding logoMime '$($b.logoMime)', expected image/png" }
@@ -245,14 +251,16 @@ if ([int]$b.logoBytes -le 0)       { Fail "branding logo is empty" }
 if ($b.accent -ne "#0b6e4f")       { Fail "branding accent '$($b.accent)'" }
 if ($b.helpUrl -notmatch '^https://') { Fail "branding helpUrl '$($b.helpUrl)'" }
 try {
-    & reg.exe add 'HKLM\SOFTWARE\Policies\SofCat\Branding' /v Title /t REG_SZ /d 'Policy Title' /f | Out-Null
+    & reg.exe add 'HKLM\SOFTWARE\Policies\SofCat\branding' /v title /t REG_SZ /d 'Policy Title' /f | Out-Null
     if ($LASTEXITCODE -ne 0) { Fail "reg add exited $LASTEXITCODE" }
+    Restart-ForPolicy
     $p = Get-Branding
-    if ($p.title -ne "Policy Title") { Fail "policy Title did not win: '$($p.title)'" }
-    if ([int]$p.logoBytes -ne [int]$b.logoBytes) { Fail "policy Title changed an unrelated field (logo)" }
+    if ($p.title -ne "Policy Title") { Fail "policy title did not win: '$($p.title)'" }
+    if ([int]$p.logoBytes -ne [int]$b.logoBytes) { Fail "policy title changed an unrelated field (logo)" }
 } finally {
     Remove-Item -Path $PolicyKey -Recurse -Force -ErrorAction SilentlyContinue
 }
+Restart-ForPolicy
 $b = Get-Branding
 if ($b.title -ne $BrandingTitle) { Fail "config title not restored after removing the policy: '$($b.title)'" }
 Pass "config title '$BrandingTitle' ($($b.logoMime), $($b.logoBytes) bytes); policy 'Policy Title' won; config restored"

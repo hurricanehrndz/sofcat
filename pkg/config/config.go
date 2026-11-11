@@ -105,10 +105,13 @@ type Configuration struct {
 	// is carrying out, for the inventory. The service sets it per run; it is
 	// never read from config.yaml.
 	RequestedBy map[string]string `yaml:"-"`
+	// ManagedWarnings are the managed settings Get ignored or dropped, for
+	// the service to log at start.
+	ManagedWarnings []string `yaml:"-"`
 }
 
-// Branding is the optional organisation branding block for SofCat UI. Policy
-// registry values override it per field; pkg/branding merges and validates both.
+// Branding is the optional organisation branding block for SofCat UI. Managed
+// settings override it per field (applyManaged); pkg/branding validates it.
 type Branding struct {
 	Title     string `yaml:"title,omitempty"`
 	Tagline   string `yaml:"tagline,omitempty"`
@@ -195,13 +198,19 @@ func Get() Configuration {
 	serviceControlMode := serviceInstallArg || serviceRemoveArg || serviceStartArg || serviceStopArg || serviceStatusArg
 	serviceClientMode := serviceCmdArg != ""
 
+	// Managed settings (MDM or GPO) win over config.yaml key by key, and can
+	// stand in for the file altogether.
+	var warnings []string
+	warn := func(msg string) { warnings = append(warnings, msg) }
+	managed := readManagedSettings(warn)
+
 	// Read the config file. The installer runs -serviceinstall, and the
 	// service starts, before management tooling has written config.yaml, so
 	// the service-control flags and service mode run with defaults until
 	// the file exists; every managed run fails until then, and a service
 	// restart picks the file up.
 	configFile, err := os.ReadFile(configPath)
-	if err != nil && (!serviceArg && !serviceControlMode || !errors.Is(err, fs.ErrNotExist)) {
+	if err != nil && (!serviceArg && !serviceControlMode && len(managed) == 0 || !errors.Is(err, fs.ErrNotExist)) {
 		fmt.Println("Unable to read configuration file: ", err)
 		osExit(1)
 	}
@@ -211,6 +220,14 @@ func Get() Configuration {
 	if err != nil {
 		fmt.Println("Unable to parse yaml configuration: ", err)
 		osExit(1)
+	}
+	applyManaged(&cfg, managed, warn)
+	cfg.ManagedWarnings = warnings
+	// The service logs them once its log exists; anything else has a console.
+	if !serviceArg {
+		for _, w := range warnings {
+			fmt.Fprintln(os.Stderr, w)
+		}
 	}
 
 	// Normal run mode requires both manifest and URL. Service mode starts

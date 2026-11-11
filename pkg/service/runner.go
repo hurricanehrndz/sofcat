@@ -154,6 +154,9 @@ func (sr *serviceRunner) start(ctx context.Context) error {
 	if err := sofcatlog.NewLog(sr.cfg); err != nil {
 		return fmt.Errorf("initialize logger: %w", err)
 	}
+	for _, w := range sr.cfg.ManagedWarnings {
+		slog.Warn(w)
+	}
 
 	interval, err := time.ParseDuration(sr.cfg.ServiceInterval)
 	if err != nil || interval <= 0 {
