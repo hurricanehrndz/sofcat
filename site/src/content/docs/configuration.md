@@ -46,6 +46,7 @@ owns it and neither its group nor others can write it.
 | `url`, `url_packages`, `manifest`, `local_manifests`, `catalogs` | Yes |
 | `verbose`, `debug`, `log_file_plain`, `checkonly`, `service_interval` | Yes |
 | `tls_auth`, `tls_client_cert`, `tls_client_key`, `tls_server_cert` (file paths) | Yes |
+| `tls_client_cert_store`, `tls_client_cert_store_field` | Yes |
 | `branding` (`title`, `tagline`, `logo`, `help_url`, `help_label`, `accent`, `list_heading`, `sections`) | Yes, field by field |
 | `auth_user`, `auth_pass` | No: ignored with a warning in `sofcat.log` |
 | `app_data_path`, `service_name`, `service_pipe_name` | No: they must match the installed build |
@@ -81,10 +82,24 @@ internet. Use mutual TLS instead:
   payload, SCEP or ACME, or your PKI's enrollment agent. The private key
   stays on the machine and you can revoke one machine without touching the
   rest.
-- Set `tls_auth` and point `tls_client_cert`, `tls_client_key` and
-  `tls_server_cert` at the deployed files through policy. The policy holds
-  only paths. Restrict the key file itself to SYSTEM and Administrators
-  (root on macOS).
+- Set `tls_auth` and `tls_client_cert_store`, a regular expression that
+  picks the certificate from the machine store: `LocalMachine\My` on
+  Windows, the System keychain on macOS. It matches the subject's common
+  name, or the field `tls_client_cert_store_field` names: `issuer` (its
+  common name), `serial` or `dns_names` (any of them). Of the matching
+  certificates SofCat presents the one valid now that expires last, so a
+  renewed certificate replaces the old one at the next run without a
+  restart. The key never leaves the store, so a non-exportable or
+  TPM-backed key works. On macOS the key's access control must let the
+  daemon use it, since a daemon cannot answer the keychain's prompt: set
+  `AllowAllAppsAccess` in the certificate payload of the MDM profile
+  (PKCS #12, SCEP or ACME), or import it by hand with `security import -A`.
+  Without it the log shows `CFError -25308` with that advice.
+- Or point `tls_client_cert` and `tls_client_key` at PEM files. Restrict the
+  key file to SYSTEM and Administrators (root on macOS).
+- `tls_server_cert` is a PEM file of the roots that verify the repository.
+  Leave it out to use the system's. Policy can set every one of these keys;
+  none is a secret.
 - Terminate TLS at a reverse proxy or CDN that requires a client certificate
   from your CA in front of a static repository.
 

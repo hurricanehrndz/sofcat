@@ -26,6 +26,7 @@ var downloadCfg config.Configuration
 // SetConfig accepts a configuration struct that all functions in the `download` package will use
 func SetConfig(cfg config.Configuration) {
 	downloadCfg = cfg
+	storeCache.reset(cfg.TLSClientCertStore, cfg.TLSClientCertStoreField)
 }
 
 func fileContext(ctx context.Context, file string, url string, progress Progress) error {
@@ -80,68 +81,58 @@ func Get(url string) ([]byte, error) {
 	return getContext(context.Background(), url)
 }
 
-// open sends the request and returns the response of a 200; the caller
-// closes its body.
-func open(ctx context.Context, url string) (*http.Response, error) {
-	// Declare the http client
-	var client *http.Client
-
-	// If TLSAuth is true, configure server and client certs
-	if downloadCfg.TLSAuth {
-		// Load	the client certificate and private key
+// clientTLSConfig is the TLS config for tls_auth: the client certificate from
+// the machine store (tls_client_cert_store) or from PEM files, and the server
+// roots from tls_server_cert or, when it is unset, the system's.
+func clientTLSConfig() (*tls.Config, error) {
+	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
+	if downloadCfg.TLSClientCertStore != "" {
+		tlsConfig.GetClientCertificate = func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
+			return storeCache.get()
+		}
+	} else {
 		clientCert, err := tls.LoadX509KeyPair(downloadCfg.TLSClientCert, downloadCfg.TLSClientKey)
 		if err != nil {
 			return nil, err
 		}
-
-		// Load server certificates
+		tlsConfig.Certificates = []tls.Certificate{clientCert}
+	}
+	if downloadCfg.TLSServerCert != "" {
 		serverCert, err := os.ReadFile(downloadCfg.TLSServerCert)
 		if err != nil {
 			return nil, err
 		}
 		caCertPool := x509.NewCertPool()
 		caCertPool.AppendCertsFromPEM(serverCert)
-
-		// Setup the tls configuration
-		tlsConfig := &tls.Config{
-			Certificates: []tls.Certificate{clientCert},
-			RootCAs:      caCertPool,
-			// Insecure, but might need to be an option for odd configurations in the future
-			// Renegotiation: tls.RenegotiateFreelyAsClient,
-		}
-
-		// Setup the http client
-		client = &http.Client{
-			Transport: &http.Transport{
-				TLSClientConfig: tlsConfig,
-				DialContext: (&net.Dialer{
-					Timeout:   10 * time.Second,
-					KeepAlive: 10 * time.Second,
-				}).DialContext,
-				TLSHandshakeTimeout:   10 * time.Second,
-				ResponseHeaderTimeout: 10 * time.Second,
-				ExpectContinueTimeout: 1 * time.Second,
-			},
-		}
-	} else {
-		// Setup our http client without tls auth
-		// Defining the transport separately so we can add a `file://` protocol
-		transport := &http.Transport{
-			DialContext: (&net.Dialer{
-				Timeout:   10 * time.Second,
-				KeepAlive: 10 * time.Second,
-			}).DialContext,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ResponseHeaderTimeout: 10 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
-		}
-
-		// Register a file handler so `file://` works
-		transport.RegisterProtocol("file", http.NewFileTransport(http.Dir("/"))) //nolint:gosec // G111: file:// sources are absolute paths from the admin-controlled catalog
-
-		// Create the client using our custom transport
-		client = &http.Client{Transport: transport}
+		tlsConfig.RootCAs = caCertPool
 	}
+	return tlsConfig, nil
+}
+
+// open sends the request and returns the response of a 200; the caller
+// closes its body.
+func open(ctx context.Context, url string) (*http.Response, error) {
+	transport := &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout:   10 * time.Second,
+			KeepAlive: 10 * time.Second,
+		}).DialContext,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+	if downloadCfg.TLSAuth {
+		tlsConfig, err := clientTLSConfig()
+		if err != nil {
+			return nil, err
+		}
+		transport.TLSClientConfig = tlsConfig
+	}
+
+	// Register a file handler so `file://` works
+	transport.RegisterProtocol("file", http.NewFileTransport(http.Dir("/"))) //nolint:gosec // G111: file:// sources are absolute paths from the admin-controlled catalog
+
+	client := &http.Client{Transport: transport}
 
 	// Build the request
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)

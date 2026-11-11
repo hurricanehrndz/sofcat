@@ -208,9 +208,10 @@ _require-macos:
     @[ "$(uname)" = Darwin ] || { echo "this recipe runs only on macOS (Xcode command line tools: cgo, sips, iconutil, pkgbuild)" >&2; exit 1; }
 
 # macOS binaries for the host architecture -> build/<app> (the CLI) and
-# build/<app>-useragent (the per-user helper), both pure Go, and
-# build/<product>.app (the UI: Wails needs cgo and the Xcode command line
-# tools). Same tags and identity as `build`; no -H windowsgui. The icon.icns
+# build/<app>-useragent (the per-user helper, pure Go) and
+# build/<product>.app. The CLI needs cgo for the System keychain
+# (tls_client_cert_store) and the UI for Wails, so both need the Xcode command
+# line tools. Same tags and identity as `build`; no -H windowsgui. The icon.icns
 # is made with sips and iconutil, which ship with macOS. With
 # CODESIGN_IDENTITY set, the CLI and the helper are signed after their builds
 # and the app as a bundle once it is complete, since the signature seals
@@ -219,7 +220,8 @@ _require-macos:
 build-macos: _require-macos ui-assets
     mkdir -p build
     {{ if write_roots == "" { "true" } else { "cp '" + write_roots + "' pkg/placement/brand-write-roots.yaml" } }}
-    CGO_ENABLED=0 go build -tags "{{_svc_tags}}" -ldflags "-X github.com/hurricanehrndz/sofcat/pkg/version.appName={{app}} -X github.com/hurricanehrndz/sofcat/pkg/version.version={{version}} {{_identity}}" \
+    MACOSX_DEPLOYMENT_TARGET={{macos_min}} CGO_ENABLED=1 CGO_CFLAGS="-O2 -g -mmacosx-version-min={{macos_min}}" CGO_LDFLAGS="-mmacosx-version-min={{macos_min}}" \
+        go build -tags "{{_svc_tags}}" -ldflags "-X github.com/hurricanehrndz/sofcat/pkg/version.appName={{app}} -X github.com/hurricanehrndz/sofcat/pkg/version.version={{version}} {{_identity}}" \
         -o build/{{app}} ./cmd/sofcat
     {{ if CODESIGN_IDENTITY == "" { "true" } else { _codesign + " --identifier " + identifier + ".cli build/" + app } }}
     CGO_ENABLED=0 go build -tags "{{_svc_tags}}" -ldflags "{{_identity}}" -o build/{{app}}-useragent ./cmd/sofcat-useragent

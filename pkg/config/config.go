@@ -108,6 +108,12 @@ type Configuration struct {
 	// ManagedWarnings are the managed settings Get ignored or dropped, for
 	// the service to log at start.
 	ManagedWarnings []string `yaml:"-"`
+	// TLSClientCertStore selects the tls_auth client certificate from the
+	// machine store (Windows LocalMachine, the macOS System keychain) by a
+	// regular expression on TLSClientCertStoreField (subject, the default,
+	// issuer, serial or dns_names), in place of TLSClientCert and TLSClientKey.
+	TLSClientCertStore      string `yaml:"tls_client_cert_store,omitempty"`
+	TLSClientCertStoreField string `yaml:"tls_client_cert_store_field,omitempty"`
 }
 
 // Branding is the optional organisation branding block for SofCat UI. Managed

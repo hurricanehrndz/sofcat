@@ -42,6 +42,9 @@ func managedFields(c *Configuration) map[string]any {
 		"tls_server_cert":  &c.TLSServerCert,
 		"service_interval": &c.ServiceInterval,
 
+		"tls_client_cert_store":       &c.TLSClientCertStore,
+		"tls_client_cert_store_field": &c.TLSClientCertStoreField,
+
 		"branding.title":        &c.Branding.Title,
 		"branding.tagline":      &c.Branding.Tagline,
 		"branding.logo":         &c.Branding.Logo,
