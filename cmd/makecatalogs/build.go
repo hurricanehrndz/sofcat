@@ -92,8 +92,10 @@ func planBuild(source string) ([]plannedItem, error) {
 		}
 		item := p.item
 		name := item.info.ItemName
-		if prev, ok := byName[name]; ok {
-			return nil, fmt.Errorf("%s: item_name %q is also in %s", itemPath, name, prev)
+		// items/x.yaml, item_name x and item-trees/x/ name one item, and the
+		// file name keeps item names unique.
+		if base := strings.TrimSuffix(filepath.Base(itemPath), ".yaml"); name != base {
+			return nil, fmt.Errorf("%s: item_name %q does not match the file name %q", itemPath, name, base)
 		}
 		byName[name] = itemPath
 		// A hand-written package-info for the item would compete with the
