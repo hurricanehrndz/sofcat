@@ -18,7 +18,7 @@ The source holds:
 
 ```
 placements.yaml           where items land
-items/<item>.yaml         an item file: package-info without installer, with placements
+items/<item_name>.yaml    an item file: package-info without installer, with placements
 item-trees/<item_name>/   the item's files, at the root
 templates/                optional: placement file templates
 manifests/                optional
@@ -26,8 +26,9 @@ conditions/               optional: fact scripts the repository delivers
 packages-info/            optional: package-info files written by hand
 ```
 
-An item file is a package-info file without `installer`. Its top-level
-`placements` lists the placements its tree goes to:
+An item file is a package-info file without `installer`, named after its
+`item_name`. Its top-level `placements` lists the placements its tree goes
+to:
 
 ```yaml
 # items/acme-wallpapers.yaml
@@ -44,7 +45,8 @@ different files in different placements is two items, each with its own
 tree.
 
 `build` plans every item before it writes anything. It fails on any of the
-`zip-item` errors below, on two item files with the same `item_name`, on a
+`zip-item` errors below, on an item file whose `item_name` is not its file
+name without `.yaml`, on a
 tree no item file names, and on a `packages-info/<item_name>.yaml` that would
 be generated over. Then it wipes `<out>`, copies `placements.yaml` and the
 optional directories, packs each item's zips under `<out>/<prefix>/`
@@ -147,6 +149,8 @@ checks every zip item. It reports:
   `paths`
 - a zip item in a repository with no `placements.yaml`
 - a `custom_action_labels` key other than the ten above, on any item
+- a package-info file, of any item, whose `item_name` is not its file name
+  without the extension
 - a `files` template that fails to render: for each OS the entry has a
   path on, the template is rendered with `.Items` built from the catalog
   items that target the placement (none for a rootless placement), managed

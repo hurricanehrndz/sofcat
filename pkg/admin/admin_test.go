@@ -44,7 +44,7 @@ installer:
   package_id: skip
   hash: ghi
 `
-	if err := os.WriteFile(filepath.Join(packagesInfoPath, "chrome.yaml"), []byte(itemA), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(packagesInfoPath, "Chrome.yaml"), []byte(itemA), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(packagesInfoPath, "agent.yaml"), []byte(itemB), 0o644); err != nil {
@@ -82,6 +82,31 @@ installer:
 	}
 	if _, ok := got["NoCatalog"]; ok {
 		t.Fatalf("did not expect item without catalog to be generated")
+	}
+}
+
+// The file name is how an admin finds an item's package-info, so an item_name
+// that disagrees with it is reported; the item stays under its item_name.
+func TestCollectCatalogsItemNameMismatch(t *testing.T) {
+	repoPath := t.TempDir()
+	dir := filepath.Join(repoPath, "packages-info")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "chrome-120.yaml")
+	if err := os.WriteFile(path, []byte("item_name: chrome\ncatalog: base\ninstaller: {type: msi, location: x.msi}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	set, err := CollectCatalogs(repoPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := path + `: item_name "chrome" does not match the file name "chrome-120"`
+	if len(set.Problems) != 1 || set.Problems[0] != want {
+		t.Errorf("problems = %v, want [%s]", set.Problems, want)
+	}
+	if _, ok := set.Catalogs["base"]["chrome"]; !ok {
+		t.Error("item dropped from the catalog")
 	}
 }
 

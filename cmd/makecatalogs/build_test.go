@@ -21,7 +21,7 @@ func buildSource(t *testing.T) string {
 		"placements.yaml":            testPlacements,
 		"items/hello.yaml":           testItem,
 		"item-trees/hello/SKILL.md":  "hello\n",
-		"packages-info/chrome.yaml":  chromeInfo,
+		"packages-info/Chrome.yaml":  chromeInfo,
 		"templates/index.json.tmpl":  "{}\n",
 		"manifests/site_default":     "catalogs: [skills]\nmanaged_installs: [hello]\n",
 		"conditions/darwin/10-facts": macScript,
@@ -48,7 +48,7 @@ func TestBuild(t *testing.T) {
 	}
 
 	for _, rel := range []string{
-		"placements.yaml", "packages-info/chrome.yaml", "templates/index.json.tmpl",
+		"placements.yaml", "packages-info/Chrome.yaml", "templates/index.json.tmpl",
 		"manifests/site_default", "catalogs/skills.yaml", "catalogs/production.yaml",
 	} {
 		if _, err := os.Stat(filepath.Join(out, filepath.FromSlash(rel))); err != nil {
@@ -183,10 +183,10 @@ func TestBuildRefusals(t *testing.T) {
 		change func(t *testing.T, source string)
 		want   string
 	}{
-		"two items with one item_name": {func(t *testing.T, source string) {
+		"item_name other than the file name": {func(t *testing.T, source string) {
 			t.Helper()
 			writeFiles(t, source, map[string]string{"items/hello-copy.yaml": testItem})
-		}, `item_name "hello" is also in`},
+		}, `hello-copy.yaml: item_name "hello" does not match the file name "hello-copy"`},
 		"generated package-info over a hand-written one": {func(t *testing.T, source string) {
 			t.Helper()
 			writeFiles(t, source, map[string]string{"packages-info/hello.yaml": chromeInfo})

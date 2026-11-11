@@ -27,7 +27,7 @@ const (
 // conditionsRepo is a repo with one condition script per OS.
 func conditionsRepo(t *testing.T) string {
 	t.Helper()
-	repo := writeRepo(t, map[string]string{"chrome.yaml": chromeInfo})
+	repo := writeRepo(t, map[string]string{"Chrome.yaml": chromeInfo})
 	writeFiles(t, repo, map[string]string{
 		"conditions/darwin/10-facts":      macScript,
 		"conditions/windows/10-facts.ps1": winScript,
@@ -158,7 +158,7 @@ func TestCheckConditions(t *testing.T) {
 // would fetch it as one: refuse it even in a normal build.
 func TestCatalogNamedConditionsIsRefused(t *testing.T) {
 	repo := writeRepo(t, map[string]string{
-		"chrome.yaml": chromeInfo,
+		"Chrome.yaml": chromeInfo,
 		"other.yaml":  "item_name: Other\ncatalog: Conditions\n",
 	})
 	var stdout, stderr bytes.Buffer

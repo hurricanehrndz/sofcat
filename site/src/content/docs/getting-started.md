@@ -89,9 +89,10 @@ The repository is plain YAML and files served over HTTP(S):
 - the items themselves (`.msi`, `.exe`, `.ps1`, `.nupkg`, zips).
 
 `makecatalogs` builds `catalogs/<catalog>.yaml` from the repository's
-`packages-info/*.yaml`. It is a standalone binary for Linux, macOS and
-Windows, so the repository's CI does not need a Windows runner. Run
-`makecatalogs --check <repo_path>` as a pull-request gate.
+`packages-info/*.yaml`, each named after its `item_name`. It is a standalone
+binary for Linux, macOS and Windows, so the repository's CI does not need a
+Windows runner. Run `makecatalogs --check <repo_path>` as a pull-request
+gate; it fails on a file whose `item_name` is not its file name.
 
 [Configuration](/configuration/) lists the annotated example files to start
 from.

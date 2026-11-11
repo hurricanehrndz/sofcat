@@ -70,7 +70,7 @@ installer:
 func TestBuildsCatalogWithoutAgentConfig(t *testing.T) {
 	t.Setenv("ProgramData", t.TempDir()) // empty: no sofcat/config.yaml
 	t.Chdir(t.TempDir())                 // and none relative to the working directory
-	repo := writeRepo(t, map[string]string{"chrome.yaml": chromeInfo})
+	repo := writeRepo(t, map[string]string{"Chrome.yaml": chromeInfo})
 
 	var stdout, stderr bytes.Buffer
 	if code := run([]string{repo}, &stdout, &stderr); code != 0 {
@@ -102,31 +102,32 @@ func TestCheckWritesNothing(t *testing.T) {
 		files    map[string]string
 		wantCode int
 	}{
-		"good repo": {map[string]string{"chrome.yaml": chromeInfo}, 0},
+		"good repo": {map[string]string{"Chrome.yaml": chromeInfo}, 0},
 		"missing catalog": {map[string]string{
-			"chrome.yaml": chromeInfo,
+			"Chrome.yaml": chromeInfo,
 			"orphan.yaml": "item_name: Orphan\n",
 		}, 1},
 		"duplicate item": {map[string]string{
-			"chrome.yaml":   chromeInfo,
-			"chrome-2.yaml": chromeInfo,
+			"Chrome.yaml":         chromeInfo,
+			"testing/Chrome.yaml": chromeInfo,
 		}, 1},
-		"invalid yaml": {map[string]string{"bad.yaml": "key: [unclosed"}, 1},
+		"item_name other than the file name": {map[string]string{"chrome-2.yaml": chromeInfo}, 1},
+		"invalid yaml":                       {map[string]string{"bad.yaml": "key: [unclosed"}, 1},
 		// A catalog name becomes a file name; it must not escape catalogs/.
 		"path in catalog name": {map[string]string{
-			"chrome.yaml": chromeInfo,
+			"Chrome.yaml": chromeInfo,
 			"escape.yaml": "item_name: Escape\ncatalog: ../../escaped\n",
 		}, 1},
 		// Prod.yaml and prod.yaml are one file on macOS and Windows.
 		"catalog names differ by case": {map[string]string{
-			"chrome.yaml": chromeInfo,
+			"Chrome.yaml": chromeInfo,
 			"other.yaml":  "item_name: Other\ncatalog: Production\n",
 		}, 1},
 		"no catalogs at all": {map[string]string{"orphan.yaml": "item_name: Orphan\n"}, 1},
 		// macOS AppleDouble files are not package-info; skip them as Munki does.
 		"dotfile ignored": {map[string]string{
-			"chrome.yaml":   chromeInfo,
-			"._chrome.yaml": "\x00\x05\x16\x07",
+			"Chrome.yaml":   chromeInfo,
+			"._Chrome.yaml": "\x00\x05\x16\x07",
 		}, 0},
 	}
 	for name, tc := range tests {
@@ -154,7 +155,7 @@ func TestCheckWritesNothing(t *testing.T) {
 
 func TestBuildWarnsButSucceedsOnProblems(t *testing.T) {
 	repo := writeRepo(t, map[string]string{
-		"chrome.yaml": chromeInfo,
+		"Chrome.yaml": chromeInfo,
 		"orphan.yaml": "item_name: Orphan\n",
 	})
 	var stdout, stderr bytes.Buffer
@@ -242,7 +243,7 @@ func TestCheckFlagsBadConditionalItems(t *testing.T) {
 			"      - condition: arch = \"arm64\"\n        managed_installs: [Chrome]\n", 1},
 	} {
 		t.Run(name, func(t *testing.T) {
-			repo := writeRepo(t, map[string]string{"chrome.yaml": chromeInfo})
+			repo := writeRepo(t, map[string]string{"Chrome.yaml": chromeInfo})
 			path := filepath.Join(repo, "manifests", "groups", "site.yaml")
 			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 				t.Fatal(err)

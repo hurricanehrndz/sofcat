@@ -134,6 +134,9 @@ func CollectCatalogs(repoPath string) (CatalogSet, error) { //nolint:gocognit //
 		folded[strings.ToLower(parsed.Catalog)] = parsed.Catalog
 
 		itemName := strings.TrimSpace(parsed.ItemName)
+		if base := strings.TrimSuffix(filepath.Base(packageInfoPath), filepath.Ext(packageInfoPath)); itemName != "" && itemName != base {
+			set.Problems = append(set.Problems, fmt.Sprintf("%s: item_name %q does not match the file name %q", packageInfoPath, itemName, base))
+		}
 		if itemName == "" {
 			itemName = strings.TrimSpace(strings.ReplaceAll(parsed.Item.DisplayName, " ", ""))
 		}
