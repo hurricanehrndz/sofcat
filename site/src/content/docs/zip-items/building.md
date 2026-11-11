@@ -113,7 +113,7 @@ nothing, when:
 
 - `<item.yaml>` already has an `installer`
 - `<item.yaml>` has no `placements`, or lists one twice
-- a placement is not in `placements.yaml`
+- a placement is not in `placements.yaml`, or has no `paths` ([rootless](/zip-items/placements/#rootless-placements))
 - the tree is empty or holds a symlink
 - the tree's root is a single directory named after the item
 - the tree ships `x` beside `x.tmpl`, a file named just `.tmpl`, or an
@@ -145,14 +145,16 @@ checks every zip item. It reports:
 - a zip item with no variants
 - a variant without `location`, `hash` or `tree_hash`
 - a variant OS other than `darwin` or `windows`
-- a variant placement that `placements.yaml` does not define
+- a variant placement that `placements.yaml` does not define, or that has no
+  `paths`
 - a zip item in a repository with no `placements.yaml`
 - a `custom_action_labels` key other than the ten above, on any item
 - a package-info file, of any item, whose `item_name` is not its file name
   without the extension
 - a `files` template that fails to render: for each OS the entry has a
   path on, the template is rendered with `.Items` built from the catalog
-  items that target the placement, managed both ways, against a sample of every
+  items that target the placement (none for a rootless placement), managed
+  both ways, against a sample of every
   built-in fact of that OS overlaid with `check_facts` (see [Templates for
   placement files](/zip-items/placement-files/#templates-for-placement-files)). A missing fact, a `cond` naming a fact no sample
   provides, a `cond` calling `now()`, and output that is not JSON on a

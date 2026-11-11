@@ -196,7 +196,10 @@ func planZipItem(table placement.Table, placementsPath string, item zipItem, tre
 		if !ok {
 			return nil, fmt.Errorf("item %q: placement %q is not in %s", info.ItemName, name, placementsPath)
 		}
-		// placement.Parse refuses a placement with no darwin or windows path,
+		if p.Rootless() {
+			return nil, fmt.Errorf("item %q: placement %q has no paths, so it holds no item trees", info.ItemName, name)
+		}
+		// placement.Parse refuses a placement with neither paths nor files,
 		// so every listed placement gets at least one variant.
 		for _, goos := range []string{placement.Darwin, placement.Windows} {
 			if _, ok := p.Path(goos); !ok {

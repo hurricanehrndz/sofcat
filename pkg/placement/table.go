@@ -42,9 +42,12 @@ type Table struct {
 }
 
 // Spec is a named destination for zip items: a directory that holds their
-// trees and, optionally, files rendered from the trees it holds.
+// trees and, optionally, files rendered from the trees it holds. A rootless
+// placement has files and no paths: it holds no trees, and a managed run
+// writes its files every time.
 type Spec struct {
-	// Paths maps an OS (darwin, windows) to the placement root on it.
+	// Paths maps an OS (darwin, windows) to the placement root on it. Empty
+	// for a rootless placement.
 	Paths map[string]string `yaml:"paths,omitempty" json:"paths,omitempty"`
 	// Scope maps an OS to machine or user. An OS left out is machine.
 	Scope map[string]string `yaml:"scope,omitempty" json:"scope,omitempty"`
@@ -67,16 +70,32 @@ type Spec struct {
 
 // File is a file a placement renders (render.FileContext): at Path,
 // relative to the placement root, or at Paths, one absolute path per OS.
-// An empty render removes the file.
+// An empty render removes the file, as does Ensure absent, which takes no
+// template.
 type File struct {
 	Path     string            `yaml:"path,omitempty" json:"path,omitempty"`
 	Paths    map[string]string `yaml:"paths,omitempty" json:"paths,omitempty"`
 	Template string            `yaml:"template" json:"template"`
+	// Ensure is EnsurePresent (the default when empty) or EnsureAbsent.
+	Ensure string `yaml:"ensure,omitempty" json:"ensure,omitempty"`
 	// TemplateFile names a file in the repository that holds the template
 	// instead. Parse reads it into Template and clears it, so it never
 	// reaches a render or the user plan.
 	TemplateFile string `yaml:"template_file,omitempty" json:"-"`
 }
+
+// Values of File.Ensure.
+const (
+	EnsurePresent = "present"
+	EnsureAbsent  = "absent"
+)
+
+// Absent reports whether the file is to be removed rather than rendered.
+func (f File) Absent() bool { return f.Ensure == EnsureAbsent }
+
+// Rootless reports whether the placement has no paths: only files, each at
+// its own absolute path.
+func (p Spec) Rootless() bool { return len(p.Paths) == 0 }
 
 // View describes placement name, rooted at root, to a template.
 func (p Spec) View(name, root string) render.Placement {
@@ -209,7 +228,8 @@ func (t Table) resolveTemplateFiles(read func(rel string) ([]byte, error)) error
 		for i := range files {
 			f := &files[i]
 			rel := f.TemplateFile
-			if rel == "" {
+			// validateFiles refuses a template on an absent entry.
+			if rel == "" || f.Absent() {
 				continue
 			}
 			fail := func(format string, args ...any) {
@@ -297,8 +317,22 @@ func validatePlacement(name string, p Spec) []error {
 	if name == "" || name == "." || name == ".." || strings.ContainsAny(name, `/\:`) {
 		fail("invalid name")
 	}
-	if len(p.Paths) == 0 {
-		fail("no paths")
+	if p.Rootless() {
+		// Only files at their own paths: no root to hold trees or anything
+		// relative to one, and no user to expand a path for.
+		switch {
+		case len(p.Files) == 0:
+			fail("needs paths or files")
+		case p.Exclusive:
+			fail("exclusive: set without paths")
+		case p.ItemsDir != "":
+			fail("items_dir: set without paths")
+		}
+		for goos, scope := range p.Scope {
+			if scope == ScopeUser {
+				fail("scope: %s is user, which a placement without paths cannot be", goos)
+			}
+		}
 	}
 	errs = append(errs, validatePaths("paths", p.Paths, p)...)
 	for goos, scope := range p.Scope {
@@ -343,7 +377,8 @@ func validatePaths(field string, paths map[string]string, p Spec) []error {
 
 // validateFiles checks the files entries: a template that parses, and
 // either a relative path that cannot land in an item tree or per-OS paths
-// on the placement's OSes.
+// on the placement's OSes (any OS, without paths), and ensure. An absent
+// entry takes no template.
 func validateFiles(p Spec) []error {
 	var errs []error
 	seen := map[string]bool{}
@@ -355,6 +390,8 @@ func validateFiles(p Spec) []error {
 		switch {
 		case f.Path != "" && f.Paths != nil:
 			fail("set path or paths, not both")
+		case f.Path != "" && p.Rootless():
+			fail("path %q needs the placement's paths; use paths, one absolute path per OS", f.Path)
 		case f.Path != "":
 			if err := p.CheckFile(f.Path); err != nil {
 				fail("%w", err)
@@ -366,12 +403,22 @@ func validateFiles(p Spec) []error {
 		case len(f.Paths) > 0:
 			errs = append(errs, validatePaths(field+": paths", f.Paths, p)...)
 			for goos := range f.Paths {
-				if _, ok := p.Paths[goos]; !ok {
+				if _, ok := p.Paths[goos]; !ok && !p.Rootless() {
 					fail("paths: %s, which the placement has no path for", goos)
 				}
 			}
 		default:
 			fail("needs path or paths")
+		}
+		switch f.Ensure {
+		case "", EnsurePresent:
+		case EnsureAbsent:
+			if f.Template != "" || f.TemplateFile != "" {
+				fail("ensure: absent takes no template or template_file")
+			}
+			continue
+		default:
+			fail("ensure: %q, want present or absent", f.Ensure)
 		}
 		// Only Parse resolves a template_file.
 		if f.TemplateFile != "" {

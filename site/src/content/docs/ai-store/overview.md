@@ -107,7 +107,6 @@ catalogs:
   - harness
 managed_installs:
   - example-skill
-  - claude-code-config
   - codex-models
 optional_installs:
   - example-plugin

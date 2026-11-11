@@ -25,14 +25,14 @@ placements:
 | Field | Meaning |
 |---|---|
 | key | The placement name. Variants and the `placements` list of an item file use it. |
-| `paths` | The placement root, keyed by `darwin` and `windows`. Every placement is a directory: one tree per item at `<root>/<item_name>`. |
-| `scope` | `machine` or `user`, keyed like `paths`. An OS left out is `machine`. In `user` scope the per-user helper places the trees and writes the `files`. |
+| `paths` | The placement root, keyed by `darwin` and `windows`: a directory with one tree per item at `<root>/<item_name>`. A placement without `paths` is rootless (see Rootless placements). |
+| `scope` | `machine` or `user`, keyed like `paths`. An OS left out is `machine`. In `user` scope the per-user helper places the trees and writes the `files`. A rootless placement is `machine` only. |
 | `applies_to` | Display names, such as `[Desktop]`. The storefront shows a line such as "Applies to: Desktop" for an item (see Storefront labels). Display only: it does not limit where an item is placed. |
 | `action_labels` | Optional storefront label overrides for the placement's items. Keys: `install`, `installing`, `installed`, `remove`, `removing`, `update`, `cancel`, `pending_install`, `pending_remove`, `applies_to`. |
 | `exclusive` | Optional. When true, sofcat does not write into an existing, non-empty root it did not create. |
 | `items_dir` | Optional. Item trees go to `<root>/<items_dir>/<item_name>` instead. A clean relative path, slash-separated, each segment one Windows can hold, whose first segment does not start with `.`. |
 | `vars` | Optional. Any mapping, read by the placement's templates as `.Placement.Vars`. |
-| `files` | Optional. Files rendered from the placement's receipts, each a `template` or a `template_file` with a relative `path` or per-OS `paths` ([Placement files](/zip-items/placement-files/)). |
+| `files` | Optional with `paths`, required without. Files rendered from the placement's receipts, each a `template` or a `template_file` with a relative `path` or per-OS `paths`, or removed with `ensure: absent` ([Placement files](/zip-items/placement-files/)). |
 | `files_atomic` | Optional, with `files`. When true, no file is written unless every one renders and passes its checks; otherwise each is written on its own. |
 | `check_facts` | Top level, beside `placements`: facts for `makecatalogs -check` over the built-in samples, for the admin facts templates read. |
 
@@ -41,6 +41,32 @@ the user's home, `${USERPROFILE}` on Windows or `${HOME}` on macOS, only
 when its OS has `user` scope.
 
 Where order matters, placements are taken in file order.
+
+## Rootless placements
+
+A placement may have `files` and no `paths`. It holds no item trees: it
+only writes its files, such as a tool's machine-wide config file.
+
+```yaml
+placements:
+  claude-code-settings:
+    files:
+      - paths:
+          darwin: /Library/Application Support/ClaudeCode/managed-settings.json
+        template_file: templates/managed-settings.json.tmpl
+```
+
+Every files entry uses `paths`, one absolute path per OS; the relative `path`
+needs a root and is refused, and so are `exclusive`, `items_dir` and `user`
+scope. No item may target it: `makecatalogs build` and `zip-item` refuse an
+item that lists it, and `makecatalogs -check` refuses a variant that names
+it.
+
+Every device that reads this `placements.yaml` gets the file, on every
+managed run, whatever its manifest lists. Differences between devices come
+from the template, through `cond` and `fact`. Its templates see no root
+(`.Placement.Root` is empty) and no items. A rootless placement is managed
+only: the storefront never shows it, and the per-user helper never sees it.
 
 ## Storefront labels
 

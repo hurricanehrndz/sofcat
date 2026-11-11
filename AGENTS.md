@@ -339,7 +339,11 @@ daemon with the harness config yourself, for the same reason.
    `placements: [...]`, which the smoke reads), `item-trees/<item_name>/`,
    `conditions/darwin/` and
    `cases/<case>/` with an optional `facts.json` and the expected files under
-   `expected/`, mirrored by absolute path.
+   `expected/`, mirrored by absolute path, and `empty/` in the same form for
+   the run under `harness_empty_manifest`: its `expected/` holds only the
+   files that stay without items, those of a placement with no `paths`. The
+   generic fixture's Claude Code placement is one; its Codex placement holds
+   the `codex-models` item.
 2. Serve it on the Mac:
    `./build/manual-test-server -root build/manual-test/harness/server-root -addr 127.0.0.1:8080`.
 3. Install and configure, without a kickstart:
@@ -352,13 +356,14 @@ daemon with the harness config yourself, for the same reason.
    what its startup run wrote with the expected files (`.json` parsed, others
    byte for byte), owner `root:wheel` and mode 0644, and the placed item trees
    with the fixture's by hash. Last it switches the daemon to
-   `harness_empty_manifest` and checks the files are gone.
+   `harness_empty_manifest` with the facts of `empty/` and checks that the
+   files under `empty/expected` remain as there and every other file is gone.
 5. Clean up as in step 7 of the macOS loop: stop the test server, run
    `-serviceremove` and remove the brand's directories.
 
 `go test ./pkg/placement -run Fixture` renders the generic fixture's templates
-with each case's facts on any host and compares the expected files byte for
-byte, and `just _harness-repo` builds and checks the repository without a Mac.
+with each case's facts, and those of `empty/`, on any host and compares the
+expected files byte for byte, and `just _harness-repo` builds and checks the repository without a Mac.
 
 ## Diagnostics
 

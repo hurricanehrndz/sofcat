@@ -10,7 +10,9 @@
 # their content against cases/<case>/expected/ (a .json file parsed, any
 # other byte for byte), owner root:wheel and mode 0644, and every file of the
 # placed item trees against the fixture's copy by hash. It then switches the
-# daemon to harness_empty_manifest and asserts every file is gone.
+# daemon to harness_empty_manifest, with the facts of the fixture's empty/,
+# and asserts that only the files under empty/expected remain, as there: the
+# files of a placement without paths, which no item holds.
 #
 # WARNING: the expected files are mirrored by absolute path, and those are
 # the real harness config paths, such as /etc/codex/config.toml. The smoke
@@ -83,11 +85,13 @@ wait_for() {
 
 sha() { shasum -a 256 "$1" | awk '{print $1}'; }
 
-# targets prints the absolute path of every file a case expects, once each:
-# cases/<case>/expected/etc/codex/config.toml is /etc/codex/config.toml.
+# targets prints the absolute path of every file a case or empty/ expects,
+# once each: cases/<case>/expected/etc/codex/config.toml is
+# /etc/codex/config.toml.
 targets() {
 	local expected
-	for expected in "$FIXTURE"/cases/*/expected; do
+	for expected in "$FIXTURE"/cases/*/expected "$FIXTURE/empty/expected"; do
+		[ -d "$expected" ] || continue
 		(cd "$expected" && find . -type f | sed 's/^\.//')
 	done | sort -u
 }
@@ -117,10 +121,16 @@ $(cd "$1" && find . -type f | sed 's/^\.//')
 EOF
 }
 
-all_gone() {
+# emptied EXPECTED_DIR says whether every target is as the run under
+# harness_empty_manifest leaves it: written as EXPECTED_DIR has it, or gone.
+emptied() {
 	local target
 	while IFS= read -r target; do
-		[ ! -e "$target" ] || return 1
+		if [ -f "$1$target" ]; then
+			[ -f "$target" ] && same_content "$1$target" "$target" || return 1
+		else
+			[ ! -e "$target" ] || return 1
+		fi
 	done <<EOF
 $TARGETS
 EOF
@@ -319,20 +329,39 @@ done
 
 # --- Out of the manifest ------------------------------------------------------------
 
-step "With harness_empty_manifest the next run removes every file"
+step "With harness_empty_manifest the next run removes the items' files and keeps the rest"
+# The fixture's empty/ holds the facts of this run and the files that stay:
+# those of a placement without paths. Different facts from the last case's
+# make the run rewrite them, so a match shows the run is done.
+empty="$FIXTURE/empty/expected"
 stop_daemon
+rm -f "$FACTS_FILE"
+if [ -f "$FIXTURE/empty/facts.json" ]; then
+	install -m 600 -o root -g wheel "$FIXTURE/empty/facts.json" "$FACTS_FILE" || fail "could not write $FACTS_FILE"
+fi
 sed 's/^manifest: .*/manifest: harness_empty_manifest/' "$SAVE_DIR/config.yaml" >"$CONFIG" || fail "could not rewrite $CONFIG"
 start_daemon
 deadline=$(($(date +%s) + TIMEOUT_SEC))
-until all_gone || [ "$(date +%s)" -ge "$deadline" ]; do
+until emptied "$empty" || [ "$(date +%s)" -ge "$deadline" ]; do
 	sleep 3
 done
+gone=0
 while IFS= read -r target; do
-	[ ! -e "$target" ] || fail "$target still exists ${TIMEOUT_SEC}s after its item left the manifest"
+	if [ -f "$empty$target" ]; then
+		[ -f "$target" ] || fail "$target is gone, but its placement has no paths, so it stays without items"
+		same_content "$empty$target" "$target" || fail "$target differs from $empty$target:
+$(diff "$empty$target" "$target")"
+		perm=$(stat -f '%Su:%Sg %Lp' "$target")
+		[ "$perm" = "root:wheel 644" ] || fail "$target is $perm, want root:wheel 644"
+		pass "$target kept and matches, $perm"
+	else
+		[ ! -e "$target" ] || fail "$target still exists ${TIMEOUT_SEC}s after its item left the manifest"
+		gone=$((gone + 1))
+	fi
 done <<EOF
 $TARGETS
 EOF
-pass "$(printf '%s\n' "$TARGETS" | wc -l | tr -d ' ') files gone"
+pass "$gone files gone"
 
 echo
 printf '\033[32mHARNESS SMOKE PASSED\033[0m\n'

@@ -13,7 +13,8 @@ check_facts:
 placements:
   # The key is the placement name. Item files list it under placements: and
   # catalog variants use it.
-  # Every placement is a directory: one tree per item at <path>/<item_name>.
+  # A placement with paths is a directory: one tree per item at
+  # <path>/<item_name>.
   wallpapers:
     # The placement root per OS. Only darwin and windows. Windows paths may use
     # ${ProgramFiles} and ${ProgramData}. The user's home, ${USERPROFILE} on
@@ -114,3 +115,23 @@ placements:
             }
           }
           {{- end }}
+  # No paths: a rootless placement holds no items and only writes its files,
+  # each at its own absolute path, on every managed run of every device that
+  # reads this file. Machine scope only, and the app never shows it. Its
+  # templates see no root and no items, so fact and cond make the per-device
+  # differences.
+  site-settings:
+    files:
+      - paths:
+          darwin: /Library/Application Support/Acme/site.json
+          windows: ${ProgramData}\Acme\site.json
+        template: |
+          {"site": {{ json (fact "site") }}}
+      # ensure: absent (the default is present) removes the file on every run
+      # where it exists, and takes no template. sofcat keeps no record of the
+      # files it wrote: an entry dropped from this file leaves its file
+      # behind, so mark it absent first and delete it once devices have run.
+      - paths:
+          darwin: /Library/Application Support/Acme/old-site.json
+          windows: ${ProgramData}\Acme\old-site.json
+        ensure: absent

@@ -1,8 +1,0 @@
-# Input to makecatalogs build; just bootstrap-harness-macos packs item-trees/claude-code-config.
-item_name: claude-code-config
-placements: [harness-claude-code]
-display_name: Claude Code Config
-section: Harness
-description: Holds the harness-claude-code placement, which writes Claude Code's managed settings
-catalog: harness
-version: 1.0.0
