@@ -3,9 +3,9 @@ title: Getting started
 description: Install the SofCat agent on Windows or macOS, point it at a repository and restart it.
 ---
 
-:::caution[Pre-beta]
-The config keys, catalog format and service protocol can change between
-releases without a migration path.
+:::caution[Beta]
+The config keys, catalog format and service protocol can still change between
+beta releases without a migration path; the release notes list what changed.
 :::
 
 SofCat has two halves. A repository on any web server holds manifests,

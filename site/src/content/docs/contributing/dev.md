@@ -49,19 +49,23 @@ Nothing is signed.
 
 ## Releases
 
-Merging to `main` does not release. Push a `vMAJOR.MINOR.PATCH` tag on a commit
-that is on `main`:
+Merging to `main` does not release. Push a version tag on a commit that is on
+`main`: `vMAJOR.MINOR.PATCH-beta.N` for a beta, cut as a GitHub prerelease, or
+`vMAJOR.MINOR.PATCH` for a release:
 
 ```sh
-git fetch origin && git tag v1.11.0 origin/main && git push origin v1.11.0
+git fetch origin && git tag v1.11.0-beta.1 origin/main && git push origin v1.11.0-beta.1
 ```
 
 Build Release (`.github/workflows/build_release.yml`) builds and signs
 everything at that tag: on Linux the Windows executables, `setup.exe` and
 makecatalogs, and on a macOS runner the arm64 CLI, helper, app and pkg. A
 last job attaches the files below, with a signed provenance bundle
-(`sofcat-<tag>.sigstore.json`), to a prerelease, and the released-binary
-integration tests run on Windows.
+(`sofcat-<tag>.sigstore.json`), to the release with notes generated from the
+merged pull requests, and the released-binary integration tests run on
+Windows. The installer's file name and Add or remove programs entry carry only
+`MAJOR.MINOR.PATCH`, so a beta's `setup.exe` is named like the release that
+follows it.
 
 | File | Holds |
 | --- | --- |

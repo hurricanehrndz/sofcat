@@ -12,9 +12,9 @@
 </p>
 
 > [!WARNING]
-> SofCat is pre-beta. The config keys, catalog format and service protocol can
-> change between releases without a migration path. Only the Windows agent
-> ships today.
+> SofCat is in beta. The config keys, catalog format and service protocol can
+> still change between beta releases without a migration path; the release
+> notes list what changed.
 
 SofCat is a catalog for anything you can put on disk or run: installers,
 packages, scripts, AI skills. You publish manifests and catalogs on any web
