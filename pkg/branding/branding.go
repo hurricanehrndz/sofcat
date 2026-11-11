@@ -1,8 +1,8 @@
-// Package branding resolves the organisation branding SofCat UI shows: policy
-// registry values first, then the config.yaml `branding:` block, field by
-// field. Every field is validated here, in the SYSTEM service, so the UI only
-// ever receives plain text, an http(s) URL, a #rrggbb colour and a sniffed
-// image. A field that fails validation is dropped; it never fails the request.
+// Package branding validates the organisation branding SofCat UI shows: the
+// config.yaml `branding:` block with managed settings merged over it field by
+// field (config.Get). Every field is validated here, in the SYSTEM service, so
+// the UI only ever receives plain text, an http(s) URL, a #rrggbb colour and a
+// sniffed image. A field that fails validation is dropped; it never fails the request.
 package branding
 
 import (
@@ -48,37 +48,11 @@ type Branding struct {
 	Sections []string `json:"sections,omitempty"`
 }
 
-// Resolve reads the policy registry values, merges them over cfg and returns
-// the validated branding. The logo file is read on every call, so a replaced
-// logo shows up without a service restart.
+// Resolve returns the validated branding; config.Get has already merged the
+// managed settings over the config.yaml block. The logo file is read on every
+// call, so a replaced logo shows up without a service restart.
 func Resolve(cfg config.Branding) Branding {
-	return resolve(merge(readPolicy(), cfg))
-}
-
-// merge returns policy's value for every field it sets, else cfg's. A policy
-// value that later fails validation is dropped, not replaced by cfg's.
-func merge(policy, cfg config.Branding) config.Branding {
-	pick := func(p, c string) string {
-		if strings.TrimSpace(p) != "" {
-			return p
-		}
-		return c
-	}
-	sections := cfg.Sections
-	if len(policy.Sections) > 0 {
-		sections = policy.Sections
-	}
-	return config.Branding{
-		Title:     pick(policy.Title, cfg.Title),
-		Tagline:   pick(policy.Tagline, cfg.Tagline),
-		Logo:      pick(policy.Logo, cfg.Logo),
-		HelpURL:   pick(policy.HelpURL, cfg.HelpURL),
-		HelpLabel: pick(policy.HelpLabel, cfg.HelpLabel),
-		Accent:    pick(policy.Accent, cfg.Accent),
-
-		ListHeading: pick(policy.ListHeading, cfg.ListHeading),
-		Sections:    sections,
-	}
+	return resolve(cfg)
 }
 
 func resolve(in config.Branding) Branding {

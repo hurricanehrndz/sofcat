@@ -12,18 +12,6 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/config"
 )
 
-// A policy value must win field by field, so an MDM can override one field
-// (say the title) while the config block still supplies the rest.
-func TestMergePolicyWinsPerField(t *testing.T) {
-	cfg := config.Branding{Title: "Config", Tagline: "Config tagline", Accent: "#111111", HelpURL: "https://config.example/"}
-	policy := config.Branding{Title: "Policy", Accent: "  ", HelpURL: "https://policy.example/"}
-	got := merge(policy, cfg)
-	want := config.Branding{Title: "Policy", Tagline: "Config tagline", Accent: "#111111", HelpURL: "https://policy.example/"}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("merge = %#v, want %#v", got, want)
-	}
-}
-
 func TestResolveNothingConfiguredIsEmpty(t *testing.T) {
 	if got := resolve(config.Branding{}); !reflect.DeepEqual(got, Branding{}) {
 		t.Fatalf("empty branding resolved to %#v", got)
@@ -48,30 +36,13 @@ func TestResolveValidatesText(t *testing.T) {
 }
 
 // The list heading is admin text shown in place of "Available software": it
-// is validated like the title, and a policy value overrides the config one.
+// is validated like the title.
 func TestResolveListHeading(t *testing.T) {
 	if got := resolve(config.Branding{ListHeading: "  Skills\nand plugins  "}).ListHeading; got != "Skillsand plugins" {
 		t.Errorf("heading %q kept control characters or padding", got)
 	}
 	if n := len([]rune(resolve(config.Branding{ListHeading: strings.Repeat("x", maxHeading+9)}).ListHeading)); n != maxHeading {
 		t.Errorf("heading has %d runes, want the %d cap", n, maxHeading)
-	}
-	merged := merge(config.Branding{ListHeading: "Policy heading"}, config.Branding{ListHeading: "Config heading"})
-	if merged.ListHeading != "Policy heading" {
-		t.Errorf("merged heading %q, want the policy value", merged.ListHeading)
-	}
-}
-
-// Sections set the tab order as one list, so a policy list replaces the
-// config list whole rather than merging entry by entry; no policy list keeps
-// the config one.
-func TestMergeSections(t *testing.T) {
-	cfg := config.Branding{Sections: []string{"Config"}}
-	if got := merge(config.Branding{Sections: []string{"Policy", "Other"}}, cfg).Sections; !reflect.DeepEqual(got, []string{"Policy", "Other"}) {
-		t.Errorf("merged sections %q, want the policy list", got)
-	}
-	if got := merge(config.Branding{}, cfg).Sections; !reflect.DeepEqual(got, []string{"Config"}) {
-		t.Errorf("merged sections %q, want the config list", got)
 	}
 }
 

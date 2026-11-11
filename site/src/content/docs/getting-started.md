@@ -38,6 +38,9 @@ self-service app install the optional ones for standard users.
      - example_catalog
    ```
 
+   Or set the same keys from MDM or Group Policy, which win over the file
+   ([Managed settings](/configuration/#managed-settings)).
+
 3. Restart the service:
 
    ```powershell
@@ -77,7 +80,8 @@ The package installs the app in `/Applications`, the CLI in
 `/Library/Application Support/SofCat/bin/sofcat` and a launchd daemon. The
 daemon keeps its state in `/Library/Application Support/SofCat/Data`, which
 only root can read. The config stays root-owned and `0600`, since it can hold
-`auth_pass`.
+`auth_pass`. A configuration profile can set the same keys instead
+([Managed settings](/configuration/#managed-settings)).
 
 ## Publish a repository
 

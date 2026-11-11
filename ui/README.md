@@ -81,34 +81,37 @@ service resolves the branding and validates it; the UI only asks for it with
 `GetBranding` and never reads `config.yaml` or the registry itself. Each field
 comes from the first source that sets it:
 
-1. Policy values under `HKLM\SOFTWARE\Policies\SofCat\Branding`, all REG_SZ.
-   A rebranded build reads `HKLM\SOFTWARE\Policies\<Name>\Branding` instead,
-   where `<Name>` is its `pkg/identity` name, so profiles for one build never
-   brand another.
+1. Managed settings: values under `HKLM\SOFTWARE\Policies\SofCat\branding` on
+   Windows, or the `branding` dict in
+   `/Library/Managed Preferences/<IDENTIFIER>.plist` on macOS. A rebranded build
+   reads `HKLM\SOFTWARE\Policies\<Name>\branding` instead, where `<Name>` is its
+   `pkg/identity` name, so profiles for one build never brand another. The value
+   names are the `config.yaml` keys; the full key list is at
+   <https://sofcat.app/configuration/#managed-settings>.
 2. The `branding:` block in `config.yaml` (see `examples/example_config.yaml`).
 3. Nothing. The UI then looks exactly as it does unbranded.
 
-| Policy value | `config.yaml` key | Accepted |
-|---|---|---|
-| `Title` | `title` | Plain text, up to 120 characters. Also the window title and the app-bar name. |
-| `Tagline` | `tagline` | Plain text, up to 240 characters. |
-| `LogoPath` | `logo` | Local path to a PNG, JPEG or SVG of at most 512 KiB, checked by content. A PNG also becomes the window, taskbar and Alt+Tab icon. |
-| `HelpUrl` | `help_url` | Absolute `http` or `https` URL, opened in the system browser. |
-| `HelpLabel` | `help_label` | Plain text, up to 60 characters. Defaults to "Get help". |
-| `Accent` | `accent` | `#rrggbb`. Recolours buttons, links and the banner, and on Windows 11 the native title bar (Windows 10 keeps its default caption). |
-| `ListHeading` | `list_heading` | Plain text, up to 120 characters. Replaces the "Available software" heading; "My items" is unchanged. |
-| `Sections` | `sections` | A list in `config.yaml`; one comma-separated REG_SZ as policy. Up to 50 entries of plain text, up to 120 characters each. Sets the storefront tab order: the sections listed come first, then the rest alphabetically. Items without a catalog `section` appear under a "Software" tab, so give every item a section to hide it. |
+| Key (policy value and `config.yaml`) | Accepted |
+|---|---|
+| `title` | Plain text, up to 120 characters. Also the window title and the app-bar name. |
+| `tagline` | Plain text, up to 240 characters. |
+| `logo` | Local path to a PNG, JPEG or SVG of at most 512 KiB, checked by content. A PNG also becomes the window, taskbar and Alt+Tab icon. |
+| `help_url` | Absolute `http` or `https` URL, opened in the system browser. |
+| `help_label` | Plain text, up to 60 characters. Defaults to "Get help". |
+| `accent` | `#rrggbb`. Recolours buttons, links and the banner, and on Windows 11 the native title bar (Windows 10 keeps its default caption). |
+| `list_heading` | Plain text, up to 120 characters. Replaces the "Available software" heading; "My items" is unchanged. |
+| `sections` | A list; a REG_MULTI_SZ as policy. Up to 50 entries of plain text, up to 120 characters each. Sets the storefront tab order: the sections listed come first, then the rest alphabetically. Items without a catalog `section` appear under a "Software" tab, so give every item a section to hide it. |
 
 Set the policy values with Intune (a custom OMA-URI or a registry script), Group
 Policy Preferences, or `reg add`:
 
 ```bat
-reg add HKLM\SOFTWARE\Policies\SofCat\Branding /v Title /t REG_SZ /d "Acme Software Center" /f
-reg add HKLM\SOFTWARE\Policies\SofCat\Branding /v Accent /t REG_SZ /d "#0b6e4f" /f
+reg add "HKLM\SOFTWARE\Policies\SofCat\branding" /v title /t REG_SZ /d "Acme Software Center" /f
+reg add "HKLM\SOFTWARE\Policies\SofCat\branding" /v accent /t REG_SZ /d "#0b6e4f" /f
 ```
 
-Policy values apply on the next `GetBranding` call. A `config.yaml` change needs
-a service restart, like any other config change. A value that fails its check is
+The service reads managed settings once, when it starts, so a policy change and a
+`config.yaml` change both need a service restart. A value that fails its check is
 dropped (debug log only) and is not replaced by the config value. Check the
 result with `sofcat.exe -S GetBranding`, which prints the payload with the logo
 replaced by its size in bytes. The UI caches the last payload in
