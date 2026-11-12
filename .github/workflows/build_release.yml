@@ -1,10 +1,12 @@
 name: Build Release
 # Cut a release by pushing a version tag for a commit on main:
-#   git tag v1.11.0 origin/main && git push origin v1.11.0
+#   git tag v1.11.0-beta.1 origin/main && git push origin v1.11.0-beta.1
+# A -beta.N tag cuts a prerelease; a plain vMAJOR.MINOR.PATCH tag a release.
 on:
   push:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-beta.[0-9]+"
 permissions:
   contents: read
 jobs:
@@ -189,7 +191,8 @@ jobs:
         uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1.21.0
         with:
           allowUpdates: false
-          prerelease: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generateReleaseNotes: true # the merged PRs since the last tag
           artifacts: "dist/*"
           tag: ${{ github.ref_name }}
           token: ${{ secrets.GITHUB_TOKEN }}
