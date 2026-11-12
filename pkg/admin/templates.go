@@ -15,6 +15,7 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/artifact"
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
 	"github.com/hurricanehrndz/sofcat/pkg/conditions"
+	"github.com/hurricanehrndz/sofcat/pkg/jsonmerge"
 	"github.com/hurricanehrndz/sofcat/pkg/placement"
 	"github.com/hurricanehrndz/sofcat/pkg/render"
 )
@@ -63,7 +64,7 @@ func checkPlacementTemplates(h repoPlacements, catalogs map[string]map[string]ca
 func checkFileTemplates(h repoPlacements, name, goos, root string, items []render.Item) []string {
 	p := h.table.Placements[name]
 	facts := checkFacts(h.table, goos)
-	ctx := render.FileContext{OS: goos, Scope: p.ScopeFor(goos), Placement: p.View(name, root)}
+	ctx := render.FileContext{OS: goos, Placement: p.View(name, root)}
 	var problems []string
 	for i, f := range p.Files {
 		out := f.Path
@@ -74,7 +75,13 @@ func checkFileTemplates(h repoPlacements, name, goos, root string, items []rende
 			continue
 		}
 		field := fmt.Sprintf("files[%d]", i)
-		for _, err := range renderBothWays(field, f.Template, out, ctx, items, facts) {
+		// A user-scope file renders in the helper, with its user.
+		ctx.Scope, ctx.User = p.FileScope(f, goos), ""
+		if ctx.Scope == placement.ScopeUser {
+			ctx.User = SampleUser
+		}
+		merge := f.Merge == placement.MergeAddIfAbsent
+		for _, err := range renderBothWays(field, f.Template, out, ctx, items, facts, merge) {
 			problems = append(problems, fmt.Sprintf("%s: placement %q: %s %q on %s: %v", h.path, name, field, out, goos, err))
 		}
 	}
@@ -83,21 +90,33 @@ func checkFileTemplates(h repoPlacements, name, goos, root string, items []rende
 
 // renderBothWays renders template source, named name, for an output at out,
 // with items all managed and all optional, and returns the distinct errors.
-func renderBothWays(name, source, out string, ctx render.FileContext, items []render.Item, facts conditions.Facts) []error {
+// A merge template must also give keys jsonmerge accepts (a JSON object) with
+// no items, when it adds none.
+func renderBothWays(name, source, out string, ctx render.FileContext, items []render.Item, facts conditions.Facts, merge bool) []error {
 	t, err := render.Parse(name, source)
 	if err != nil {
 		return []error{err}
 	}
 	var errs []error
 	seen := map[string]bool{}
-	for _, managed := range []bool{true, false} {
-		ctx.Items = slices.Clone(items)
-		for i := range ctx.Items {
-			ctx.Items[i].Managed = managed
-		}
-		if _, _, err := t.Render(ctx, facts, out); err != nil && !seen[err.Error()] {
-			seen[err.Error()] = true
-			errs = append(errs, fmt.Errorf("managed %v: %w", managed, err))
+	sets := [][]render.Item{items}
+	if merge {
+		sets = append(sets, nil)
+	}
+	for _, set := range sets {
+		for _, managed := range []bool{true, false} {
+			ctx.Items = slices.Clone(set)
+			for i := range ctx.Items {
+				ctx.Items[i].Managed = managed
+			}
+			rendered, _, err := t.Render(ctx, facts, out)
+			if err == nil && merge {
+				_, err = jsonmerge.Leaves(rendered)
+			}
+			if err != nil && !seen[err.Error()] {
+				seen[err.Error()] = true
+				errs = append(errs, fmt.Errorf("managed %v: %w", managed, err))
+			}
 		}
 	}
 	return errs

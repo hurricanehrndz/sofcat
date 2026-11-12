@@ -92,6 +92,11 @@ CONSOLE_HOME=$(dscl . -read "/Users/$CONSOLE_USER" NFSHomeDirectory 2>/dev/null 
 AGENT_TARGET="gui/$CONSOLE_UID/$AGENT_LABEL"
 USER_TREE="$CONSOLE_HOME/.agents/tapas-plugins/plugins/tapas-user-plugin"
 USER_RECEIPT="$CONSOLE_HOME/Library/Application Support/$PRODUCT/receipts/tapas-user-plugins/tapas-user-plugin.json"
+# The user-scope merge file of tapas-marketplace (placements.yaml): the real
+# path would be ~/.claude/settings.json. The record lists the keys sofcat
+# added to it, per user.
+USER_SETTINGS="$CONSOLE_HOME/.agents/tapas-claude/settings.json"
+MERGE_RECORD="$CONSOLE_HOME/Library/Application Support/$PRODUCT/receipts/.merged-keys.json"
 
 step_num=0
 OUT=""
@@ -300,6 +305,17 @@ warned_held() {
 
 sha() { shasum -a 256 "$1" | awk '{print $1}'; }
 
+# user_setting prints one enabledPlugins value of the user's settings file,
+# "absent" when the key is missing.
+user_setting() { jq -r --arg k "$1" '.enabledPlugins | if has($k) then (.[$k] | tostring) else "absent" end' "$USER_SETTINGS" 2>/dev/null; }
+user_setting_is() { [ "$(user_setting "$1")" = "$2" ]; }
+
+# merge_owns succeeds when the record says sofcat added enabledPlugins.$1.
+merge_owns() {
+	[ -f "$MERGE_RECORD" ] && jq -e --arg k "$1" \
+		'any(.entries[]?; .placement == "tapas-marketplace" and any(.keys[]; . == ["enabledPlugins", $k]))' "$MERGE_RECORD" >/dev/null
+}
+
 user_placed() { [ -f "$USER_TREE/SKILL.md" ] && [ -f "$USER_RECEIPT" ]; }
 
 # agent_runs prints how many times launchd has run the console user's helper.
@@ -494,6 +510,17 @@ count=$(find "$(dirname "$DROP_IN")" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' '
 [ "$count" = 1 ] || fail "managed-settings.d holds more than the drop-in: $(ls -A "$(dirname "$DROP_IN")")"
 pass "$DROP_IN registers $MARKET_ROOT and enables tapas-managed-plugin@tapas-test"
 
+step "The helper adds the managed plugin to the user's settings; the user's own keys are seeded beside it"
+# The daemon's startup run placed the managed plugin before this smoke could
+# seed anything, so the seeded false is for tapas-second-plugin, placed below.
+# The helper runs in the user's session on the plan change; wait for it.
+wait_for "the helper to enable tapas-managed-plugin@tapas-test for $CONSOLE_USER" user_setting_is tapas-managed-plugin@tapas-test true
+merge_owns tapas-managed-plugin@tapas-test || fail "the record lacks tapas-managed-plugin@tapas-test: $(cat "$MERGE_RECORD")"
+seeded=$(jq '.model = "keep-me" | .enabledPlugins["tapas-second-plugin@tapas-test"] = false' "$USER_SETTINGS") || fail "$USER_SETTINGS is not JSON"
+printf '%s\n' "$seeded" >"$USER_SETTINGS"
+chown "$CONSOLE_USER" "$USER_SETTINGS"
+pass "$USER_SETTINGS: managed plugin true and owned; model=keep-me and tapas-second-plugin@tapas-test=false seeded"
+
 step "InstallItem adds the optional plugin, listed but not enabled"
 assert_succeeded InstallItem:tapas-optional-plugin
 assert_placed "$PLUGINS_ROOT" tapas-marketplace tapas-optional-plugin .claude-plugin/plugin.json
@@ -505,6 +532,19 @@ assert_codex_entry tapas-optional-plugin AVAILABLE "$(receipt_path tapas-marketp
 assert_codex_entry tapas-managed-plugin INSTALLED_BY_DEFAULT "$(receipt_path tapas-marketplace tapas-managed-plugin)"
 pass "tapas-optional-plugin listed with defaultEnabled=false, not in enabledPlugins; Codex catalog AVAILABLE"
 
+step "The helper adds the optional plugin to the user's settings, past the seeded false"
+# tapas-second-plugin goes in first, so the plan that adds the optional key
+# already holds the seeded one: add_if_absent must leave it false and unowned.
+assert_succeeded InstallItem:tapas-second-plugin
+assert_placed "$PLUGINS_ROOT" tapas-marketplace tapas-second-plugin .claude-plugin/plugin.json
+assert_succeeded InstallItem:tapas-optional-plugin
+wait_for "the helper to enable tapas-optional-plugin@tapas-test for $CONSOLE_USER" user_setting_is tapas-optional-plugin@tapas-test true
+merge_owns tapas-optional-plugin@tapas-test || fail "the record lacks tapas-optional-plugin@tapas-test: $(cat "$MERGE_RECORD")"
+user_setting_is tapas-second-plugin@tapas-test false || fail "the seeded false changed: $(cat "$USER_SETTINGS")"
+! merge_owns tapas-second-plugin@tapas-test || fail "the record lists the seeded key: $(cat "$MERGE_RECORD")"
+[ "$(jq -r .model "$USER_SETTINGS")" = keep-me ] || fail "model changed: $(cat "$USER_SETTINGS")"
+pass "$USER_SETTINGS: optional plugin true and owned; seeded false and model untouched"
+
 step "RemoveItem drops the optional plugin's entry"
 assert_succeeded RemoveItem:tapas-optional-plugin
 wait_removed "$PLUGINS_ROOT" tapas-marketplace tapas-optional-plugin
@@ -515,6 +555,16 @@ enabled tapas-managed-plugin@tapas-test || fail "the managed plugin left enabled
 [ "$(codex_entries tapas-optional-plugin)" = "[]" ] || fail "tapas-optional-plugin still in the Codex catalog"
 assert_codex_entry tapas-managed-plugin INSTALLED_BY_DEFAULT "$(receipt_path tapas-marketplace tapas-managed-plugin)"
 pass "tree, receipt and both catalog entries gone; the managed plugin stays enabled"
+
+step "The helper takes back only the optional plugin's key"
+wait_for "the helper to remove tapas-optional-plugin@tapas-test for $CONSOLE_USER" user_setting_is tapas-optional-plugin@tapas-test absent
+! merge_owns tapas-optional-plugin@tapas-test || fail "the record still lists the removed key: $(cat "$MERGE_RECORD")"
+user_setting_is tapas-second-plugin@tapas-test false || fail "the seeded false changed: $(cat "$USER_SETTINGS")"
+[ "$(jq -r .model "$USER_SETTINGS")" = keep-me ] || fail "model changed: $(cat "$USER_SETTINGS")"
+assert_succeeded RemoveItem:tapas-second-plugin
+wait_removed "$PLUGINS_ROOT" tapas-marketplace tapas-second-plugin
+wait_pruned
+pass "optional plugin's key gone and unrecorded; seeded false and model still there; tapas-second-plugin removed"
 
 # --- Required software -------------------------------------------------------------
 

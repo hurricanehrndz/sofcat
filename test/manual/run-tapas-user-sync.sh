@@ -112,6 +112,26 @@ run_agent
 [ "$(cat "$INDEX")" = "$index_text" ] || fail "$INDEX restored as '$(cat "$INDEX")', want '$index_text'"
 pass "$INDEX restored as it was"
 
+step "A key sofcat added to the user's settings is back after a helper run"
+# run-tapas-smoke.sh seeded this file (the merge output of tapas-marketplace)
+# and sofcat added the managed plugin's key to it. Deleting that key is what
+# `claude plugin uninstall` does; the next sync adds it again, and the user's
+# own keys stay as they were.
+SETTINGS="$AGENTS_DIR/tapas-claude/settings.json"
+MANAGED_KEY="tapas-managed-plugin@tapas-test"
+if [ -f "$SETTINGS" ]; then
+	tmp=$(mktemp)
+	jq --arg k "$MANAGED_KEY" 'del(.enabledPlugins[$k])' "$SETTINGS" >"$tmp" && cat "$tmp" >"$SETTINGS"
+	rm -f "$tmp"
+	jq -e --arg k "$MANAGED_KEY" '.enabledPlugins | has($k) | not' "$SETTINGS" >/dev/null || fail "could not delete $MANAGED_KEY from $SETTINGS"
+	run_agent
+	jq -e --arg k "$MANAGED_KEY" '.enabledPlugins[$k] == true and .model == "keep-me" and .enabledPlugins["tapas-second-plugin@tapas-test"] == false' "$SETTINGS" >/dev/null ||
+		fail "$SETTINGS after a run: $(cat "$SETTINGS"), want $MANAGED_KEY true, model keep-me, tapas-second-plugin@tapas-test false"
+	pass "$MANAGED_KEY is back as true; model and the seeded false are as they were"
+else
+	pass "$SETTINGS is not there (run-tapas-smoke.sh did not seed it); skipped"
+fi
+
 step "Nothing under $AGENTS_DIR is owned by root"
 owned=$(find "$AGENTS_DIR" -user root -print | head -n5)
 [ -z "$owned" ] || fail "owned by root: $owned"

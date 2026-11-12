@@ -32,7 +32,7 @@ placements:
 | `exclusive` | Optional. When true, sofcat does not write into an existing, non-empty root it did not create. |
 | `items_dir` | Optional. Item trees go to `<root>/<items_dir>/<item_name>` instead. A clean relative path, slash-separated, each segment one Windows can hold, whose first segment does not start with `.`. |
 | `vars` | Optional. Any mapping, read by the placement's templates as `.Placement.Vars`. |
-| `files` | Optional with `paths`, required without. Files rendered from the placement's receipts, each a `template` or a `template_file` with a relative `path` or per-OS `paths`, or removed with `ensure: absent` ([Placement files](/zip-items/placement-files/)). |
+| `files` | Optional with `paths`, required without. Files rendered from the placement's receipts, each a `template` or a `template_file` with a relative `path` or per-OS `paths`, or removed with `ensure: absent` ([Placement files](/zip-items/placement-files/)). A `paths` entry takes two more fields: `scope: user` has the per-user helper write that file for each signed-in user, even in a machine placement, and `merge: add_if_absent` adds keys to a JSON file the user also edits instead of owning it ([Merging into a user's file](/zip-items/placement-files/#merging-into-a-users-file)). |
 | `files_atomic` | Optional, with `files`. When true, no file is written unless every one renders and passes its checks; otherwise each is written on its own. |
 | `check_facts` | Top level, beside `placements`: facts for `makecatalogs -check` over the built-in samples, for the admin facts templates read. |
 
@@ -117,6 +117,12 @@ darwin_user: ['${HOME}/Pictures']
 Without the file, a build uses `${ProgramData}\<NAME>` on Windows and
 `/Library/Application Support/<NAME>` on macOS, the directory holding its
 config and `Data`, and has no user roots.
+
+A files entry with `scope: user` writes under a user root even when its
+placement is machine scope: a Claude Code user settings file at
+`${HOME}/.claude` needs `${HOME}/.claude` in `darwin_user`, and
+`${USERPROFILE}\.claude` in `windows_user`, set by the brand or by managed
+policy.
 
 Managed policy can add roots to any build, stock or brand. It cannot remove
 the build's. On Windows the policy is the key
