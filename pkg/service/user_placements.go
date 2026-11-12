@@ -25,6 +25,7 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/identity"
 	"github.com/hurricanehrndz/sofcat/pkg/installer"
 	"github.com/hurricanehrndz/sofcat/pkg/placement"
+	"github.com/hurricanehrndz/sofcat/pkg/render"
 )
 
 // UserPlacement is one entry of the user-placement plan, listUserPlacements'
@@ -71,6 +72,24 @@ type UserPlacements struct {
 	// placement's files once its last item leaves. A plan from an older
 	// service has none: nil, never empty, so the helper can tell.
 	Placements map[string]placement.Spec `json:"placements"`
+	// UserFiles holds a UserFileSet for each machine placement with a user-scope
+	// files entry. A placement whose root cannot be resolved is held, so the
+	// helper leaves its keys alone. Never nil when stored.
+	UserFiles map[string]UserFileSet `json:"userFiles"`
+}
+
+// UserFileSet is what the per-user helper writes for one machine placement
+// with a files entry whose scope is user: the placement's whole spec (the
+// helper renders only the entries that are user scope), its expanded root and
+// its items as the service's receipts describe them, sorted by name. Items
+// is empty, not nil, when nothing is placed, so the helper still removes the
+// keys. Held is set when the service could not resolve the root or read the
+// receipts: the helper then neither renders nor removes what it merged.
+type UserFileSet struct {
+	Spec  placement.Spec `json:"spec"`
+	Root  string         `json:"root"`
+	Items []render.Item  `json:"items"`
+	Held  bool           `json:"held"`
 }
 
 // UserPlacementResult is the helper's outcome for one placement, sent with
@@ -176,6 +195,29 @@ func UserSpecs(table placement.Table, goos string) map[string]placement.Spec {
 	return specs
 }
 
+// UserFileSets returns the UserFileSet of every machine placement on goos with
+// a files entry that has a user-scope path there, from zip's receipts. A
+// placement whose root or receipts cannot be read is held, with a warning.
+func UserFileSets(zip *installer.ZipInstaller, table placement.Table, goos string) map[string]UserFileSet {
+	sets := map[string]UserFileSet{}
+	for _, name := range table.Names() {
+		spec := table.Placements[name]
+		if spec.ScopeFor(goos) != placement.ScopeMachine || !slices.ContainsFunc(spec.Files, func(f placement.File) bool {
+			return f.Scope == placement.ScopeUser && f.Paths[goos] != ""
+		}) {
+			continue
+		}
+		root, items, err := zip.UserFileSet(name, spec)
+		if err != nil {
+			slog.Warn("unable to describe the user-scope files of a placement; holding them", "placement", name, "err", err)
+			sets[name] = UserFileSet{Spec: spec, Items: []render.Item{}, Held: true}
+			continue
+		}
+		sets[name] = UserFileSet{Spec: spec, Root: root, Items: items}
+	}
+	return sets
+}
+
 // UserPlanPath is where a run stores the plan listUserPlacements serves.
 func UserPlanPath(appDataPath string) string {
 	return filepath.Join(appDataPath, "user-plan.json")
@@ -194,6 +236,9 @@ func SaveUserPlan(appDataPath string, plan UserPlacements) error {
 	}
 	if plan.Placements == nil {
 		plan.Placements = map[string]placement.Spec{}
+	}
+	if plan.UserFiles == nil {
+		plan.UserFiles = map[string]UserFileSet{}
 	}
 	data, err := json.Marshal(plan)
 	if err != nil {
@@ -244,7 +289,7 @@ func markUserSyncStarted(appDataPath, hash string) error {
 // its plan at logon even while the repository is unreachable. A stored plan
 // from an older service keeps Placements nil.
 func LoadUserPlan(appDataPath string) (UserPlacements, error) {
-	empty := UserPlacements{Entries: []UserPlacement{}, Facts: conditions.Facts{}, Placements: map[string]placement.Spec{}}
+	empty := UserPlacements{Entries: []UserPlacement{}, Facts: conditions.Facts{}, Placements: map[string]placement.Spec{}, UserFiles: map[string]UserFileSet{}}
 	data, err := os.ReadFile(UserPlanPath(appDataPath))
 	if errors.Is(err, fs.ErrNotExist) {
 		return empty, nil
@@ -261,6 +306,9 @@ func LoadUserPlan(appDataPath string) (UserPlacements, error) {
 	}
 	if stored.Facts == nil {
 		stored.Facts = empty.Facts
+	}
+	if stored.UserFiles == nil {
+		stored.UserFiles = empty.UserFiles
 	}
 	return stored, nil
 }
@@ -403,7 +451,7 @@ func (sr *serviceRunner) dispatchUserPlacements(conn clientConn, req rpcRequest,
 }
 
 // sendUserPlacementCommand is `-S ListUserPlacements`, one JSON line per
-// entry and then one holding the plan's placements, and `-S ReportUserPlacements:item,placement,outcome[,error]`, which
+// entry and then one holding the plan's placements and user files, and `-S ReportUserPlacements:item,placement,outcome[,error]`, which
 // sends one result.
 func sendUserPlacementCommand(ctx context.Context, client *Client, cmd Command) (CommandResponse, error) {
 	if cmd.Action == actionReportUserPlacements {
@@ -422,7 +470,8 @@ func sendUserPlacementCommand(ctx context.Context, client *Client, cmd Command) 
 	}
 	specs, err := json.Marshal(struct {
 		Placements map[string]placement.Spec `json:"placements"`
-	}{plan.Placements})
+		UserFiles  map[string]UserFileSet    `json:"userFiles"`
+	}{plan.Placements, plan.UserFiles})
 	if err != nil {
 		return CommandResponse{}, fmt.Errorf("failed to encode user placement specs: %w", err)
 	}

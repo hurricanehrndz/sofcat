@@ -10,6 +10,8 @@ import (
 	"os/user"
 	"path/filepath"
 	"slices"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,6 +20,7 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/installer"
 	"github.com/hurricanehrndz/sofcat/pkg/placement"
 	"github.com/hurricanehrndz/sofcat/pkg/receipt"
+	"github.com/hurricanehrndz/sofcat/pkg/render"
 	"github.com/hurricanehrndz/sofcat/pkg/service"
 )
 
@@ -27,7 +30,9 @@ type fakeClient struct {
 	// placements are the plan's specs, passed through JSON as over the pipe;
 	// nil is a plan from an older service.
 	placements map[string]placement.Spec
-	err        error
+	// userFiles are the plan's user-file sets, passed through JSON too.
+	userFiles map[string]service.UserFileSet
+	err       error
 	// failures are returned, in order, before plan or err.
 	failures []error
 	calls    int
@@ -54,6 +59,15 @@ func (c *fakeClient) ListUserPlacements(context.Context) (service.UserPlacements
 			return service.UserPlacements{}, err
 		}
 		if err := json.Unmarshal(data, &plan.Placements); err != nil {
+			return service.UserPlacements{}, err
+		}
+	}
+	if c.userFiles != nil {
+		data, err := json.Marshal(c.userFiles)
+		if err != nil {
+			return service.UserPlacements{}, err
+		}
+		if err := json.Unmarshal(data, &plan.UserFiles); err != nil {
 			return service.UserPlacements{}, err
 		}
 	}
@@ -610,4 +624,189 @@ func TestSyncNoPlacementFileWithoutReceipts(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(root, ".index.txt")); !os.IsNotExist(err) {
 		t.Errorf("index.txt generated without receipts: %v", err)
 	}
+}
+
+// mergeSet is the plan's user-file set for machine placement "market": its
+// whole spec, whose one scope: user entry adds enabledPlugins.<item>@m to
+// the profile's .agents/claude/settings.json, and the named items.
+func mergeSet(template string, held bool, names ...string) map[string]service.UserFileSet {
+	spec := placement.Spec{
+		Paths: map[string]string{placement.Windows: `C:\market`},
+		Files: []placement.File{
+			{Paths: map[string]string{placement.Windows: `C:\market\machine.json`}, Template: "{}"},
+			{
+				Paths: map[string]string{placement.Windows: "${USERPROFILE}/.agents/claude/settings.json"},
+				Scope: placement.ScopeUser, Merge: placement.MergeAddIfAbsent, Template: template,
+			},
+		},
+	}
+	items := []render.Item{}
+	for _, n := range names {
+		items = append(items, render.Item{Name: n})
+	}
+	return map[string]service.UserFileSet{"market": {Spec: spec, Root: `C:\market`, Items: items, Held: held}}
+}
+
+const mergeTemplate = `{"enabledPlugins": { {{- range $i, $p := .Items }}{{ if $i }},{{ end }}{{ json (printf "%s@m" $p.Name) }}: true{{ end -}} }}`
+
+// syncMerge runs one helper sync with the given plan files and returns the
+// settings file the merge writes ("" when missing) and the results.
+func syncMerge(t *testing.T, guard placement.Guard, profile, receipts string, files map[string]service.UserFileSet) (string, []service.UserPlacementResult) {
+	t.Helper()
+	client := &fakeClient{userFiles: files}
+	results, err := Sync(context.Background(), client, guard, receipts, slog.Default())
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(profile, ".agents", "claude", "settings.json"))
+	if err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	return string(data), results
+}
+
+// A machine placement's user-scope file is merged into the user's profile
+// from the items in the plan; an item that leaves the plan's set (removed, or
+// dropped from default_installs) takes its key, and a placement that leaves
+// the plan altogether is swept. Only the entry with scope: user is rendered.
+func TestSyncMergesMachinePlacementFiles(t *testing.T) {
+	_, guard, profile := fixture(t)
+	receipts := filepath.Join(t.TempDir(), "receipts")
+
+	got, results := syncMerge(t, guard, profile, receipts, mergeSet(mergeTemplate, false, "a", "b"))
+	if len(results) != 0 || !strings.Contains(got, `"a@m": true`) || !strings.Contains(got, `"b@m": true`) {
+		t.Fatalf("results = %+v, settings = %q; want both keys", results, got)
+	}
+	if _, err := os.Stat(filepath.Join(receipts, ".merged-keys.json")); err != nil {
+		t.Errorf("no merge record: %v", err)
+	}
+
+	got, results = syncMerge(t, guard, profile, receipts, mergeSet(mergeTemplate, false, "b"))
+	if len(results) != 0 || strings.Contains(got, "a@m") || !strings.Contains(got, "b@m") {
+		t.Errorf("results = %+v, settings = %q; want only b@m after a left", results, got)
+	}
+
+	got, results = syncMerge(t, guard, profile, receipts, mergeSet(mergeTemplate, false))
+	if len(results) != 0 || strings.Contains(got, "@m") {
+		t.Errorf("results = %+v, settings = %q; want no keys with no items", results, got)
+	}
+
+	got, _ = syncMerge(t, guard, profile, receipts, mergeSet(mergeTemplate, false, "a"))
+	if !strings.Contains(got, "a@m") {
+		t.Fatalf("settings = %q, want a@m back", got)
+	}
+	got, results = syncMerge(t, guard, profile, receipts, nil)
+	if len(results) != 0 || strings.Contains(got, "a@m") {
+		t.Errorf("results = %+v, settings = %q; want the orphaned placement's key swept", results, got)
+	}
+}
+
+// A held set, and one that failed to render this run, keep the keys they
+// merged: the sweep must not read an unknown set of items as none.
+func TestSyncKeepsMergedKeysOfHeldAndFailedSets(t *testing.T) {
+	_, guard, profile := fixture(t)
+	receipts := filepath.Join(t.TempDir(), "receipts")
+	if got, _ := syncMerge(t, guard, profile, receipts, mergeSet(mergeTemplate, false, "a")); !strings.Contains(got, "a@m") {
+		t.Fatalf("settings = %q, want a@m", got)
+	}
+
+	got, results := syncMerge(t, guard, profile, receipts, mergeSet(mergeTemplate, true))
+	if len(results) != 0 || !strings.Contains(got, "a@m") {
+		t.Errorf("held: results = %+v, settings = %q; want a@m left alone", results, got)
+	}
+
+	got, results = syncMerge(t, guard, profile, receipts, mergeSet(`[]`, false))
+	if len(results) != 1 || results[0].Item != "" || results[0].Placement != "market" || results[0].Error == "" || !strings.Contains(got, "a@m") {
+		t.Errorf("bad template: results = %+v, settings = %q; want one failure for market and a@m kept", results, got)
+	}
+}
+
+// A user's own value for a key is never overridden or removed.
+func TestSyncMergeKeepsTheUsersKey(t *testing.T) {
+	_, guard, profile := fixture(t)
+	receipts := filepath.Join(t.TempDir(), "receipts")
+	path := filepath.Join(profile, ".agents", "claude", "settings.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(`{"enabledPlugins": {"a@m": false}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	syncMerge(t, guard, profile, receipts, mergeSet(mergeTemplate, false, "a"))
+	got, _ := syncMerge(t, guard, profile, receipts, nil)
+	if got != `{"enabledPlugins": {"a@m": false}}` {
+		t.Errorf("settings = %q, want the user's file untouched", got)
+	}
+}
+
+// A merge entry whose path changed while the placement stays in the plan: the
+// old file loses the keys and the new one gets them.
+func TestSyncMergePathChange(t *testing.T) {
+	_, guard, profile := fixture(t)
+	receipts := filepath.Join(t.TempDir(), "receipts")
+	syncMerge(t, guard, profile, receipts, mergeSet(mergeTemplate, false, "a"))
+
+	moved := mergeSet(mergeTemplate, false, "a")
+	moved["market"].Spec.Files[1].Paths[placement.Windows] = "${USERPROFILE}/.agents/other/settings.json"
+	old, results := syncMerge(t, guard, profile, receipts, moved)
+	if len(results) != 0 || strings.Contains(old, "a@m") {
+		t.Errorf("results = %+v, old file = %q; want a@m taken back", results, old)
+	}
+	data, err := os.ReadFile(filepath.Join(profile, ".agents", "other", "settings.json"))
+	if err != nil || !strings.Contains(string(data), "a@m") {
+		t.Errorf("new file = %q, %v; want a@m", data, err)
+	}
+}
+
+// A placement whose root is missing is skipped by the regeneration, though its
+// receipts say its items are placed: the sweep must not read that as no items,
+// or an owned key the user set to false would come back true.
+func TestSyncKeepsMergedKeysOfPlacementWithoutRoot(t *testing.T) {
+	_, guard, profile := fixture(t)
+	receipts := filepath.Join(t.TempDir(), "receipts")
+	settings := filepath.Join(profile, ".agents", "claude", "settings.json")
+	if err := os.MkdirAll(filepath.Dir(settings), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const body = `{"enabledPlugins": {"a@m": false}}`
+	if err := os.WriteFile(settings, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rec := `{"entries":[{"path":` + strconv.Quote(settings) + `,"placement":"codex","keys":[["enabledPlugins","a@m"]]}]}`
+	if err := os.MkdirAll(receipts, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(receipts, ".merged-keys.json"), []byte(rec), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	skills := filepath.Join(profile, ".agents", "skills")
+	if err := receipt.Write(receipts, receipt.Receipt{Item: "a", Version: "1", Placement: "codex", Path: filepath.Join(skills, "a"), TreeHash: "t", PlacedHash: "t"}); err != nil {
+		t.Fatal(err)
+	}
+	spec := placement.Spec{
+		Paths: map[string]string{placement.Windows: "${USERPROFILE}/.agents/skills"},
+		Files: []placement.File{{
+			Paths: map[string]string{placement.Windows: "${USERPROFILE}/.agents/claude/settings.json"},
+			Merge: placement.MergeAddIfAbsent, Template: mergeTemplate,
+		}},
+	}
+	client := &fakeClient{
+		plan:       []service.UserPlacement{{Item: "a", Placement: "codex", Path: spec.Paths[placement.Windows], Held: true}},
+		placements: map[string]placement.Spec{"codex": spec},
+	}
+	if _, err := Sync(context.Background(), client, guard, receipts, slog.Default()); err != nil {
+		t.Fatal(err)
+	}
+	if got := readTestFile(t, settings); got != body {
+		t.Errorf("settings = %q, want %q untouched", got, body)
+	}
+}
+
+func readTestFile(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
 }

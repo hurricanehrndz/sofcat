@@ -379,6 +379,30 @@ func TestParseRejectsFiles(t *testing.T) {
 		"absent with a template_file": {
 			`{files: [{paths: {darwin: /x}, ensure: absent, template_file: t}]}`, "files[0]: ensure: absent takes no template",
 		},
+		"file scope machine": {
+			`{paths: {darwin: /p}, files: [{paths: {darwin: /x}, scope: machine, template: x}]}`, `files[0]: scope: "machine", want user or empty`,
+		},
+		"file scope user with path": {
+			`{paths: {darwin: /p}, files: [{path: .x, scope: user, template: x}]}`, "files[0]: scope: user needs paths, not path",
+		},
+		"unknown merge": {
+			`{paths: {darwin: /p}, files: [{paths: {darwin: /x}, scope: user, merge: replace, template: x}]}`, `files[0]: merge: "replace", want add_if_absent`,
+		},
+		"merge on a machine file": {
+			`{paths: {darwin: /p}, files: [{paths: {darwin: /x}, merge: add_if_absent, template: x}]}`, "files[0]: merge: add_if_absent needs user scope on darwin",
+		},
+		"merge with path": {
+			`{paths: {darwin: /p}, scope: {darwin: user}, files: [{path: .x, merge: add_if_absent, template: x}]}`, "files[0]: merge: add_if_absent needs paths, not path",
+		},
+		"merge ensure absent": {
+			`{paths: {darwin: /p}, files: [{paths: {darwin: /x}, scope: user, merge: add_if_absent, ensure: absent}]}`, "merge: add_if_absent needs ensure present",
+		},
+		"merge without a template": {
+			`{paths: {darwin: /p}, files: [{paths: {darwin: /x}, scope: user, merge: add_if_absent}]}`, "merge: add_if_absent needs template",
+		},
+		"user file scope on one OS only": {
+			`{paths: {darwin: /p, windows: 'C:\p'}, files: [{paths: {darwin: /x, windows: 'C:\x'}, merge: add_if_absent, template: x}], scope: {darwin: user}}`, "needs user scope on windows",
+		},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -394,13 +418,14 @@ func TestParseRejectsFiles(t *testing.T) {
 // dot-path without it, and per-OS paths on a subset of the placement's OSes.
 func TestParseAcceptsFiles(t *testing.T) {
 	tests := map[string]string{
-		"dot path without items_dir":   `{paths: {darwin: /p}, files: [{path: .claude-plugin/marketplace.json, template: x}]}`,
-		"any path beside items_dir":    `{paths: {darwin: /p}, items_dir: plugins, files: [{path: catalog.toml, template: x}, {path: plugins.json, template: x}]}`,
-		"per-OS paths on a subset":     `{paths: {darwin: /p, windows: 'C:\p'}, files: [{paths: {darwin: /etc/x.json}, template: x}]}`,
-		"same path, relative and OS'd": `{paths: {darwin: /p}, files: [{path: .x, template: x}, {paths: {darwin: /p/.x}, template: y}]}`,
-		"rootless, any OS":             `{files: [{paths: {darwin: /etc/x.json, windows: 'C:\x.json'}, template: x}], files_atomic: true}`,
-		"absent, either form":          `{paths: {darwin: /p}, files: [{path: .x, ensure: absent}, {paths: {darwin: /y}, ensure: absent}, {path: .z, ensure: present, template: x}]}`,
-		"rootless absent":              `{files: [{paths: {darwin: /x}, ensure: absent}]}`,
+		"dot path without items_dir":                             `{paths: {darwin: /p}, files: [{path: .claude-plugin/marketplace.json, template: x}]}`,
+		"any path beside items_dir":                              `{paths: {darwin: /p}, items_dir: plugins, files: [{path: catalog.toml, template: x}, {path: plugins.json, template: x}]}`,
+		"per-OS paths on a subset":                               `{paths: {darwin: /p, windows: 'C:\p'}, files: [{paths: {darwin: /etc/x.json}, template: x}]}`,
+		"same path, relative and OS'd":                           `{paths: {darwin: /p}, files: [{path: .x, template: x}, {paths: {darwin: /p/.x}, template: y}]}`,
+		"rootless, any OS":                                       `{files: [{paths: {darwin: /etc/x.json, windows: 'C:\x.json'}, template: x}], files_atomic: true}`,
+		"absent, either form":                                    `{paths: {darwin: /p}, files: [{path: .x, ensure: absent}, {paths: {darwin: /y}, ensure: absent}, {path: .z, ensure: present, template: x}]}`,
+		"rootless absent":                                        `{files: [{paths: {darwin: /x}, ensure: absent}]}`,
+		"merge file in a user-scope file of a machine placement": `{paths: {darwin: /p, windows: 'C:\p'}, files: [{paths: {darwin: '${HOME}/.claude/settings.json', windows: '${USERPROFILE}\.claude\settings.json'}, scope: user, merge: add_if_absent, template: '{{ range .Items }}{{ end }}'}]}`,
 	}
 	for name, placement := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -465,12 +490,13 @@ placements:
 
 // claudeTemplates returns the Claude catalog and drop-in templates of the
 // Tapas fixture's marketplace, which the zip-items guide shows for brands
-// to copy.
+// to copy. The marketplace has more entries after the first three (the
+// user-scope merge entry), which are not read.
 func claudeTemplates(t *testing.T) (catalog, dropIn string) {
 	t.Helper()
 	table, _ := parseFixture(t, "tapas")
 	files := table.Placements["tapas-marketplace"].Files
-	if len(files) != 3 || files[0].Path != ".claude-plugin/marketplace.json" || files[2].Paths == nil {
+	if len(files) < 3 || files[0].Path != ".claude-plugin/marketplace.json" || files[2].Paths == nil {
 		t.Fatalf("tapas-marketplace files = %+v", files)
 	}
 	return files[0].Template, files[2].Template
