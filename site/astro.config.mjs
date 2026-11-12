@@ -24,7 +24,7 @@ export default defineConfig({
       sidebar: [
         {
           label: "Start here",
-          items: ["getting-started", "configuration"],
+          items: ["download", "getting-started", "configuration"],
         },
         {
           label: "Guides",

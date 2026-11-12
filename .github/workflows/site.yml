@@ -18,6 +18,9 @@ on:
       - mise.toml
       - justfile
       - .github/workflows/site.yml
+  # Build Release starts it on main after cutting a release, so the download
+  # page lists the new one.
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
@@ -36,13 +39,17 @@ jobs:
         with:
           # The site needs only Node and just, not the Go and lint toolchain.
           install_args: node just
-      # Builds the Starlight site and the storefront demo into site/dist.
+      # Builds the Starlight site and the storefront demo into site/dist. The
+      # download page lists the releases through the GitHub API; the token
+      # lifts the anonymous rate limit.
       - run: just site
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
       # main deploys sofcat.app. A PR from this repository uploads a preview
       # version (its URL is printed in the log) without touching production;
       # fork PRs get no secrets, so they stop after the build.
       - name: Deploy to Cloudflare
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
         working-directory: site
         run: npx wrangler deploy
         env:

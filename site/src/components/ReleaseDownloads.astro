@@ -1,0 +1,278 @@
+---
+// The download page's release list, read from the GitHub API when the site
+// builds: the newest stable release with a link per file, a newer preview if
+// there is one, and every earlier release. Build Release asks the Site
+// workflow to deploy again once a release is cut, so the page follows each
+// tag. In CI a failed fetch fails the build, so a broken page is never
+// deployed; a local build without network renders a link to GitHub instead.
+const repo = "hurricanehrndz/sofcat";
+const releasesPage = `https://github.com/${repo}/releases`;
+
+type Asset = { name: string; size: number; browser_download_url: string };
+type Release = {
+  tag_name: string;
+  html_url: string;
+  published_at: string;
+  prerelease: boolean;
+  draft: boolean;
+  assets: Asset[];
+};
+
+async function fetchReleases(): Promise<Release[] | null> {
+  const headers: Record<string, string> = { Accept: "application/vnd.github+json" };
+  if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+  try {
+    const res = await fetch(`https://api.github.com/repos/${repo}/releases?per_page=100`, { headers });
+    if (!res.ok) throw new Error(`GitHub API answered ${res.status} ${res.statusText}`);
+    return ((await res.json()) as Release[]).filter((r) => !r.draft);
+  } catch (err) {
+    if (process.env.CI) throw new Error(`download page: unable to list releases: ${err}`);
+    console.warn(`download page: unable to list releases (${err}); rendering a link to GitHub`);
+    return null;
+  }
+}
+
+const releases = await fetchReleases();
+// The API lists newest first.
+const stable = releases?.find((r) => !r.prerelease);
+const preview = releases?.find((r) => r.prerelease && (!stable || r.published_at > stable.published_at));
+const latest = stable ?? preview;
+const earlier = releases?.filter((r) => r !== latest) ?? [];
+
+const version = (r: Release) => r.tag_name.replace(/^v/, "");
+const date = (r: Release) =>
+  new Date(r.published_at).toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
+const mib = (a: Asset) => `${(a.size / (1024 * 1024)).toFixed(1)} MB`;
+const find = (r: Release, test: (name: string) => boolean) => r.assets.find((a) => test(a.name));
+
+// The files of a release, by what they are for (contributing/dev.md, "Releases").
+function groups(r: Release) {
+  const file = (label: string, test: (name: string) => boolean, note = "") => {
+    const asset = find(r, test);
+    return asset ? [{ label, note, asset }] : [];
+  };
+  const makecatalogs = r.assets
+    .filter((a) => a.name.startsWith("makecatalogs-"))
+    .map((a) => {
+      const [, os, arch] = a.name.match(/^makecatalogs-(\w+)-(\w+)\./) ?? [];
+      const osName = { windows: "Windows", darwin: "macOS", linux: "Linux" }[os] ?? os;
+      return { label: `${osName} ${arch}`, note: "", asset: a };
+    });
+  return [
+    {
+      title: "Windows",
+      files: [
+        ...file("Installer", (n) => n.endsWith("-setup.exe"), "Installs and starts the service; run elevated, /S for silent."),
+        ...file("Executables", (n) => n.startsWith("sofcat-") && n.endsWith("-windows-amd64.zip"), "sofcat.exe, sofcat-ui.exe and sofcat-useragent.exe, unpackaged."),
+      ],
+    },
+    {
+      title: "macOS (Apple silicon)",
+      files: [
+        ...file("Installer", (n) => n.endsWith(".pkg"), "Signed and notarized; installs the app, the CLI and the launchd daemon."),
+        ...file("Archive", (n) => /-darwin-arm64\.tar\.gz$/.test(n) && n.startsWith("sofcat-"), "sofcat, sofcat-useragent and SofCat.app, unpackaged."),
+      ],
+    },
+    { title: "makecatalogs", files: makecatalogs },
+  ].filter((g) => g.files.length > 0);
+}
+
+const bundle = latest && find(latest, (n) => n.endsWith(".sigstore.json"));
+---
+
+{
+  !latest && (
+    <p>
+      Every release, with its files and notes, is on the{" "}
+      <a href={releasesPage}>GitHub releases page</a>.
+    </p>
+  )
+}
+
+{
+  latest && (
+    <section class="release not-content">
+      <div class="heading">
+        <h2 id="latest">
+          SofCat {version(latest)}
+          {latest.prerelease && <span class="badge">Preview</span>}
+        </h2>
+        <p class="meta">
+          Released {date(latest)} · <a href={latest.html_url}>Release notes</a>
+        </p>
+      </div>
+      {!stable && (
+        <p>There is no stable release yet; this is the newest preview.</p>
+      )}
+      {groups(latest).map((g) => (
+        <div class="group">
+          <h3>{g.title}</h3>
+          <ul>
+            {g.files.map(({ label, note, asset }) => (
+              <li>
+                <a class="file" href={asset.browser_download_url}>
+                  <span class="label">{label}</span>
+                  <code>{asset.name}</code>
+                  <span class="size">{mib(asset)}</span>
+                </a>
+                {note && <p class="note">{note}</p>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </section>
+  )
+}
+
+{
+  stable && preview && (
+    <p>
+      A newer preview, <a href={preview.html_url}>{version(preview)}</a>, is
+      available for testing. Previews can change config keys, the catalog
+      format and the service protocol before the release that follows them.
+    </p>
+  )
+}
+
+{
+  latest && (
+    <>
+      <h2 id="verify">Verify a download</h2>
+      <p>
+        Every file carries SLSA build provenance from the workflow that built
+        it. Check one with the GitHub CLI:
+      </p>
+      <pre class="cmd"><code>gh attestation verify {"<file>"} -R {repo}</code></pre>
+      {bundle && (
+        <p>
+          To check offline, download <code>{bundle.name}</code> too and add{" "}
+          <code>--bundle {bundle.name}</code>.
+        </p>
+      )}
+      <p>
+        The Windows executables are Authenticode-signed and the macOS app and
+        package are signed with a Developer ID and notarized; see{" "}
+        <a href="/reference/code-signing/">Code signing</a> for how to check
+        each.
+      </p>
+    </>
+  )
+}
+
+{
+  earlier.length > 0 && (
+    <>
+      <h2 id="earlier">Earlier releases</h2>
+      <ul class="earlier">
+        {earlier.map((r) => (
+          <li>
+            <a href={r.html_url}>{version(r)}</a>
+            {r.prerelease && <span class="badge">Preview</span>}
+            <span class="meta">{date(r)}</span>
+          </li>
+        ))}
+      </ul>
+    </>
+  )
+}
+
+<style>
+  .release {
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.75rem;
+    padding: 1.25rem 1.5rem;
+    margin-block: 1.5rem;
+  }
+  .heading h2 {
+    margin: 0;
+    font-size: var(--sl-text-h2);
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+  }
+  .meta {
+    color: var(--sl-color-gray-3);
+    font-size: var(--sl-text-sm);
+    margin: 0.25rem 0 0;
+  }
+  .release a:not(.file),
+  .earlier a {
+    color: var(--sl-color-text-accent);
+  }
+  .badge {
+    font-size: var(--sl-text-xs);
+    font-weight: 600;
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    background: var(--sl-color-orange-low);
+    color: var(--sl-color-orange-high);
+    margin-inline-start: 0.4rem;
+  }
+  .group h3 {
+    font-size: var(--sl-text-lg);
+    margin: 1.25rem 0 0.5rem;
+  }
+  .group ul,
+  .earlier {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .group li + li {
+    margin-top: 0.5rem;
+  }
+  .file {
+    display: grid;
+    grid-template-columns: 9rem 1fr auto;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.6rem 0.8rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    text-decoration: none;
+    color: var(--sl-color-white);
+  }
+  .file:hover {
+    border-color: var(--sl-color-accent);
+    background: var(--sl-color-accent-low);
+  }
+  .file code {
+    overflow-wrap: anywhere;
+    background: none;
+    padding: 0;
+  }
+  .label {
+    font-weight: 600;
+  }
+  .size {
+    color: var(--sl-color-gray-3);
+    font-size: var(--sl-text-sm);
+    white-space: nowrap;
+  }
+  .note {
+    margin: 0.25rem 0 0 0.8rem;
+    color: var(--sl-color-gray-3);
+    font-size: var(--sl-text-sm);
+  }
+  .earlier li {
+    display: flex;
+    gap: 0.75rem;
+    align-items: baseline;
+    padding-block: 0.25rem;
+  }
+  .cmd {
+    overflow-x: auto;
+    max-width: 100%;
+  }
+  @media (max-width: 40rem) {
+    .file {
+      grid-template-columns: 1fr auto;
+    }
+    .file code {
+      grid-column: 1 / -1;
+      grid-row: 2;
+    }
+  }
+</style>

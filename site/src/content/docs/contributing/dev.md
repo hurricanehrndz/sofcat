@@ -50,12 +50,19 @@ Nothing is signed.
 ## Releases
 
 Merging to `main` does not release. Push a version tag on a commit that is on
-`main`: `vMAJOR.MINOR.PATCH-beta.N` for a beta, cut as a GitHub prerelease, or
-`vMAJOR.MINOR.PATCH` for a release:
+`main`: `vMAJOR.MINOR.PATCH` for a release, or `vMAJOR.MINOR.PATCH-beta.N` for
+a preview, cut as a GitHub prerelease:
 
 ```sh
-git fetch origin && git tag v1.11.0-beta.1 origin/main && git push origin v1.11.0-beta.1
+git fetch origin && git tag v5.1.0 origin/main && git push origin v5.1.0
 ```
+
+Releases follow [semantic versioning](https://semver.org/) from v5.0.0, the
+first stable release. A change that breaks config keys, the catalog format or
+the service protocol needs a new major version, and its pull request says so
+in the title or summary, since the release notes are generated from merged
+pull requests. A preview may break anything the release it leads to has not
+yet shipped.
 
 Build Release (`.github/workflows/build_release.yml`) builds and signs
 everything at that tag: on Linux the Windows executables, `setup.exe` and
@@ -64,8 +71,9 @@ last job attaches the files below, with a signed provenance bundle
 (`sofcat-<tag>.sigstore.json`), to the release with notes generated from the
 merged pull requests, and the released-binary integration tests run on
 Windows. The installer's file name and Add or remove programs entry carry only
-`MAJOR.MINOR.PATCH`, so a beta's `setup.exe` is named like the release that
-follows it.
+`MAJOR.MINOR.PATCH`, so a preview's `setup.exe` is named like the release that
+follows it. Once the release is cut, a last job asks the Site workflow to
+deploy again, so the [Download](/download/) page lists it.
 
 | File | Holds |
 | --- | --- |

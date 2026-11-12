@@ -196,6 +196,19 @@ jobs:
           artifacts: "dist/*"
           tag: ${{ github.ref_name }}
           token: ${{ secrets.GITHUB_TOKEN }}
+  # A release cut with GITHUB_TOKEN triggers no workflow, so a release event
+  # never reaches the Site workflow; a dispatch does.
+  site:
+    name: Redeploy site
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write # start the Site workflow
+    steps:
+      - name: Deploy sofcat.app with the new release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run site.yml --ref main --repo "$GITHUB_REPOSITORY"
   integration:
     name: Released-binary integration
     needs: build
