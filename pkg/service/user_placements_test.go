@@ -441,7 +441,12 @@ func TestUserPlanCarriesTemplateFileText(t *testing.T) {
 // items, so the helper removes the keys. Placements without such an entry,
 // and user-scope ones, are left out, and a root the guard refuses is held.
 func TestUserFileSets(t *testing.T) {
-	base := t.TempDir()
+	// The guard resolves the root; a Windows runner's TempDir can be an 8.3
+	// short name (RUNNER~1) that EvalSymlinks expands, and macOS's is a symlink.
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	root := filepath.Join(base, "roots", "market")
 	userFile := placement.File{
 		Paths: map[string]string{placement.Windows: `${USERPROFILE}\.claude\settings.json`},
