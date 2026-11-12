@@ -3,11 +3,6 @@ title: Getting started
 description: Install the SofCat agent on Windows or macOS, point it at a repository and restart it.
 ---
 
-:::caution[Beta]
-The config keys, catalog format and service protocol can still change between
-beta releases without a migration path; the release notes list what changed.
-:::
-
 SofCat has two halves. A repository on any web server holds manifests,
 catalogs and the items themselves. An agent on each machine reads its manifest
 from that repository, keeps the required items in place, and lets a
@@ -16,7 +11,7 @@ self-service app install the optional ones for standard users.
 ## Install on Windows
 
 1. Download `sofcat-<version>-x86_64-setup.exe` from the
-   [releases page](https://github.com/hurricanehrndz/sofcat/releases) and
+   [Download](/download/) page and
    install it from an elevated prompt:
 
    ```powershell
@@ -55,12 +50,13 @@ program files, closes the storefront if it is open, and leaves
 in the Windows Application log under the source `sofcat`; see
 [Event log](/reference/event-log/).
 
-Nothing is code signed yet. See [Code signing](/reference/code-signing/).
+Release builds are Authenticode-signed; a build of your own is unsigned unless
+you set the [signing variables](/reference/code-signing/).
 
 ## Install on macOS
 
 Download `sofcat-<tag>.pkg` from the
-[releases page](https://github.com/hurricanehrndz/sofcat/releases). It is signed
+[Download](/download/) page. It is signed
 with a Developer ID and notarized, and built for Apple silicon (arm64) only.
 For an Intel Mac, build one on that Mac from a checkout with `just pkg` (see
 [Developer notes](/contributing/dev/) for the toolchain); it is unsigned

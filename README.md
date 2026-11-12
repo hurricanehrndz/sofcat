@@ -7,14 +7,9 @@
   <a href="https://github.com/hurricanehrndz/sofcat/actions/workflows/go-test.yml"><img alt="go-test" src="https://github.com/hurricanehrndz/sofcat/actions/workflows/go-test.yml/badge.svg?branch=main"></a>
   <a href="https://github.com/hurricanehrndz/sofcat/actions/workflows/windows-integration-tests.yml"><img alt="Windows integration tests" src="https://github.com/hurricanehrndz/sofcat/actions/workflows/windows-integration-tests.yml/badge.svg?branch=main"></a>
   <a href="https://scorecard.dev/viewer/?uri=github.com/hurricanehrndz/sofcat"><img alt="OpenSSF Scorecard" src="https://api.scorecard.dev/projects/github.com/hurricanehrndz/sofcat/badge"></a>
-  <a href="https://github.com/hurricanehrndz/sofcat/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/hurricanehrndz/sofcat?include_prereleases&sort=semver"></a>
+  <a href="https://github.com/hurricanehrndz/sofcat/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/hurricanehrndz/sofcat?sort=semver"></a>
   <a href="LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/github/license/hurricanehrndz/sofcat"></a>
 </p>
-
-> [!WARNING]
-> SofCat is in beta. The config keys, catalog format and service protocol can
-> still change between beta releases without a migration path; the release
-> notes list what changed.
 
 SofCat is a catalog for anything you can put on disk or run: installers,
 packages, scripts, AI skills. You publish manifests and catalogs on any web
@@ -78,7 +73,7 @@ flowchart LR
 ## Quick start on Windows
 
 1. Download `sofcat-<version>-x86_64-setup.exe` from the
-   [releases page](https://github.com/hurricanehrndz/sofcat/releases) and install it:
+   [download page](https://sofcat.app/download/) and install it:
 
    ```powershell
    .\sofcat-<version>-x86_64-setup.exe /S
