@@ -58,11 +58,18 @@ type ZipInstaller struct {
 	// runs as: the tree templates' .User in user scope. The service leaves
 	// it empty; the per-user helper sets it.
 	User string
+	// MergeRecord is the file that records the keys merge files entries added,
+	// per placement and file (zip_merge.go). The per-user helper sets it; the
+	// service leaves it empty and refuses a merge entry.
+	MergeRecord string
 
 	// renderer decides what sofcat renders inside a tree; the tree's own
 	// templates (treeTemplates) when nil.
 	renderer treeRenderer
 	now      func() time.Time
+	// merged holds the files merged into in this installer's life, which
+	// SweepMerges leaves alone.
+	merged map[mergeKey]bool
 }
 
 func (z *ZipInstaller) templates() treeRenderer {

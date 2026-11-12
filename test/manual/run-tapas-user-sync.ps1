@@ -181,6 +181,28 @@ try {
     if ($restored -ne $indexText) { Fail "$index restored as '$restored', want '$indexText'" }
     Log "$index restored as it was"
 
+    # run-tapas-smoke.ps1 seeded the user's own Claude settings (the merge
+    # output of tapas-marketplace) and sofcat added the managed plugin's key.
+    # Deleting that key is what `claude plugin uninstall` does; the next sync
+    # adds it again, and the user's own keys stay as they were.
+    $settings = Join-Path $agents "tapas-claude\settings.json"
+    $managedKey = "tapas-managed-plugin@tapas-test"
+    if (Test-Path -LiteralPath $settings) {
+        $sj = [IO.File]::ReadAllText($settings) | ConvertFrom-Json
+        $sj.enabledPlugins.PSObject.Properties.Remove($managedKey)
+        [IO.File]::WriteAllText($settings, ($sj | ConvertTo-Json -Depth 10), (New-Object Text.UTF8Encoding $false))
+        Invoke-UserSync
+        $settingsText = [IO.File]::ReadAllText($settings)
+        $sj = $settingsText | ConvertFrom-Json
+        if ($sj.enabledPlugins.$managedKey -ne $true -or $sj.model -ne "keep-me" -or $sj.enabledPlugins.'tapas-second-plugin@tapas-test' -ne $false) {
+            Fail "$settings after a run: $settingsText, want $managedKey true, model keep-me, tapas-second-plugin@tapas-test false"
+        }
+        Log "$managedKey is back as true; model and the seeded false are as they were"
+    }
+    else {
+        Log "$settings is not there (run-tapas-smoke.ps1 did not seed it); skipped"
+    }
+
     $paths = @($agents) + @(Get-ChildItem -LiteralPath $agents -Recurse -Force | ForEach-Object { $_.FullName })
     foreach ($path in $paths) {
         $owner = (Get-Acl -LiteralPath $path).Owner

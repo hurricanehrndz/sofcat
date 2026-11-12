@@ -295,11 +295,15 @@ passwordless sudo.
    only root can set (launchd's root-owned plist); nothing else honours it.
    It needs a user signed in to the GUI (the rig's SSH user is): it checks
    that the daemon starts the per-user helper's LaunchAgent for them, by
-   bootstrap first and by kickstart on a later plan change.
+   bootstrap first and by kickstart on a later plan change. It also seeds
+   `~/.agents/tapas-claude/settings.json` with the user's own keys and checks
+   that the helper's `add_if_absent` merge adds and removes only its own.
    Then, as that user (not root), `test/manual/run-tapas-user-sync.sh` must
    exit 0 and print `TAPAS USER SYNC PASSED`: it runs the installed helper
    and checks `tapas-user-plugin` under `~/.agents/tapas-plugins` and its
-   receipt under `~/Library/Application Support/Tapas Test/receipts`.
+   receipt under `~/Library/Application Support/Tapas Test/receipts`, then
+   deletes a key sofcat merged into `~/.agents/tapas-claude/settings.json` and
+   checks the next run adds it back.
 6. Visible gate: open `/Applications/Tapas Test.app` as the logged-on user and
    screenshot it (`mac show`, or VNC if the capture shows only wallpaper).
 7. Clean up: stop the test server, then
@@ -309,7 +313,8 @@ passwordless sudo.
    and remove `/Applications/Tapas Test.app`,
    `/Library/Application Support/Tapas Test` and
    `/Library/Application Support/tapas-test-*`, and, as the user,
-   `~/.agents/tapas-plugins` and `~/Library/Application Support/Tapas Test`.
+   `~/.agents/tapas-plugins`, `~/.agents/tapas-claude` (the merge file the
+   smoke seeds) and `~/Library/Application Support/Tapas Test`.
    Run the root removal through
    `sudo sh -c '...'`: the login shell over SSH is zsh, which aborts the
    whole command when a glob such as `tapas-test-*` matches nothing, and a

@@ -76,6 +76,14 @@ type File struct {
 	Path     string            `yaml:"path,omitempty" json:"path,omitempty"`
 	Paths    map[string]string `yaml:"paths,omitempty" json:"paths,omitempty"`
 	Template string            `yaml:"template" json:"template"`
+	// Scope is ScopeUser to have the per-user helper render and write the
+	// file for its user, on a machine placement too. Empty means the
+	// placement's own scope on each OS.
+	Scope string `yaml:"scope,omitempty" json:"scope,omitempty"`
+	// Merge is MergeAddIfAbsent to add the keys the template renders to a
+	// JSON file the user also edits (pkg/jsonmerge), instead of owning the
+	// file. Empty means sofcat owns the file.
+	Merge string `yaml:"merge,omitempty" json:"merge,omitempty"`
 	// Ensure is EnsurePresent (the default when empty) or EnsureAbsent.
 	Ensure string `yaml:"ensure,omitempty" json:"ensure,omitempty"`
 	// TemplateFile names a file in the repository that holds the template
@@ -89,6 +97,9 @@ const (
 	EnsurePresent = "present"
 	EnsureAbsent  = "absent"
 )
+
+// MergeAddIfAbsent is the Merge value that adds keys and never overrides one.
+const MergeAddIfAbsent = "add_if_absent"
 
 // Absent reports whether the file is to be removed rather than rendered.
 func (f File) Absent() bool { return f.Ensure == EnsureAbsent }
@@ -142,6 +153,15 @@ func (p Spec) ScopeFor(goos string) string {
 		return scope
 	}
 	return ScopeMachine
+}
+
+// FileScope returns the scope of files entry f on goos: its own, else the
+// placement's.
+func (p Spec) FileScope(f File, goos string) string {
+	if f.Scope != "" {
+		return f.Scope
+	}
+	return p.ScopeFor(goos)
 }
 
 // Names returns the placement names in file order. This is the table's
@@ -334,7 +354,7 @@ func validatePlacement(name string, p Spec) []error {
 			}
 		}
 	}
-	errs = append(errs, validatePaths("paths", p.Paths, p)...)
+	errs = append(errs, validatePaths("paths", p.Paths, p.ScopeFor)...)
 	for goos, scope := range p.Scope {
 		if goos != Darwin && goos != Windows {
 			fail("scope: unknown OS %q", goos)
@@ -358,8 +378,9 @@ func validatePlacement(name string, p Spec) []error {
 }
 
 // validatePaths checks an OS-to-path map: the placement's paths, or a
-// files entry's.
-func validatePaths(field string, paths map[string]string, p Spec) []error {
+// files entry's. scopeFor gives the scope that may use the profile variable
+// on an OS.
+func validatePaths(field string, paths map[string]string, scopeFor func(goos string) string) []error {
 	var errs []error
 	for goos, path := range paths {
 		if goos != Darwin && goos != Windows {
@@ -368,7 +389,7 @@ func validatePaths(field string, paths map[string]string, p Spec) []error {
 		if path == "" {
 			errs = append(errs, fmt.Errorf("%s: empty path for %s", field, goos))
 		}
-		if v := "${" + ProfileVar(goos) + "}"; strings.Contains(path, v) && p.ScopeFor(goos) != ScopeUser {
+		if v := "${" + ProfileVar(goos) + "}"; strings.Contains(path, v) && scopeFor(goos) != ScopeUser {
 			errs = append(errs, fmt.Errorf("%s: %s in %s path, which is not user scope", field, v, goos))
 		}
 	}
@@ -401,7 +422,7 @@ func validateFiles(p Spec) []error {
 			}
 			seen[f.Path] = true
 		case len(f.Paths) > 0:
-			errs = append(errs, validatePaths(field+": paths", f.Paths, p)...)
+			errs = append(errs, validatePaths(field+": paths", f.Paths, func(goos string) string { return p.FileScope(f, goos) })...)
 			for goos := range f.Paths {
 				if _, ok := p.Paths[goos]; !ok && !p.Rootless() {
 					fail("paths: %s, which the placement has no path for", goos)
@@ -410,6 +431,7 @@ func validateFiles(p Spec) []error {
 		default:
 			fail("needs path or paths")
 		}
+		validateFileMerge(p, f, fail)
 		switch f.Ensure {
 		case "", EnsurePresent:
 		case EnsureAbsent:
@@ -486,4 +508,39 @@ func isCleanRelative(p string) bool {
 		}
 	}
 	return true
+}
+
+// validateFileMerge checks files entry f's scope and merge, reporting each
+// problem through fail.
+func validateFileMerge(p Spec, f File, fail func(format string, args ...any)) {
+	switch f.Scope {
+	case "":
+	case ScopeUser:
+		if f.Path != "" {
+			fail("scope: user needs paths, not path")
+		}
+	default:
+		fail("scope: %q, want user or empty", f.Scope)
+	}
+	switch f.Merge {
+	case "":
+	case MergeAddIfAbsent:
+		if f.Path != "" {
+			fail("merge: %s needs paths, not path", f.Merge)
+		}
+		if f.Ensure == EnsureAbsent {
+			fail("merge: %s needs ensure present", f.Merge)
+		}
+		if f.Template == "" && f.TemplateFile == "" {
+			fail("merge: %s needs template or template_file", f.Merge)
+		}
+		// The record of the keys sofcat added is per user.
+		for goos := range f.Paths {
+			if p.FileScope(f, goos) != ScopeUser {
+				fail("merge: %s needs user scope on %s", f.Merge, goos)
+			}
+		}
+	default:
+		fail("merge: %q, want %s", f.Merge, MergeAddIfAbsent)
+	}
 }

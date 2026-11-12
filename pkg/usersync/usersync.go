@@ -41,6 +41,9 @@ type Client interface {
 // flag and this account's login name; the helper runs no script of its own.
 // After scope exit, the files of each placement the user holds receipts in
 // are regenerated; a failure is a result with no item.
+// Then the user-scope files of the machine placements in the plan's UserFiles
+// are written, and the keys merged into a JSON file that nothing wrote this
+// run are taken back.
 // Every result is logged and reported; the returned error is set only when
 // the login name cannot be read, the lock cannot be taken or no plan could
 // be fetched, after retrying a service that cannot be reached yet for up to
@@ -84,12 +87,13 @@ func Sync(ctx context.Context, client Client, guard placement.Guard, receiptDir 
 		managed[e.Item] = managed[e.Item] || e.Managed
 	}
 	z := &installer.ZipInstaller{
-		Guard:      guard,
-		Table:      userTable(plan, receipts, guard.GOOS, logger),
-		ReceiptDir: receiptDir,
-		Managed:    func(item string) bool { return managed[item] },
-		Facts:      plan.Facts,
-		User:       login,
+		Guard:       guard,
+		Table:       userTable(plan, receipts, guard.GOOS, logger),
+		ReceiptDir:  receiptDir,
+		Managed:     func(item string) bool { return managed[item] },
+		Facts:       plan.Facts,
+		User:        login,
+		MergeRecord: filepath.Join(receiptDir, mergeRecordName),
 	}
 
 	var results []service.UserPlacementResult
@@ -124,21 +128,23 @@ func Sync(ctx context.Context, client Client, guard placement.Guard, receiptDir 
 		record(rc.Item, rc.Placement, z.Remove(rc))
 	}
 
+	// Placements whose files failed to render, or are held, keep the keys
+	// they merged: the sweep below must not read them as gone.
+	unsettled := map[string]bool{}
+
 	// Regenerate the files of every placement this user still has items in,
 	// so a file deleted or left stale is restored with no tree change. Not
 	// every user-scope placement: its root, a tool's profile directory, can
 	// exist with nothing of ours in it. Scope exit removed receipts, so they
 	// are read again.
-	if remaining, err := receipt.List(receiptDir); err != nil {
-		logger.Warn("user sync: unable to read receipts; skipping placement files", "dir", receiptDir, "err", err)
-	} else {
-		var names []string
-		for _, rc := range remaining {
-			if !slices.Contains(names, rc.Placement) {
-				names = append(names, rc.Placement)
-			}
-		}
-		for _, res := range z.Regenerate(names) {
+	sweep := regeneratePlacements(z, receiptDir, unsettled, record, logger)
+
+	syncUserFiles(z, plan, unsettled, record, logger)
+
+	// Take back the keys of merge entries nothing wrote this run: a placement
+	// that left the plan, or an entry that was removed or moved.
+	if sweep {
+		for _, res := range z.SweepMerges(func(name string) bool { return unsettled[name] }) {
 			record("", res.Placement, res)
 		}
 	}
@@ -198,6 +204,11 @@ func listPlan(ctx context.Context, client Client, logger *slog.Logger) (service.
 		}
 	}
 }
+
+// mergeRecordName is the file in the receipt directory that records the keys
+// merged into the user's JSON files. A plain file: receipt.List reads only
+// its subdirectories.
+const mergeRecordName = ".merged-keys.json"
 
 // lockName is the lock file in the receipt directory. receipt.List reads
 // only its subdirectories, so the file is never taken for a receipt.
@@ -306,4 +317,52 @@ func userTable(plan service.UserPlacements, receipts []receipt.Receipt, goos str
 	}
 	table.Order = slices.Sorted(maps.Keys(table.Placements))
 	return table
+}
+
+// syncUserFiles writes the user-scope files of the machine placements in the
+// plan's UserFiles, in name order, from the items the plan carries: the
+// service owns the receipts and the root. A held set is left alone, and a
+// placement that is held or fails is added to unsettled.
+func syncUserFiles(z *installer.ZipInstaller, plan service.UserPlacements, unsettled map[string]bool, record func(item, placementName string, res installer.Result), logger *slog.Logger) {
+	for _, name := range slices.Sorted(maps.Keys(plan.UserFiles)) {
+		set := plan.UserFiles[name]
+		if set.Held {
+			unsettled[name] = true
+			logger.Info("user sync: leaving held placement files alone", "placement", name)
+			continue
+		}
+		if res, ok := z.RegenerateUserFiles(name, set.Spec, set.Root, set.Items); !ok {
+			unsettled[name] = true
+			record("", name, res)
+		}
+	}
+}
+
+// regeneratePlacements regenerates the files of every placement the user
+// still holds receipts in, adding each placement that failed, or that was not
+// looked at for want of a root, to unsettled. It reports false when the
+// receipts could not be read, when nothing is known about what is placed.
+func regeneratePlacements(z *installer.ZipInstaller, receiptDir string, unsettled map[string]bool, record func(item, placementName string, res installer.Result), logger *slog.Logger) bool {
+	remaining, err := receipt.List(receiptDir)
+	if err != nil {
+		logger.Warn("user sync: unable to read receipts; skipping placement files", "dir", receiptDir, "err", err)
+		return false
+	}
+	var names []string
+	for _, rc := range remaining {
+		if !slices.Contains(names, rc.Placement) {
+			names = append(names, rc.Placement)
+		}
+	}
+	failed, skipped := z.Regenerate(names)
+	// A placement with no root yet was not looked at, though receipts say its
+	// items are placed: its keys stay.
+	for _, name := range skipped {
+		unsettled[name] = true
+	}
+	for _, res := range failed {
+		unsettled[res.Placement] = true
+		record("", res.Placement, res)
+	}
+	return true
 }

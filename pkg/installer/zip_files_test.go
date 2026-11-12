@@ -385,7 +385,7 @@ func TestRegenerateAllSkipsUserScope(t *testing.T) {
 	if failed := z.RegenerateAll(); len(failed) != 0 {
 		t.Fatalf("RegenerateAll = %+v, want the user-scope placement skipped", failed)
 	}
-	if failed := z.Regenerate([]string{"user-plugins"}); len(failed) != 1 {
+	if failed, _ := z.Regenerate([]string{"user-plugins"}); len(failed) != 1 {
 		t.Errorf("Regenerate(user-plugins) without USERPROFILE = %+v, want one failure", failed)
 	}
 }

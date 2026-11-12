@@ -197,3 +197,21 @@ placements:
             }
           }
           {{- end }}
+      # The user's own Claude Code settings, merged per user by the helper:
+      # every placed plugin's key is added if absent, so a plugin the user
+      # turned off with false stays off. The real file is
+      # ~/.claude/settings.json; this one stays inside the fixture's user
+      # root so the rig's own Claude Code settings are never touched. A
+      # managed enabledPlugins value, as in the drop-in above, would take the
+      # choice away from the user.
+      - paths:
+          darwin: ${HOME}/.agents/tapas-claude/settings.json
+          windows: ${USERPROFILE}\.agents\tapas-claude\settings.json
+        scope: user
+        merge: add_if_absent
+        template: |
+          {"enabledPlugins": {
+            {{- range $i, $p := .Items }}{{ if $i }},{{ end }}
+            {{ json (printf "%s@%s" $p.Name $.Placement.Vars.name) }}: true
+            {{- end }}
+          }}

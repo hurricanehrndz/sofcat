@@ -20,6 +20,8 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/installer"
 	"github.com/hurricanehrndz/sofcat/pkg/manifest"
 	"github.com/hurricanehrndz/sofcat/pkg/placement"
+	"github.com/hurricanehrndz/sofcat/pkg/receipt"
+	"github.com/hurricanehrndz/sofcat/pkg/render"
 )
 
 // userPlanTable has one machine and one user placement on Windows; the user
@@ -140,7 +142,10 @@ func TestUserPlanStore(t *testing.T) {
 	if !reflect.DeepEqual(specs, map[string]placement.Spec{"codex": codex}) {
 		t.Fatalf("user specs = %+v, want codex only", specs)
 	}
-	plan := UserPlacements{Entries: entries, Facts: conditions.Facts{"os": "windows", "assigned_user": "jdoe"}, Placements: specs}
+	plan := UserPlacements{
+		Entries: entries, Facts: conditions.Facts{"os": "windows", "assigned_user": "jdoe"}, Placements: specs,
+		UserFiles: map[string]UserFileSet{"market": {Spec: placement.Spec{Files: []placement.File{{Paths: map[string]string{placement.Windows: "x"}, Scope: placement.ScopeUser, Merge: placement.MergeAddIfAbsent, Template: "{}"}}}, Root: `C:\market`, Items: []render.Item{{Name: "a"}}}},
+	}
 	if err := SaveUserPlan(appData, plan); err != nil {
 		t.Fatal(err)
 	}
@@ -156,8 +161,8 @@ func TestUserPlanStore(t *testing.T) {
 	if err := SaveUserPlan(appData, UserPlacements{}); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := LoadUserPlan(appData); err != nil || got.Placements == nil || len(got.Placements) != 0 {
-		t.Errorf("plan without user placements = %#v, %v; want empty placements", got, err)
+	if got, err := LoadUserPlan(appData); err != nil || got.Placements == nil || len(got.Placements) != 0 || got.UserFiles == nil || len(got.UserFiles) != 0 {
+		t.Errorf("plan without user placements = %#v, %v; want empty placements and user files", got, err)
 	}
 }
 
@@ -328,7 +333,7 @@ func TestUserPlacementMethods(t *testing.T) {
 	for i := range entries {
 		entries[i].location = ""
 	}
-	stored := UserPlacements{Entries: entries, Facts: conditions.Facts{"os": "windows"}, Placements: UserSpecs(userPlanTable, placement.Windows)}
+	stored := UserPlacements{Entries: entries, Facts: conditions.Facts{"os": "windows"}, Placements: UserSpecs(userPlanTable, placement.Windows), UserFiles: map[string]UserFileSet{}}
 	if err := SaveUserPlan(cfg.AppDataPath, stored); err != nil {
 		t.Fatal(err)
 	}
@@ -427,5 +432,81 @@ func TestUserPlanCarriesTemplateFileText(t *testing.T) {
 	want := []placement.File{{Path: ".index.json", Template: text}}
 	if got := plan.Placements["codex"].Files; !reflect.DeepEqual(got, want) {
 		t.Errorf("stored files = %+v, want %+v", got, want)
+	}
+}
+
+// TestUserFileSets: a machine placement with a scope: user files entry is
+// handed to the helper with its root and the items its receipts describe,
+// sorted by name; with nothing placed the set is still there, with empty
+// items, so the helper removes the keys. Placements without such an entry,
+// and user-scope ones, are left out, and a root the guard refuses is held.
+func TestUserFileSets(t *testing.T) {
+	// The guard resolves the root; a Windows runner's TempDir can be an 8.3
+	// short name (RUNNER~1) that EvalSymlinks expands, and macOS's is a symlink.
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(base, "roots", "market")
+	userFile := placement.File{
+		Paths: map[string]string{placement.Windows: `${USERPROFILE}\.claude\settings.json`},
+		Scope: placement.ScopeUser, Merge: placement.MergeAddIfAbsent, Template: "{}",
+	}
+	machineFile := placement.File{Paths: map[string]string{placement.Windows: filepath.Join(base, "roots", "m.json")}, Template: "{}"}
+	paths := func(dir string) map[string]string { return map[string]string{placement.Windows: dir} }
+	table := placement.Table{
+		Placements: map[string]placement.Spec{
+			"market":  {Paths: paths(root), Files: []placement.File{machineFile, userFile}},
+			"empty":   {Paths: paths(filepath.Join(base, "roots", "empty")), Files: []placement.File{userFile}},
+			"outside": {Paths: paths(filepath.Join(base, "elsewhere")), Files: []placement.File{userFile}},
+			"plain":   {Paths: paths(filepath.Join(base, "roots", "plain")), Files: []placement.File{machineFile}},
+			"user":    {Paths: paths(`${USERPROFILE}\skills`), Scope: map[string]string{placement.Windows: placement.ScopeUser}, Files: []placement.File{userFile}},
+		},
+		Order: []string{"market", "empty", "outside", "plain", "user"},
+	}
+	receipts := filepath.Join(base, "receipts")
+	for _, item := range []string{"b", "a"} {
+		if err := receipt.Write(receipts, receipt.Receipt{Item: item, Version: "1.0", Placement: "market", Path: filepath.Join(root, item), TreeHash: "t", PlacedHash: "p", Managed: item == "a"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := receipt.Write(receipts, receipt.Receipt{Item: "z", Placement: "plain", Path: "p", TreeHash: "t", PlacedHash: "p"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	z := &installer.ZipInstaller{
+		Guard:      placement.Guard{GOOS: placement.Windows, Roots: placement.Roots{Windows: []string{filepath.Join(base, "roots")}}},
+		Table:      table,
+		ReceiptDir: receipts,
+	}
+
+	sets := UserFileSets(z, table, placement.Windows)
+	if got := slices.Sorted(maps.Keys(sets)); !slices.Equal(got, []string{"empty", "market", "outside"}) {
+		t.Fatalf("sets for %v, want empty, market, outside", got)
+	}
+	market := sets["market"]
+	wantItems := []render.Item{
+		{Name: "a", Version: "1.0", Managed: true, Path: filepath.Join(root, "a"), TreeHash: "t", PlacedHash: "p"},
+		{Name: "b", Version: "1.0", Path: filepath.Join(root, "b"), TreeHash: "t", PlacedHash: "p"},
+	}
+	if market.Held || market.Root != root || !reflect.DeepEqual(market.Items, wantItems) || !reflect.DeepEqual(market.Spec, table.Placements["market"]) {
+		t.Errorf("market = %+v, want root %s, items %+v and its whole spec", market, root, wantItems)
+	}
+	if empty := sets["empty"]; empty.Held || empty.Items == nil || len(empty.Items) != 0 {
+		t.Errorf("empty = %+v, want present with empty, non-nil items", empty)
+	}
+	if outside := sets["outside"]; !outside.Held || outside.Items == nil {
+		t.Errorf("outside = %+v, want held", outside)
+	}
+
+	// Through the plan file, as the helper reads it.
+	appData := filepath.Join(base, "data")
+	if err := SaveUserPlan(appData, UserPlacements{UserFiles: sets}); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := LoadUserPlan(appData); err != nil || !reflect.DeepEqual(got.UserFiles, sets) {
+		t.Errorf("stored user files = %+v, %v; want %+v", got.UserFiles, err, sets)
 	}
 }

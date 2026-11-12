@@ -90,6 +90,37 @@ path. `enabledPlugins` lists only the managed plugins, keyed
 `<plugin>@<name>`. When the marketplace holds no plugin, the template
 renders nothing and sofcat removes the file.
 
+### Enabling plugins per user
+
+A managed `enabledPlugins` value cannot be turned off by the user. To enable a
+plugin and leave the choice to the user, add the keys to the user's own
+`settings.json` instead, with a merge entry in the same `files` list:
+
+```yaml
+      - paths:
+          darwin: ${HOME}/.claude/settings.json
+          windows: ${USERPROFILE}\.claude\settings.json
+        scope: user
+        merge: add_if_absent
+        template: |
+          {"enabledPlugins": {
+            {{- range $i, $p := .Items }}{{ if $i }},{{ end }}
+            {{ json (printf "%s@%s" $p.Name $.Placement.Vars.name) }}: true
+            {{- end }}
+          }}
+```
+
+The per-user helper adds `<plugin>@<name>: true` for every plugin placed
+when the key is absent, and never changes a key that is there, so a user who
+sets one to `false` keeps it off. It takes back only the keys it added, when
+the plugin leaves the marketplace, and adds one again if `claude plugin
+uninstall` deleted it while the plugin is still placed. Unlike the drop-in,
+which lists only the managed plugins, this lists every plugin placed, optional
+ones included. The user roots must include `${HOME}/.claude` and
+`${USERPROFILE}\.claude`
+([Write roots](/zip-items/placements/#write-roots)). See [Merging into a
+user's file](/zip-items/placement-files/#merging-into-a-users-file).
+
 The templates can also live in files of their own, named by `template_file`
 ([Templates for placement files](/zip-items/placement-files/#templates-for-placement-files)).
 The [example repository](https://github.com/hurricanehrndz/sofcat-harness-example)

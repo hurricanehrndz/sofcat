@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/hurricanehrndz/sofcat/pkg/conditions"
+	"github.com/hurricanehrndz/sofcat/pkg/jsonmerge"
 	"github.com/hurricanehrndz/sofcat/pkg/placement"
 	"github.com/hurricanehrndz/sofcat/pkg/receipt"
 	"github.com/hurricanehrndz/sofcat/pkg/render"
@@ -36,15 +37,16 @@ func (z *ZipInstaller) RegenerateAll() []Result {
 	names := slices.DeleteFunc(z.Table.Names(), func(name string) bool {
 		return z.Table.Placements[name].ScopeFor(z.Guard.GOOS) == placement.ScopeUser
 	})
-	return z.Regenerate(names)
+	failed, _ := z.Regenerate(names)
+	return failed
 }
 
 // Regenerate is RegenerateAll for the placements in names only, whatever
 // their scope. The per-user helper passes the user-scope placements its user
 // holds receipts for, since a user-scope root such as a tool's profile
-// directory exists whether or not sofcat placed anything there.
-func (z *ZipInstaller) Regenerate(names []string) []Result {
-	var failed []Result
+// directory exists whether or not sofcat placed anything there. skipped names
+// the placements it left alone for want of a root.
+func (z *ZipInstaller) Regenerate(names []string) (failed []Result, skipped []string) {
 	for _, name := range names {
 		spec := z.Table.Placements[name]
 		if !generates(spec) {
@@ -62,6 +64,7 @@ func (z *ZipInstaller) Regenerate(names []string) []Result {
 		root, err := z.resolve(name, spec)
 		if err == nil {
 			if _, statErr := os.Lstat(root); errors.Is(statErr, fs.ErrNotExist) {
+				skipped = append(skipped, name)
 				continue
 			}
 			err = z.regenerate(name)
@@ -70,7 +73,7 @@ func (z *ZipInstaller) Regenerate(names []string) []Result {
 			failed = append(failed, fail(Target{Placement: name}, root, err))
 		}
 	}
-	return failed
+	return failed, skipped
 }
 
 // generates reports whether a placement has files to render.
@@ -89,7 +92,9 @@ func generates(spec placement.Spec) bool {
 // placement.ErrRefused, and the errors are joined. Apply and Remove call it
 // after each change, so the files are current at once, and RegenerateAll
 // once per run, so a file deleted or refused on one run is restored on the
-// next. A rootless placement renders with no root and no items.
+// next. A rootless placement renders with no root and no items. A scope: user
+// entry of a machine placement is left to the per-user helper
+// (RegenerateUserFiles).
 func (z *ZipInstaller) regenerate(name string) error {
 	spec, ok := z.Table.Placements[name]
 	if !ok || !generates(spec) {
@@ -99,13 +104,25 @@ func (z *ZipInstaller) regenerate(name string) error {
 	if err != nil {
 		return err
 	}
-	ctx := z.fileContext(name, spec, root, rcs)
+	return z.writeFiles(name, spec, root, fileItems(rcs), spec.ScopeFor(z.Guard.GOOS))
+}
+
+// writeFiles renders and writes the files entries of spec, placement name,
+// whose effective scope is scope: the service passes the placement's own, so
+// a machine placement's scope: user entries are left to the per-user helper,
+// which passes user for those (RegenerateUserFiles). items are what the
+// templates see under root.
+func (z *ZipInstaller) writeFiles(name string, spec placement.Spec, root string, items []render.Item, scope string) error {
+	ctx := z.fileContext(name, spec, root, items, scope)
 
 	outputs := make([]fileOutput, 0, len(spec.Files))
 	var errs []error
 	seen := map[string]bool{}
 	for i, f := range spec.Files {
-		path, leaf, ok, err := z.filePath(name, spec, f, root)
+		if spec.FileScope(f, z.Guard.GOOS) != scope {
+			continue
+		}
+		path, leaf, ok, err := z.filePath(name, spec, f, root, scope)
 		if err != nil {
 			errs = append(errs, err)
 			continue
@@ -125,13 +142,21 @@ func (z *ZipInstaller) regenerate(name string) error {
 			errs = append(errs, fmt.Errorf("%w: placement %q: %w", placement.ErrRefused, name, err))
 			continue
 		}
-		outputs = append(outputs, fileOutput{path, leaf, data})
+		o := fileOutput{path: path, leaf: leaf, data: data}
+		if f.Merge == placement.MergeAddIfAbsent {
+			o.merge = true
+			if o.want, err = jsonmerge.Leaves(data); err != nil {
+				errs = append(errs, fmt.Errorf("%w: placement %q: files[%d]: %w", placement.ErrRefused, name, i, err))
+				continue
+			}
+		}
+		outputs = append(outputs, o)
 	}
 	if spec.FilesAtomic && len(errs) > 0 {
 		return errors.Join(errs...)
 	}
 	for _, o := range outputs {
-		if err := o.apply(name, len(rcs)); err != nil {
+		if err := z.applyFile(o, name, len(items)); err != nil {
 			errs = append(errs, fmt.Errorf("placement %q: %w", name, err))
 		}
 	}
@@ -173,15 +198,21 @@ func claim(seen map[string]bool, leaf, path string) bool {
 }
 
 // fileOutput is one rendered files entry: data for path, or, when data is
-// nil, the removal of leaf.
+// nil, the removal of leaf. A merge entry adds the keys in want to the JSON
+// file at path instead (applyMerge).
 type fileOutput struct {
 	path, leaf string
 	data       []byte
+	merge      bool
+	want       []jsonmerge.Leaf
 }
 
-// apply writes or removes o's file for placement name, rendered from items
-// receipts, logging only what changed on disk.
-func (o fileOutput) apply(name string, items int) error {
+// applyFile writes, merges or removes o's file for placement name, rendered
+// from items receipts, logging only what changed on disk.
+func (z *ZipInstaller) applyFile(o fileOutput, name string, items int) error {
+	if o.merge {
+		return z.applyMerge(o, name)
+	}
 	if o.data == nil {
 		removed, err := removeFile(o.leaf)
 		if removed {
@@ -200,12 +231,12 @@ func (o fileOutput) apply(name string, items int) error {
 }
 
 // filePath resolves and checks files entry f of placement name on this OS,
+// in scope (its effective scope, the one the guard checks it against),
 // under root for a relative path, else at its own path here: path is where
 // it is written, with every symlink resolved, and leaf where it is removed,
 // with only its parent's resolved (placement.Guard.CheckLeaf). An absent
 // entry has no path. ok is false when the entry has no path on this OS.
-func (z *ZipInstaller) filePath(name string, spec placement.Spec, f placement.File, root string) (path, leaf string, ok bool, err error) {
-	scope := spec.ScopeFor(z.Guard.GOOS)
+func (z *ZipInstaller) filePath(name string, spec placement.Spec, f placement.File, root, scope string) (path, leaf string, ok bool, err error) {
 	if f.Path != "" {
 		local := filepath.FromSlash(f.Path)
 		if !filepath.IsLocal(local) {
@@ -287,17 +318,13 @@ func unchanged(path string, data []byte, mode fs.FileMode) bool {
 	return err == nil && bytes.Equal(current, data)
 }
 
-// fileContext is what a placement file template of placement name sees:
-// the placement at root and rcs as its items (zip-items guide, "Templates
+// fileContext is what a placement file template of placement name sees in
+// scope: the placement at root and items as its items (zip-items guide, "Templates
 // for placement files").
-func (z *ZipInstaller) fileContext(name string, spec placement.Spec, root string, rcs []receipt.Receipt) render.FileContext {
-	items := make([]render.Item, len(rcs))
-	for i, rc := range rcs {
-		items[i] = render.Item{Name: rc.Item, Version: rc.Version, Managed: rc.Managed, Path: rc.Path, TreeHash: rc.TreeHash, PlacedHash: rc.PlacedHash}
-	}
+func (z *ZipInstaller) fileContext(name string, spec placement.Spec, root string, items []render.Item, scope string) render.FileContext {
 	ctx := render.FileContext{
 		OS:        z.Guard.GOOS,
-		Scope:     spec.ScopeFor(z.Guard.GOOS),
+		Scope:     scope,
 		Placement: spec.View(name, root),
 		Items:     items,
 	}
@@ -306,6 +333,15 @@ func (z *ZipInstaller) fileContext(name string, spec placement.Spec, root string
 		ctx.User = z.User
 	}
 	return ctx
+}
+
+// fileItems describes receipts to a template.
+func fileItems(rcs []receipt.Receipt) []render.Item {
+	items := make([]render.Item, len(rcs))
+	for i, rc := range rcs {
+		items[i] = render.Item{Name: rc.Item, Version: rc.Version, Managed: rc.Managed, Path: rc.Path, TreeHash: rc.TreeHash, PlacedHash: rc.PlacedHash}
+	}
+	return items
 }
 
 // renderFile parses and renders a placement file template for path.
