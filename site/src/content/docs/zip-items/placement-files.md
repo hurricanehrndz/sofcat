@@ -85,15 +85,81 @@ to remove what it points to, and never removes a directory: anything at the
 path but a regular file is left alone and refused (`placement_refused`). A
 missing file is no failure.
 
-sofcat keeps no record of the files it wrote. An entry dropped from
+sofcat keeps no record of the whole files it wrote. An entry dropped from
 `placements.yaml` leaves its file on the device as it last was. To retire a
 file, mark its entry `ensure: absent`, let the devices run, then delete the
-entry.
+entry. The exception is a [merge entry](#merging-into-a-users-file), whose
+record of the keys it added is what lets sofcat take them back.
 
 [Plugins and marketplaces](/ai-store/plugins/) has complete placements that
 write a marketplace catalog and a settings drop-in.
 [Config files](/ai-store/config/) writes a tool's machine-wide config from a
 rootless placement.
+
+## Merging into a user's file
+
+Some tools keep the user's own choices in a JSON file sofcat must not own,
+such as Claude Code's `~/.claude/settings.json`. A files entry with
+`merge: add_if_absent` adds the keys its template renders to such a file and
+leaves everything else in it to the user. It needs `paths` (not `path`), a
+template, and `scope: user`:
+
+```yaml
+files:
+  - paths:
+      darwin: ${HOME}/.claude/settings.json
+      windows: ${USERPROFILE}\.claude\settings.json
+    scope: user
+    merge: add_if_absent
+    template: |
+      {"enabledPlugins": {
+        {{- range $i, $p := .Items }}{{ if $i }},{{ end }}
+        {{ json (printf "%s@%s" $p.Name $.Placement.Vars.name) }}: true
+        {{- end }}
+      }}
+```
+
+`scope: user` on a files entry of a machine placement makes the per-user
+helper render the entry, for each signed-in user, from the placement's items:
+the service puts the placement's root and its receipts' items in the stored
+plan, and the helper writes the file in that user's profile at logon and
+whenever the plan changes. The placement's trees stay machine scope, written
+by the service. The path must use the user's home, `${HOME}` on macOS or
+`${USERPROFILE}` on Windows, and sit under a user write root
+([Write roots](/zip-items/placements/#write-roots)). A merge entry must be
+user scope on every OS it has a path for.
+
+What `add_if_absent` does, per user and file:
+
+- A key that is absent is added with the rendered value.
+- sofcat records each key it added. The record lives in the helper's
+  receipt directory, `.merged-keys.json`:
+  `%LOCALAPPDATA%\<NAME>\receipts` on Windows,
+  `~/Library/Application Support/<NAME>/receipts` on macOS.
+- A key that is present is never changed, whatever its value. A user who
+  turns a plugin off with `false` keeps it off, and sofcat does not record
+  that key, so it never removes it.
+- A key sofcat added is removed when the template stops rendering it, such
+  as when its item leaves the placement, whatever value it holds by then. A
+  key the user added or already had is never removed.
+- A key sofcat added and the user or a tool then deleted, such as by
+  `claude plugin uninstall`, is added again at the next sync while the
+  template still renders it.
+- The rest of the file is kept byte for byte, comments and spacing included.
+  A missing file is created.
+
+The template must render a JSON object. Its members are the keys: a
+top-level member whose value is not an object is one key, and each member of
+a top-level object is a key of its own. Nothing deeper is tracked, so a
+value that is itself an object is added or kept as a whole. In the example
+the keys are the members of `enabledPlugins`.
+
+sofcat refuses the entry, leaving the file and the record as they were, when
+the file is not valid JSON, when it or a container the template adds a key
+to is not an object, or when the file is itself a symlink or not a regular
+file. The helper reports it under the placement's name in its log; the next
+sync tries again. If it cannot read the record it refuses every merge rather
+than treat all keys as the user's.
 
 ## Templates for placement files
 
