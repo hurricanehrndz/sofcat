@@ -59,7 +59,7 @@ NOTARY_API_ISSUER_ID := env("NOTARY_API_ISSUER_ID", "")
 _notary_missing := if NOTARY_AUTH != "api-key" { "NOTARY_AUTH=api-key" } else if NOTARY_API_KEY_PATH == "" { "NOTARY_API_KEY_PATH" } else if NOTARY_API_KEY_ID == "" { "NOTARY_API_KEY_ID" } else if NOTARY_API_ISSUER_ID == "" { "NOTARY_API_ISSUER_ID" } else { "" }
 # No --timestamp for the ad-hoc identity: codesign refuses to timestamp it.
 _codesign := "codesign --force --options runtime" + (if CODESIGN_IDENTITY == "-" { "" } else { " --timestamp" }) + " --sign " + quote(CODESIGN_IDENTITY)
-pkg_version := replace_regex(replace_regex(version, "^v", ""), "[-+].*$", "")
+pkg_version := replace_regex(replace_regex(replace_regex(version, "^v", ""), "-([0-9]+)-g([0-9a-f]+)(-dirty)?$", "+${1}.g${2}${3}"), "^([^+]*)-dirty$", "${1}+dirty")
 manual_test_dir := "build/manual-test"
 server_root := manual_test_dir / "server-root"
 vm_dir := manual_test_dir / "vm"
@@ -175,8 +175,10 @@ build arch="amd64": ui-assets (winres arch)
 
 # Windows installer -> build/<app>-<pkg_version>-x86_64-setup.exe (embala's
 # setup format; it builds on any OS, since the stub is prebuilt and embala
-# only appends the payload). pkg_version is the numeric part of version:
-# v1.5.0-3-gabc-dirty -> 1.5.0. installer/install.lua and uninstall.lua are
+# only appends the payload). pkg_version is version as SemVer 2.0: the tag
+# keeps its prerelease and git describe's suffix becomes build metadata, so
+# v1.5.0-beta.1 -> 1.5.0-beta.1 and v1.5.0-3-gabc-dirty -> 1.5.0+3.gabc-dirty.
+# installer/install.lua and uninstall.lua are
 # rendered beside embala.toml with the same placeholders. With SIGN_CMD set, a
 # [sign.windows] section is appended to the rendered embala.toml (the command
 # as a TOML basic string, so \ and " in it are escaped, with embala's $f).
