@@ -584,7 +584,7 @@ $seed | Add-Member -NotePropertyName model -NotePropertyValue "keep-me" -Force
 $seed.enabledPlugins | Add-Member -NotePropertyName "tapas-second-plugin@tapas-test" -NotePropertyValue $false -Force
 # UTF-8 without a BOM, as Claude Code writes it.
 [IO.File]::WriteAllText($userSettings, ($seed | ConvertTo-Json -Depth 10), (New-Object Text.UTF8Encoding $false))
-Pass "$userSettings: managed plugin true and owned; model=keep-me and tapas-second-plugin@tapas-test=false seeded"
+Pass "${userSettings}: managed plugin true and owned; model=keep-me and tapas-second-plugin@tapas-test=false seeded"
 
 Write-Step "InstallItem adds the optional plugin, listed but not enabled"
 Assert-Succeeded "InstallItem:tapas-optional-plugin"
@@ -607,7 +607,7 @@ Assert-Succeeded "InstallItem:tapas-optional-plugin"
 Wait-For { (Get-UserSetting "tapas-optional-plugin@tapas-test") -eq "true" } "the helper to enable tapas-optional-plugin@tapas-test in $userSettings"
 if (-not (Test-MergeOwns "tapas-optional-plugin@tapas-test")) { Fail "the record lacks tapas-optional-plugin@tapas-test: $(Get-Content -LiteralPath $mergeRecord -Raw)" }
 Assert-UserSettingsKept
-Pass "$userSettings: optional plugin true and owned; seeded false and model untouched"
+Pass "${userSettings}: optional plugin true and owned; seeded false and model untouched"
 
 Write-Step "RemoveItem drops the optional plugin's entry"
 Assert-Succeeded "RemoveItem:tapas-optional-plugin"
