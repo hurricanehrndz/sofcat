@@ -5,6 +5,15 @@ catalogs:
 app_data_path: c:/cpe/sofcat/cache
 # auth_user: johnny
 # auth_pass: pizza
+# Mutual TLS. The client certificate comes from the machine store (Windows
+# LocalMachine\My, the macOS System keychain): a regular expression on its
+# subject CN, or on issuer, serial or dns_names with tls_client_cert_store_field.
+# Or give PEM files with tls_client_cert and tls_client_key instead. Without
+# tls_server_cert the system roots verify the server.
+# tls_auth: true
+# tls_client_cert_store: ^device-.*\.corp\.example\.com$
+# tls_client_cert_store_field: subject
+# tls_server_cert: c:/cpe/sofcat/repo-ca.pem
 # service_name: sofcat
 # service_interval: 1h
 # service_pipe_name: sofcat-service

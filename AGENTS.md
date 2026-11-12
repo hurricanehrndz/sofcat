@@ -94,7 +94,8 @@ Test that set with `just test-zip-only` and
 `golangci-lint run --build-tags zip_only ./...`.
 
 On a Mac, `just build-macos` builds the CLI and the per-user helper for the
-host architecture (`build/<slug>` and `build/<slug>-useragent`, pure Go) and
+host architecture (`build/<slug>`, cgo for the System keychain, and
+`build/<slug>-useragent`, pure Go) and
 the UI as `build/<Name>.app` (cgo, so the Xcode command line tools), and
 `just pkg` wraps them with the launchd plists into
 `build/<slug>-<version>.pkg`, unsigned by default. With `CODESIGN_IDENTITY` set,
