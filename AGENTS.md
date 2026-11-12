@@ -59,7 +59,7 @@ cross-built (`GOOS=windows GOARCH=amd64 CGO_ENABLED=0`) and stripped
 per-user helper `build/sofcat-useragent.exe` (`cmd/sofcat-useragent`, also
 `-H windowsgui`, no Wails).
 `just setup` wraps them in embala's `setup.exe` (`installer/embala.toml`,
-`install.lua` and `uninstall.lua`, embala 0.10.0); it builds on Linux. The
+`install.lua` and `uninstall.lua`, embala 0.11.0); it builds on Linux. The
 installer copies them into `C:\Program Files\SofCat`, adds the Start-menu
 shortcut and the Add or remove programs entry, then runs
 `sofcat.exe -serviceinstall`, which registers and starts the service and
@@ -239,7 +239,7 @@ included, are in the Application log:
 
 Nupkg items (`site/src/content/docs/guides/nupkg-items.md`) have their own
 loop, on a clean VM with no Chocolatey. `just bootstrap-nupkg` builds
-`build/sofcat.exe` and, with embala 0.10.0 from mise, plain-style packages
+`build/sofcat.exe` and, with embala 0.11.0 from mise, plain-style packages
 `sofcat-nupkg-smoke` 1.0.0 and 2.0.0 (`scripts = "generate"`) and
 `sofcat-nupkg-bad` 1.0.0, whose install script calls an unknown command,
 into a repository at

@@ -112,7 +112,7 @@ msix fixtures install; do not run it on a machine you keep.
 Checks [nupkg items](../../site/src/content/docs/guides/nupkg-items.md) end to end on a clean VM
 with no Chocolatey and no guest internet.
 
-1. `just bootstrap-nupkg` (needs embala 0.10.0 from `mise install`) builds
+1. `just bootstrap-nupkg` (needs embala 0.11.0 from `mise install`) builds
    `build/sofcat.exe` and runs `build-nupkg-repo.sh`, which builds three
    plain-style packages with embala: `sofcat-nupkg-smoke` 1.0.0 and 2.0.0
    (`scripts = "generate"`, a `readme.txt` payload) and `sofcat-nupkg-bad`
