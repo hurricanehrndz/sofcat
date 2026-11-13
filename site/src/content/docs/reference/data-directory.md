@@ -49,9 +49,14 @@ another run is under way, the service's included, fails at once with
 "another managed run is in progress". The service's own run waits for the
 other run to finish. So does `sofcat -checkonly`, which prints the inventory
 instead of writing `inventory.json`. It says it is waiting on stderr, so
-stdout stays the inventory JSON. `Data\service-manifest.yaml.lock` is held
-for each short read and write of the self-serve file, so a selection made in
-the app during a command-line run is not lost.
+stdout stays the inventory JSON. It waits with no limit, and a run can be
+long, so a monitoring wrapper should apply its own timeout.
+
+`Data\service-manifest.yaml.lock` is taken by every read and write of the
+self-serve file, by the service and by a command-line run alike. Each hold is
+one load, or one load and save; status checks run before it is taken. So a
+selection made in the app during a command-line run is not lost, and the app
+never reads a half-written file.
 
 `Data\user-artifacts\` is the one entry users read: the staged archives the
 per-user helper places into each profile ([Zip items](/zip-items/overview/#installing)).

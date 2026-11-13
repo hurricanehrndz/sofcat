@@ -145,7 +145,11 @@ func TestPruneSelfServeUninstalls(t *testing.T) {
 		Uninstalls: []string{"Gone", "StillHere", "Errored", "Unresolvable"},
 		SelectedBy: map[string]string{"Gone": "S-1-5-21-1-2-3-1001", "StillHere": "S-1-5-21-1-2-3-1002"},
 	}
-	changed := PruneSelfServeUninstalls(&ss, catalogs, &status.Checker{}, "cache")
+	gone := GoneUninstalls(ss.Uninstalls, catalogs, &status.Checker{}, "cache")
+	if !reflect.DeepEqual(gone, []string{"Gone"}) {
+		t.Fatalf("GoneUninstalls = %#v, want only Gone", gone)
+	}
+	changed := PruneSelfServeUninstalls(&ss, gone)
 	if !changed {
 		t.Fatalf("expected changed=true")
 	}

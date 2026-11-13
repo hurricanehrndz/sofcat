@@ -3,20 +3,25 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/hurricanehrndz/sofcat/pkg/catalog"
 	"github.com/hurricanehrndz/sofcat/pkg/config"
 	"github.com/hurricanehrndz/sofcat/pkg/filelock"
+	"github.com/hurricanehrndz/sofcat/pkg/manifest"
 	"github.com/hurricanehrndz/sofcat/pkg/report"
 	"github.com/hurricanehrndz/sofcat/pkg/sofcatlog"
+	"github.com/hurricanehrndz/sofcat/pkg/status"
 )
 
 // lockedRun is a run against a repository whose manifest lists nothing, so
@@ -152,6 +157,62 @@ func TestServiceRunWaitsForLock(t *testing.T) {
 		t.Fatalf("TryLock after the run: %v", err)
 	}
 	unlock()
+}
+
+// TestPruneChecksDoNotHoldSelfServe: the prune's status checks may run slow
+// scripts, so the service's mutations and lists must not wait for them, and a
+// selection made meanwhile must survive the prune's save.
+func TestPruneChecksDoNotHoldSelfServe(t *testing.T) {
+	resetMainHooks()
+	defer resetMainHooks()
+	defer sofcatlog.Close()
+	lr := newLockedRun(t)
+	lr.release()
+	path := manifest.SelfServePath(lr.cfg.AppDataPath)
+	if err := manifest.SaveSelfServe(path, manifest.Item{
+		Name:       "service-manifest",
+		Uninstalls: []string{"Reselected", "Done"},
+		SelectedBy: map[string]string{"Reselected": "old", "Done": "old"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	goneUninstalls = func(names []string, _ map[int]map[string]catalog.Item, _ *status.Checker, _ string) []string {
+		// A user selects Reselected for install while the checks run, as the
+		// service's setSelection does.
+		mutated := make(chan error, 1)
+		go func() {
+			mutated <- manifest.UpdateSelfServe(path, func(entry *manifest.Item) bool {
+				entry.Uninstalls = slices.DeleteFunc(entry.Uninstalls, func(n string) bool { return n == "Reselected" })
+				entry.Installs = append(entry.Installs, "Reselected")
+				entry.SelectedBy["Reselected"] = "new"
+				return true
+			})
+		}()
+		select {
+		case err := <-mutated:
+			if err != nil {
+				t.Error(err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Error("a mutation waited for the prune's status checks")
+		}
+		return names
+	}
+
+	if _, err := managedRun(lr.cfg, nil, nil); err != nil {
+		t.Fatalf("managedRun: %v", err)
+	}
+	got, err := manifest.LoadSelfServe(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Uninstalls) != 0 || !slices.Contains(got.Installs, "Reselected") {
+		t.Errorf("after prune: installs %v, uninstalls %v; want Reselected kept for install and Done pruned", got.Installs, got.Uninstalls)
+	}
+	if want := map[string]string{"Reselected": "new"}; !maps.Equal(got.SelectedBy, want) {
+		t.Errorf("selected_by after prune = %v, want %v", got.SelectedBy, want)
+	}
 }
 
 // TestCheckOnlyRunWaitsForLock: a check-only run, which monitoring starts on

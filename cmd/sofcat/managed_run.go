@@ -32,6 +32,9 @@ var (
 	// newZipInstaller builds the run's zip installer; tests swap in one with
 	// temporary write roots.
 	newZipInstaller = installer.NewMachineZip
+	// goneUninstalls checks which pending self-serve removals are done; tests
+	// swap it to act while the checks run.
+	goneUninstalls = process.GoneUninstalls
 )
 
 // managedRun runs one full pass. progress receives per-item events and cancels
@@ -231,10 +234,18 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 	// Prune self-serve uninstalls that are confirmed gone so the user can
 	// reinstall later (R5). Only after a real run, never in check-only.
 	if !cfg.CheckOnly {
-		// Prune a fresh copy, not selfServe: a user cancel may have changed the
-		// file since the run began, and saving the old copy would undo it.
-		err := manifest.UpdateSelfServe(selfServePath, func(entry *manifest.Item) bool {
-			return process.PruneSelfServeUninstalls(entry, catalogs, runner.Checker, cfg.CachePath)
+		// Check a fresh snapshot outside the self-serve lock: the checks may
+		// run scripts, and the service's mutations and lists wait on that lock.
+		// Then prune a fresh copy, not selfServe or the snapshot: a user cancel
+		// or selection may have changed the file meanwhile, and saving an old
+		// copy would undo it.
+		snapshot, err := manifest.LoadSelfServe(selfServePath)
+		if err != nil {
+			return nil, fmt.Errorf("unable to reload self-serve manifest for prune: %w", err)
+		}
+		gone := goneUninstalls(snapshot.Uninstalls, catalogs, runner.Checker, cfg.CachePath)
+		err = manifest.UpdateSelfServe(selfServePath, func(entry *manifest.Item) bool {
+			return process.PruneSelfServeUninstalls(entry, gone)
 		})
 		if err != nil {
 			return nil, fmt.Errorf("unable to save self-serve manifest after prune: %w", err)
