@@ -147,6 +147,54 @@ func TestGuardUserHome(t *testing.T) {
 	}
 }
 
+// TestGuardSingleFileRoot: a root may name one file, so a build can let a
+// merge entry write a tool's settings file in the user's home without
+// opening every file beside it. The file need not exist yet, since the merge
+// creates it, and a policy root works as a compiled one.
+func TestGuardSingleFileRoot(t *testing.T) {
+	home := t.TempDir()
+	settings := filepath.Join(home, ".claude", "settings.json")
+	for name, roots := range map[string]Roots{
+		"compiled": {DarwinUser: []string{"${HOME}/.claude/settings.json"}},
+		"policy":   Roots{}.WithPolicy(Darwin, nil, []string{"${HOME}/.claude/settings.json"}),
+	} {
+		t.Run(name, func(t *testing.T) {
+			g := Guard{GOOS: Darwin, Roots: roots, Vars: map[string]string{"HOME": home}}
+			check := func(state string) {
+				if _, err := g.Resolve("${HOME}/.claude/settings.json", ScopeUser); err != nil {
+					t.Errorf("the root file itself, %s: refused: %v", state, err)
+				}
+				for _, raw := range []string{"${HOME}/.claude/other.json", "${HOME}/.claude", "${HOME}/.claude/settings.json.bak"} {
+					if _, err := g.Resolve(raw, ScopeUser); !errors.Is(err, ErrRefused) {
+						t.Errorf("%s beside the root file, %s: error %v, want refused", raw, state, err)
+					}
+				}
+			}
+			const under = "${HOME}/.claude/settings.json/x.json"
+			check("not yet created")
+			// Known limit, documented: until the root file exists the guard
+			// cannot tell it from a missing directory, so a path under it
+			// passes.
+			if _, err := g.Resolve(under, ScopeUser); err != nil {
+				t.Errorf("a path under the missing root file: refused: %v", err)
+			}
+			if err := os.MkdirAll(filepath.Dir(settings), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(settings, []byte(`{}`), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			check("existing")
+			if _, err := g.Resolve(under, ScopeUser); !errors.Is(err, ErrRefused) {
+				t.Errorf("a path under the existing root file: error %v, want refused", err)
+			}
+			if err := os.RemoveAll(filepath.Dir(settings)); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
 func TestParseRoots(t *testing.T) {
 	r, err := ParseRoots([]byte("darwin: [/a]\nwindows: ['${ProgramFiles}\\X']\nwindows_user: [.agents]\ndarwin_user: ['${HOME}/.agents']\n"))
 	if err != nil || len(r.Darwin) != 1 || len(r.Windows) != 1 || len(r.WindowsUser) != 1 || len(r.DarwinUser) != 1 {

@@ -87,29 +87,43 @@ func ReconcileSelfServe(selfServe *manifest.Item, manifests []manifest.Item) (in
 	return installs, uninstalls, changed
 }
 
-// PruneSelfServeUninstalls drops managed_uninstalls entries whose software is
-// confirmed gone so the user can reinstall later (R5). An entry that no longer
-// resolves to a catalog item is kept (the catalog may return); a still-installed
-// item is kept and retried next run. A dropped entry's removal is complete, so
-// its selected_by entry goes too: the next user to select it becomes its selector
-// (R32a). Returns whether the file needs saving.
-func PruneSelfServeUninstalls(selfServe *manifest.Item, catalogsMap map[int]map[string]catalog.Item, checker *status.Checker, cachePath string) (changed bool) {
-	kept := make([]string, 0, len(selfServe.Uninstalls))
-	for _, name := range selfServe.Uninstalls {
+// GoneUninstalls returns the managed_uninstalls names whose software is
+// confirmed gone. An entry that no longer resolves to a catalog item is not
+// (the catalog may return), nor is a still-installed item, retried next run,
+// nor one whose status cannot be checked. It runs status checks, so callers
+// run it on a snapshot outside the self-serve lock.
+func GoneUninstalls(uninstalls []string, catalogsMap map[int]map[string]catalog.Item, checker *status.Checker, cachePath string) []string {
+	var gone []string
+	for _, name := range uninstalls {
 		item, ok := removalItem(name, catalogsMap)
 		if !ok {
 			// removalItem already warned; keep the entry so it can be retried.
-			kept = append(kept, name)
 			continue
 		}
 		installed, err := statusCheck(checker, item, "uninstall", cachePath)
 		if err != nil {
 			slog.Warn("unable to check uninstall status, keeping entry", "item", name, "err", err)
-			kept = append(kept, name)
 			continue
 		}
 		if installed {
 			// Still on disk (removal failed or deferred); retry next run.
+			continue
+		}
+		gone = append(gone, name)
+	}
+	return gone
+}
+
+// PruneSelfServeUninstalls drops the gone names (from GoneUninstalls) that are
+// still in managed_uninstalls, so the user can reinstall later (R5). A name
+// the user reselected since the check is no longer there and is left alone. A
+// dropped entry's removal is complete, so its selected_by entry goes too: the
+// next user to select it becomes its selector (R32a). Returns whether the file
+// needs saving.
+func PruneSelfServeUninstalls(selfServe *manifest.Item, gone []string) (changed bool) {
+	kept := make([]string, 0, len(selfServe.Uninstalls))
+	for _, name := range selfServe.Uninstalls {
+		if !slices.Contains(gone, name) {
 			kept = append(kept, name)
 			continue
 		}

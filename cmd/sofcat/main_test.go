@@ -16,6 +16,7 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/config"
 	"github.com/hurricanehrndz/sofcat/pkg/identity"
 	"github.com/hurricanehrndz/sofcat/pkg/installer"
+	"github.com/hurricanehrndz/sofcat/pkg/process"
 	"github.com/hurricanehrndz/sofcat/pkg/report"
 	"github.com/hurricanehrndz/sofcat/pkg/service"
 	"github.com/hurricanehrndz/sofcat/pkg/sofcatlog"
@@ -35,6 +36,7 @@ func resetMainHooks() {
 	// Never register the brand's event source on a test machine.
 	startManagementLogFunc = func(string, bool, io.Writer) func() { return func() {} }
 	newZipInstaller = installer.NewMachineZip
+	goneUninstalls = process.GoneUninstalls
 }
 
 func TestRunAdminCheckError(t *testing.T) {
@@ -620,6 +622,61 @@ func TestRouteServiceCommandErrorDoesNotPrintItems(t *testing.T) {
 
 	if strings.TrimSpace(stdout) != "" {
 		t.Fatalf("expected no stdout output on command error, got %q", stdout)
+	}
+}
+
+// `-S run` prints the failed and deferred items whatever the outcome, and
+// exits non-zero when the run failed or any item did, so a script can act on
+// it.
+func TestRouteServiceRun(t *testing.T) {
+	for _, tt := range []struct {
+		name       string
+		resp       service.CommandResponse
+		err        error
+		wantStdout string
+		wantErr    string
+	}{
+		{
+			name:       "success",
+			resp:       service.CommandResponse{Status: "ok", Message: "managed run completed"},
+			wantStdout: "managed run completed\n",
+		},
+		{
+			name:       "failed items",
+			resp:       service.CommandResponse{Status: "ok", Message: "managed run completed", Items: []string{"failed: Chrome", "deferred: Slack"}},
+			err:        errors.New("managed run completed with 1 failed item(s)"),
+			wantStdout: "failed: Chrome\ndeferred: Slack\n",
+			wantErr:    "1 failed item",
+		},
+		{
+			name:    "refused",
+			err:     errors.New("not_authorized: only an administrator can start a managed run"),
+			wantErr: "not_authorized",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			resetMainHooks()
+			defer resetMainHooks()
+			var spec string
+			sendServiceCommandFunc = func(cfg config.Configuration, s string) (service.CommandResponse, error) {
+				spec = s
+				return tt.resp, tt.err
+			}
+
+			var err error
+			stdout := captureStdout(t, func() {
+				err = route(config.Configuration{ServiceCommand: "run"})
+			})
+			if spec != "run" {
+				t.Fatalf("service command = %q, want run", spec)
+			}
+			if stdout != tt.wantStdout {
+				t.Errorf("stdout = %q, want %q", stdout, tt.wantStdout)
+			}
+			if tt.wantErr == "" && err != nil || tt.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tt.wantErr)) {
+				t.Errorf("route error = %v, want %q", err, tt.wantErr)
+			}
+		})
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/hurricanehrndz/sofcat/pkg/filelock"
 	"go.yaml.in/yaml/v4"
 )
 
@@ -18,9 +19,8 @@ func SelfServePath(appDataPath string) string {
 	return filepath.Join(appDataPath, "service-manifest.yaml")
 }
 
-// LoadSelfServe reads the self-serve manifest at path. A missing file returns a
-// named empty manifest rather than an error.
-func LoadSelfServe(path string) (Item, error) {
+// loadSelfServe reads the self-serve manifest at path without the lock.
+func loadSelfServe(path string) (Item, error) {
 	defaultManifest := Item{
 		Name:     "service-manifest",
 		Installs: []string{},
@@ -47,7 +47,8 @@ func LoadSelfServe(path string) (Item, error) {
 // SaveSelfServe persists the self-serve manifest at path. It keeps the three
 // self-serve lists (managed_installs, managed_uninstalls, default_installs) and
 // the selected_by record, and drops includes/catalogs/updates/conditional_items,
-// which the self-serve file never owns.
+// which the self-serve file never owns. It takes no lock: callers go through
+// UpdateSelfServe.
 func SaveSelfServe(path string, entry Item) error {
 	if err := mkdirAll(filepath.Clean(filepath.Dir(path)), 0o755); err != nil {
 		return fmt.Errorf("unable to create local manifest directory: %w", err)
@@ -68,20 +69,58 @@ func SaveSelfServe(path string, entry Item) error {
 	return nil
 }
 
-// selfServeMu serialises UpdateSelfServe. The service writes the self-serve
-// manifest from its command queue and, for a cancel, while a managed run in the
-// same process is under way, so a plain load and save could lose a write.
+// selfServeMu serialises access to the self-serve manifest within a process.
+// The service writes it from its command queue and, for a cancel, while a
+// managed run in the same process is under way, so a plain load and save could
+// lose a write.
 var selfServeMu sync.Mutex
 
-// UpdateSelfServe loads the self-serve manifest at path, lets fn change it, and
-// saves it when fn reports a change, all under one in-process lock.
-// CEILING: the lock is per process. The service owns the file and runs every
-// managed run in-process; a separate `sofcat` CLI run racing the service could
-// still lose a write. Upgrade to a file lock if both ever write concurrently.
-func UpdateSelfServe(path string, fn func(*Item) bool) error {
+// lockSelfServe takes selfServeMu and the file lock path+".lock", which a
+// command-line run beside the service needs: its saves would otherwise race
+// the service's mutations and reads. Every hold is one load, or one load,
+// change and save, never a status check or a network call. It is taken inside
+// the managed-run lock when a run calls this, and nothing under it takes that
+// one, so the two never wait on each other.
+func lockSelfServe(path string) (func(), error) {
 	selfServeMu.Lock()
-	defer selfServeMu.Unlock()
-	entry, err := LoadSelfServe(path)
+	unlock, err := filelock.Lock(path + ".lock")
+	if err != nil {
+		selfServeMu.Unlock()
+		return nil, fmt.Errorf("unable to lock the self-serve manifest: %w", err)
+	}
+	return func() { unlock(); selfServeMu.Unlock() }, nil
+}
+
+// LoadSelfServe reads the self-serve manifest at path under its lock, so it
+// never sees a save half written. A missing file returns a named empty
+// manifest rather than an error. Never call it from an UpdateSelfServe
+// callback, which already holds the lock.
+func LoadSelfServe(path string) (Item, error) {
+	unlock, err := lockSelfServe(path)
+	if errors.Is(err, os.ErrNotExist) {
+		// No directory for the lock file, so no manifest either.
+		return loadSelfServe(path)
+	}
+	if err != nil {
+		return Item{}, err
+	}
+	defer unlock()
+	return loadSelfServe(path)
+}
+
+// UpdateSelfServe loads the self-serve manifest at path, lets fn change it, and
+// saves it when fn reports a change, all under one hold of its lock. fn must
+// be quick: every reader and writer of the file waits for it.
+func UpdateSelfServe(path string, fn func(*Item) bool) error {
+	if err := mkdirAll(filepath.Clean(filepath.Dir(path)), 0o755); err != nil {
+		return fmt.Errorf("unable to create local manifest directory: %w", err)
+	}
+	unlock, err := lockSelfServe(path)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	entry, err := loadSelfServe(path)
 	if err != nil {
 		return err
 	}

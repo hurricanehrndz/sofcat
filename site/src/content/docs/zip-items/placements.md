@@ -118,11 +118,17 @@ Without the file, a build uses `${ProgramData}\<NAME>` on Windows and
 `/Library/Application Support/<NAME>` on macOS, the directory holding its
 config and `Data`, and has no user roots.
 
+A root may name a single file, in `write-roots.yaml` or in managed policy.
+It allows that path, and nothing beside it. Until the file exists sofcat
+cannot tell it from a directory, so a path under it would also pass: name
+only the file itself in the repository's placements.
+
 A files entry with `scope: user` writes under a user root even when its
-placement is machine scope: a Claude Code user settings file at
-`${HOME}/.claude` needs `${HOME}/.claude` in `darwin_user`, and
-`${USERPROFILE}\.claude` in `windows_user`, set by the brand or by managed
-policy.
+placement is machine scope: a Claude Code user settings file needs
+`${HOME}/.claude/settings.json` in `darwin_user`, and
+`${USERPROFILE}\.claude\settings.json` in `windows_user`, set by the brand or
+by managed policy. The directory, `${HOME}/.claude`, works too, but allows
+every file in it.
 
 Managed policy can add roots to any build, stock or brand. It cannot remove
 the build's. On Windows the policy is the key

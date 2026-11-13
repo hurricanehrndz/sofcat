@@ -379,3 +379,13 @@ func openPipeContext(ctx context.Context, pipePath string, timeout time.Duration
 		}
 	}
 }
+
+// closedByPeer reports whether a read failed because the other end closed
+// the pipe. Windows reports that as a pipe error, not io.EOF.
+func closedByPeer(err error) bool {
+	return errors.Is(err, io.EOF) ||
+		errors.Is(err, io.ErrUnexpectedEOF) ||
+		errors.Is(err, windows.ERROR_BROKEN_PIPE) ||
+		errors.Is(err, windows.ERROR_PIPE_NOT_CONNECTED) ||
+		errors.Is(err, windows.ERROR_NO_DATA)
+}
