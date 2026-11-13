@@ -172,6 +172,12 @@ func (g Guard) root(raw, scope string) (string, error) {
 	return resolve(path)
 }
 
+// Expand returns raw as Resolve sees it before resolving any symlink: its
+// variables expanded for scope, absolute and clean.
+func (g Guard) Expand(raw, scope string) (string, error) {
+	return g.expand(raw, scope)
+}
+
 // expand replaces the variables a path may use: ${ProgramFiles} and
 // ${ProgramData} on Windows, and the user's home (ProfileVar) in user scope
 // when the caller supplied it. A user-scope path that is still relative is

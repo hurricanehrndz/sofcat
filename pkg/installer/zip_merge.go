@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -97,16 +98,20 @@ func (z *ZipInstaller) applyMerge(o fileOutput, name string) error {
 		z.merged = map[mergeKey]bool{}
 	}
 	z.merged[mergeKey{name, strings.ToLower(o.leaf)}] = true
-	return z.mergeInto(name, o.leaf, o.path, o.want)
+	return z.mergeInto(name, o.named, o.leaf, o.path, o.want)
 }
 
 // mergeInto makes the JSON file at path hold want for placement name and none
-// of the other keys the record says it added. leaf is path with only its
-// parent's symlinks resolved: a file that is itself a symlink or anything but
-// a regular file is refused, and a missing one is an empty document. A write
-// keeps the file's permission bits; a refusal leaves the file and the record
-// as they were.
-func (z *ZipInstaller) mergeInto(name, leaf, path string, want []jsonmerge.Leaf) error {
+// of the other keys the record says it added. named is the file's path before
+// any symlink was resolved: a symlinked directory on it below the user's home
+// is refused (realDirs). leaf is path with only its parent's symlinks
+// resolved: a file that is itself a symlink or anything but a regular file is
+// refused, and a missing one is an empty document. A write keeps the file's
+// permission bits; a refusal leaves the file and the record as they were.
+func (z *ZipInstaller) mergeInto(name, named, leaf, path string, want []jsonmerge.Leaf) error {
+	if err := z.realDirs(named); err != nil {
+		return err
+	}
 	var doc []byte
 	mode := fs.FileMode(0o644)
 	switch info, err := os.Lstat(leaf); {
@@ -149,6 +154,48 @@ func (z *ZipInstaller) mergeInto(name, leaf, path string, want []jsonmerge.Leaf)
 	return nil
 }
 
+// realDirs refuses path, a merge target as named before any symlink is
+// resolved, when a directory on the way to it below the user's home is a
+// symlink, a junction or anything else but a plain directory. The record of
+// added keys is this machine's, but such a link usually leads somewhere
+// shared or versioned, such as a dotfiles repository or a synced folder: a
+// key added through it would appear on another machine with no record of it
+// and never be removed there. The home itself, and anything above it, may be
+// a symlink. A missing directory is fine; the write creates it. A path
+// outside the home is left to the guard. The check runs just before the
+// merge reads and writes, so a link made in between still wins that race;
+// making one takes no more than the rights the user has over the file.
+func (z *ZipInstaller) realDirs(path string) error {
+	home := z.Guard.Vars[placement.ProfileVar(z.Guard.GOOS)]
+	if home == "" {
+		return nil
+	}
+	// The record holds paths with the home resolved.
+	homes := []string{home}
+	if resolved, err := filepath.EvalSymlinks(home); err == nil && resolved != home {
+		homes = append(homes, resolved)
+	}
+	for _, h := range homes {
+		rel, in := z.Guard.RelativeTo(path, h)
+		if !in {
+			continue
+		}
+		dir := path
+		for range strings.Count(rel, "/") {
+			dir = filepath.Dir(dir)
+			switch info, err := os.Lstat(dir); {
+			case errors.Is(err, fs.ErrNotExist):
+			case err != nil:
+				return err
+			case !info.IsDir():
+				return fmt.Errorf("%w: %s is a symlink or not a plain directory; leaving %s alone", placement.ErrRefused, dir, path)
+			}
+		}
+		return nil
+	}
+	return nil
+}
+
 // mergeKey names a merged file of a placement, its path in lower case.
 type mergeKey struct{ placement, path string }
 
@@ -177,7 +224,7 @@ func (z *ZipInstaller) SweepMerges(skip func(placement string) bool) []Result {
 		}
 		_, err := z.Guard.CheckLeaf(e.Path, placement.ScopeUser)
 		if err == nil {
-			err = z.mergeInto(e.Placement, e.Path, e.Path, nil)
+			err = z.mergeInto(e.Placement, e.Path, e.Path, e.Path, nil)
 		}
 		if err != nil {
 			failed = append(failed, fail(Target{Placement: e.Placement}, e.Path, err))

@@ -118,8 +118,9 @@ uninstall` deleted it while the plugin is still placed. Unlike the drop-in,
 which lists only the managed plugins, this lists every plugin placed, optional
 ones included. The user roots must include `${HOME}/.claude` and
 `${USERPROFILE}\.claude`
-([Write roots](/zip-items/placements/#write-roots)). See [Merging into a
-user's file](/zip-items/placement-files/#merging-into-a-users-file).
+([Write roots](/zip-items/placements/#write-roots)). A `.claude` directory
+that is a symlink, such as into a dotfiles repository, is refused. See
+[Merging into a user's file](/zip-items/placement-files/#merging-into-a-users-file).
 
 The templates can also live in files of their own, named by `template_file`
 ([Templates for placement files](/zip-items/placement-files/#templates-for-placement-files)).
