@@ -182,6 +182,12 @@ func SendCommand(cfg config.Configuration, spec string) (CommandResponse, error)
 	client := NewClient(cfg.ServicePipeName)
 	ctx := context.Background()
 	switch cmd.Action {
+	case actionRun:
+		result, err := client.Run(ctx)
+		if err != nil {
+			return CommandResponse{}, err
+		}
+		return runResponse(result)
 	case actionGetServiceInfo:
 		info, err := client.GetServiceInfo(ctx)
 		if err != nil {
@@ -249,6 +255,28 @@ func SendCommand(cfg config.Configuration, spec string) (CommandResponse, error)
 	default:
 		return CommandResponse{}, fmt.Errorf("unsupported service action %q", cmd.Action)
 	}
+}
+
+// runResponse is `-S run`'s output, a "failed: " or "deferred: " line per
+// item, and its error when the run failed or any item did, so the command
+// exits non-zero.
+func runResponse(result RunResult) (CommandResponse, error) {
+	resp := CommandResponse{Status: "ok", Message: "managed run completed"}
+	for _, name := range result.FailedItems {
+		resp.Items = append(resp.Items, "failed: "+name)
+	}
+	for _, name := range result.DeferredItems {
+		resp.Items = append(resp.Items, "deferred: "+name)
+	}
+	switch {
+	case result.ErrorCode == "canceled":
+		return resp, errors.New("the service stopped before the managed run ended")
+	case !result.Completed:
+		return resp, errors.New("managed run failed; see the SofCat service log")
+	case len(result.FailedItems) > 0:
+		return resp, fmt.Errorf("managed run completed with %d failed item(s)", len(result.FailedItems))
+	}
+	return resp, nil
 }
 
 // brandingSummary is the one `-S GetBranding` output line: the payload with

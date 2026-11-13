@@ -169,14 +169,15 @@ Wails needs cgo on macOS. On the Mac itself, `just lint` covers the whole tree.
 
   `just ui-lint` fails when the committed tree and a fresh generation differ.
 - The service speaks JSON-RPC 2.0 (newline-delimited, one request per connection, plus
-  the `streamOperationStatus` notification stream); the contract is the "Protocol"
+  the `streamOperationStatus` notification stream and the one `runResult`
+  notification that ends a `run` request); the contract is the "Protocol"
   section of `ui/ARCHITECTURE.md`. Only `pkg/service/transport_*.go` is per
   platform, so keep protocol and runner code portable and its tests running on Linux.
 - Keep `cmd/sofcat` service-message commands updated in lockstep with SofCat UI protocol changes for testing/debugging.
 - `ListOptionalInstalls` should return JSON-safe subset DTOs, not full internal item objects.
 - The bound Wails surface is exactly six methods, `ListOptionalInstalls`, `InstallItem`,
   `RemoveItem`, `WatchOperation`, `GetBranding`, and `CancelOperation`, and one
-  `sofcat:operation-status` event; the service's `getServiceInfo` is not bound.
+  `sofcat:operation-status` event; the service's `getServiceInfo` and `run` are not bound.
   Progress percentages are per item, not aggregate; only `Succeeded`, `Failed`,
   `Deferred`, and `Canceled` end an operation, and
   `Canceled` comes from the service (`canceledBy: "service"`) or the user (`"user"`).

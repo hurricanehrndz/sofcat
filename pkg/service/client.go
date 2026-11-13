@@ -125,6 +125,37 @@ func (c *Client) StreamOperationStatus(ctx context.Context, operationID string, 
 	return err
 }
 
+// Run asks the service for a managed run and waits until it has ended. The
+// service queues it behind any run under way, so the wait is bounded only by
+// ctx. Only an administrator may call it.
+func (c *Client) Run(ctx context.Context) (RunResult, error) {
+	var accepted AcceptedOperation
+	var result RunResult
+	err := c.call(ctx, methodRun, nil, &accepted, func(dec *json.Decoder) error {
+		if !accepted.Accepted {
+			return errors.New("service did not accept the run")
+		}
+		var note rpcNotification
+		if err := dec.Decode(&note); err != nil {
+			if closedByPeer(err) {
+				return errors.New("service closed the connection before the run ended")
+			}
+			return fmt.Errorf("failed to decode run result: %w", err)
+		}
+		if note.JSONRPC != jsonrpcVersion || note.Method != notificationRunResult {
+			return fmt.Errorf("unexpected stream message %q", note.Method)
+		}
+		if err := json.Unmarshal(note.Params, &result); err != nil {
+			return fmt.Errorf("failed to decode run result: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return RunResult{}, err
+	}
+	return result, nil
+}
+
 // CancelOperation asks the service to cancel operationID. The service refuses
 // with operation_not_cancelable once the item's install or removal has started,
 // the operation has finished, or the operation is unknown.

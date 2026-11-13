@@ -60,12 +60,13 @@ answer echoes the `id` with a `result` or an `error`:
 | `removeItem` | `{itemName}` | `AcceptedOperation` |
 | `cancelOperation` | `{operationId}` | `{canceled: true}` |
 | `streamOperationStatus` | `{operationId}` | `{streamAccepted: true}`, then notifications |
+| `run` | none | `AcceptedOperation` without `operationId`, then one `runResult` notification |
 | `listUserPlacements` | none | `{entries: [{item, version, placement, path, archive, hash, treeHash, held, managed}], facts: {...}, placements: {name: spec}}` |
 | `reportUserPlacements` | `{results: [{item, placement, outcome, error?}]}` | `{}` |
 
 `getServiceInfo`, `getBranding`, the two mutations and `cancelOperation` skip the
 command queue and answer while a managed run is under way;
-`listOptionalInstalls` waits behind it. `apiVersion` changes only for a breaking
+`listOptionalInstalls` and the run that `run` asks for wait behind it. `apiVersion` changes only for a breaking
 change to these methods; additions show up in `capabilities`.
 
 Every managed run, check-only included, holds the file lock `run.lock` in the
@@ -170,6 +171,37 @@ the run that changed the plan ends. `-serviceremove` ends any helper still
 running beside it, after it removes the `Run` value, and any storefront, so an
 open window does not keep `<slug>-ui.exe` locked against the uninstaller.
 
+`run` asks for a managed run now and waits for its outcome; `sofcat -S run`
+calls it, and it is not bound into Wails. Only a local administrator may call
+it, by the rule that gives administrators their other rights (Boundary above;
+`authorized` in `pkg/service/common.go`). On Windows that needs an elevated
+token or SYSTEM, so a UAC-filtered administrator is refused; on macOS root or
+a member of group `admin` passes; elsewhere only root. `sofcat -S run` itself
+needs root on macOS all the same, because the CLI reads the root-only
+`config.yaml` before it connects. Anyone
+else, or a caller the service cannot resolve, gets `not_authorized`. The
+service answers at once with an `AcceptedOperation` that has no
+`operationId`, queues the run behind any run under way, and sends one
+`runResult` notification when it has ended, then closes:
+
+```json
+{"jsonrpc":"2.0","id":"1759580000000000002","method":"run"}
+{"jsonrpc":"2.0","id":"1759580000000000002","result":{"accepted":true,"queuedAtUtc":"2026-10-04T12:00:00.123Z","requestedBy":"PC01\\admin"}}
+{"jsonrpc":"2.0","method":"runResult","params":{"completed":true,"failedItems":["GoogleChrome"],"deferredItems":[]}}
+```
+
+`completed` is whether the run ended without a fatal error. When it did not,
+`errorCode` is `managed_run_failed`, and the service log has the error, or
+`canceled` when the service stopped first. `canceled` is best effort: the
+service closes open connections as it stops, so a client may instead see the
+connection close before `runResult`. A client must read that as an unknown
+outcome, never as success; `sofcat -S run` then exits non-zero.
+`failedItems` and `deferredItems` name the items the run's report lists. The
+run reports progress to any open operation whose item it reaches, as a
+mutation's run does. A client that hangs up while it waits does not stop the
+run. A run takes as long as it takes, so the client waits
+on the notification with no deadline of its own.
+
 `streamOperationStatus` answers with its result and then sends every record of
 the operation, from the first, as `operationStatus` notifications on the same
 connection, until a terminal record, and closes:
@@ -226,13 +258,13 @@ application errors. `data.code` is the stable string clients branch on, and
 | -32601 | `method_not_found` | unknown method |
 | -32602 | `invalid_params` | a required param is missing or of the wrong type |
 | -32603 | `internal_error` | the service panicked while handling the request |
-| -32000 | `server_busy` | every handler slot is taken (sent before reading the request, so `id` is null), or every stream slot |
+| -32000 | `server_busy` | every handler slot is taken (sent before reading the request, so `id` is null), every stream slot, or every `run` waiter slot |
 | -32001 | `command_failed` | the command failed (for example the manifest fetch) |
 | -32002 | `operation_not_cancelable` | cancel refused: the item was acted on, the operation finished, or it is unknown |
 | -32003 | `unknown_operation` | stream of an operation the service does not track |
 | -32004 | `item_not_available` | `installItem` for an item not offered for self-service |
 | -32005 | `item_not_removable` | `removeItem` for an item that is not a self-service item, or that an admin manifest requires |
-| -32006 | `not_authorized` | `removeItem`, `cancelOperation`, or an `installItem` that would take back a pending removal, from a caller who is neither the item's selector (the operation's requester, for a cancel) nor a local administrator |
+| -32006 | `not_authorized` | `removeItem`, `cancelOperation`, or an `installItem` that would take back a pending removal, from a caller who is neither the item's selector (the operation's requester, for a cancel) nor a local administrator, and `run` from anyone who is not a local administrator |
 
 The service does not support batches, and it does not act on a request without
 an `id` (a notification): it closes the connection without a reply. The
@@ -245,8 +277,8 @@ a placement sofcat may not write ([Zip items](../site/src/content/docs/zip-items
 installed; the message is the deferral reason, which names that software.
 
 The service bounds what one client can hold. It handles 32 connections at a
-time, at most 16 of them streams; a client beyond either limit gets
-`server_busy`. A client has 5 seconds to send its request line, after which the
+time, at most 16 of them streams and at most 4 of them `run` requests
+waiting for their run; a client beyond any of these limits gets `server_busy`. A client has 5 seconds to send its request line, after which the
 service hangs up without an answer, and the line may be at most 64 KiB, or the
 service answers `invalid_request` and hangs up. Each response and notification
 must be taken within 30 seconds, so a client that stops reading a stream loses

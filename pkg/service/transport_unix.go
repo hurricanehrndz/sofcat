@@ -15,6 +15,7 @@ import (
 	"runtime"
 	"slices"
 	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/hurricanehrndz/sofcat/pkg/identity"
@@ -150,4 +151,12 @@ func dial(ctx context.Context, name string, timeout time.Duration) (io.ReadWrite
 		return nil, fmt.Errorf("refusing %s: it is served by uid %d, not %d, so it is not the SofCat service", path, uid, trustedServerUID)
 	}
 	return conn, nil
+}
+
+// closedByPeer reports whether a read failed because the other end closed
+// the socket.
+func closedByPeer(err error) bool {
+	return errors.Is(err, io.EOF) ||
+		errors.Is(err, io.ErrUnexpectedEOF) ||
+		errors.Is(err, syscall.ECONNRESET)
 }
