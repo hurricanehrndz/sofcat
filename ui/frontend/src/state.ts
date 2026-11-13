@@ -705,7 +705,7 @@ function formatSavedAt(savedAtUtc: string): string {
 const DEFAULT_PRODUCT: string = import.meta.env?.VITE_PRODUCT_NAME ?? "SofCat";
 const DEFAULT_HELP_LABEL = "Get help";
 const DEFAULT_LIST_HEADING = "Available software";
-const LOGO_MIMES = new Set(["image/png", "image/jpeg", "image/svg+xml"]);
+const IMAGE_MIMES = new Set(["image/png", "image/jpeg", "image/svg+xml"]);
 
 export function isHexColor(value: string): boolean {
   return /^#[0-9a-fA-F]{6}$/.test(value);
@@ -738,28 +738,33 @@ function text(payload: Record<string, unknown>, key: string): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+/** imageSrc builds a data: URL from an image type the shell accepts and clean base64, else "". */
+function imageSrc(mime: string, base64: string): string {
+  return IMAGE_MIMES.has(mime) && /^[A-Za-z0-9+/]+={0,2}$/.test(base64) ? `data:${mime};base64,${base64}` : "";
+}
+
 /** brandingView turns a GetBranding payload (or a cached copy) into what the shell shows. */
 export function brandingView(payload: unknown): BrandingView {
   const raw = typeof payload === "object" && payload !== null ? (payload as Record<string, unknown>) : {};
   const title = text(raw, "title");
   const tagline = text(raw, "tagline");
-  const mime = text(raw, "logoMime");
-  const base64 = text(raw, "logoBase64");
-  const logoSrc =
-    LOGO_MIMES.has(mime) && /^[A-Za-z0-9+/]+={0,2}$/.test(base64) ? `data:${mime};base64,${base64}` : "";
+  const logoSrc = imageSrc(text(raw, "logoMime"), text(raw, "logoBase64"));
+  const backgroundSrc = imageSrc(text(raw, "backgroundMime"), text(raw, "backgroundBase64"));
   const helpUrl = httpUrl(text(raw, "helpUrl"));
   const accent = isHexColor(text(raw, "accent")) ? text(raw, "accent").toLowerCase() : "";
   return {
     title,
     tagline,
     logoSrc,
+    backgroundSrc,
+    backgroundText: text(raw, "backgroundText") === "dark" ? "dark" : "light",
     helpUrl,
     helpLabel: helpUrl ? text(raw, "helpLabel") || DEFAULT_HELP_LABEL : "",
     accent,
     onAccent: accent ? onAccent(accent) : "",
     productName: title || DEFAULT_PRODUCT,
     productMark: (Array.from(title)[0] ?? "").toUpperCase(),
-    showBanner: Boolean(title || tagline || logoSrc || helpUrl),
+    showBanner: Boolean(title || tagline || logoSrc || backgroundSrc || helpUrl),
     listHeading: text(raw, "listHeading") || DEFAULT_LIST_HEADING,
     sections: Array.isArray(raw.sections)
       ? raw.sections

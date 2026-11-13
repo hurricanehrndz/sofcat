@@ -747,6 +747,7 @@ test("brandingView maps the branded board", () => {
   assert.equal(view.productName, "Acme Software Center");
   assert.equal(view.productMark, "A");
   assert.equal(view.logoSrc, "data:image/png;base64,iVBORw0KGgo=");
+  assert.equal(view.backgroundSrc, "", "no background image: the banner keeps the accent");
   assert.equal(view.helpLabel, "Get help");
   assert.equal(view.accent, "#0b6e4f");
   assert.equal(view.onAccent, "#ffffff");
@@ -768,6 +769,9 @@ test("brandingView drops values the WebView must not use", () => {
   assert.equal(view.accent, "");
   assert.equal(view.logoSrc, "");
   assert.equal(brandingView({ logoMime: "image/svg+xml", logoBase64: '"><script>' }).logoSrc, "");
+  // The background source goes into a CSS url(""), so the same checks guard it.
+  assert.equal(brandingView({ backgroundMime: "text/html", backgroundBase64: "PHNjcmlwdD4=" }).backgroundSrc, "");
+  assert.equal(brandingView({ backgroundMime: "image/jpeg", backgroundBase64: '"); x: url(evil' }).backgroundSrc, "");
 });
 
 test("isHexColor and httpUrl", () => {
@@ -888,4 +892,20 @@ test("a download's percent updates are progress ticks, not new Activity entries"
     filed.map((r) => r.seq),
     [1, 2, 5, 6],
   );
+});
+
+// An admin sets an accent, a background image or both. The image wins in the
+// banner; the accent still colours the rest of the shell and sits under the
+// image, so neither may drop the other.
+test("brandingView keeps a background image beside the accent, and it alone shows the banner", () => {
+  const image = { backgroundMime: "image/jpeg", backgroundBase64: "/9j/4AAQ" };
+  const both = brandingView({ ...image, accent: "#d32323" });
+  assert.equal(both.backgroundSrc, "data:image/jpeg;base64,/9j/4AAQ");
+  assert.equal(both.accent, "#d32323");
+  assert.equal(brandingView(image).showBanner, true);
+  assert.equal(brandingView(image).accent, "");
+  // The admin picks the text colour for their picture; anything else is light.
+  assert.equal(brandingView(image).backgroundText, "light");
+  assert.equal(brandingView({ ...image, backgroundText: "dark" }).backgroundText, "dark");
+  assert.equal(brandingView({ ...image, backgroundText: "red; x" }).backgroundText, "light");
 });

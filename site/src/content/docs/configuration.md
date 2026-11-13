@@ -53,7 +53,7 @@ owns it and neither its group nor others can write it.
 | `verbose`, `debug`, `log_file_plain`, `checkonly`, `service_interval` | Yes |
 | `tls_auth`, `tls_client_cert`, `tls_client_key`, `tls_server_cert` (file paths) | Yes |
 | `tls_client_cert_store`, `tls_client_cert_store_field` | Yes |
-| `branding` (`title`, `tagline`, `logo`, `help_url`, `help_label`, `accent`, `list_heading`, `sections`) | Yes, field by field |
+| `branding` (`title`, `tagline`, `logo`, `help_url`, `help_label`, `accent`, `background_image`, `background_text`, `list_heading`, `sections`) | Yes, field by field |
 | `auth_user`, `auth_pass` | No: ignored with a warning in `sofcat.log` |
 | `app_data_path`, `service_name`, `service_pipe_name` | No: they must match the installed build |
 
@@ -127,8 +127,8 @@ every key.
 
 ## Branding
 
-The storefront's title, tagline, logo, help link, accent colour, list heading
-and section tab order come from the `branding:` block in `config.yaml` or from
+The storefront's title, tagline, logo, help link, accent colour, banner
+background image, list heading and section tab order come from the `branding:` block in `config.yaml` or from
 [managed settings](#managed-settings), with no rebuild. The keys and their
 limits are in the UI's
 [branding reference](https://github.com/hurricanehrndz/sofcat/blob/main/ui/README.md#branding).

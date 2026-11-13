@@ -75,7 +75,7 @@ user's operation to watch it.
 
 ## Branding
 
-An organisation can put its name, a tagline, a logo, a help link and an accent
+An organisation can put its name, a tagline, a logo, a help link, a banner background image and an accent
 colour on the UI with no rebuild or re-signing, and it works offline. The SYSTEM
 service resolves the branding and validates it; the UI only asks for it with
 `GetBranding` and never reads `config.yaml` or the registry itself. Each field
@@ -99,6 +99,8 @@ comes from the first source that sets it:
 | `help_url` | Absolute `http` or `https` URL, opened in the system browser. |
 | `help_label` | Plain text, up to 60 characters. Defaults to "Get help". |
 | `accent` | `#rrggbb`. Recolours buttons, links and the banner, and on Windows 11 the native title bar (Windows 10 keeps its default caption). |
+| `background_image` | Local path to a PNG, JPEG or SVG of at most 1 MiB, checked by content. Fills the banner in place of the accent, cropped to cover it. Buttons and links keep the accent. Pick a wide image with no text near the edges. |
+| `background_text` | `light` (the default) or `dark`. The colour of the banner's title, tagline and help button over `background_image`. sofcat draws nothing over the image, so pick the one that reads on it. |
 | `list_heading` | Plain text, up to 120 characters. Replaces the "Available software" heading; "My items" is unchanged. |
 | `sections` | A list; a REG_MULTI_SZ as policy. Up to 50 entries of plain text, up to 120 characters each. Sets the storefront tab order: the sections listed come first, then the rest alphabetically. Items without a catalog `section` appear under a "Software" tab, so give every item a section to hide it. |
 

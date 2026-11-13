@@ -280,23 +280,31 @@ func runResponse(result RunResult) (CommandResponse, error) {
 }
 
 // brandingSummary is the one `-S GetBranding` output line: the payload with
-// logoBase64 swapped for the logo's decoded size, so a console stays readable.
+// logoBase64 and backgroundBase64 swapped for the images' decoded sizes, so a
+// console stays readable.
 func brandingSummary(b branding.Branding) (string, error) {
 	logo, err := base64.StdEncoding.DecodeString(b.LogoBase64)
 	if err != nil {
 		return "", fmt.Errorf("failed to decode branding logo: %w", err)
 	}
+	background, err := base64.StdEncoding.DecodeString(b.BackgroundBase64)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode branding background image: %w", err)
+	}
 	line, err := json.Marshal(struct {
-		Title       string   `json:"title"`
-		Tagline     string   `json:"tagline"`
-		HelpURL     string   `json:"helpUrl"`
-		HelpLabel   string   `json:"helpLabel"`
-		Accent      string   `json:"accent"`
-		LogoMime    string   `json:"logoMime"`
-		LogoBytes   int      `json:"logoBytes"`
-		ListHeading string   `json:"listHeading"`
-		Sections    []string `json:"sections,omitempty"`
-	}{b.Title, b.Tagline, b.HelpURL, b.HelpLabel, b.Accent, b.LogoMime, len(logo), b.ListHeading, b.Sections})
+		Title           string   `json:"title"`
+		Tagline         string   `json:"tagline"`
+		HelpURL         string   `json:"helpUrl"`
+		HelpLabel       string   `json:"helpLabel"`
+		Accent          string   `json:"accent"`
+		LogoMime        string   `json:"logoMime"`
+		LogoBytes       int      `json:"logoBytes"`
+		BackgroundMime  string   `json:"backgroundMime"`
+		BackgroundBytes int      `json:"backgroundBytes"`
+		BackgroundText  string   `json:"backgroundText"`
+		ListHeading     string   `json:"listHeading"`
+		Sections        []string `json:"sections,omitempty"`
+	}{b.Title, b.Tagline, b.HelpURL, b.HelpLabel, b.Accent, b.LogoMime, len(logo), b.BackgroundMime, len(background), b.BackgroundText, b.ListHeading, b.Sections})
 	return string(line), err
 }
 

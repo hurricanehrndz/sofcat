@@ -148,3 +148,46 @@ func TestResolveLogo(t *testing.T) {
 		})
 	}
 }
+
+// The banner's background image goes through the same checks as the logo,
+// with its own larger cap, and neither image depends on the other: an admin
+// may set an accent, a background image or both.
+func TestResolveBackgroundImage(t *testing.T) {
+	jpeg := []byte("\xff\xd8\xff\xe0\x00\x10JFIF")
+	photo := writeFile(t, "banner.jpg", append(jpeg, make([]byte, MaxLogoBytes)...))
+	got := resolve(config.Branding{Accent: "#D32323", BackgroundImage: photo})
+	if got.BackgroundMime != "image/jpeg" || got.Accent != "#d32323" || got.LogoMime != "" {
+		t.Fatalf("background over the logo cap, with an accent: %+v", got)
+	}
+	want, _ := os.ReadFile(photo)
+	if decoded, _ := base64.StdEncoding.DecodeString(got.BackgroundBase64); string(decoded) != string(want) {
+		t.Fatal("background bytes did not round-trip")
+	}
+
+	for name, path := range map[string]string{
+		"too large": writeFile(t, "big.jpg", append(jpeg, make([]byte, MaxBackgroundBytes)...)),
+		"not image": writeFile(t, "page.jpg", []byte("<html><script>alert(1)</script>")),
+		"missing":   filepath.Join(t.TempDir(), "missing.jpg"),
+	} {
+		got := resolve(config.Branding{Accent: "#d32323", BackgroundImage: path})
+		if got.BackgroundMime != "" || got.BackgroundBase64 != "" {
+			t.Errorf("%s: background kept: %s, %d bytes", name, got.BackgroundMime, len(got.BackgroundBase64))
+		}
+		if got.Accent != "#d32323" {
+			t.Errorf("%s: a rejected background dropped the accent the banner falls back to", name)
+		}
+	}
+}
+
+// The admin picks the banner text colour for their picture. Anything but
+// light or dark is dropped, so the UI falls back to its default instead of
+// putting an arbitrary string into the page.
+func TestResolveBackgroundText(t *testing.T) {
+	for in, want := range map[string]string{
+		"dark": "dark", " Light ": "light", "DARK": "dark", "": "", "#000000": "", "dark; x": "",
+	} {
+		if got := resolve(config.Branding{BackgroundText: in}).BackgroundText; got != want {
+			t.Errorf("background_text %q resolved to %q, want %q", in, got, want)
+		}
+	}
+}

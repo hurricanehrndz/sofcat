@@ -166,6 +166,16 @@ function applyBranding(next: BrandingView): void {
   brandBanner.hidden = !next.showBanner;
   bannerLogo.hidden = !next.logoSrc;
   bannerLogo.replaceChildren(...(next.logoSrc ? [logoImage(next.logoSrc)] : []));
+  // A background image takes the accent's place in the banner, with the text
+  // colour the admin picked for it. The source is a data: URL brandingView
+  // built, so it cannot break out of url("").
+  if (next.backgroundSrc) {
+    brandBanner.style.setProperty("--banner-image", `url("${next.backgroundSrc}")`);
+    brandBanner.dataset.image = next.backgroundText;
+  } else {
+    brandBanner.style.removeProperty("--banner-image");
+    delete brandBanner.dataset.image;
+  }
   need<HTMLParagraphElement>("#banner-title").textContent = next.title;
   need<HTMLParagraphElement>("#banner-tagline").textContent = next.tagline;
   bannerHelp.hidden = !next.helpUrl;

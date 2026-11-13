@@ -29,6 +29,9 @@ const (
 	maxHelpURL   = 2048
 	maxSections  = 50
 	MaxLogoBytes = 512 << 10
+	// MaxBackgroundBytes is larger, for a photograph. The UI keeps the payload
+	// in localStorage, so it cannot grow much further.
+	MaxBackgroundBytes = 1 << 20
 )
 
 var accentPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
@@ -42,6 +45,12 @@ type Branding struct {
 	Accent     string `json:"accent"`
 	LogoMime   string `json:"logoMime"`
 	LogoBase64 string `json:"logoBase64"`
+	// Background is the banner's background image. When set, the UI draws it
+	// over the accent colour, with the banner text in BackgroundText: "light"
+	// or "dark", or "" for the UI's default, light.
+	BackgroundMime   string `json:"backgroundMime"`
+	BackgroundBase64 string `json:"backgroundBase64"`
+	BackgroundText   string `json:"backgroundText"`
 	// ListHeading replaces the UI's "Available software" heading when set.
 	ListHeading string `json:"listHeading"`
 	// Sections is the storefront tab order; sections it omits follow it.
@@ -71,7 +80,17 @@ func resolve(in config.Branding) Branding {
 		slog.Debug("branding accent dropped", "accent", accent)
 	}
 	if path := strings.TrimSpace(in.Logo); path != "" {
-		out.LogoMime, out.LogoBase64 = logo(path)
+		out.LogoMime, out.LogoBase64 = image("logo", path, MaxLogoBytes)
+	}
+	if path := strings.TrimSpace(in.BackgroundImage); path != "" {
+		out.BackgroundMime, out.BackgroundBase64 = image("background_image", path, MaxBackgroundBytes)
+	}
+	switch text := strings.ToLower(strings.TrimSpace(in.BackgroundText)); text {
+	case "light", "dark":
+		out.BackgroundText = text
+	case "":
+	default:
+		slog.Debug("branding background_text dropped", "backgroundText", text)
 	}
 	return out
 }
@@ -128,25 +147,25 @@ func helpURL(value string) string {
 	return parsed.String()
 }
 
-// logo reads the local file at path and returns its MIME type and base64
-// bytes, or empty strings when it is missing, too large or not a PNG, JPEG or
-// SVG. The UI only ever renders it through <img>, where an SVG cannot run
-// script.
-func logo(path string) (string, string) {
+// image reads the local file at path, the branding key what, and returns its
+// MIME type and base64 bytes, or empty strings when it is missing, larger than
+// limit or not a PNG, JPEG or SVG. The UI only ever renders it through <img>
+// or as a CSS background, where an SVG cannot run script.
+func image(what, path string, limit int64) (string, string) {
 	file, err := os.Open(path)
 	if err != nil {
-		slog.Debug("branding logo dropped", "path", path, "err", err)
+		slog.Debug("branding "+what+" dropped", "path", path, "err", err)
 		return "", ""
 	}
 	defer func() { _ = file.Close() }()
-	data, err := io.ReadAll(io.LimitReader(file, MaxLogoBytes+1))
-	if err != nil || len(data) == 0 || len(data) > MaxLogoBytes {
-		slog.Debug("branding logo dropped", "path", path, "bytes", len(data), "err", err)
+	data, err := io.ReadAll(io.LimitReader(file, limit+1))
+	if err != nil || len(data) == 0 || int64(len(data)) > limit {
+		slog.Debug("branding "+what+" dropped", "path", path, "bytes", len(data), "err", err)
 		return "", ""
 	}
 	mime := sniffImage(data)
 	if mime == "" {
-		slog.Debug("branding logo dropped", "path", path, "reason", "not a PNG, JPEG or SVG")
+		slog.Debug("branding "+what+" dropped", "path", path, "reason", "not a PNG, JPEG or SVG")
 		return "", ""
 	}
 	return mime, base64.StdEncoding.EncodeToString(data)

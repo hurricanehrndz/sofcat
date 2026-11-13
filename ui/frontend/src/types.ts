@@ -86,6 +86,10 @@ export type BrandingView = {
   tagline: string;
   /** A data: URL for <img>, or "" when there is no usable logo. */
   logoSrc: string;
+  /** A data: URL for the banner's background image, or "" to fill it with the accent. */
+  backgroundSrc: string;
+  /** The banner text colour over the background image; light unless the admin picked dark. */
+  backgroundText: "light" | "dark";
   helpUrl: string;
   helpLabel: string;
   /** #rrggbb, or "" to keep the default accent. */

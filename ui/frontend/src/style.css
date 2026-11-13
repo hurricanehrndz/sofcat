@@ -239,6 +239,39 @@ button:disabled {
   outline-color: var(--on-brand, var(--on-accent));
 }
 
+/*
+ * A background image (data-image, from branding background_image) takes the
+ * accent's place, cropped to fill, with nothing drawn over it. The admin picks
+ * the text that reads on their picture (background_text): light, the default,
+ * or dark. The accent stays underneath for a transparent image.
+ */
+#banner[data-image] {
+  --banner-ink: #fff;
+  --banner-paper: #1b1b1f;
+
+  min-height: 7.5rem;
+  background: var(--banner-image) center / cover no-repeat var(--brand, var(--accent));
+  color: var(--banner-ink);
+}
+
+#banner[data-image="dark"] {
+  --banner-ink: #1b1b1f;
+  --banner-paper: #fff;
+}
+
+#banner[data-image] .banner-tagline {
+  color: var(--banner-ink);
+}
+
+#banner[data-image] .banner-help {
+  background: var(--banner-ink);
+  color: var(--banner-paper);
+}
+
+#banner[data-image] :focus-visible {
+  outline-color: var(--banner-ink);
+}
+
 .app-bar {
   display: flex;
   flex-wrap: wrap;

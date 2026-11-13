@@ -28,6 +28,8 @@ app_data_path: c:/cpe/sofcat/cache
 #   help_url: https://help.example.com/               # http or https only
 #   help_label: Get help
 #   accent: "#0b6e4f"                                 # 6-digit hex
+#   background_image: C:\ProgramData\SofCat\branding\banner.jpg  # local PNG, JPEG or SVG, at most 1 MiB; fills the banner in place of the accent
+#   background_text: light                            # banner text over the image: light (default) or dark
 #   list_heading: Software for your team              # replaces "Available software"
 #   sections:                                         # storefront tab order; unlisted sections follow alphabetically
 #     - Apps
