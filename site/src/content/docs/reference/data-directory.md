@@ -47,7 +47,11 @@ these its own ACL.
 empty, and it is never deleted. A command-line `sofcat` run started while
 another run is under way, the service's included, fails at once with
 "another managed run is in progress". The service's own run waits for the
-other run to finish.
+other run to finish. So does `sofcat -checkonly`, which prints the inventory
+instead of writing `inventory.json`. It says it is waiting on stderr, so
+stdout stays the inventory JSON. `Data\service-manifest.yaml.lock` is held
+for each short read and write of the self-serve file, so a selection made in
+the app during a command-line run is not lost.
 
 `Data\user-artifacts\` is the one entry users read: the staged archives the
 per-user helper places into each profile ([Zip items](/zip-items/overview/#installing)).

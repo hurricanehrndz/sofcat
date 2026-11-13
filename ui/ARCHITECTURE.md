@@ -70,8 +70,9 @@ change to these methods; additions show up in `capabilities`.
 
 Every managed run, check-only included, holds the file lock `run.lock` in the
 data directory, so the service's run and a command-line `sofcat` run never
-overlap. The service waits for the lock. A command-line run fails at once with
-"another managed run is in progress".
+overlap. The service waits for the lock, and so does `sofcat -checkonly`, which
+says so on stderr and still prints its inventory JSON on stdout. Any other
+command-line run fails at once with "another managed run is in progress".
 
 An `OptionalInstallItem` is `{itemName, displayName, version, catalog,
 description?, category?, section?, developer?, iconName?, restartAction?, isManaged,
@@ -347,7 +348,10 @@ write the selection, register the operation as `Queued` and answer at once, and
 only the run they schedule is queued. A mutation that lands mid-run leaves that
 run on the plan it loaded; the queued run picks up the newer selection. All
 self-serve manifest writes, the run's included, go through
-`manifest.UpdateSelfServe`, an in-process lock with a fresh load.
+`manifest.UpdateSelfServe`, a fresh load under an in-process lock and the file
+lock `service-manifest.yaml.lock`. The file lock covers a command-line run
+beside the service. It is held only for the load and save, never while
+waiting on `run.lock`, so a mutation still answers at once.
 
 Installed and managed state come only from an authoritative `ListOptionalInstalls`
 refresh performed after a terminal record, never from progress records. A failed

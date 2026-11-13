@@ -291,7 +291,9 @@ const runLockName = "run.lock"
 var errRunInProgress = errors.New("another managed run is in progress; try again when it finishes")
 
 // lockRun takes the managed-run lock. The service waits for it, as its own
-// queue waits; a command-line run fails at once with errRunInProgress.
+// queue waits, and so does a check-only run, which monitoring wrappers start
+// on their own schedule and which must still print its inventory. Any other
+// command-line run fails at once with errRunInProgress.
 func lockRun(cfg config.Configuration) (func(), error) {
 	if err := os.MkdirAll(cfg.AppDataPath, 0o755); err != nil {
 		return nil, fmt.Errorf("unable to create data directory: %w", err)
@@ -299,10 +301,15 @@ func lockRun(cfg config.Configuration) (func(), error) {
 	path := filepath.Join(cfg.AppDataPath, runLockName)
 	unlock, err := filelock.TryLock(path)
 	if errors.Is(err, filelock.ErrLocked) {
-		if !cfg.ServiceMode {
+		switch {
+		case cfg.ServiceMode:
+			slog.Info("waiting for another managed run to finish", "lock", path)
+		case cfg.CheckOnly:
+			// stderr: stdout carries only the inventory JSON.
+			fmt.Fprintln(os.Stderr, "waiting for another managed run to finish")
+		default:
 			return nil, errRunInProgress
 		}
-		slog.Info("waiting for another managed run to finish", "lock", path)
 		unlock, err = filelock.Lock(path)
 	}
 	if err != nil {

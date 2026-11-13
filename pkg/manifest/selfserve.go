@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/hurricanehrndz/sofcat/pkg/filelock"
 	"go.yaml.in/yaml/v4"
 )
 
@@ -74,13 +75,22 @@ func SaveSelfServe(path string, entry Item) error {
 var selfServeMu sync.Mutex
 
 // UpdateSelfServe loads the self-serve manifest at path, lets fn change it, and
-// saves it when fn reports a change, all under one in-process lock.
-// CEILING: the lock is per process. The service owns the file and runs every
-// managed run in-process; a separate `sofcat` CLI run racing the service could
-// still lose a write. Upgrade to a file lock if both ever write concurrently.
+// saves it when fn reports a change, all under selfServeMu and the file lock
+// path+".lock". The file lock covers a command-line run beside the service,
+// whose mutations write the file while that run is under way. It is held only
+// for this load and save, inside the managed-run lock when a run calls this,
+// and nothing here takes that one, so the two never wait on each other.
 func UpdateSelfServe(path string, fn func(*Item) bool) error {
 	selfServeMu.Lock()
 	defer selfServeMu.Unlock()
+	if err := mkdirAll(filepath.Clean(filepath.Dir(path)), 0o755); err != nil {
+		return fmt.Errorf("unable to create local manifest directory: %w", err)
+	}
+	unlock, err := filelock.Lock(path + ".lock")
+	if err != nil {
+		return fmt.Errorf("unable to lock the self-serve manifest: %w", err)
+	}
+	defer unlock()
 	entry, err := LoadSelfServe(path)
 	if err != nil {
 		return err
