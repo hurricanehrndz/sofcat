@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/hurricanehrndz/sofcat/pkg/placement"
@@ -28,6 +29,11 @@ func TestMergeRefusesJunctionedParent(t *testing.T) {
 	failed := m.sync(t, "a")
 	if len(failed) != 1 || !errors.Is(failed[0].Err, placement.ErrRefused) {
 		t.Fatalf("sync = %+v, want one refusal", failed)
+	}
+	// The merge names the junction; the guard alone would call it a dangling
+	// symlink.
+	if !strings.Contains(failed[0].Err.Error(), "is a symlink or junction") {
+		t.Errorf("refusal = %v, want the junction named", failed[0].Err)
 	}
 	if got := readFile(t, filepath.Join(target, "settings.json")); got != `{}` {
 		t.Errorf("settings through the junction = %q, want {}", got)

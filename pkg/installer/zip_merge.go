@@ -100,13 +100,19 @@ func (z *ZipInstaller) saveMerges(rec mergeRecord) error {
 
 // applyMerge merges o's keys into its JSON file for placement name.
 func (z *ZipInstaller) applyMerge(o fileOutput, name string) error {
+	// Under both names, so the sweep neither undoes nor repeats this merge.
+	z.markMerged(name, o.leaf)
+	z.markMerged(name, o.named)
+	return z.mergeInto(name, o.named, o.leaf, o.path, o.want)
+}
+
+// markMerged notes that this sync handled placement name's merge of path, so
+// the sweep leaves its record entry alone.
+func (z *ZipInstaller) markMerged(name, path string) {
 	if z.merged == nil {
 		z.merged = map[mergeKey]bool{}
 	}
-	// Under both names, so the sweep neither undoes nor repeats this merge.
-	z.merged[mergeKey{name, strings.ToLower(o.leaf)}] = true
-	z.merged[mergeKey{name, strings.ToLower(o.named)}] = true
-	return z.mergeInto(name, o.named, o.leaf, o.path, o.want)
+	z.merged[mergeKey{name, strings.ToLower(path)}] = true
 }
 
 // mergeInto makes the JSON file at path hold want for placement name and none
@@ -265,4 +271,24 @@ func (z *ZipInstaller) UserFileSet(name string, spec placement.Spec) (string, []
 	}
 	slices.SortFunc(rcs, func(a, b receipt.Receipt) int { return strings.Compare(a.Item, b.Item) })
 	return root, fileItems(rcs), nil
+}
+
+// mergeName returns the file a merge entry f of placement name names, before
+// any symlink is resolved, and refuses one with a linked directory below the
+// home (realDirs); an entry that is no merge, or has no path on this OS, has
+// no name. Merge entries name their file with paths, never path. This runs
+// before the guard resolves the path: the guard cannot follow a Windows
+// junction and would report a dangling symlink.
+func (z *ZipInstaller) mergeName(name string, f placement.File, scope string) (string, error) {
+	raw := f.Paths[z.Guard.GOOS]
+	if raw == "" || f.Merge != placement.MergeAddIfAbsent {
+		return "", nil
+	}
+	named, err := z.Guard.Expand(raw, scope)
+	if err != nil {
+		return "", err
+	}
+	// A refusal here is reported once: the sweep skips the entry.
+	z.markMerged(name, named)
+	return named, z.realDirs(named)
 }
