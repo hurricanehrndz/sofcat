@@ -6,6 +6,9 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+	"time"
+
+	"github.com/hurricanehrndz/sofcat/pkg/filelock"
 )
 
 func TestLoadSelfServeMissingFileReturnsNamedEmpty(t *testing.T) {
@@ -90,5 +93,41 @@ func TestUpdateSelfServeKeepsConcurrentWrites(t *testing.T) {
 	}
 	if len(got.Installs) != 20 {
 		t.Fatalf("kept %d of 20 concurrent writes: %v", len(got.Installs), got.Installs)
+	}
+}
+
+// Another process's update (a command-line run beside the service) holds the
+// file lock; an update here waits for it and then sees that process's write.
+func TestUpdateSelfServeWaitsForOtherProcess(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "service-manifest.yaml")
+	unlock, err := filelock.Lock(path + ".lock")
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		done <- UpdateSelfServe(path, func(entry *Item) bool {
+			entry.Installs = append(entry.Installs, "mine")
+			return true
+		})
+	}()
+	select {
+	case early := <-done:
+		t.Fatalf("update did not wait for the file lock: %v", early)
+	case <-time.After(200 * time.Millisecond):
+	}
+	if err = SaveSelfServe(path, Item{Name: "self-serve", Installs: []string{"theirs"}}); err != nil {
+		t.Fatal(err)
+	}
+	unlock()
+	if err = <-done; err != nil {
+		t.Fatal(err)
+	}
+	got, err := LoadSelfServe(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got.Installs, []string{"theirs", "mine"}) {
+		t.Fatalf("Installs = %v, want the other process's write kept", got.Installs)
 	}
 }

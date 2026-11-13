@@ -16,6 +16,7 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/config"
 	"github.com/hurricanehrndz/sofcat/pkg/identity"
 	"github.com/hurricanehrndz/sofcat/pkg/installer"
+	"github.com/hurricanehrndz/sofcat/pkg/process"
 	"github.com/hurricanehrndz/sofcat/pkg/report"
 	"github.com/hurricanehrndz/sofcat/pkg/service"
 	"github.com/hurricanehrndz/sofcat/pkg/sofcatlog"
@@ -35,6 +36,7 @@ func resetMainHooks() {
 	// Never register the brand's event source on a test machine.
 	startManagementLogFunc = func(string, bool, io.Writer) func() { return func() {} }
 	newZipInstaller = installer.NewMachineZip
+	goneUninstalls = process.GoneUninstalls
 }
 
 func TestRunAdminCheckError(t *testing.T) {

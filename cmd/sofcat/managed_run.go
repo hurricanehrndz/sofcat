@@ -15,6 +15,7 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/config"
 	"github.com/hurricanehrndz/sofcat/pkg/download"
 	"github.com/hurricanehrndz/sofcat/pkg/facts"
+	"github.com/hurricanehrndz/sofcat/pkg/filelock"
 	"github.com/hurricanehrndz/sofcat/pkg/installer"
 	"github.com/hurricanehrndz/sofcat/pkg/manifest"
 	"github.com/hurricanehrndz/sofcat/pkg/process"
@@ -31,6 +32,9 @@ var (
 	// newZipInstaller builds the run's zip installer; tests swap in one with
 	// temporary write roots.
 	newZipInstaller = installer.NewMachineZip
+	// goneUninstalls checks which pending self-serve removals are done; tests
+	// swap it to act while the checks run.
+	goneUninstalls = process.GoneUninstalls
 )
 
 // managedRun runs one full pass. progress receives per-item events and cancels
@@ -52,8 +56,16 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 		return nil, fmt.Errorf("unable to create cache directory: %w", err)
 	}
 
+	// One managed run at a time across processes, held before the log opens
+	// and released after the inventory is written.
+	unlock, err := lockRun(cfg)
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
+
 	// Create a new logger object
-	if err := sofcatlog.NewLog(cfg); err != nil {
+	if err = sofcatlog.NewLog(cfg); err != nil {
 		return nil, fmt.Errorf("unable to initialize logger: %w", err)
 	}
 
@@ -222,10 +234,18 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 	// Prune self-serve uninstalls that are confirmed gone so the user can
 	// reinstall later (R5). Only after a real run, never in check-only.
 	if !cfg.CheckOnly {
-		// Prune a fresh copy, not selfServe: a user cancel may have changed the
-		// file since the run began, and saving the old copy would undo it.
-		err := manifest.UpdateSelfServe(selfServePath, func(entry *manifest.Item) bool {
-			return process.PruneSelfServeUninstalls(entry, catalogs, runner.Checker, cfg.CachePath)
+		// Check a fresh snapshot outside the self-serve lock: the checks may
+		// run scripts, and the service's mutations and lists wait on that lock.
+		// Then prune a fresh copy, not selfServe or the snapshot: a user cancel
+		// or selection may have changed the file meanwhile, and saving an old
+		// copy would undo it.
+		snapshot, err := manifest.LoadSelfServe(selfServePath)
+		if err != nil {
+			return nil, fmt.Errorf("unable to reload self-serve manifest for prune: %w", err)
+		}
+		gone := goneUninstalls(snapshot.Uninstalls, catalogs, runner.Checker, cfg.CachePath)
+		err = manifest.UpdateSelfServe(selfServePath, func(entry *manifest.Item) bool {
+			return process.PruneSelfServeUninstalls(entry, gone)
 		})
 		if err != nil {
 			return nil, fmt.Errorf("unable to save self-serve manifest after prune: %w", err)
@@ -272,6 +292,41 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 
 	slog.Info("Done!")
 	return run, nil
+}
+
+// runLockName is the lock file in the data directory that a managed run
+// holds, so a command-line run and the service's never overlap. It is never
+// deleted: removing a lock file races with the next run opening it.
+const runLockName = "run.lock"
+
+var errRunInProgress = errors.New("another managed run is in progress; try again when it finishes")
+
+// lockRun takes the managed-run lock. The service waits for it, as its own
+// queue waits, and so does a check-only run, which monitoring wrappers start
+// on their own schedule and which must still print its inventory. Any other
+// command-line run fails at once with errRunInProgress.
+func lockRun(cfg config.Configuration) (func(), error) {
+	if err := os.MkdirAll(cfg.AppDataPath, 0o755); err != nil {
+		return nil, fmt.Errorf("unable to create data directory: %w", err)
+	}
+	path := filepath.Join(cfg.AppDataPath, runLockName)
+	unlock, err := filelock.TryLock(path)
+	if errors.Is(err, filelock.ErrLocked) {
+		switch {
+		case cfg.ServiceMode:
+			slog.Info("waiting for another managed run to finish", "lock", path)
+		case cfg.CheckOnly:
+			// stderr: stdout carries only the inventory JSON.
+			fmt.Fprintln(os.Stderr, "waiting for another managed run to finish")
+		default:
+			return nil, errRunInProgress
+		}
+		unlock, err = filelock.Lock(path)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("unable to lock %s: %w", path, err)
+	}
+	return unlock, nil
 }
 
 // userPlanSets returns the desired and held sets the user plan is built from:
