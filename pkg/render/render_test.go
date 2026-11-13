@@ -214,7 +214,7 @@ func TestTimeout(t *testing.T) {
 }
 
 // Templates cannot reach files or the network: the function set is exactly
-// the three functions plus text/template's own.
+// json, fact, cond and the value builders, plus text/template's own.
 func TestFunctionSet(t *testing.T) {
 	for _, source := range []string{`{{ readFile "x" }}`, `{{ include "x" }}`, `{{ env "HOME" }}`} {
 		if _, err := Parse("t", source); err == nil {

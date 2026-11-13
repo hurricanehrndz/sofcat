@@ -1,7 +1,7 @@
 // Package render is the template engine behind the files sofcat writes for a
 // placement and, later, the templates a placed tree ships (zip-items guide,
 // "Templates for placement files"). Templates are Go text/template with
-// missingkey=error and three functions: json, fact and cond. Facts come from
+// missingkey=error and the functions of funcs. Facts come from
 // pkg/conditions, never from pkg/facts, so makecatalogs can render the same
 // templates against sample facts without the platform code.
 package render
@@ -46,13 +46,9 @@ func Parse(name, source string) (*Template, error) {
 	if len(source) > MaxTemplate {
 		return nil, fmt.Errorf("%s: %d bytes, over the %d-byte limit", name, len(source), MaxTemplate)
 	}
-	// The real functions are bound per render (Render); these fix the names
-	// and arities so parsing can check calls.
-	t, err := template.New(name).Option("missingkey=error").Funcs(template.FuncMap{
-		"json": func(any) (string, error) { return "", nil },
-		"fact": func(string) (any, error) { return nil, nil },
-		"cond": func(string) (bool, error) { return false, nil },
-	}).Parse(source)
+	// Render binds the functions to its own facts; binding the set here lets
+	// parsing reject any other name.
+	t, err := template.New(name).Option("missingkey=error").Funcs(funcs(&limitedWriter{}, nil, nil)).Parse(source)
 	if err != nil {
 		return nil, err
 	}
@@ -157,26 +153,7 @@ func (t *Template) Render(data any, facts conditions.Facts, path string) ([]byte
 		return nil, nil, err
 	}
 	var out limitedWriter
-	tmpl.Funcs(template.FuncMap{
-		"json": jsonLiteral,
-		"fact": func(name string) (any, error) {
-			if out.stopped.Load() {
-				return nil, errTimeout
-			}
-			v, ok := facts[name]
-			if !ok {
-				return nil, fmt.Errorf("fact %q: no such fact", name)
-			}
-			read[name] = v
-			return v, nil
-		},
-		"cond": func(expression string) (bool, error) {
-			if out.stopped.Load() {
-				return false, errTimeout
-			}
-			return cond(expression, facts, read)
-		},
-	})
+	tmpl.Funcs(funcs(&out, facts, read))
 
 	done := make(chan error, 1)
 	go func() { done <- tmpl.Execute(&out, data) }()

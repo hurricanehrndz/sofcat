@@ -9,7 +9,7 @@ it after the archive's hash checks and before the swap, writes the output
 beside it, and leaves the `.tmpl` in the placed tree, so a later run can
 re-render in place without the archive ([Installing](/zip-items/overview/#installing), steps 2 and 3). The
 device reads templates from the tree it is placing and nowhere else. The
-engine, its three functions, the limits, the error positions and the `.json`
+engine, its [functions](/zip-items/placement-files/#functions), the limits, the error positions and the `.json`
 canonicalization are those of [Templates for placement files](/zip-items/placement-files/#templates-for-placement-files); a failed render
 refuses the tree with `placement_refused`, writes nothing, and the next run
 retries. A template whose output is empty or only whitespace writes an empty
@@ -28,7 +28,8 @@ The context is:
 | `.Item` | The item whose tree this is: `.Name`, `.Version`, `.Managed` (true when a manifest lists it in `managed_installs`), `.Path` (the tree's directory) and `.TreeHash` (the catalog's hash). There is no `.PlacedHash`: it is the hash of the output. |
 | `.User` | In user scope, the login name of the account the helper runs as, without domain (`alice`, not `CORP\alice` or `alice@corp.example.com`); empty in machine scope. |
 
-`.Items` is absent. Facts come through `fact` and `cond`,
+`.Items` is absent, and with it `HasFile` and `ReadJSON`: a tree template
+cannot look inside its own tree. Facts come through `fact` and `cond`,
 with the run's facts: the service renders machine-scope trees with the facts
 it collected for the run, and hands the helper the same map with the
 user-placement plan, so a user-scope tree renders with the same values and

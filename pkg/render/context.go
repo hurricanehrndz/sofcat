@@ -1,5 +1,7 @@
 package render
 
+import "io/fs"
+
 // FileContext is what a placement file template renders with (zip-items
 // guide, "Templates for placement files"). Facts are reached through the
 // fact and cond functions, not a field.
@@ -26,7 +28,8 @@ type Placement struct {
 }
 
 // Item is one placed tree, from its receipt. The JSON names are the
-// receipt's, so {{ json .Items }} reads like the receipts.
+// receipt's, so {{ json .Items }} reads like the receipts. HasFile and
+// ReadJSON look inside the tree.
 type Item struct {
 	Name    string `json:"name"`
 	Version string `json:"version"`
@@ -39,6 +42,9 @@ type Item struct {
 	// file does.
 	TreeHash   string `json:"tree_hash"`
 	PlacedHash string `json:"placed_hash"`
+	// tree is where HasFile and ReadJSON look (WithTree); nil is the
+	// directory at Path.
+	tree fs.FS
 }
 
 // TreeContext is what a template inside a placed tree renders with. It has
