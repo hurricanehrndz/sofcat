@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"maps"
-	"math"
 	"path"
 	"slices"
 	"strings"
@@ -113,30 +112,7 @@ func (p Spec) View(name, root string) render.Placement {
 	v := render.Placement{Name: name, Root: root}
 	// Nil without vars, so tree inputs (installer.treeInputs) leave it out.
 	if len(p.Vars) > 0 {
-		v.Vars = integral(render.JSONValue(p.Vars))
-	}
-	return v
-}
-
-// integral turns every whole float64 in a JSON value into an int, in place,
-// so vars read the same from placements.yaml and from the user plan's JSON,
-// which decodes every number as float64: the service, the helper and
-// makecatalogs -check render alike. YAML 3.0 is therefore 3. A float beyond
-// 2^53 is left alone.
-func integral(v any) any {
-	switch v := v.(type) {
-	case map[string]any:
-		for k, e := range v {
-			v[k] = integral(e)
-		}
-	case []any:
-		for i, e := range v {
-			v[i] = integral(e)
-		}
-	case float64:
-		if v == math.Trunc(v) && math.Abs(v) <= 1<<53 {
-			return int(v)
-		}
+		v.Vars = render.Integral(render.JSONValue(p.Vars))
 	}
 	return v
 }

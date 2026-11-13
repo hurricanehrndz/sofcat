@@ -59,16 +59,13 @@ placements:
           windows: ${ProgramData}\ClaudeCode\managed-settings.d\50-acme.json
         template: |
           {{- if .Items }}
+          {{- $enabled := dict }}
+          {{- range .Items }}{{ if .Managed }}{{ $_ := set $enabled (printf "%s@%s" .Name $.Placement.Vars.name) true }}{{ end }}{{ end }}
           {
             "extraKnownMarketplaces": {
               {{ json .Placement.Vars.name }}: {"source": {"source": "directory", "path": {{ json .Placement.Root }}}}
             },
-            "enabledPlugins": {
-              {{- $first := true }}
-              {{- range .Items }}{{ if .Managed }}{{ if not $first }},{{ end }}{{ $first = false }}
-              {{ json (printf "%s@%s" .Name $.Placement.Vars.name) }}: true
-              {{- end }}{{ end }}
-            }
+            "enabledPlugins": {{ json $enabled }}
           }
           {{- end }}
 ```
@@ -196,6 +193,53 @@ prefix. With two plugins placed, one managed, the file comes out as:
 
 `codex plugin marketplace add <placement root>` then lists the plugins with
 those policies and versions.
+
+### Listing only the plugins Codex can load
+
+One marketplace can hold plugins for Claude Code, for Codex and for both.
+Codex loads a plugin only when its tree ships `.codex-plugin/plugin.json`,
+so the Codex catalog should list only those. The template asks each tree
+with `HasFile` and takes the category from the plugin's own manifest with
+`ReadJSON`, so nothing in `vars` repeats what the trees hold
+([Functions](/zip-items/placement-files/#functions)):
+
+```yaml
+    vars:
+      name: acme
+      owner: {name: Acme IT}
+      codex_authentication: {ci-plugin: ON_USE}
+    files:
+      - path: .agents/plugins/marketplace.json
+        template: |
+          {{- $plugins := list }}
+          {{- range $p := .Items }}{{ if $p.HasFile ".codex-plugin/plugin.json" }}
+            {{- $manifest := $p.ReadJSON ".codex-plugin/plugin.json" }}
+            {{- $auth := default "ON_INSTALL" (index $.Placement.Vars.codex_authentication $p.Name) }}
+            {{- $policy := dict "installation" "AVAILABLE" "authentication" $auth }}
+            {{- if $p.Managed }}{{ $_ := set $policy "installation" "INSTALLED_BY_DEFAULT" }}{{ end }}
+            {{- $plugins = append $plugins (dict
+                  "name" $p.Name
+                  "version" (printf "%s+%s" $p.Version (slice $p.PlacedHash 7 19))
+                  "source" (dict "source" "local" "path" (printf "./plugins/%s" $p.Name))
+                  "category" $manifest.interface.category
+                  "policy" $policy) }}
+          {{- end }}{{ end }}
+          {
+            "name": {{ json .Placement.Vars.name }},
+            "interface": {"displayName": {{ json .Placement.Vars.owner.name }}},
+            "plugins": {{ json $plugins }}
+          }
+```
+
+The template builds the list of plugins with `list`, `dict` and `append`
+and encodes it once with `json`, so it places no commas itself.
+`codex_authentication` holds only the exceptions: `default` gives every
+plugin it does not name `ON_INSTALL`. The map must exist, even empty
+(`codex_authentication: {}`), because reading a `vars` key that is missing
+fails the render. So does a Codex manifest without `interface.category`.
+
+The Claude catalog can leave out the plugins that are for Codex alone the
+same way, with `{{ if $p.HasFile ".claude-plugin/plugin.json" }}`.
 
 ## A Claude Desktop plugin
 

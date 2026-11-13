@@ -157,8 +157,11 @@ checks every zip item. It reports:
   both ways, against a sample of every
   built-in fact of that OS overlaid with `check_facts` (see [Templates for
   placement files](/zip-items/placement-files/#templates-for-placement-files)). A missing fact, a `cond` naming a fact no sample
-  provides, a `cond` calling `now()`, and output that is not JSON on a
-  `.json` path all fail.
+  provides, a `cond` calling `now()`, a function sofcat does not have, and
+  output that is not JSON on a `.json` path all fail. `HasFile` and
+  `ReadJSON` read each item's zip in the repository; a template that calls
+  them on an item whose zip is hosted elsewhere fails
+  ([Functions](/zip-items/placement-files/#functions)).
 - a tree template in a zip that fails to render: every zip a zip item names
   that the repository holds is opened, and each `.tmpl` entry is rendered
   per variant as `zip-item` renders it ([Tree templates, Validation](/zip-items/tree-templates/#validation)); a zip

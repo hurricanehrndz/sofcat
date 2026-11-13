@@ -175,7 +175,7 @@ func CollectCatalogs(repoPath string) (CatalogSet, error) { //nolint:gocognit //
 		return CatalogSet{}, fmt.Errorf("no catalogs to write: no package-info file under %s names a valid catalog", packagesInfoPath)
 	}
 
-	set.Problems = append(set.Problems, checkPlacementTemplates(placements, set.Catalogs)...)
+	set.Problems = append(set.Problems, checkPlacementTemplates(repoPath, placements, set.Catalogs)...)
 	set.Problems = append(set.Problems, checkZipTemplates(repoPath, placements, set.Catalogs)...)
 	set.Problems = append(set.Problems, checkManifests(repoPath)...)
 

@@ -187,8 +187,9 @@ rendered from the placement's receipts after every change there and once
 per run, and removed when the output is empty. Templates are
 Go [`text/template`](https://pkg.go.dev/text/template) with
 `missingkey=error`, so a field the context lacks fails the render instead of
-printing `<no value>`. A template cannot read files, include other files or
-reach the network.
+printing `<no value>`. A template cannot include other files or reach the
+network, and the only files it can read are those inside an item's own tree
+(see [Functions](#functions)).
 
 A template lives inline in `placements.yaml`, as a block scalar (`|`) under
 `template`, or in a file of its own that the entry names with
@@ -228,16 +229,92 @@ The context is:
 | `.OS` | `windows` or `darwin`. |
 | `.Scope` | `machine` or `user`: `user` when the per-user helper writes the file. |
 | `.Placement` | The placement the file belongs to: `.Name`, `.Root` (the expanded placement root, whichever path the file has; empty for a rootless placement) and `.Vars`, the placement's `vars` as written in `placements.yaml` (`.Vars.owner.name` reads a key of a map; `index .Placement.Vars "key"` reads a key that may be missing). |
-| `.Items` | The receipts of the placement, none for a rootless one, sorted by item: `.Name`, `.Version`, `.Managed`, `.Path`, `.TreeHash`, `.PlacedHash`. `{{ json .Items }}` emits them with the receipt's field names (`name`, `version`, `managed`, `path`, `tree_hash`, `placed_hash`). |
+| `.Items` | The receipts of the placement, none for a rootless one, sorted by item: `.Name`, `.Version`, `.Managed`, `.Path`, `.TreeHash`, `.PlacedHash`, and the methods `.HasFile` and `.ReadJSON`, which look inside the item's tree (see [Functions](#functions)). `{{ json .Items }}` emits them with the receipt's field names (`name`, `version`, `managed`, `path`, `tree_hash`, `placed_hash`). |
 | `.User` | In user scope, the login name of the account the helper runs as, without domain, as for tree templates; empty in machine scope. |
 
 `.PlacedHash` is the hash of the tree as placed, rendered files included, so
 a catalog template can stamp a version that changes when a rendered file
 does, for tools that reload a pack only on a version change.
 
-Facts are reached through functions, not a field. Three functions join
-`text/template`'s own (`printf`, `slice`, `index`, `len`, `range`, `if`,
-variables and the rest):
+### Functions
+
+These functions join `text/template`'s own (`printf`, `slice`, `index`,
+`len`, `range`, `if`, variables and the rest). Any other name, such as
+`env` or `now`, fails when the template is parsed, on the device and in
+`makecatalogs -check`. The last column says where each works: in placement
+files, in [tree templates](/zip-items/tree-templates/), or both.
+
+| Function | Returns | Works in |
+|---|---|---|
+| `json v` | `v` as a JSON literal. | both |
+| `fact "name"` | That fact's value. | both |
+| `cond "expression"` | Whether the condition holds for the facts. | both |
+| `dict "k1" v1 "k2" v2` | A map with those keys, like sprig's [`dict`](https://masterminds.github.io/sprig/dicts.html). | both |
+| `set $d "k" v` | `$d`, after setting the key in it, like sprig's [`set`](https://masterminds.github.io/sprig/dicts.html). | both |
+| `hasKey $d "k"` | Whether the map has the key, like sprig's [`hasKey`](https://masterminds.github.io/sprig/dicts.html). | both |
+| `list v1 v2` | A list of those values, like sprig's [`list`](https://masterminds.github.io/sprig/lists.html). | both |
+| `append $l v` | A new list: `$l` with `v` at the end, like sprig's [`append`](https://masterminds.github.io/sprig/lists.html). | both |
+| `default d v` | `v`, or `d` when `v` is empty, like sprig's [`default`](https://masterminds.github.io/sprig/defaults.html). | both |
+| `$p.HasFile "path"` | Whether item `$p`'s tree holds that file. | placement files |
+| `$p.ReadJSON "path"` | The JSON value in that file of item `$p`'s tree. | placement files |
+
+The functions named after sprig's take its argument order and return what
+it returns, so a template written for them also runs under sprig. sofcat
+does not include sprig itself: `env`, `now` and the `rand` functions would
+make a file depend on more than the placement and the facts. Three
+differences are stricter than sprig:
+
+- `dict` fails on a key that is not a string and on a key with no value.
+- `set` changes only a map the same template built with `dict`. It refuses
+  `.Placement.Vars`, a fact's value and a value `ReadJSON` returned. Copy
+  what you need into a `dict` first.
+- `append` fails on a value that is not a list.
+
+`default` treats as empty what `if` treats as false: `false`, `0`, `""`,
+a missing value, and an empty list or map.
+
+Build a value and encode it once, and the template needs no commas of its
+own:
+
+```
+{{- $enabled := dict }}
+{{- range .Items }}{{ if .Managed }}{{ $_ := set $enabled .Name true }}{{ end }}{{ end }}
+{"enabledPlugins": {{ json $enabled }}}
+```
+
+`$_ :=` discards what `set` returns, which would otherwise be printed.
+
+`HasFile` and `ReadJSON` are methods of an item in `.Items`, so they exist
+only in placement files; a tree template has no `.Items`. Both take a path
+relative to the item's tree, slash-separated on every OS, with no leading
+`/` and no `.` or `..` segment.
+
+- `$p.HasFile "path"` is true when the tree holds a regular file there, and
+  false for a directory, a missing file or a tree that is gone.
+- `$p.ReadJSON "path"` returns the file's JSON value, to index like `vars`:
+  `{{ ($p.ReadJSON ".codex-plugin/plugin.json").interface.category }}`.
+  Whole numbers come back as integers. A missing file, a file over 1 MiB and
+  one that is not exactly one JSON value fail the render. Test with
+  `HasFile` first when the file is optional.
+
+They read nothing outside the tree: a link in the tree that leads out of it
+fails the render. A machine-scope file is readable by every user of the
+device, so whatever a template copies from a tree is too. sofcat rewrites
+placement files after every change to the placement and on every run, so
+the output follows the tree.
+
+`makecatalogs -check` has no placed tree and reads the item's archive from
+the repository instead. Two things follow. A file that a tree template
+renders on the device is not in the archive, only its `.tmpl`. And when the
+archive is hosted outside the repository, a template that calls either
+method on that item fails the check, naming the archive.
+
+A method name is checked when the render reaches it, unlike a function
+name. `-check` renders with the catalog items that target the placement, so
+a mistyped `$p.HasFiel` inside `range .Items` goes unreported while no item
+targets the placement.
+
+Facts are reached through functions, not a field:
 
 - `json v` encodes any value as a JSON literal: `{{ json .Items }}`,
   `{{ json (fact "ipv4_address") }}`, `{{ json .Placement.Vars.owner }}`.

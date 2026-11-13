@@ -103,16 +103,13 @@ placements:
           windows: ${ProgramData}\Acme\library.d\50-acme.json
         template: |
           {{- if .Items }}
+          {{- $enabled := dict }}
+          {{- range .Items }}{{ if .Managed }}{{ $_ := set $enabled (printf "%s@%s" .Name $.Placement.Vars.name) true }}{{ end }}{{ end }}
           {
             "libraries": {
               {{ json .Placement.Vars.name }}: {"path": {{ json .Placement.Root }}}
             },
-            "enabledPacks": {
-              {{- $first := true }}
-              {{- range .Items }}{{ if .Managed }}{{ if not $first }},{{ end }}{{ $first = false }}
-              {{ json (printf "%s@%s" .Name $.Placement.Vars.name) }}: true
-              {{- end }}{{ end }}
-            }
+            "enabledPacks": {{ json $enabled }}
           }
           {{- end }}
   # No paths: a rootless placement holds no items and only writes its files,

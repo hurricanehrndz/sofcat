@@ -185,16 +185,13 @@ placements:
           windows: ${ProgramData}\tapas-test-smoke\claude\managed-settings.d\50-tapas-test.json
         template: |
           {{- if .Items }}
+          {{- $enabled := dict }}
+          {{- range .Items }}{{ if .Managed }}{{ $_ := set $enabled (printf "%s@%s" .Name $.Placement.Vars.name) true }}{{ end }}{{ end }}
           {
             "extraKnownMarketplaces": {
               {{ json .Placement.Vars.name }}: {"source": {"source": "directory", "path": {{ json .Placement.Root }}}}
             },
-            "enabledPlugins": {
-              {{- $first := true }}
-              {{- range .Items }}{{ if .Managed }}{{ if not $first }},{{ end }}{{ $first = false }}
-              {{ json (printf "%s@%s" .Name $.Placement.Vars.name) }}: true
-              {{- end }}{{ end }}
-            }
+            "enabledPlugins": {{ json $enabled }}
           }
           {{- end }}
       # The user's own Claude Code settings, merged per user by the helper:

@@ -37,7 +37,7 @@ func checkFacts(table placement.Table, goos string) conditions.Facts {
 // the placement, managed both ways. A rootless placement renders with no
 // root and no items, as on a device. A template that fails is a problem; a
 // repository without a usable table has none to check.
-func checkPlacementTemplates(h repoPlacements, catalogs map[string]map[string]catalog.Item) []string {
+func checkPlacementTemplates(repoPath string, h repoPlacements, catalogs map[string]map[string]catalog.Item) []string {
 	if !h.present || h.problem != "" {
 		return nil
 	}
@@ -49,11 +49,12 @@ func checkPlacementTemplates(h repoPlacements, catalogs map[string]map[string]ca
 			if !ok && !p.Rootless() {
 				continue
 			}
-			items := []render.Item{}
+			items, done := []render.Item{}, func() {}
 			if !p.Rootless() {
-				items = targetingItems(catalogs, name, p, goos, root)
+				items, done = targetingItems(repoPath, catalogs, name, p, goos, root)
 			}
 			problems = append(problems, checkFileTemplates(h, name, goos, root, items)...)
+			done()
 		}
 	}
 	return problems
@@ -124,9 +125,13 @@ func renderBothWays(name, source, out string, ctx render.FileContext, items []re
 
 // targetingItems lists, sorted by name, the catalog items with a variant for
 // placement name on goos, as the receipts would describe them once placed
-// under root, with nothing rendered.
-func targetingItems(catalogs map[string]map[string]catalog.Item, name string, p placement.Spec, goos, root string) []render.Item {
+// under root, with nothing rendered. Each item's tree is its archive in the
+// repository at repoPath, so HasFile and ReadJSON see what the archive holds:
+// a file a tree template renders on the device is not there, only its .tmpl.
+// The caller runs done after rendering, to close the archives.
+func targetingItems(repoPath string, catalogs map[string]map[string]catalog.Item, name string, p placement.Spec, goos, root string) (items []render.Item, done func()) {
 	byName := map[string]render.Item{}
+	locations := map[string]string{}
 	for _, items := range catalogs {
 		for itemName, item := range items {
 			v, ok := item.Installer.Variants[name][goos]
@@ -140,15 +145,45 @@ func targetingItems(catalogs map[string]map[string]catalog.Item, name string, p 
 				TreeHash:   v.TreeHash,
 				PlacedHash: v.TreeHash,
 			}
+			locations[itemName] = v.Location
 		}
 	}
 	names := slices.Sorted(maps.Keys(byName))
 	out := make([]render.Item, 0, len(names))
+	var open []io.Closer
 	for _, n := range names {
-		out = append(out, byName[n])
+		var tree fs.FS
+		local := filepath.FromSlash(locations[n])
+		var r *zip.ReadCloser
+		err := fs.ErrNotExist
+		if filepath.IsLocal(local) {
+			r, err = zip.OpenReader(filepath.Join(repoPath, local))
+		}
+		switch {
+		case errors.Is(err, fs.ErrNotExist):
+			tree = noTree{fmt.Errorf("archive %q is not in the repository, so the check cannot look inside the tree", locations[n])}
+		case err != nil:
+			// Not %w: an error that wraps fs.ErrNotExist would read as a tree
+			// without the file.
+			tree = noTree{fmt.Errorf("archive %q: %s", locations[n], err.Error())}
+		default:
+			tree = r
+			open = append(open, r)
+		}
+		out = append(out, byName[n].WithTree(tree))
 	}
-	return out
+	return out, func() {
+		for _, c := range open {
+			_ = c.Close()
+		}
+	}
 }
+
+// noTree is the tree of an item whose archive the check cannot open: a
+// template that looks inside it fails with err, and any other renders.
+type noTree struct{ err error }
+
+func (t noTree) Open(string) (fs.File, error) { return nil, t.err }
 
 // SampleUser is the .User a check renders a user-scope tree template with.
 const SampleUser = "jdoe"
