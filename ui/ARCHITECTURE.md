@@ -168,7 +168,9 @@ calls it, and it is not bound into Wails. Only a local administrator may call
 it, by the rule that gives administrators their other rights (Boundary above;
 `authorized` in `pkg/service/common.go`). On Windows that needs an elevated
 token or SYSTEM, so a UAC-filtered administrator is refused; on macOS root or
-a member of group `admin` passes without sudo; elsewhere only root. Anyone
+a member of group `admin` passes; elsewhere only root. `sofcat -S run` itself
+needs root on macOS all the same, because the CLI reads the root-only
+`config.yaml` before it connects. Anyone
 else, or a caller the service cannot resolve, gets `not_authorized`. The
 service answers at once with an `AcceptedOperation` that has no
 `operationId`, queues the run behind any run under way, and sends one

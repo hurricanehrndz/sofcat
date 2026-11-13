@@ -137,7 +137,7 @@ func (c *Client) Run(ctx context.Context) (RunResult, error) {
 		}
 		var note rpcNotification
 		if err := dec.Decode(&note); err != nil {
-			if errors.Is(err, io.EOF) {
+			if closedByPeer(err) {
 				return errors.New("service closed the connection before the run ended")
 			}
 			return fmt.Errorf("failed to decode run result: %w", err)
