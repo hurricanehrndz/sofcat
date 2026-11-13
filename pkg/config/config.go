@@ -59,7 +59,7 @@ Options:
 -a, -about          displays the version number and other build info
 -V, -version        display the version number
 -s, -service        run SofCat as a service (Windows SCM or macOS launchd)
--S, -servicecmd     send a command to a running SofCat service (GetServiceInfo|ListOptionalInstalls|GetBranding|InstallItem:itemName|RemoveItem:itemName|StreamOperationStatus:operationId|CancelOperation:operationId|ListUserPlacements|ReportUserPlacements:item,placement,outcome[,error])
+-S, -servicecmd     send a command to a running SofCat service (run|GetServiceInfo|ListOptionalInstalls|GetBranding|InstallItem:itemName|RemoveItem:itemName|StreamOperationStatus:operationId|CancelOperation:operationId|ListUserPlacements|ReportUserPlacements:item,placement,outcome[,error])
 -serviceinstall     install and start the SofCat service, restrict its data directory to SYSTEM and Administrators (root on macOS) and register the per-user helper at logon (Windows)
 -serviceremove      stop and remove the SofCat service and the helper's logon entry, and end running helpers and storefronts (Windows)
 -servicestart       start the SofCat service
