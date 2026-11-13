@@ -699,7 +699,9 @@ func (sr *serviceRunner) dispatchRun(ctx context.Context, conn clientConn, req r
 		return nil, nil
 	}
 
-	resp, err := sr.submit(ctx, Command{Action: actionRun})
+	// The run reports progress to any open operation whose item it reaches,
+	// as the run a mutation schedules does.
+	resp, err := sr.submit(ctx, Command{Action: actionRun, progress: sr.operationProgressCallback()})
 	result := RunResult{Completed: err == nil, FailedItems: []string{}, DeferredItems: []string{}}
 	switch {
 	case errors.Is(err, context.Canceled):

@@ -165,8 +165,10 @@ open window does not keep `<slug>-ui.exe` locked against the uninstaller.
 
 `run` asks for a managed run now and waits for its outcome; `sofcat -S run`
 calls it, and it is not bound into Wails. Only a local administrator may call
-it: on Windows a token with BUILTIN\Administrators enabled (an elevated
-administrator or SYSTEM), on macOS root or a member of group `admin`. Anyone
+it, by the rule that gives administrators their other rights (Boundary above;
+`authorized` in `pkg/service/common.go`). On Windows that needs an elevated
+token or SYSTEM, so a UAC-filtered administrator is refused; on macOS root or
+a member of group `admin` passes without sudo; elsewhere only root. Anyone
 else, or a caller the service cannot resolve, gets `not_authorized`. The
 service answers at once with an `AcceptedOperation` that has no
 `operationId`, queues the run behind any run under way, and sends one
@@ -180,9 +182,14 @@ service answers at once with an `AcceptedOperation` that has no
 
 `completed` is whether the run ended without a fatal error. When it did not,
 `errorCode` is `managed_run_failed`, and the service log has the error, or
-`canceled` when the service stopped first. `failedItems` and `deferredItems`
-name the items the run's report lists. A client that hangs up while it waits
-does not stop the run. A run takes as long as it takes, so the client waits
+`canceled` when the service stopped first. `canceled` is best effort: the
+service closes open connections as it stops, so a client may instead see the
+connection close before `runResult`. A client must read that as an unknown
+outcome, never as success; `sofcat -S run` then exits non-zero.
+`failedItems` and `deferredItems` name the items the run's report lists. The
+run reports progress to any open operation whose item it reaches, as a
+mutation's run does. A client that hangs up while it waits does not stop the
+run. A run takes as long as it takes, so the client waits
 on the notification with no deadline of its own.
 
 `streamOperationStatus` answers with its result and then sends every record of

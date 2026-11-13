@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hurricanehrndz/sofcat/pkg/catalog"
 	"github.com/hurricanehrndz/sofcat/pkg/config"
 	"github.com/hurricanehrndz/sofcat/pkg/installer"
 	"github.com/hurricanehrndz/sofcat/pkg/report"
@@ -333,5 +334,127 @@ func TestRunResponse(t *testing.T) {
 				t.Errorf("err = %v, want %q", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+// Waiting callers' slots are no reason to tell a non-administrator anything
+// but not_authorized: the admin check comes first.
+func TestRunRequestRefusesANonAdminEvenWhenBusy(t *testing.T) {
+	sr, ctx := startTestRunner(t, testServiceConfig(t), noopRun)
+	for i := 0; i < cap(sr.runSem); i++ {
+		sr.runSem <- struct{}{}
+	}
+	defer func() {
+		for i := 0; i < cap(sr.runSem); i++ {
+			<-sr.runSem
+		}
+	}()
+
+	resp, _, _ := runAs(t, ctx, sr, userA)
+	if resp.Error == nil || resp.Error.Data.Code != "not_authorized" {
+		t.Fatalf("run as a standard user with every waiter slot taken = %+v, want not_authorized", resp)
+	}
+}
+
+// A requested run reports progress to an open operation whose item it
+// reaches, so a storefront install queued behind it shows its progress.
+func TestRunRequestReportsProgressToOpenOperations(t *testing.T) {
+	sr, ctx := startTestRunner(t, testServiceConfig(t), func(_ config.Configuration, progress installer.ProgressFn, _ *installer.Cancels) (*report.Report, error) {
+		if progress != nil {
+			progress(catalog.Item{Name: "Slack", DisplayName: "Slack"}, nil, "downloading", 40, "Slack")
+		}
+		return nil, nil
+	})
+	sr.registerTrackedOperation("Slack", userA.Name, userA.ID, CommandResponse{OperationID: "op-slack"})
+
+	if _, result, _ := runAs(t, ctx, sr, adminUser); result == nil || !result.Completed {
+		t.Fatalf("runResult = %+v, want completed", result)
+	}
+	events, _, _ := sr.snapshotTrackedOperation("op-slack")
+	if !slices.ContainsFunc(events, func(e OperationStatus) bool { return e.State == "Downloading" }) {
+		t.Fatalf("operation records = %+v, want a Downloading record from the requested run", events)
+	}
+}
+
+// peerConn is a real transport connection whose Peer is caller, so a Client
+// talks to the real handler as an administrator on any host.
+type peerConn struct {
+	clientConn
+	caller peer
+}
+
+func (c peerConn) Peer() (peer, error) { return c.caller, nil }
+
+// serveOne listens on a test pipe of its own and hands its first connection
+// to handle. It returns the pipe name for a Client.
+func serveOne(t *testing.T, handle func(clientConn)) string {
+	t.Helper()
+	name := testPipeName(t)
+	ln, err := listen(name)
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		handle(conn)
+		_ = conn.Close()
+	}()
+	t.Cleanup(func() {
+		_ = ln.Close()
+		<-done
+	})
+	return name
+}
+
+// Client.Run and `-S run` over the real transport and handler.
+func TestClientRunEndToEnd(t *testing.T) {
+	failing := &report.Report{FailedItems: []report.FailedItem{{Name: "Chrome"}}}
+	for _, tt := range []struct {
+		name      string
+		rep       *report.Report
+		wantItems []string
+		wantErr   string
+	}{
+		{name: "success"},
+		{name: "failed item", rep: failing, wantItems: []string{"failed: Chrome"}, wantErr: "1 failed item"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var runs atomic.Int32
+			sr, ctx := startTestRunner(t, testServiceConfig(t), countingRun(&runs, tt.rep, nil))
+			handle := func(c clientConn) { sr.handleConn(ctx, peerConn{c, adminUser}) }
+
+			result, err := NewClient(serveOne(t, handle)).Run(ctx)
+			if err != nil || !result.Completed || len(result.FailedItems) != len(tt.wantItems) {
+				t.Fatalf("Run = %+v, %v", result, err)
+			}
+			resp, err := SendCommand(config.Configuration{ServicePipeName: serveOne(t, handle)}, "run")
+			if !slices.Equal(resp.Items, tt.wantItems) {
+				t.Errorf("-S run items = %q, want %q", resp.Items, tt.wantItems)
+			}
+			if tt.wantErr == "" && err != nil || tt.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tt.wantErr)) {
+				t.Errorf("-S run error = %v, want %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// A connection that closes after the ack leaves the outcome unknown: the
+// client says so, and never reports it as a run that failed or succeeded.
+func TestClientRunConnectionClosedAfterAck(t *testing.T) {
+	name := serveOne(t, func(c clientConn) {
+		var req rpcRequest
+		if err := json.NewDecoder(c).Decode(&req); err != nil {
+			return
+		}
+		_ = writeResult(c, req.ID, AcceptedOperation{Accepted: true, QueuedAtUTC: nowRFC3339UTC()})
+	})
+	_, err := SendCommand(config.Configuration{ServicePipeName: name}, "run")
+	if err == nil || !strings.Contains(err.Error(), "closed the connection before the run ended") {
+		t.Fatalf("-S run = %v, want the closed connection reported", err)
 	}
 }
