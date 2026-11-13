@@ -170,7 +170,14 @@ func TestGuardSingleFileRoot(t *testing.T) {
 					}
 				}
 			}
+			const under = "${HOME}/.claude/settings.json/x.json"
 			check("not yet created")
+			// Known limit, documented: until the root file exists the guard
+			// cannot tell it from a missing directory, so a path under it
+			// passes.
+			if _, err := g.Resolve(under, ScopeUser); err != nil {
+				t.Errorf("a path under the missing root file: refused: %v", err)
+			}
 			if err := os.MkdirAll(filepath.Dir(settings), 0o755); err != nil {
 				t.Fatal(err)
 			}
@@ -178,6 +185,9 @@ func TestGuardSingleFileRoot(t *testing.T) {
 				t.Fatal(err)
 			}
 			check("existing")
+			if _, err := g.Resolve(under, ScopeUser); !errors.Is(err, ErrRefused) {
+				t.Errorf("a path under the existing root file: error %v, want refused", err)
+			}
 			if err := os.RemoveAll(filepath.Dir(settings)); err != nil {
 				t.Fatal(err)
 			}

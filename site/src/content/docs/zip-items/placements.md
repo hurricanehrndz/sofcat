@@ -118,9 +118,10 @@ Without the file, a build uses `${ProgramData}\<NAME>` on Windows and
 `/Library/Application Support/<NAME>` on macOS, the directory holding its
 config and `Data`, and has no user roots.
 
-A root may name a single file. It then allows that path and nothing beside
-it. The file need not exist yet. This holds for a root in `write-roots.yaml`
-and for one managed policy adds.
+A root may name a single file, in `write-roots.yaml` or in managed policy.
+It allows that path, and nothing beside it. Until the file exists sofcat
+cannot tell it from a directory, so a path under it would also pass: name
+only the file itself in the repository's placements.
 
 A files entry with `scope: user` writes under a user root even when its
 placement is machine scope: a Claude Code user settings file needs
