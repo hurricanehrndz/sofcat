@@ -68,6 +68,14 @@ command queue and answer while a managed run is under way;
 `listOptionalInstalls` waits behind it. `apiVersion` changes only for a breaking
 change to these methods; additions show up in `capabilities`.
 
+Every managed run, check-only included, holds the file lock `run.lock` in the
+data directory, so the service's run and a command-line `sofcat` run never
+overlap. The service waits for the lock, and so does `sofcat -checkonly`, which
+says so on stderr and still prints its inventory JSON on stdout. It waits with
+no limit, and a run can be long, so a monitoring wrapper should apply its own
+timeout. Any other
+command-line run fails at once with "another managed run is in progress".
+
 An `OptionalInstallItem` is `{itemName, displayName, version, catalog,
 description?, category?, section?, developer?, iconName?, restartAction?, isManaged,
 isRequired, isInstalled, status, statusUpdatedAtUtc, lastOperationId?,
@@ -342,7 +350,12 @@ write the selection, register the operation as `Queued` and answer at once, and
 only the run they schedule is queued. A mutation that lands mid-run leaves that
 run on the plan it loaded; the queued run picks up the newer selection. All
 self-serve manifest writes, the run's included, go through
-`manifest.UpdateSelfServe`, an in-process lock with a fresh load.
+`manifest.UpdateSelfServe`, and every read through `manifest.LoadSelfServe`.
+Both take an in-process lock and the file lock `service-manifest.yaml.lock`,
+which covers a command-line run beside the service. A hold is one load, or
+one load, change and save. The run's prune checks item status on a snapshot
+before it takes the lock, and nothing under the lock waits on `run.lock`. So
+a mutation waits at most for another short load or save, never for a run.
 
 Installed and managed state come only from an authoritative `ListOptionalInstalls`
 refresh performed after a terminal record, never from progress records. A failed

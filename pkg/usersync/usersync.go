@@ -20,6 +20,7 @@ import (
 
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
 	"github.com/hurricanehrndz/sofcat/pkg/download"
+	"github.com/hurricanehrndz/sofcat/pkg/filelock"
 	"github.com/hurricanehrndz/sofcat/pkg/installer"
 	"github.com/hurricanehrndz/sofcat/pkg/placement"
 	"github.com/hurricanehrndz/sofcat/pkg/receipt"
@@ -222,15 +223,7 @@ func lock(receiptDir string) (func(), error) {
 	if err := os.MkdirAll(receiptDir, 0o755); err != nil {
 		return nil, err
 	}
-	f, err := os.OpenFile(filepath.Join(receiptDir, lockName), os.O_RDWR|os.O_CREATE, 0o600)
-	if err != nil {
-		return nil, err
-	}
-	if err := lockFile(f); err != nil {
-		_ = f.Close()
-		return nil, err
-	}
-	return func() { _ = f.Close() }, nil
+	return filelock.Lock(filepath.Join(receiptDir, lockName))
 }
 
 // currentUser is user.Current; tests replace it.

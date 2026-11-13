@@ -43,6 +43,21 @@ these its own ACL.
   ([Nupkg items](/guides/nupkg-items/#the-kept-copy)).
 - `Data\sofcat.log` may name paths and items.
 
+`Data\run.lock` is the lock a managed run holds for its whole length. It is
+empty, and it is never deleted. A command-line `sofcat` run started while
+another run is under way, the service's included, fails at once with
+"another managed run is in progress". The service's own run waits for the
+other run to finish. So does `sofcat -checkonly`, which prints the inventory
+instead of writing `inventory.json`. It says it is waiting on stderr, so
+stdout stays the inventory JSON. It waits with no limit, and a run can be
+long, so a monitoring wrapper should apply its own timeout.
+
+`Data\service-manifest.yaml.lock` is taken by every read and write of the
+self-serve file, by the service and by a command-line run alike. Each hold is
+one load, or one load and save; status checks run before it is taken. So a
+selection made in the app during a command-line run is not lost, and the app
+never reads a half-written file.
+
 `Data\user-artifacts\` is the one entry users read: the staged archives the
 per-user helper places into each profile ([Zip items](/zip-items/overview/#installing)).
 On macOS, where `Data` is root-only (0700) and no ACL can open one entry of

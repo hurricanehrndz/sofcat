@@ -108,8 +108,13 @@ func completeRemovals(t *testing.T, cfg config.Configuration) {
 		Type:     "zip",
 		Variants: map[string]map[string]catalog.Variant{"skills": {"windows": {Location: "skill.zip", Hash: "abc", TreeHash: "sha256:def"}}},
 	}}}}
-	err := manifest.UpdateSelfServe(serviceLocalManifestPath(cfg), func(entry *manifest.Item) bool {
-		return process.PruneSelfServeUninstalls(entry, catalogs, &status.Checker{}, t.TempDir())
+	entry, err := loadServiceLocalManifest(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gone := process.GoneUninstalls(entry.Uninstalls, catalogs, &status.Checker{}, t.TempDir())
+	err = manifest.UpdateSelfServe(serviceLocalManifestPath(cfg), func(entry *manifest.Item) bool {
+		return process.PruneSelfServeUninstalls(entry, gone)
 	})
 	if err != nil {
 		t.Fatal(err)
