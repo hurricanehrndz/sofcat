@@ -141,8 +141,10 @@ What `add_if_absent` does, per user and file:
   turns a plugin off with `false` keeps it off, and sofcat does not record
   that key, so it never removes it.
 - A key sofcat added is removed when the template stops rendering it, such
-  as when its item leaves the placement, whatever value it holds by then. A
-  key the user added or already had is never removed.
+  as when its item leaves the placement. Removing an item resets its key,
+  even one the user has since changed, for example to `false`, so adding the
+  item again adds the key afresh with the rendered value. A key the user
+  added or already had is never removed.
 - A key sofcat added and the user or a tool then deleted, such as by
   `claude plugin uninstall`, is added again at the next sync while the
   template still renders it.
@@ -158,9 +160,25 @@ the keys are the members of `enabledPlugins`.
 sofcat refuses the entry, leaving the file and the record as they were, when
 the file is not valid JSON, when it or a container the template adds a key
 to is not an object, or when the file is itself a symlink or not a regular
-file. The helper reports it under the placement's name in its log; the next
-sync tries again. If it cannot read the record it refuses every merge rather
-than treat all keys as the user's.
+file. It also refuses when a directory between the user's home and the file
+is a symlink or, on Windows, a junction. The home itself may be one. The
+record of added keys belongs to this machine, but such a link usually leads
+somewhere shared, such as a dotfiles repository or a synced folder. Keys
+added through it would reach other machines that have no record of them and
+never be removed there. This holds for removing keys too: keys added before
+the directory became a link stay recorded and are removed once it is a plain
+directory again. The helper reports a refusal under the placement's name in
+its log; the next sync tries again. If it cannot read the record it refuses
+every merge rather than treat all keys as the user's.
+
+Merge is deliberately narrow. It adds keys to a JSON object in a user's file
+and takes back the keys it added. `add_if_absent` is its only mode. It does
+not change a key that is present. It does not append to or edit an array: an
+array is a value, added whole when its key is absent. It tracks no key deeper
+than the two levels above. It writes only JSON, not TOML, YAML, plist or
+registry values. It is not meant to grow into general configuration
+management. A setting that needs more, such as another format or a setting
+that is not a file, is out of scope for merge.
 
 ## Templates for placement files
 

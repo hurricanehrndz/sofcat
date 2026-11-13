@@ -122,6 +122,11 @@ func (z *ZipInstaller) writeFiles(name string, spec placement.Spec, root string,
 		if spec.FileScope(f, z.Guard.GOOS) != scope {
 			continue
 		}
+		named, err := z.mergeName(name, f, scope)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("placement %q: %w", name, err))
+			continue
+		}
 		path, leaf, ok, err := z.filePath(name, spec, f, root, scope)
 		if err != nil {
 			errs = append(errs, err)
@@ -144,7 +149,7 @@ func (z *ZipInstaller) writeFiles(name string, spec placement.Spec, root string,
 		}
 		o := fileOutput{path: path, leaf: leaf, data: data}
 		if f.Merge == placement.MergeAddIfAbsent {
-			o.merge = true
+			o.merge, o.named = true, named
 			if o.want, err = jsonmerge.Leaves(data); err != nil {
 				errs = append(errs, fmt.Errorf("%w: placement %q: files[%d]: %w", placement.ErrRefused, name, i, err))
 				continue
@@ -199,9 +204,11 @@ func claim(seen map[string]bool, leaf, path string) bool {
 
 // fileOutput is one rendered files entry: data for path, or, when data is
 // nil, the removal of leaf. A merge entry adds the keys in want to the JSON
-// file at path instead (applyMerge).
+// file at path instead (applyMerge); named is that file's path before any
+// symlink was resolved.
 type fileOutput struct {
 	path, leaf string
+	named      string
 	data       []byte
 	merge      bool
 	want       []jsonmerge.Leaf

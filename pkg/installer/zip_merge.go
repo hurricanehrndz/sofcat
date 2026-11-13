@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -30,8 +31,14 @@ type mergeRecord struct {
 
 // mergeEntry is the keys placement added to the JSON file at Path. Path is
 // compared without regard to case, as claim does: Windows and macOS do.
+// Named is the file's path as the entry names it, before any symlink was
+// resolved, as the last successful merge saw it; the sweep checks it
+// (realDirs), since Path has those links resolved away. A record written
+// before Named existed lacks it: a merge of an entry still in the plan fills
+// it in, and a sweep of one has nothing to check.
 type mergeEntry struct {
 	Path      string          `json:"path"`
+	Named     string          `json:"named,omitempty"`
 	Placement string          `json:"placement"`
 	Keys      []jsonmerge.Key `json:"keys"`
 }
@@ -40,22 +47,22 @@ func (e mergeEntry) is(name, path string) bool {
 	return e.Placement == name && strings.EqualFold(e.Path, path)
 }
 
-// owned returns the keys placement name added to path.
-func (r mergeRecord) owned(name, path string) []jsonmerge.Key {
+// entry returns what placement name recorded for path; none is a zero entry.
+func (r mergeRecord) entry(name, path string) mergeEntry {
 	for _, e := range r.Entries {
 		if e.is(name, path) {
-			return e.Keys
+			return e
 		}
 	}
-	return nil
+	return mergeEntry{}
 }
 
-// set records keys as all that placement name added to path; none removes the
-// entry.
-func (r *mergeRecord) set(name, path string, keys []jsonmerge.Key) {
+// set records keys as all that placement name added to path, named named;
+// none removes the entry.
+func (r *mergeRecord) set(name, path, named string, keys []jsonmerge.Key) {
 	r.Entries = slices.DeleteFunc(r.Entries, func(e mergeEntry) bool { return e.is(name, path) })
 	if len(keys) > 0 {
-		r.Entries = append(r.Entries, mergeEntry{Path: path, Placement: name, Keys: keys})
+		r.Entries = append(r.Entries, mergeEntry{Path: path, Named: named, Placement: name, Keys: keys})
 	}
 	slices.SortFunc(r.Entries, func(a, b mergeEntry) int {
 		return strings.Compare(a.Placement+"\x00"+strings.ToLower(a.Path), b.Placement+"\x00"+strings.ToLower(b.Path))
@@ -93,20 +100,32 @@ func (z *ZipInstaller) saveMerges(rec mergeRecord) error {
 
 // applyMerge merges o's keys into its JSON file for placement name.
 func (z *ZipInstaller) applyMerge(o fileOutput, name string) error {
+	// Under both names, so the sweep neither undoes nor repeats this merge.
+	z.markMerged(name, o.leaf)
+	z.markMerged(name, o.named)
+	return z.mergeInto(name, o.named, o.leaf, o.path, o.want)
+}
+
+// markMerged notes that this sync handled placement name's merge of path, so
+// the sweep leaves its record entry alone.
+func (z *ZipInstaller) markMerged(name, path string) {
 	if z.merged == nil {
 		z.merged = map[mergeKey]bool{}
 	}
-	z.merged[mergeKey{name, strings.ToLower(o.leaf)}] = true
-	return z.mergeInto(name, o.leaf, o.path, o.want)
+	z.merged[mergeKey{name, strings.ToLower(path)}] = true
 }
 
 // mergeInto makes the JSON file at path hold want for placement name and none
-// of the other keys the record says it added. leaf is path with only its
-// parent's symlinks resolved: a file that is itself a symlink or anything but
-// a regular file is refused, and a missing one is an empty document. A write
-// keeps the file's permission bits; a refusal leaves the file and the record
-// as they were.
-func (z *ZipInstaller) mergeInto(name, leaf, path string, want []jsonmerge.Leaf) error {
+// of the other keys the record says it added. named is the file's path before
+// any symlink was resolved: a symlinked directory on it below the user's home
+// is refused (realDirs). leaf is path with only its parent's symlinks
+// resolved: a file that is itself a symlink or anything but a regular file is
+// refused, and a missing one is an empty document. A write keeps the file's
+// permission bits; a refusal leaves the file and the record as they were.
+func (z *ZipInstaller) mergeInto(name, named, leaf, path string, want []jsonmerge.Leaf) error {
+	if err := z.realDirs(named); err != nil {
+		return err
+	}
 	var doc []byte
 	mode := fs.FileMode(0o644)
 	switch info, err := os.Lstat(leaf); {
@@ -125,7 +144,8 @@ func (z *ZipInstaller) mergeInto(name, leaf, path string, want []jsonmerge.Leaf)
 	if err != nil {
 		return err
 	}
-	owned := rec.owned(name, leaf)
+	prev := rec.entry(name, leaf)
+	owned := prev.Keys
 	out, nowOwned, changed, err := jsonmerge.Apply(doc, want, owned)
 	if err != nil {
 		return fmt.Errorf("%w: %s: %w", placement.ErrRefused, leaf, err)
@@ -133,8 +153,9 @@ func (z *ZipInstaller) mergeInto(name, leaf, path string, want []jsonmerge.Leaf)
 	// The record goes first: one claiming a key whose write then failed is
 	// harmless, since Apply drops or re-adds it, but a key written with no
 	// record would never be taken back.
-	if !slices.EqualFunc(owned, nowOwned, slices.Equal) {
-		rec.set(name, leaf, nowOwned)
+	// It also keeps the name this merge used, which passed realDirs.
+	if !slices.EqualFunc(owned, nowOwned, slices.Equal) || len(nowOwned) > 0 && prev.Named != named {
+		rec.set(name, leaf, named, nowOwned)
 		if err := z.saveMerges(rec); err != nil {
 			return err
 		}
@@ -146,6 +167,42 @@ func (z *ZipInstaller) mergeInto(name, leaf, path string, want []jsonmerge.Leaf)
 		return err
 	}
 	slog.Info("Merged placement file", "placement", name, "path", path, "owned", len(nowOwned))
+	return nil
+}
+
+// realDirs refuses path, a merge target as named before any symlink is
+// resolved, when a directory on the way to it below the user's home is a
+// symlink or a junction, which Lstat does not report as a directory. Other
+// reparse points that still report as one, such as cloud placeholder
+// folders, are allowed. The record of added keys is this machine's, but such
+// a link usually leads somewhere shared or versioned, such as a dotfiles
+// repository or a synced folder: a key added through it would appear on
+// another machine with no record of it and never be removed there. The home
+// itself, and anything above it, may be a symlink. A missing directory is
+// fine; the write creates it. A path outside the home is left to the guard.
+// The check runs just before the merge reads and writes, so a link made in
+// between still wins that race; making one takes no more than the rights the
+// user has over the file.
+func (z *ZipInstaller) realDirs(path string) error {
+	home := z.Guard.Vars[placement.ProfileVar(z.Guard.GOOS)]
+	if home == "" || path == "" {
+		return nil
+	}
+	rel, in := z.Guard.RelativeTo(path, home)
+	if !in {
+		return nil
+	}
+	dir := path
+	for range strings.Count(rel, "/") {
+		dir = filepath.Dir(dir)
+		switch info, err := os.Lstat(dir); {
+		case errors.Is(err, fs.ErrNotExist):
+		case err != nil:
+			return err
+		case !info.IsDir():
+			return fmt.Errorf("%w: %s is a symlink or junction, not a directory; leaving %s alone", placement.ErrRefused, dir, path)
+		}
+	}
 	return nil
 }
 
@@ -172,12 +229,12 @@ func (z *ZipInstaller) SweepMerges(skip func(placement string) bool) []Result {
 	}
 	var failed []Result
 	for _, e := range rec.Entries {
-		if z.merged[mergeKey{e.Placement, strings.ToLower(e.Path)}] || skip(e.Placement) {
+		if z.merged[mergeKey{e.Placement, strings.ToLower(e.Path)}] || z.merged[mergeKey{e.Placement, strings.ToLower(e.Named)}] || skip(e.Placement) {
 			continue
 		}
 		_, err := z.Guard.CheckLeaf(e.Path, placement.ScopeUser)
 		if err == nil {
-			err = z.mergeInto(e.Placement, e.Path, e.Path, nil)
+			err = z.mergeInto(e.Placement, e.Named, e.Path, e.Path, nil)
 		}
 		if err != nil {
 			failed = append(failed, fail(Target{Placement: e.Placement}, e.Path, err))
@@ -214,4 +271,24 @@ func (z *ZipInstaller) UserFileSet(name string, spec placement.Spec) (string, []
 	}
 	slices.SortFunc(rcs, func(a, b receipt.Receipt) int { return strings.Compare(a.Item, b.Item) })
 	return root, fileItems(rcs), nil
+}
+
+// mergeName returns the file a merge entry f of placement name names, before
+// any symlink is resolved, and refuses one with a linked directory below the
+// home (realDirs); an entry that is no merge, or has no path on this OS, has
+// no name. Merge entries name their file with paths, never path. This runs
+// before the guard resolves the path: the guard cannot follow a Windows
+// junction and would report a dangling symlink.
+func (z *ZipInstaller) mergeName(name string, f placement.File, scope string) (string, error) {
+	raw := f.Paths[z.Guard.GOOS]
+	if raw == "" || f.Merge != placement.MergeAddIfAbsent {
+		return "", nil
+	}
+	named, err := z.Guard.Expand(raw, scope)
+	if err != nil {
+		return "", err
+	}
+	// A refusal here is reported once: the sweep skips the entry.
+	z.markMerged(name, named)
+	return named, z.realDirs(named)
 }

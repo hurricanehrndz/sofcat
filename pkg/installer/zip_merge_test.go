@@ -289,7 +289,7 @@ func TestMergeRefusals(t *testing.T) {
 	}
 }
 
-// Only the file itself must not be a symlink, checked on the path as named,
+// The file itself must not be a symlink, checked on the path as named,
 // before it is resolved.
 func TestMergeRefusesSymlinkedFile(t *testing.T) {
 	m := newMergeTest(t)
@@ -312,20 +312,217 @@ func TestMergeRefusesSymlinkedFile(t *testing.T) {
 	}
 }
 
-// A symlinked parent directory goes through the normal guard instead, and
-// is fine when it stays inside a write root.
-func TestMergeFollowsSymlinkedParent(t *testing.T) {
-	m := newMergeTest(t)
-	real := filepath.Join(filepath.Dir(m.settings), "..", "real")
-	if err := os.MkdirAll(real, 0o755); err != nil {
+// at points the merge entry at settings instead.
+func (m *mergeTest) at(settings string) {
+	m.settings = settings
+	m.spec = mergeSpec(m.root, settings)
+	m.z.Table.Placements["market"] = m.spec
+}
+
+// linkDir moves dir to target, which must not exist, and leaves a symlink to
+// it at dir; it skips the test where symlinks cannot be made.
+func linkDir(t *testing.T, dir, target string) {
+	t.Helper()
+	if err := os.Rename(dir, target); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(real, m.settings[:len(m.settings)-len("/settings.json")]); err != nil {
+	if err := os.Symlink(target, dir); err != nil {
 		t.Skipf("no symlinks: %v", err)
 	}
+}
+
+// wantRefusedThroughLink checks a merge refused at the symlink link left
+// file, behind it, as before, wrote nothing beside it, and kept the link.
+func wantRefusedThroughLink(t *testing.T, failed []Result, link, file, before string) {
+	t.Helper()
+	if len(failed) != 1 || !errors.Is(failed[0].Err, placement.ErrRefused) {
+		t.Fatalf("merge = %+v, want one refusal", failed)
+	}
+	if got := readFile(t, file); got != before {
+		t.Errorf("settings through the link = %q, want %q", got, before)
+	}
+	if entries, err := os.ReadDir(filepath.Dir(file)); err != nil || len(entries) != 1 {
+		t.Errorf("the file's directory holds %v (%v), want only the file", entries, err)
+	}
+	if info, err := os.Lstat(link); err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Errorf("%s is no longer a symlink: %v", link, err)
+	}
+}
+
+// A symlinked directory below the home usually leads somewhere shared, such
+// as a dotfiles repository: keys added through it would reach machines with
+// no record of them. The merge is refused, with the file and record as they
+// were. Every link here leads inside the home, where the guard alone would
+// allow the write.
+func TestMergeRefusesSymlinkedParent(t *testing.T) {
+	m := newMergeTest(t)
+	m.write(t, `{"theme": "dark"}`)
+	dir := filepath.Dir(m.settings)
+	linkDir(t, dir, filepath.Join(filepath.Dir(dir), "dotfiles"))
+	wantRefusedThroughLink(t, m.sync(t, "a"), dir, m.settings, `{"theme": "dark"}`)
+	if exists(m.record) {
+		t.Error("a refused merge wrote the record")
+	}
+}
+
+func TestMergeRefusesSymlinkTwoLevelsUp(t *testing.T) {
+	m := newMergeTest(t)
+	home := m.z.Guard.Vars[placement.ProfileVar(testOS())]
+	m.at(filepath.Join(home, "a", "b", "settings.json"))
+	m.write(t, `{}`)
+	linkDir(t, filepath.Join(home, "a"), filepath.Join(home, "elsewhere"))
+	wantRefusedThroughLink(t, m.sync(t, "x"), filepath.Join(home, "a"), m.settings, `{}`)
+	if exists(m.record) {
+		t.Error("a refused merge wrote the record")
+	}
+}
+
+// The home itself may be a symlink. The record then holds the resolved
+// path, and the sweep checks the path as named.
+func TestMergeAllowsSymlinkedHome(t *testing.T) {
+	m := newMergeTest(t)
+	home := m.z.Guard.Vars[placement.ProfileVar(testOS())]
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	real := filepath.Join(filepath.Dir(m.root), "real-home")
+	linkDir(t, home, real)
 	m.mustSync(t, "a")
-	if got := readFile(t, filepath.Join(real, "settings.json")); !strings.Contains(got, "a@m") {
-		t.Errorf("settings = %q, want a@m", got)
+	if !m.plugins(t)["a@m"] {
+		t.Fatalf("settings = %s, want a@m", readFile(t, m.settings))
+	}
+	if e := m.recorded(t); len(e) != 1 || !strings.HasPrefix(e[0].Path, real) || e[0].Named != m.settings {
+		t.Fatalf("record = %+v, want the path under %s, named %s", e, real, m.settings)
+	}
+
+	dir := filepath.Join(real, ".claude")
+	before := readFile(t, m.settings)
+	linkDir(t, dir, filepath.Join(real, "dotfiles"))
+	z := *m.z
+	z.merged = nil
+	wantRefusedThroughLink(t, z.SweepMerges(func(string) bool { return false }), dir, m.settings, before)
+	wantKeys(t, m.recorded(t), "enabledPlugins/a@m")
+
+	// The record's path differs from the merge's leaf now; the named path
+	// still keeps the sweep from reporting the merge's refusal again.
+	if res, ok := z.RegenerateUserFiles("market", m.spec, m.root, nil); ok || !errors.Is(res.Err, placement.ErrRefused) {
+		t.Fatalf("merge = %+v, want a refusal", res)
+	}
+	if failed := z.SweepMerges(func(string) bool { return false }); len(failed) != 0 {
+		t.Errorf("the sweep reported the refused merge again: %+v", failed)
+	}
+}
+
+// Keys added while the directory was real are not removed through a link
+// made since, by a merge or by the sweep. The record keeps them, so they go
+// once the directory is real again. A merge's refusal is reported once: the
+// sweep in the same sync skips the entry.
+func TestMergeKeepsKeysBehindNewSymlink(t *testing.T) {
+	m := newMergeTest(t)
+	m.mustSync(t, "a")
+	before := readFile(t, m.settings)
+	dir := filepath.Dir(m.settings)
+	moved := filepath.Join(filepath.Dir(dir), "dotfiles")
+	linkDir(t, dir, moved)
+
+	z := *m.z
+	z.merged = nil
+	res, ok := z.RegenerateUserFiles("market", m.spec, m.root, nil)
+	if ok {
+		t.Fatal("a merge through the link was not refused")
+	}
+	wantRefusedThroughLink(t, []Result{res}, dir, m.settings, before)
+	if failed := z.SweepMerges(func(string) bool { return false }); len(failed) != 0 {
+		t.Errorf("the sweep reported the refused merge again: %+v", failed)
+	}
+	z2 := *m.z
+	z2.merged = nil
+	wantRefusedThroughLink(t, z2.SweepMerges(func(string) bool { return false }), dir, m.settings, before)
+	wantKeys(t, m.recorded(t), "enabledPlugins/a@m")
+
+	if err := os.Remove(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(moved, dir); err != nil {
+		t.Fatal(err)
+	}
+	m.mustSync(t)
+	if got := m.plugins(t); len(got) != 0 {
+		t.Errorf("enabledPlugins = %v once the directory is real again, want none", got)
+	}
+	wantKeys(t, m.recorded(t))
+}
+
+// rewrite replaces the record's entries with edit's result.
+func (m mergeTest) rewrite(t *testing.T, edit func([]mergeEntry) []mergeEntry) {
+	t.Helper()
+	data, err := json.Marshal(mergeRecord{Entries: edit(m.recorded(t))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(m.record, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// The record's path has the links resolved away, so the sweep checks the
+// path as the entry named it: here the record holds the link's target, as a
+// merge through the link would have left it.
+func TestSweepRefusesLinkResolvedAway(t *testing.T) {
+	m := newMergeTest(t)
+	m.mustSync(t, "a")
+	before := readFile(t, m.settings)
+	dir := filepath.Dir(m.settings)
+	shared := filepath.Join(filepath.Dir(dir), "dotfiles", "claude")
+	if err := os.MkdirAll(filepath.Dir(shared), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	linkDir(t, dir, shared)
+	m.rewrite(t, func(es []mergeEntry) []mergeEntry {
+		es[0].Path = filepath.Join(shared, "settings.json")
+		return es
+	})
+
+	z := *m.z
+	z.merged = nil
+	wantRefusedThroughLink(t, z.SweepMerges(func(string) bool { return false }), dir, m.settings, before)
+	wantKeys(t, m.recorded(t), "enabledPlugins/a@m")
+}
+
+// A record written before entries kept their named path still loads, and
+// the sweep takes back the keys of a plain path as before.
+func TestSweepRecordWithoutNamedPath(t *testing.T) {
+	m := newMergeTest(t)
+	m.mustSync(t, "a")
+	m.rewrite(t, func(es []mergeEntry) []mergeEntry {
+		es[0].Named = ""
+		return es
+	})
+	if strings.Contains(readFile(t, m.record), "named") {
+		t.Fatalf("record = %s, want no named path", readFile(t, m.record))
+	}
+	z := *m.z
+	z.merged = nil
+	if failed := z.SweepMerges(func(string) bool { return false }); len(failed) != 0 {
+		t.Fatal(failed)
+	}
+	if got := m.plugins(t); len(got) != 0 {
+		t.Errorf("enabledPlugins = %v, want a@m swept", got)
+	}
+	wantKeys(t, m.recorded(t))
+}
+
+// A merge of an entry still in the plan fills in a missing named path.
+func TestMergeFillsInNamedPath(t *testing.T) {
+	m := newMergeTest(t)
+	m.mustSync(t, "a")
+	m.rewrite(t, func(es []mergeEntry) []mergeEntry {
+		es[0].Named = ""
+		return es
+	})
+	m.mustSync(t, "a")
+	if e := m.recorded(t); len(e) != 1 || e[0].Named != m.settings {
+		t.Errorf("record = %+v, want named %s", e, m.settings)
 	}
 }
 
@@ -482,7 +679,7 @@ func TestMergeRecordPathIgnoresCase(t *testing.T) {
 	if err := os.WriteFile(m.record, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if got := (mergeRecord{Entries: entries}).owned("market", m.settings); len(got) != 1 {
+	if got := (mergeRecord{Entries: entries}).entry("market", m.settings).Keys; len(got) != 1 {
 		t.Errorf("owned = %v, want the upper-cased entry matched", got)
 	}
 	// The same installer just merged into it, so a sweep leaves it alone.
