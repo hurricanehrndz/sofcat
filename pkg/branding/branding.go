@@ -46,9 +46,11 @@ type Branding struct {
 	LogoMime   string `json:"logoMime"`
 	LogoBase64 string `json:"logoBase64"`
 	// Background is the banner's background image. When set, the UI draws it
-	// over the accent colour.
+	// over the accent colour, with the banner text in BackgroundText: "light"
+	// or "dark", or "" for the UI's default, light.
 	BackgroundMime   string `json:"backgroundMime"`
 	BackgroundBase64 string `json:"backgroundBase64"`
+	BackgroundText   string `json:"backgroundText"`
 	// ListHeading replaces the UI's "Available software" heading when set.
 	ListHeading string `json:"listHeading"`
 	// Sections is the storefront tab order; sections it omits follow it.
@@ -82,6 +84,13 @@ func resolve(in config.Branding) Branding {
 	}
 	if path := strings.TrimSpace(in.BackgroundImage); path != "" {
 		out.BackgroundMime, out.BackgroundBase64 = image("background_image", path, MaxBackgroundBytes)
+	}
+	switch text := strings.ToLower(strings.TrimSpace(in.BackgroundText)); text {
+	case "light", "dark":
+		out.BackgroundText = text
+	case "":
+	default:
+		slog.Debug("branding background_text dropped", "backgroundText", text)
 	}
 	return out
 }

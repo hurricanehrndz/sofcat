@@ -41,6 +41,7 @@ func TestGet(t *testing.T) {
 			Tagline:         "Need help? Call the service desk at ext. 1234.",
 			Logo:            `C:\ProgramData\SofCat\branding\logo.png`,
 			BackgroundImage: `C:\ProgramData\SofCat\branding\banner.jpg`,
+			BackgroundText:  "dark",
 			HelpURL:         "https://example.com/help",
 			HelpLabel:       "Get help",
 			Accent:          "#0b6e4f",

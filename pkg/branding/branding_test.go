@@ -178,3 +178,16 @@ func TestResolveBackgroundImage(t *testing.T) {
 		}
 	}
 }
+
+// The admin picks the banner text colour for their picture. Anything but
+// light or dark is dropped, so the UI falls back to its default instead of
+// putting an arbitrary string into the page.
+func TestResolveBackgroundText(t *testing.T) {
+	for in, want := range map[string]string{
+		"dark": "dark", " Light ": "light", "DARK": "dark", "": "", "#000000": "", "dark; x": "",
+	} {
+		if got := resolve(config.Branding{BackgroundText: in}).BackgroundText; got != want {
+			t.Errorf("background_text %q resolved to %q, want %q", in, got, want)
+		}
+	}
+}

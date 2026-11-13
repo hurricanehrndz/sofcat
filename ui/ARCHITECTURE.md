@@ -55,7 +55,7 @@ answer echoes the `id` with a `result` or an `error`:
 | --- | --- | --- |
 | `getServiceInfo` | none | `{version, protocolVersion: "2.0", apiVersion: 1, capabilities: [methods], busy, uptimeSeconds}` |
 | `listOptionalInstalls` | none | `{items: [OptionalInstallItem]}` (shape below) |
-| `getBranding` | none | `Branding`: `{title, tagline, helpUrl, helpLabel, accent, logoMime, logoBase64, backgroundMime, backgroundBase64, listHeading, sections?}` |
+| `getBranding` | none | `Branding`: `{title, tagline, helpUrl, helpLabel, accent, logoMime, logoBase64, backgroundMime, backgroundBase64, backgroundText, listHeading, sections?}` |
 | `installItem` | `{itemName}` | `AcceptedOperation` |
 | `removeItem` | `{itemName}` | `AcceptedOperation` |
 | `cancelOperation` | `{operationId}` | `{canceled: true}` |
@@ -403,7 +403,7 @@ every run, so a policy change applies from the next run without a restart:
    `HKLM\SOFTWARE\Policies\SofCat\branding` on Windows, or the `branding` dict of
    `/Library/Managed Preferences/<IDENTIFIER>.plist` on macOS. The names are the
    `config.yaml` keys (`title`, `tagline`, `logo`, `help_url`, `help_label`,
-   `accent`, `background_image`, `list_heading`, `sections`; `sections` is a
+   `accent`, `background_image`, `background_text`, `list_heading`, `sections`; `sections` is a
    REG_MULTI_SZ).
 2. The `branding:` block in `config.yaml`.
 3. Nothing, and the UI keeps its default look.
@@ -415,7 +415,7 @@ runes). The help
 URL must be absolute http or https. The accent must match `#rrggbb`. The logo is
 read from its local path on every call, capped at 512 KiB, and kept only if its
 bytes sniff as PNG, JPEG or SVG. The background image is read the same way,
-capped at 1 MiB. A dropped field is logged at debug level and
+capped at 1 MiB, and `background_text` must be `light` or `dark`. A dropped field is logged at debug level and
 never fails the call.
 
 `GetBranding` skips the service command queue, because the UI calls it once
@@ -428,8 +428,9 @@ accent; the window is not frameless. The frontend then applies the cached payloa
 `sofcat.branding.v1`, fetches a fresh one and reapplies it. The banner shows
 when a title, tagline, logo, background image or help URL is set. The logo is an
 `<img>` from a `data:` URL, so an SVG cannot run script. The background image is
-a CSS background from a `data:` URL, drawn over the accent under a dark tint,
-and takes the accent's place in the banner only. The help button opens its URL in the
+a CSS background from a `data:` URL, drawn over the accent, and takes the
+accent's place in the banner only. The banner text over it is white, or
+near-black when `backgroundText` is `dark`. The help button opens its URL in the
 system browser through the Wails Browser API after the frontend checks the
 scheme again. The UI never reads `config.yaml` or the registry itself.
 

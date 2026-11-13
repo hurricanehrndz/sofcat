@@ -125,9 +125,12 @@ type Branding struct {
 	// BackgroundImage is a local image the banner shows in place of the accent
 	// colour.
 	BackgroundImage string `yaml:"background_image,omitempty"`
-	HelpURL         string `yaml:"help_url,omitempty"`
-	HelpLabel       string `yaml:"help_label,omitempty"`
-	Accent          string `yaml:"accent,omitempty"`
+	// BackgroundText is the banner text colour over BackgroundImage: light
+	// (the default) or dark.
+	BackgroundText string `yaml:"background_text,omitempty"`
+	HelpURL        string `yaml:"help_url,omitempty"`
+	HelpLabel      string `yaml:"help_label,omitempty"`
+	Accent         string `yaml:"accent,omitempty"`
 	// ListHeading replaces the UI's "Available software" heading.
 	ListHeading string `yaml:"list_heading,omitempty"`
 	// Sections orders the storefront tabs built from catalog item sections.

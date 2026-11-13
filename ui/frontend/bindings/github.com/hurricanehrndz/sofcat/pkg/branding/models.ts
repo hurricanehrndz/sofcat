@@ -19,10 +19,12 @@ export class Branding {
 
     /**
      * Background is the banner's background image. When set, the UI draws it
-     * over the accent colour.
+     * over the accent colour, with the banner text in BackgroundText: "light"
+     * or "dark", or "" for the UI's default, light.
      */
     "backgroundMime": string;
     "backgroundBase64": string;
+    "backgroundText": string;
 
     /**
      * ListHeading replaces the UI's "Available software" heading when set.
@@ -63,6 +65,9 @@ export class Branding {
         if (!("backgroundBase64" in $$source)) {
             this["backgroundBase64"] = "";
         }
+        if (!("backgroundText" in $$source)) {
+            this["backgroundText"] = "";
+        }
         if (!("listHeading" in $$source)) {
             this["listHeading"] = "";
         }
@@ -74,10 +79,10 @@ export class Branding {
      * Creates a new Branding instance from a string or object.
      */
     static createFrom($$source: any = {}): Branding {
-        const $$createField10_0 = $$createType0;
+        const $$createField11_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("sections" in $$parsedSource) {
-            $$parsedSource["sections"] = $$createField10_0($$parsedSource["sections"]);
+            $$parsedSource["sections"] = $$createField11_0($$parsedSource["sections"]);
         }
         return new Branding($$parsedSource as Partial<Branding>);
     }

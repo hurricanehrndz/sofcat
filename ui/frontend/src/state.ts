@@ -757,6 +757,7 @@ export function brandingView(payload: unknown): BrandingView {
     tagline,
     logoSrc,
     backgroundSrc,
+    backgroundText: text(raw, "backgroundText") === "dark" ? "dark" : "light",
     helpUrl,
     helpLabel: helpUrl ? text(raw, "helpLabel") || DEFAULT_HELP_LABEL : "",
     accent,

@@ -328,6 +328,7 @@ export const STORES: Record<StoreName, MockStore> = {
       logoBase64: btoa(APPS_LOGO),
       backgroundMime: "",
       backgroundBase64: "",
+      backgroundText: "",
       listHeading: "Apps for Acme",
       sections: ["Productivity", "Developer tools", "Utilities"],
     },
@@ -344,6 +345,7 @@ export const STORES: Record<StoreName, MockStore> = {
       logoBase64: btoa(SKILLS_LOGO),
       backgroundMime: "",
       backgroundBase64: "",
+      backgroundText: "",
       listHeading: "Skills for Acme teams",
       sections: ["Skills", "Plugins"],
     },
@@ -360,6 +362,7 @@ export const UNBRANDED: Branding = {
   logoBase64: "",
   backgroundMime: "",
   backgroundBase64: "",
+  backgroundText: "",
   listHeading: "",
   sections: [],
 };

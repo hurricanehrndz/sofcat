@@ -904,4 +904,8 @@ test("brandingView keeps a background image beside the accent, and it alone show
   assert.equal(both.accent, "#d32323");
   assert.equal(brandingView(image).showBanner, true);
   assert.equal(brandingView(image).accent, "");
+  // The admin picks the text colour for their picture; anything else is light.
+  assert.equal(brandingView(image).backgroundText, "light");
+  assert.equal(brandingView({ ...image, backgroundText: "dark" }).backgroundText, "dark");
+  assert.equal(brandingView({ ...image, backgroundText: "red; x" }).backgroundText, "light");
 });

@@ -49,6 +49,7 @@ func managedFields(c *Configuration) map[string]any {
 		"branding.tagline":          &c.Branding.Tagline,
 		"branding.logo":             &c.Branding.Logo,
 		"branding.background_image": &c.Branding.BackgroundImage,
+		"branding.background_text":  &c.Branding.BackgroundText,
 		"branding.help_url":         &c.Branding.HelpURL,
 		"branding.help_label":       &c.Branding.HelpLabel,
 		"branding.accent":           &c.Branding.Accent,
