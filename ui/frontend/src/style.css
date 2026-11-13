@@ -239,6 +239,32 @@ button:disabled {
   outline-color: var(--on-brand, var(--on-accent));
 }
 
+/*
+ * A background image (data-image, from branding background_image) takes the
+ * accent's place, cropped to fill. The scrim and white text keep the title
+ * readable on any picture; the accent stays underneath for a transparent one.
+ */
+#banner[data-image] {
+  min-height: 7.5rem;
+  background:
+    linear-gradient(rgb(0 0 0 / 45%), rgb(0 0 0 / 45%)),
+    var(--banner-image) center / cover no-repeat var(--brand, var(--accent));
+  color: #fff;
+}
+
+#banner[data-image] .banner-tagline {
+  color: rgb(255 255 255 / 85%);
+}
+
+#banner[data-image] .banner-help {
+  background: #fff;
+  color: #1b1b1f;
+}
+
+#banner[data-image] :focus-visible {
+  outline-color: #fff;
+}
+
 .app-bar {
   display: flex;
   flex-wrap: wrap;

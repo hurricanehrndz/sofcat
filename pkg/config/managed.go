@@ -45,14 +45,15 @@ func managedFields(c *Configuration) map[string]any {
 		"tls_client_cert_store":       &c.TLSClientCertStore,
 		"tls_client_cert_store_field": &c.TLSClientCertStoreField,
 
-		"branding.title":        &c.Branding.Title,
-		"branding.tagline":      &c.Branding.Tagline,
-		"branding.logo":         &c.Branding.Logo,
-		"branding.help_url":     &c.Branding.HelpURL,
-		"branding.help_label":   &c.Branding.HelpLabel,
-		"branding.accent":       &c.Branding.Accent,
-		"branding.list_heading": &c.Branding.ListHeading,
-		"branding.sections":     &c.Branding.Sections,
+		"branding.title":            &c.Branding.Title,
+		"branding.tagline":          &c.Branding.Tagline,
+		"branding.logo":             &c.Branding.Logo,
+		"branding.background_image": &c.Branding.BackgroundImage,
+		"branding.help_url":         &c.Branding.HelpURL,
+		"branding.help_label":       &c.Branding.HelpLabel,
+		"branding.accent":           &c.Branding.Accent,
+		"branding.list_heading":     &c.Branding.ListHeading,
+		"branding.sections":         &c.Branding.Sections,
 	}
 }
 
