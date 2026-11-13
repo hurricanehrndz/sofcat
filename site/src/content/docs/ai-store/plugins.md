@@ -116,8 +116,8 @@ sets one to `false` keeps it off. It takes back only the keys it added, when
 the plugin leaves the marketplace, and adds one again if `claude plugin
 uninstall` deleted it while the plugin is still placed. Unlike the drop-in,
 which lists only the managed plugins, this lists every plugin placed, optional
-ones included. The user roots must include `${HOME}/.claude` and
-`${USERPROFILE}\.claude`
+ones included. The user roots must include `${HOME}/.claude/settings.json`
+and `${USERPROFILE}\.claude\settings.json`, or the directories holding them
 ([Write roots](/zip-items/placements/#write-roots)). See [Merging into a
 user's file](/zip-items/placement-files/#merging-into-a-users-file).
 

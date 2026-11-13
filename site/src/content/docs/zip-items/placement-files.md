@@ -126,8 +126,9 @@ plan, and the helper writes the file in that user's profile at logon and
 whenever the plan changes. The placement's trees stay machine scope, written
 by the service. The path must use the user's home, `${HOME}` on macOS or
 `${USERPROFILE}` on Windows, and sit under a user write root
-([Write roots](/zip-items/placements/#write-roots)). A merge entry must be
-user scope on every OS it has a path for.
+([Write roots](/zip-items/placements/#write-roots)). Make the file itself the
+root, such as `${HOME}/.claude/settings.json`, so nothing beside it is
+writable. A merge entry must be user scope on every OS it has a path for.
 
 What `add_if_absent` does, per user and file:
 
