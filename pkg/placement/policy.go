@@ -12,8 +12,8 @@ import (
 
 // WithPolicy returns r plus the write roots managed policy adds on goos (see
 // pkg/placement/policy), dropping each entry that is not a valid root for its
-// scope with a warning, and logs the roots it adds. Policy only adds roots;
-// Guard.Check's refusals apply to them as to the compiled ones.
+// scope with a warning. Policy only adds roots; Guard.Check's refusals apply
+// to them as to the compiled ones.
 func (r Roots) WithPolicy(goos string, machine, user []string) Roots {
 	keep := func(scope string, entries []string) []string {
 		var kept []string
@@ -34,11 +34,6 @@ func (r Roots) WithPolicy(goos string, machine, user []string) Roots {
 	case Windows:
 		r.Windows = slices.Concat(r.Windows, machine)
 		r.WindowsUser = slices.Concat(r.WindowsUser, user)
-	default:
-		return r
-	}
-	if len(machine) > 0 || len(user) > 0 {
-		slog.Info("write roots from managed policy", "machine", machine, "user", user)
 	}
 	return r
 }

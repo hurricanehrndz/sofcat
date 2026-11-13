@@ -10,7 +10,7 @@ The agent reads one file, `config.yaml`:
 | Windows | `C:\ProgramData\SofCat\config.yaml` |
 | macOS | `/Library/Application Support/SofCat/config.yaml` (root-owned, `0600`) |
 
-A config change takes effect when the service restarts. The minimum is the
+A change to this file takes effect when the service restarts. The minimum is the
 repository URL, the machine's manifest and the catalogs to search:
 
 ```yaml
@@ -29,7 +29,13 @@ Most `config.yaml` keys can also come from managed policy. A managed value
 wins over the same key in `config.yaml`; keys the policy leaves out, or sets
 to an empty string or empty list, keep the file's value. A list replaces the
 file's list whole. When policy supplies `url` and `manifest`, `config.yaml`
-is optional. Like the file, policy is read when the service starts.
+is optional.
+
+The service reads policy at the start of every run, so a policy change needs
+no restart. It applies from the next run, and a run under way finishes with
+the settings it started with. A key you remove from the policy goes back to
+the file's value. A new `service_interval` applies after the next scheduled
+run.
 
 | Platform | Where | Types |
 | --- | --- | --- |

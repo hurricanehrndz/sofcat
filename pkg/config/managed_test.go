@@ -152,3 +152,65 @@ func collect() (*[]string, func(string)) {
 	var got []string
 	return &got, func(w string) { got = append(got, w) }
 }
+
+// A profile or GPO that arrives, changes or goes away while the service runs
+// must apply at its next run without a restart: Refresh reads policy again
+// over the config.yaml Get parsed, so a dropped setting falls back to the
+// file's value rather than keeping the policy's last one.
+func TestRefreshRereadsManagedSettings(t *testing.T) {
+	origRead := readManagedSettings
+	defer func() { readManagedSettings = origRead }()
+	managed := map[string]any{}
+	readManagedSettings = func(func(string)) map[string]any { return managed }
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+	origExit := osExit
+	defer func() { osExit = origExit }()
+	osExit = func(code int) { t.Fatalf("unexpected exit %d", code) }
+	resetServiceFlags()
+	defer func() { fileConfig = nil }()
+
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(configPath, []byte("url: https://file.example/\nmanifest: file_manifest\ncatalogs: [file]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	os.Args = []string{"sofcat.exe", "--config", configPath}
+	start := Get()
+	if start.URL != "https://file.example/" || start.ServiceInterval != "1h" {
+		t.Fatalf("start: %+v", start)
+	}
+
+	// Policy written after the start, including keys that must match the
+	// installed build and so are never managed.
+	managed = map[string]any{
+		"url": "https://mdm.example/", "catalogs": []any{"mdm"}, "service_interval": "15m", "tls_auth": true,
+		"app_data_path": "/elsewhere", "service_name": "other", "service_pipe_name": "other", "auth_pass": "leaked",
+	}
+	got := Refresh(start)
+	if got.URL != "https://mdm.example/" || got.URLPackages != "https://mdm.example/" || got.Manifest != "file_manifest" ||
+		!reflect.DeepEqual(got.Catalogs, []string{"mdm"}) || got.ServiceInterval != "15m" || !got.TLSAuth {
+		t.Fatalf("policy written after the start did not apply: %+v", got)
+	}
+	if got.AppDataPath != start.AppDataPath || got.CachePath != start.CachePath || got.ServiceName != start.ServiceName ||
+		got.ServicePipeName != start.ServicePipeName || got.ConfigPath != configPath {
+		t.Fatalf("a refresh changed what is fixed at process start: %+v", got)
+	}
+	if len(got.ManagedWarnings) != 1 {
+		t.Fatalf("want only the auth_pass warning, got %q", got.ManagedWarnings)
+	}
+
+	// Policy removed: every key is config.yaml's again.
+	managed = nil
+	if back := Refresh(got); !reflect.DeepEqual(back, start) {
+		t.Fatalf("policy removed:\ngot  %+v\nwant %+v", back, start)
+	}
+}
+
+// The service's tests and other callers build a Configuration by hand; a
+// refresh must not replace it with defaults.
+func TestRefreshWithoutGetKeepsConfiguration(t *testing.T) {
+	cfg := Configuration{URL: "https://hand.example/"}
+	if got := Refresh(cfg); !reflect.DeepEqual(got, cfg) {
+		t.Fatalf("got %+v", got)
+	}
+}

@@ -199,7 +199,7 @@ func Get() Configuration {
 	var cfg Configuration
 
 	// Parse any arguments that may have been passed
-	configPath, verbose, debug, checkonly := parseArguments()
+	configPath, _, _, _ := parseArguments()
 
 	serviceControlMode := serviceInstallArg || serviceRemoveArg || serviceStartArg || serviceStopArg || serviceStatusArg
 	serviceClientMode := serviceCmdArg != ""
@@ -213,7 +213,8 @@ func Get() Configuration {
 	// Read the config file. The installer runs -serviceinstall, and the
 	// service starts, before management tooling has written config.yaml, so
 	// the service-control flags and service mode run with defaults until
-	// the file exists; every managed run fails until then, and a service
+	// the file exists; every managed run fails until then, unless managed
+	// settings supply the url and manifest, and a service
 	// restart picks the file up.
 	configFile, err := os.ReadFile(configPath)
 	if err != nil && (!serviceArg && !serviceControlMode && len(managed) == 0 || !errors.Is(err, fs.ErrNotExist)) {
@@ -227,7 +228,9 @@ func Get() Configuration {
 		fmt.Println("Unable to parse yaml configuration: ", err)
 		osExit(1)
 	}
-	applyManaged(&cfg, managed, warn)
+	file := cfg
+	fileConfig = &file
+	cfg = resolve(cfg, managed, warn)
 	cfg.ManagedWarnings = warnings
 	// The service logs them once its log exists; anything else has a console.
 	if !serviceArg {
@@ -250,6 +253,36 @@ func Get() Configuration {
 		}
 	}
 
+	return cfg
+}
+
+// fileConfig is config.yaml as Get parsed it, before managed settings, for
+// Refresh to apply them to afresh.
+var fileConfig *Configuration
+
+// Refresh returns the configuration under the managed settings as they are
+// now. The service calls it at the start of every run, so a profile or GPO
+// that arrives after it started needs no restart, and a setting the policy
+// drops goes back to config.yaml's value. config.yaml and the command line
+// are still read once, by Get; app_data_path, service_name and
+// service_pipe_name are not managed settings, so they never change. A cfg
+// that Get did not build is returned as it is.
+func Refresh(cfg Configuration) Configuration {
+	if fileConfig == nil {
+		return cfg
+	}
+	var warnings []string
+	warn := func(msg string) { warnings = append(warnings, msg) }
+	next := resolve(*fileConfig, readManagedSettings(warn), warn)
+	next.ManagedWarnings = warnings
+	return next
+}
+
+// resolve returns cfg, config.yaml as parsed, under the managed settings,
+// the command line and the defaults.
+func resolve(cfg Configuration, managed map[string]any, warn func(string)) Configuration {
+	applyManaged(&cfg, managed, warn)
+
 	// If URLPackages wasn't provided, use the repo URL when available.
 	if cfg.URLPackages == "" && cfg.URL != "" {
 		cfg.URLPackages = cfg.URL
@@ -263,20 +296,20 @@ func Get() Configuration {
 	}
 
 	// Set the verbosity
-	if verbose && !cfg.Verbose {
+	if verboseArg && !cfg.Verbose {
 		cfg.Verbose = true
 	}
 
 	// Set the debug and verbose
-	if debug && !cfg.Debug {
+	if debugArg && !cfg.Debug {
 		cfg.Debug = true
 		cfg.Verbose = true
 	}
 
-	if checkonly && !cfg.CheckOnly {
+	if checkOnlyArg && !cfg.CheckOnly {
 		cfg.CheckOnly = true
 	}
-	cfg.ConfigPath = configPath
+	cfg.ConfigPath = configArg
 	cfg.ServiceMode = serviceArg
 	cfg.ServiceCommand = serviceCmdArg
 	cfg.ServiceInstall = serviceInstallArg

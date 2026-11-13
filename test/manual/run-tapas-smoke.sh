@@ -667,11 +667,19 @@ assert_succeeded RemoveItem:tapas-outside-skill
 wait_pruned
 pass "Failed/placement_refused; $OUTSIDE_ROOT not created"
 
-# restart_daemon restarts the daemon, which reads the policy once at startup.
-restart_daemon() {
-	launchctl kickstart -k "system/$LABEL" >/dev/null || fail "could not restart system/$LABEL"
-	wait_for "system/$LABEL to be running" running
-	wait_for "the daemon to answer on $SOCKET" answers
+# daemon_pid is the daemon's pid, to show the policy steps never restart it.
+daemon_pid() { launchctl print "system/$LABEL" 2>/dev/null | awk -F' = ' '/^\tpid = / {print $2; exit}'; }
+
+# write_policy writes the managed preferences file: binary, as MDM writes
+# them, with the user root's ${HOME} unexpanded, as an administrator would
+# write it. The daemon reads it at the start of its next run.
+write_policy() {
+	mkdir -p "$(dirname "$POLICY_PLIST")"
+	rm -f "$POLICY_PLIST"
+	plutil -create binary1 "$POLICY_PLIST" &&
+		plutil -insert WriteRoots -json "{\"Machine\":[\"$OUTSIDE_ROOT\"],\"User\":[\"\${HOME}/.tapas-policy\"]}" "$POLICY_PLIST" &&
+		plutil -convert binary1 "$POLICY_PLIST" || fail "could not write $POLICY_PLIST"
+	chown root:wheel "$POLICY_PLIST" && chmod 644 "$POLICY_PLIST"
 }
 
 # The user-scope placement outside the brand's user root, in the console
@@ -693,18 +701,12 @@ rerun_helper() {
 	wait_for "$AGENT_TARGET to finish" agent_idle
 }
 
-step "A write root from managed policy admits it after a restart"
+step "A write root from managed policy admits it at the next run, without a restart"
 [ ! -e "$POLICY_PLIST" ] || fail "$POLICY_PLIST exists before the smoke wrote it (not a clean Mac?)"
 # The helper has run (it placed tapas-user-plugin) and refused this one.
 [ ! -e "$POLICY_USER_ROOT" ] || fail "$POLICY_USER_ROOT exists without the policy"
-mkdir -p "$(dirname "$POLICY_PLIST")"
-# Binary, as MDM writes managed preferences. The user root keeps ${HOME}
-# unexpanded, as an administrator would write it.
-plutil -create binary1 "$POLICY_PLIST" &&
-	plutil -insert WriteRoots -json "{\"Machine\":[\"$OUTSIDE_ROOT\"],\"User\":[\"\${HOME}/.tapas-policy\"]}" "$POLICY_PLIST" &&
-	plutil -convert binary1 "$POLICY_PLIST" || fail "could not write $POLICY_PLIST"
-chown root:wheel "$POLICY_PLIST" && chmod 644 "$POLICY_PLIST"
-restart_daemon
+DAEMON_PID=$(daemon_pid)
+write_policy
 assert_succeeded InstallItem:tapas-outside-skill
 assert_placed "$OUTSIDE_ROOT/skills" outside-skills tapas-outside-skill
 assert_succeeded RemoveItem:tapas-outside-skill
@@ -720,16 +722,32 @@ pass "$POLICY_USER_TREE placed by $CONSOLE_USER's helper"
 
 step "A policy file others can write is ignored"
 chmod 666 "$POLICY_PLIST"
-restart_daemon
 assert_failed_with InstallItem:tapas-outside-skill placement_refused "outside the write roots"
 assert_succeeded RemoveItem:tapas-outside-skill
 wait_pruned
 rerun_helper
 [ ! -e "$POLICY_USER_ROOT" ] || fail "the helper placed under $POLICY_USER_ROOT with $POLICY_PLIST at mode 666"
+pass "service and helper refuse with $POLICY_PLIST at mode 666"
+
+step "Removing the policy takes the root away at the next run and leaves what is placed"
+chmod 644 "$POLICY_PLIST"
+assert_succeeded InstallItem:tapas-outside-skill
+assert_placed "$OUTSIDE_ROOT/skills" outside-skills tapas-outside-skill
 rm -f "$POLICY_PLIST"
+invoke_run
+assert_placed "$OUTSIDE_ROOT/skills" outside-skills tapas-outside-skill
+# With the root back the service may remove it; without, it places nothing.
+write_policy
+assert_succeeded RemoveItem:tapas-outside-skill
+wait_removed "$OUTSIDE_ROOT/skills" outside-skills tapas-outside-skill
+wait_pruned
+rm -f "$POLICY_PLIST"
+assert_failed_with InstallItem:tapas-outside-skill placement_refused "outside the write roots"
+assert_succeeded RemoveItem:tapas-outside-skill
+wait_pruned
 rm -rf "$OUTSIDE_ROOT"
-restart_daemon
-pass "service and helper refuse with $POLICY_PLIST at mode 666; file removed"
+[ "$(daemon_pid)" = "$DAEMON_PID" ] || fail "the daemon restarted during the policy steps (pid $DAEMON_PID, now $(daemon_pid))"
+pass "tree kept without the root, removed with it back, refused once it is gone; daemon pid $DAEMON_PID throughout"
 
 # --- Scope exit -------------------------------------------------------------------
 

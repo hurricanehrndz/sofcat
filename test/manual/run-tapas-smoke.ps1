@@ -743,16 +743,21 @@ function Invoke-Helper {
     Wait-For { -not (Get-Process -Name "$Slug-useragent" -ErrorAction SilentlyContinue) } "the helper to exit"
 }
 
-Write-Step "A write root from managed policy admits it after a restart"
-# The service reads the policy once, when it starts. The values keep
-# ${ProgramData} and ${USERPROFILE} unexpanded, as an administrator would
-# write them.
+# Set-Policy writes the WriteRoots policy key. The values keep ${ProgramData}
+# and ${USERPROFILE} unexpanded, as an administrator would write them. The
+# service reads the key at the start of its next run.
+function Set-Policy {
+    New-Item -Path $PolicyKey -Force | Out-Null
+    New-ItemProperty -Path $PolicyKey -Name Machine -PropertyType MultiString -Value @('${ProgramData}\tapas-test-outside') | Out-Null
+    New-ItemProperty -Path $PolicyKey -Name User -PropertyType MultiString -Value @('${USERPROFILE}\.tapas-policy') | Out-Null
+}
+# The service's process id, to show the policy steps never restart it.
+function Get-ServicePid { (Get-CimInstance Win32_Service -Filter "Name='$Slug'").ProcessId }
+
+Write-Step "A write root from managed policy admits it at the next run, without a restart"
 if (Test-Path $PolicyKey) { Fail "$PolicyKey exists before the smoke wrote it (not a clean VM?)" }
-New-Item -Path $PolicyKey -Force | Out-Null
-New-ItemProperty -Path $PolicyKey -Name Machine -PropertyType MultiString -Value @('${ProgramData}\tapas-test-outside') | Out-Null
-New-ItemProperty -Path $PolicyKey -Name User -PropertyType MultiString -Value @('${USERPROFILE}\.tapas-policy') | Out-Null
-Restart-Service $Slug
-Wait-For { (Invoke-SofCat "GetServiceInfo" -AllowFail).Code -eq 0 } "the service to answer after the restart"
+$servicePid = Get-ServicePid
+Set-Policy
 Assert-Succeeded "InstallItem:tapas-outside-skill"
 Assert-Placed $outsideRoot "outside-skills" "tapas-outside-skill" | Out-Null
 Assert-Succeeded "RemoveItem:tapas-outside-skill"
@@ -766,17 +771,26 @@ if (-not (Test-Path (Join-Path $policyUserTree "SKILL.md"))) { Fail "$policyUser
 if (-not (Test-Path $policyUserReceipt)) { Fail "receipt $policyUserReceipt is missing" }
 Pass "$policyUserTree placed by the helper"
 
-Write-Step "Without the policy both are refused again"
+Write-Step "Removing the policy takes the root away at the next run and leaves what is placed"
+Assert-Succeeded "InstallItem:tapas-outside-skill"
+Assert-Placed $outsideRoot "outside-skills" "tapas-outside-skill" | Out-Null
 Remove-Item -Path $PolicyKey -Force
-Restart-Service $Slug
-Wait-For { (Invoke-SofCat "GetServiceInfo" -AllowFail).Code -eq 0 } "the service to answer after the restart"
+Invoke-Run
+Assert-Placed $outsideRoot "outside-skills" "tapas-outside-skill" | Out-Null
+# With the root back the service may remove it; without, it places nothing.
+Set-Policy
+Assert-Succeeded "RemoveItem:tapas-outside-skill"
+Wait-Removed $outsideRoot "outside-skills" "tapas-outside-skill"
+Wait-Pruned
+Remove-Item -Path $PolicyKey -Force
 Assert-FailedWith "InstallItem:tapas-outside-skill" "placement_refused" "outside the write roots" | Out-Null
 Assert-Succeeded "RemoveItem:tapas-outside-skill"
 Wait-Pruned
 Invoke-Helper
 if (Test-Path $policyUserRoot) { Fail "the helper placed under $policyUserRoot without the policy" }
 Remove-Item -LiteralPath $OutsideRoot -Recurse -Force -ErrorAction SilentlyContinue
-Pass "service and helper refuse once $PolicyKey is gone"
+if ((Get-ServicePid) -ne $servicePid) { Fail "the service restarted during the policy steps (pid $servicePid, now $(Get-ServicePid))" }
+Pass "tree kept without the root, removed with it back, refused once $PolicyKey is gone; service pid $servicePid throughout"
 
 # --- Scope exit -------------------------------------------------------------------
 

@@ -6,6 +6,7 @@ package policy
 
 import (
 	"log/slog"
+	"reflect"
 	"sync"
 
 	"github.com/micromdm/plist"
@@ -13,17 +14,51 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/placement"
 )
 
-// effective is read once per process: a policy change applies when the
-// service or the per-user helper next starts.
-var effective = sync.OnceValue(func() placement.Roots {
-	machine, user := readPolicyRoots()
-	return placement.Compiled().WithPolicy(placement.HostOS(), machine, user)
-})
+// current is the process's snapshot of the effective roots: read at first
+// use, and again only by Refresh. The service refreshes it at the start of
+// every run; the per-user helper, one process per sync, never does.
+var (
+	mu      sync.Mutex
+	current *placement.Roots
+	// readRoots is a variable so tests can supply policy on any host.
+	readRoots = readPolicyRoots
+)
 
 // EffectiveRoots returns the compiled roots plus the valid write roots of
-// managed policy for this OS. Missing, unreadable or malformed policy adds
-// none.
-func EffectiveRoots() placement.Roots { return effective() }
+// managed policy for this OS, as last read. Missing, unreadable or malformed
+// policy adds none.
+func EffectiveRoots() placement.Roots {
+	mu.Lock()
+	defer mu.Unlock()
+	if current == nil {
+		read()
+	}
+	return *current
+}
+
+// Refresh reads the policy again and returns the roots, which EffectiveRoots
+// then returns until the next Refresh. A root the policy no longer has is
+// gone from them: placements under it are refused from then on, and what was
+// placed there stays.
+func Refresh() placement.Roots {
+	mu.Lock()
+	defer mu.Unlock()
+	read()
+	return *current
+}
+
+// read replaces the snapshot, with mu held, and logs the host's roots at the
+// first read and whenever they differ from the last one's.
+func read() {
+	machine, user := readRoots()
+	next := placement.Compiled().WithPolicy(placement.HostOS(), machine, user)
+	if current == nil || !reflect.DeepEqual(*current, next) {
+		slog.Info("effective write roots",
+			"machine", next.For(placement.HostOS(), placement.ScopeMachine),
+			"user", next.For(placement.HostOS(), placement.ScopeUser))
+	}
+	current = &next
+}
 
 // parsePlist reads the WriteRoots dict of a managed preferences plist, binary
 // or XML: its Machine and User arrays of strings. A plist without the dict has

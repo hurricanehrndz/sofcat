@@ -110,8 +110,8 @@ reg add "HKLM\SOFTWARE\Policies\SofCat\branding" /v title /t REG_SZ /d "Acme Sof
 reg add "HKLM\SOFTWARE\Policies\SofCat\branding" /v accent /t REG_SZ /d "#0b6e4f" /f
 ```
 
-The service reads managed settings once, when it starts, so a policy change and a
-`config.yaml` change both need a service restart. A value that fails its check is
+The service reads managed settings at the start of every run, so a policy change
+shows after the next run. A `config.yaml` change needs a service restart. A value that fails its check is
 dropped (debug log only) and is not replaced by the config value. Check the
 result with `sofcat.exe -S GetBranding`, which prints the payload with the logo
 replaced by its size in bytes. The UI caches the last payload in
