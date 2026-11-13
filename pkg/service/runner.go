@@ -18,6 +18,7 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
 	"github.com/hurricanehrndz/sofcat/pkg/config"
 	"github.com/hurricanehrndz/sofcat/pkg/installer"
+	"github.com/hurricanehrndz/sofcat/pkg/placement/policy"
 	"github.com/hurricanehrndz/sofcat/pkg/report"
 	"github.com/hurricanehrndz/sofcat/pkg/sofcatlog"
 	"github.com/hurricanehrndz/sofcat/pkg/version"
@@ -68,7 +69,10 @@ type queuedResult struct {
 }
 
 type serviceRunner struct {
+	// cfg is the configuration as the last run's start read it (refresh);
+	// read it through config().
 	cfg          config.Configuration
+	cfgMu        sync.RWMutex
 	managedRun   func(config.Configuration, installer.ProgressFn, *installer.Cancels) (*report.Report, error)
 	queue        chan queuedCommand
 	handlerSem   chan struct{}
@@ -198,13 +202,24 @@ func (sr *serviceRunner) start(ctx context.Context) error {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 
-		sr.scheduledRun(ctx)
+		// A managed service_interval that the runs have read since the
+		// ticker was set applies after each scheduled run.
+		scheduledRun := func() {
+			sr.scheduledRun(ctx)
+			next, err := time.ParseDuration(sr.config().ServiceInterval)
+			if err == nil && next > 0 && next != interval {
+				slog.Info("service interval changed", "from", interval.String(), "to", next.String())
+				interval = next
+				ticker.Reset(interval)
+			}
+		}
+		scheduledRun()
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				sr.scheduledRun(ctx)
+				scheduledRun()
 			}
 		}
 	}()
@@ -236,7 +251,48 @@ func (sr *serviceRunner) executeCommandSafe(cmd Command) (resp CommandResponse, 
 	}()
 
 	cmd.cancels = sr.cancels
-	return executeCommand(sr.cfg, cmd, sr.managedRun)
+	if cmd.Action == actionRun {
+		sr.refresh()
+	}
+	return executeCommand(sr.config(), cmd, sr.managedRun)
+}
+
+// refreshConfig and refreshRoots read managed policy again; tests swap them.
+var (
+	refreshConfig = config.Refresh
+	refreshRoots  = policy.Refresh
+)
+
+// config returns the configuration as the last run's start read it.
+func (sr *serviceRunner) config() config.Configuration {
+	sr.cfgMu.RLock()
+	defer sr.cfgMu.RUnlock()
+	return sr.cfg
+}
+
+// refresh reads the managed settings and the write roots policy again at the
+// start of a run, so a profile or GPO that arrives, changes or goes away
+// while the service runs needs no restart. The run uses that snapshot
+// throughout, and so does every request until the next run. The pipe and the
+// data directory, already in use, are not managed settings and stay.
+func (sr *serviceRunner) refresh() {
+	prev := sr.config()
+	next := refreshConfig(prev)
+	// start logged the first ones; a warning that stays is not repeated.
+	if !slices.Equal(next.ManagedWarnings, prev.ManagedWarnings) {
+		for _, w := range next.ManagedWarnings {
+			slog.Warn(w)
+		}
+	}
+	if d, err := time.ParseDuration(next.ServiceInterval); err != nil || d <= 0 {
+		slog.Warn("invalid service interval; keeping the last one", "interval", next.ServiceInterval, "kept", prev.ServiceInterval)
+		next.ServiceInterval = prev.ServiceInterval
+	}
+	sr.cfgMu.Lock()
+	sr.cfg = next
+	sr.cfgMu.Unlock()
+	// Logs the roots at the first read and whenever they change.
+	refreshRoots()
 }
 
 // scheduledRun runs the managed run on the service's own schedule. No client
@@ -1026,7 +1082,7 @@ func (sr *serviceRunner) cancelOperation(operationID string, caller peer) error 
 	case !authorized(op.requestedByID, caller):
 		return fmt.Errorf("%w: %s", errNotAuthorized, op.requestedDisplayName)
 	}
-	err := withdrawItem(sr.cfg, sr.cancels, op.requestedItemName, op.prior, op.requested)
+	err := withdrawItem(sr.config(), sr.cancels, op.requestedItemName, op.prior, op.requested)
 	if errors.Is(err, errNotCancelable) {
 		return fmt.Errorf("%w: work on %s has already started", errNotCancelable, op.requestedDisplayName)
 	}

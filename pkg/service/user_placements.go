@@ -444,7 +444,7 @@ func (sr *serviceRunner) dispatchUserPlacements(conn clientConn, req rpcRequest,
 	}
 	who, _ := requester(conn, logger)
 	logUserPlacementResults(who, params.Results)
-	if err := recordUserPlacementStatus(sr.cfg.AppDataPath, who.ID, params.Results, time.Now().UTC()); err != nil {
+	if err := recordUserPlacementStatus(sr.config().AppDataPath, who.ID, params.Results, time.Now().UTC()); err != nil {
 		logger.Warn("unable to store user placement status", "err", err)
 	}
 	return reportUserPlacementsResponse{}, nil

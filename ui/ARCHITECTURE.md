@@ -396,8 +396,8 @@ refresh keeps the prior data and marks it stale.
 ## Branding
 
 Branding is admin configuration, not catalog data. The SYSTEM service resolves
-it field by field, first match wins. It reads managed settings once, at start,
-so a policy change needs a service restart:
+it field by field, first match wins. It reads managed settings at the start of
+every run, so a policy change applies from the next run without a restart:
 
 1. Managed settings, for MDM and GPO: values under
    `HKLM\SOFTWARE\Policies\SofCat\branding` on Windows, or the `branding` dict of

@@ -175,9 +175,12 @@ Policy entries follow the rules of `write-roots.yaml`: a machine root is an
 absolute path (on Windows it may use `${ProgramFiles}` and `${ProgramData}`),
 and a user root starts with `${USERPROFILE}` or `${HOME}` or is relative to
 the user's home. sofcat drops an entry that breaks them and logs a warning
-naming it; a policy it cannot read or parse adds no roots. The service and the
-per-user helper read the policy once when they start, and log the roots it
-adds, so restart the service after changing it.
+naming it; a policy it cannot read or parse adds no roots. The service reads the
+policy at the start of every run and the per-user helper each time it starts,
+so a change needs no restart. A root you add applies from the next run. A root
+you remove is gone from the next run too. sofcat then refuses placements under
+it and leaves what it placed there alone. The service logs the roots in effect
+when it starts and whenever they change.
 
 Writing either location takes an administrator or root. sofcat cannot tell a
 policy MDM or Group Policy delivered from one a local administrator wrote, and
