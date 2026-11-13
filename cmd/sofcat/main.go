@@ -80,14 +80,17 @@ func route(cfg config.Configuration) error {
 
 	if cfg.ServiceCommand != "" {
 		resp, err := sendServiceCommandFunc(cfg, cfg.ServiceCommand)
-		if err != nil {
-			return err
-		}
 		action := cfg.ServiceCommand
 		if i := strings.Index(action, ":"); i >= 0 {
 			action = action[:i]
 		}
 		action = strings.ToLower(strings.TrimSpace(action))
+		if action == "run" {
+			return printRun(resp, err)
+		}
+		if err != nil {
+			return err
+		}
 
 		if len(resp.Items) > 0 {
 			for _, item := range resp.Items {
@@ -131,6 +134,18 @@ func route(cfg config.Configuration) error {
 	// A check-only run prints the inventory JSON to stdout; keep it parseable.
 	if !cfg.CheckOnly {
 		printRunSummary(rep)
+	}
+	return err
+}
+
+// printRun prints `-S run`'s failed and deferred items, even when the run
+// failed, and returns the run's error.
+func printRun(resp service.CommandResponse, err error) error {
+	for _, item := range resp.Items {
+		fmt.Println(item)
+	}
+	if err == nil {
+		fmt.Println(resp.Message)
 	}
 	return err
 }

@@ -73,6 +73,7 @@ type serviceRunner struct {
 	queue        chan queuedCommand
 	handlerSem   chan struct{}
 	streamSem    chan struct{}
+	runSem       chan struct{}
 	wg           sync.WaitGroup
 	execMutex    sync.Mutex
 	startedAt    time.Time
@@ -107,6 +108,9 @@ const (
 	// maxConcurrentStreams is below maxConcurrentHandlers, so watchers can
 	// never take every slot from mutations.
 	maxConcurrentStreams = 16
+	// maxConcurrentRunWaiters caps the run requests waiting for their run, so
+	// they too leave the storefront its slots.
+	maxConcurrentRunWaiters = 4
 	// maxRequestBytes caps one request line; no request comes near it.
 	maxRequestBytes              = 64 << 10
 	trackedOperationsMaxCount    = 512
@@ -141,6 +145,7 @@ func newServiceRunner(cfg config.Configuration, managedRun func(config.Configura
 		queue:       make(chan queuedCommand),
 		handlerSem:  make(chan struct{}, maxConcurrentHandlers),
 		streamSem:   make(chan struct{}, maxConcurrentStreams),
+		runSem:      make(chan struct{}, maxConcurrentRunWaiters),
 		startedAt:   time.Now(),
 		activeConns: make(map[clientConn]struct{}),
 		operations:  make(map[string]*trackedOperation),
@@ -617,6 +622,9 @@ func (sr *serviceRunner) dispatch(ctx context.Context, conn clientConn, req rpcR
 		}
 		return nil, nil
 
+	case methodRun:
+		return sr.dispatchRun(ctx, conn, req, logger)
+
 	case methodListUserPlacements, methodReportUserPlacements:
 		return sr.dispatchUserPlacements(conn, req, logger)
 
@@ -664,6 +672,61 @@ func (sr *serviceRunner) dispatchMutation(ctx context.Context, conn clientConn, 
 		logger.Warn("failed to write response", "err", err)
 	}
 	sr.scheduleRunAfterMutation(ctx, action, itemName, requestedBy.Name, resp.OperationID)
+	return nil, nil
+}
+
+// dispatchRun runs a run request, an administrator's request for a managed
+// run. It writes an AcceptedOperation at once, queues the run behind any under
+// way, and writes a runResult notification when it has ended. A client that
+// hangs up meanwhile does not stop the run; the write then fails and is
+// logged.
+func (sr *serviceRunner) dispatchRun(ctx context.Context, conn clientConn, req rpcRequest, logger *slog.Logger) (any, *Error) {
+	requestedBy, caller := requester(conn, logger)
+	if !caller.Admin {
+		logger.Info("run request refused: not authorized", "requestedBy", requestedBy.Name, "requestedByID", requestedBy.ID)
+		return nil, newError(codeNotAuthorized, "only an administrator can start a managed run", "")
+	}
+	select {
+	case sr.runSem <- struct{}{}:
+		defer func() { <-sr.runSem }()
+	default:
+		return nil, newError(codeServerBusy, "too many run requests waiting; retry shortly", "")
+	}
+	logger.Info("run request accepted", "requestedBy", requestedBy.Name, "requestedByID", requestedBy.ID)
+	accepted := AcceptedOperation{Accepted: true, QueuedAtUTC: nowRFC3339UTC(), RequestedBy: requestedBy.Name}
+	if err := writeResult(conn, req.ID, accepted); err != nil {
+		logger.Warn("failed to write response", "err", err)
+		return nil, nil
+	}
+
+	resp, err := sr.submit(ctx, Command{Action: actionRun})
+	result := RunResult{Completed: err == nil, FailedItems: []string{}, DeferredItems: []string{}}
+	switch {
+	case errors.Is(err, context.Canceled):
+		result.ErrorCode = "canceled"
+	case err != nil:
+		// The run's error can name repository URLs and local paths, so the
+		// client is told to see the log, as for a mutation's run.
+		logger.Warn("requested managed run failed", "err", err)
+		result.ErrorCode = "managed_run_failed"
+	}
+	if resp.report != nil {
+		for _, failed := range resp.report.FailedItems {
+			result.FailedItems = append(result.FailedItems, failed.Name)
+		}
+		for _, deferred := range resp.report.DeferredItems {
+			result.DeferredItems = append(result.DeferredItems, deferred.Name)
+		}
+	}
+	logger.Info("requested managed run ended", "completed", result.Completed, "errorCode", result.ErrorCode,
+		"failedItems", result.FailedItems, "deferredItems", result.DeferredItems)
+	params, err := json.Marshal(result)
+	if err == nil {
+		err = writeMessage(conn, rpcNotification{JSONRPC: jsonrpcVersion, Method: notificationRunResult, Params: params})
+	}
+	if err != nil {
+		logger.Warn("failed to write run result", "err", err)
+	}
 	return nil, nil
 }
 

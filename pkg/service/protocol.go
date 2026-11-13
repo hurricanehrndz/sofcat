@@ -10,7 +10,8 @@ import (
 // The service speaks JSON-RPC 2.0 (https://www.jsonrpc.org/specification):
 // one newline-delimited JSON request per connection and one response, except
 // streamOperationStatus, which follows its response with operationStatus
-// notifications until the operation ends. ui/ARCHITECTURE.md
+// notifications until the operation ends, and run, which follows its response
+// with one runResult notification when the run has ended. ui/ARCHITECTURE.md
 // ("Protocol") is the contract.
 const (
 	jsonrpcVersion = "2.0"
@@ -25,6 +26,9 @@ const (
 	methodRemoveItem            = "removeItem"
 	methodCancelOperation       = "cancelOperation"
 	methodStreamOperationStatus = "streamOperationStatus"
+	// methodRun is an administrator's request for a managed run, not bound
+	// into the UI's Wails surface.
+	methodRun = "run"
 	// The per-user helper's methods (`<slug>-useragent.exe`), not
 	// bound into the UI's Wails surface.
 	methodListUserPlacements   = "listUserPlacements"
@@ -32,6 +36,8 @@ const (
 
 	// notificationOperationStatus carries one status record on a stream.
 	notificationOperationStatus = "operationStatus"
+	// notificationRunResult ends a run request with its RunResult.
+	notificationRunResult = "runResult"
 )
 
 // capabilities is every method the service answers, for getServiceInfo.
@@ -43,6 +49,7 @@ var capabilities = []string{
 	methodRemoveItem,
 	methodCancelOperation,
 	methodStreamOperationStatus,
+	methodRun,
 	methodListUserPlacements,
 	methodReportUserPlacements,
 }
@@ -194,6 +201,19 @@ type AcceptedOperation struct {
 
 type streamOperationStatusAckResponse struct {
 	StreamAccepted bool `json:"streamAccepted"`
+}
+
+// RunResult is the params of the runResult notification that ends a run
+// request. Completed is whether the managed run ended without a fatal error;
+// when it did not, ErrorCode says why (managed_run_failed, or canceled when
+// the service stopped first) and the service log has the error. FailedItems
+// and DeferredItems name the items the run's report lists as failed or
+// deferred.
+type RunResult struct {
+	Completed     bool     `json:"completed"`
+	ErrorCode     string   `json:"errorCode,omitempty"`
+	FailedItems   []string `json:"failedItems"`
+	DeferredItems []string `json:"deferredItems"`
 }
 
 type cancelOperationResponse struct {
