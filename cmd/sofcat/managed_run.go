@@ -15,6 +15,7 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/config"
 	"github.com/hurricanehrndz/sofcat/pkg/download"
 	"github.com/hurricanehrndz/sofcat/pkg/facts"
+	"github.com/hurricanehrndz/sofcat/pkg/filelock"
 	"github.com/hurricanehrndz/sofcat/pkg/installer"
 	"github.com/hurricanehrndz/sofcat/pkg/manifest"
 	"github.com/hurricanehrndz/sofcat/pkg/process"
@@ -52,8 +53,16 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 		return nil, fmt.Errorf("unable to create cache directory: %w", err)
 	}
 
+	// One managed run at a time across processes, held before the log opens
+	// and released after the inventory is written.
+	unlock, err := lockRun(cfg)
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
+
 	// Create a new logger object
-	if err := sofcatlog.NewLog(cfg); err != nil {
+	if err = sofcatlog.NewLog(cfg); err != nil {
 		return nil, fmt.Errorf("unable to initialize logger: %w", err)
 	}
 
@@ -272,6 +281,34 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 
 	slog.Info("Done!")
 	return run, nil
+}
+
+// runLockName is the lock file in the data directory that a managed run
+// holds, so a command-line run and the service's never overlap. It is never
+// deleted: removing a lock file races with the next run opening it.
+const runLockName = "run.lock"
+
+var errRunInProgress = errors.New("another managed run is in progress; try again when it finishes")
+
+// lockRun takes the managed-run lock. The service waits for it, as its own
+// queue waits; a command-line run fails at once with errRunInProgress.
+func lockRun(cfg config.Configuration) (func(), error) {
+	if err := os.MkdirAll(cfg.AppDataPath, 0o755); err != nil {
+		return nil, fmt.Errorf("unable to create data directory: %w", err)
+	}
+	path := filepath.Join(cfg.AppDataPath, runLockName)
+	unlock, err := filelock.TryLock(path)
+	if errors.Is(err, filelock.ErrLocked) {
+		if !cfg.ServiceMode {
+			return nil, errRunInProgress
+		}
+		slog.Info("waiting for another managed run to finish", "lock", path)
+		unlock, err = filelock.Lock(path)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("unable to lock %s: %w", path, err)
+	}
+	return unlock, nil
 }
 
 // userPlanSets returns the desired and held sets the user plan is built from:

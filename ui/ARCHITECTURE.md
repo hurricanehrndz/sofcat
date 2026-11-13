@@ -68,6 +68,11 @@ command queue and answer while a managed run is under way;
 `listOptionalInstalls` waits behind it. `apiVersion` changes only for a breaking
 change to these methods; additions show up in `capabilities`.
 
+Every managed run, check-only included, holds the file lock `run.lock` in the
+data directory, so the service's run and a command-line `sofcat` run never
+overlap. The service waits for the lock. A command-line run fails at once with
+"another managed run is in progress".
+
 An `OptionalInstallItem` is `{itemName, displayName, version, catalog,
 description?, category?, section?, developer?, iconName?, restartAction?, isManaged,
 isRequired, isInstalled, status, statusUpdatedAtUtc, lastOperationId?,

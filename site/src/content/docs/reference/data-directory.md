@@ -43,6 +43,12 @@ these its own ACL.
   ([Nupkg items](/guides/nupkg-items/#the-kept-copy)).
 - `Data\sofcat.log` may name paths and items.
 
+`Data\run.lock` is the lock a managed run holds for its whole length. It is
+empty, and it is never deleted. A command-line `sofcat` run started while
+another run is under way, the service's included, fails at once with
+"another managed run is in progress". The service's own run waits for the
+other run to finish.
+
 `Data\user-artifacts\` is the one entry users read: the staged archives the
 per-user helper places into each profile ([Zip items](/zip-items/overview/#installing)).
 On macOS, where `Data` is root-only (0700) and no ACL can open one entry of
