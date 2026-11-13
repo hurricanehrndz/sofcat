@@ -214,6 +214,37 @@ func TestMergeCreatesMissingFile(t *testing.T) {
 	}
 }
 
+// A build may make the settings file itself the only user root, so nothing
+// beside it is writable. The merge must still work end to end, creating the
+// file and its directory, although it writes through a temporary file beside
+// the target that the root does not cover.
+func TestMergeSingleFileRoot(t *testing.T) {
+	m := newMergeTest(t)
+	m.z.Guard.Roots.DarwinUser = []string{m.settings}
+	m.z.Guard.Roots.WindowsUser = []string{m.settings}
+	m.mustSync(t, "a")
+	if got := m.plugins(t); !got["a@m"] {
+		t.Fatalf("enabledPlugins = %v, want a@m", got)
+	}
+	m.mustSync(t)
+	if got := m.plugins(t); len(got) != 0 {
+		t.Errorf("enabledPlugins = %v after the item left, want none", got)
+	}
+
+	// A path inside the root file is refused, since the file is no
+	// directory, and the file is left as it was.
+	before := readFile(t, m.settings)
+	inside := mergeSpec(m.root, filepath.Join(m.settings, "x.json"))
+	z := *m.z
+	z.merged = nil
+	if res, ok := z.RegenerateUserFiles("market", inside, m.root, items("a")); ok || !errors.Is(res.Err, placement.ErrRefused) {
+		t.Errorf("a merge into a path inside the root file = %+v, want a refusal", res)
+	}
+	if readFile(t, m.settings) != before {
+		t.Errorf("the root file changed: %q", readFile(t, m.settings))
+	}
+}
+
 func TestMergeKeepsFileMode(t *testing.T) {
 	if !osHasModes() {
 		t.Skip("no permission bits")

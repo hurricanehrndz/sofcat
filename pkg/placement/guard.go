@@ -215,6 +215,11 @@ func resolve(path string) (string, error) {
 	for {
 		resolved, err := filepath.EvalSymlinks(path)
 		if err == nil {
+			// Windows reports a path under a file as not found, where Unix
+			// says the file is no directory.
+			if info, serr := os.Stat(resolved); len(rest) > 0 && serr == nil && !info.IsDir() {
+				return "", fmt.Errorf("%s: not a directory", resolved)
+			}
 			return filepath.Join(append([]string{resolved}, rest...)...), nil
 		}
 		if !errors.Is(err, fs.ErrNotExist) {
