@@ -59,7 +59,7 @@ cross-built (`GOOS=windows GOARCH=amd64 CGO_ENABLED=0`) and stripped
 per-user helper `build/sofcat-useragent.exe` (`cmd/sofcat-useragent`, also
 `-H windowsgui`, no Wails).
 `just setup` wraps them in embala's `setup.exe` (`installer/embala.toml`,
-`install.lua` and `uninstall.lua`, embala 0.11.0); it builds on Linux. The
+`install.lua` and `uninstall.lua`, embala 0.12.0); it builds on Linux. The
 installer copies them into `C:\Program Files\SofCat`, adds the Start-menu
 shortcut and the Add or remove programs entry, then runs
 `sofcat.exe -serviceinstall`, which registers and starts the service and
@@ -97,7 +97,8 @@ On a Mac, `just build-macos` builds the CLI and the per-user helper for the
 host architecture (`build/<slug>`, cgo for the System keychain, and
 `build/<slug>-useragent`, pure Go) and
 the UI as `build/<Name>.app` (cgo, so the Xcode command line tools), and
-`just pkg` wraps them with the launchd plists into
+`just pkg` has embala wrap them with the launchd plists (the
+`[[pkg.component]]` tables in `installer/embala.toml`) into
 `build/<slug>-<version>.pkg`, unsigned by default. With `CODESIGN_IDENTITY` set,
 `build-macos` codesigns the CLI, the helper and the app (hardened runtime; `-` is
 ad-hoc), with `PRODUCTSIGN_IDENTITY` set `pkg` signs the product archive, and
@@ -240,7 +241,7 @@ included, are in the Application log:
 
 Nupkg items (`site/src/content/docs/guides/nupkg-items.md`) have their own
 loop, on a clean VM with no Chocolatey. `just bootstrap-nupkg` builds
-`build/sofcat.exe` and, with embala 0.11.0 from mise, plain-style packages
+`build/sofcat.exe` and, with embala 0.12.0 from mise, plain-style packages
 `sofcat-nupkg-smoke` 1.0.0 and 2.0.0 (`scripts = "generate"`) and
 `sofcat-nupkg-bad` 1.0.0, whose install script calls an unknown command,
 into a repository at

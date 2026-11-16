@@ -103,7 +103,7 @@ jobs:
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
         with:
           cache: false
-          install_args: go node just # all this build needs from mise.toml
+          install_args: go node just github:hurricanehrndz/embala # all this build needs from mise.toml
       # A throwaway keychain holds the two certificates for this job only.
       - name: Import signing certificates
         env:
@@ -126,7 +126,7 @@ jobs:
             p12="APPLE_${cert}_P12_BASE64"; password="APPLE_${cert}_P12_PASSWORD"
             printf %s "${!p12}" | base64 --decode > "$RUNNER_TEMP/$cert.p12"
             security import "$RUNNER_TEMP/$cert.p12" -P "${!password}" -f pkcs12 -k "$keychain" \
-              -T /usr/bin/codesign -T /usr/bin/productbuild
+              -T /usr/bin/codesign -T /usr/bin/productsign
             rm "$RUNNER_TEMP/$cert.p12"
           done
           security set-key-partition-list -S apple-tool:,apple: -k "$keychain_password" "$keychain" >/dev/null

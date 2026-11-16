@@ -59,7 +59,9 @@ NOTARY_API_ISSUER_ID := env("NOTARY_API_ISSUER_ID", "")
 _notary_missing := if NOTARY_AUTH != "api-key" { "NOTARY_AUTH=api-key" } else if NOTARY_API_KEY_PATH == "" { "NOTARY_API_KEY_PATH" } else if NOTARY_API_KEY_ID == "" { "NOTARY_API_KEY_ID" } else if NOTARY_API_ISSUER_ID == "" { "NOTARY_API_ISSUER_ID" } else { "" }
 # No --timestamp for the ad-hoc identity: codesign refuses to timestamp it.
 _codesign := "codesign --force --options runtime" + (if CODESIGN_IDENTITY == "-" { "" } else { " --timestamp" }) + " --sign " + quote(CODESIGN_IDENTITY)
-pkg_version := replace_regex(replace_regex(replace_regex(version, "^v", ""), "-([0-9]+)-g([0-9a-f]+)(-dirty)?$", "+${1}.g${2}${3}"), "^([^+]*)-dirty$", "${1}+dirty")
+# embala needs SemVer 2.0: v1.2.3-4-gabc[-dirty] becomes 1.2.3+4.gabc[-dirty], and
+# the `dev` of a tree without git (the Mac loop syncs one) 0.0.0-dev.
+pkg_version := if version == "dev" { "0.0.0-dev" } else { replace_regex(replace_regex(replace_regex(version, "^v", ""), "-([0-9]+)-g([0-9a-f]+)(-dirty)?$", "+${1}.g${2}${3}"), "^([^+]*)-dirty$", "${1}+dirty") }
 manual_test_dir := "build/manual-test"
 server_root := manual_test_dir / "server-root"
 vm_dir := manual_test_dir / "vm"
@@ -207,7 +209,7 @@ _app_bundle := "build/" + product + ".app"
 _icns_src := if icon_png == "" { "assets/sofcat-icon-1024.png" } else { icon_png }
 
 _require-macos:
-    @[ "$(uname)" = Darwin ] || { echo "this recipe runs only on macOS (Xcode command line tools: cgo, sips, iconutil, pkgbuild)" >&2; exit 1; }
+    @[ "$(uname)" = Darwin ] || { echo "this recipe runs only on macOS (Xcode command line tools: cgo, sips, iconutil, plutil)" >&2; exit 1; }
 
 # macOS binaries for the host architecture -> build/<app> (the CLI) and
 # build/<app>-useragent (the per-user helper, pure Go) and
@@ -270,73 +272,41 @@ _sign-check:
     [ "$NOTARIZE" != 1 ] || [ -z {{quote(_notary_missing)}} ] || fail "NOTARIZE=1 needs {{_notary_missing}}"
 
 # macOS installer -> build/<app>-<version>.pkg (unsigned without
-# PRODUCTSIGN_IDENTITY): the app in
-# /Applications, the CLI and the per-user helper in
-# /Library/Application Support/<product>/bin, the launchd plist in
+# PRODUCTSIGN_IDENTITY), built by embala from the [[pkg.component]] tables in
+# installer/embala.toml: the app in /Applications, the CLI and the per-user
+# helper in /Library/Application Support/<product>/bin, the launchd plist in
 # /Library/LaunchDaemons and the helper's in /Library/LaunchAgents, all
-# root:wheel. Each goes in its own component rooted at its install location,
-# so the payload never lists
-# /Library/Application Support, whose root:admin owner and mode Installer
-# would otherwise reset. The plist is what
-# `<app> -serviceinstall` writes for that layout (`-print-launchd-plist`, and
-# `-print-useragent-plist` for the helper's), and
-# the postinstall script bootstraps it, so the daemon starts with no config
-# until config.yaml is written and the daemon kickstarted, as the Windows
-# installer does. With PRODUCTSIGN_IDENTITY set, productbuild signs the
-# product archive (the component pkgs stay unsigned; the product signature
-# covers them), and with NOTARIZE=1 the pkg is then notarized in place.
+# root:wheel. The plist is what `<app> -serviceinstall` writes for that
+# layout (`-print-launchd-plist`, and `-print-useragent-plist` for the
+# helper's), and installer/postinstall bootstraps it, so the daemon starts
+# with no config until config.yaml is written and the daemon kickstarted, as
+# the Windows installer does. embala marks no bundle relocatable, so
+# Installer always writes /Applications and never updates a copy of the app
+# it finds elsewhere, such as build/. With PRODUCTSIGN_IDENTITY set, a
+# [sign.macos] section appended to the rendered embala.toml has productsign
+# sign the product archive (to a sidecar, since it will not overwrite its
+# input; the identity shell-quoted, then escaped as a TOML basic string), and
+# with NOTARIZE=1 the pkg is then notarized in place.
 pkg: _require-macos _sign-check build-macos
     #!/usr/bin/env bash
     set -euo pipefail
     work=build/pkg
-    rm -rf "$work" && mkdir -p "$work/support/bin" "$work/daemon" "$work/agent" "$work/scripts"
-    cp build/{{app}} build/{{app}}-useragent "$work/support/bin/"
-    plist="$work/daemon/{{identifier}}.plist"
-    build/{{app}} -print-launchd-plist > "$plist"
-    agent_plist="$work/agent/{{identifier}}.useragent.plist"
-    build/{{app}} -print-useragent-plist > "$agent_plist"
-    plutil -lint "$plist" "$agent_plist"
-    chmod 0644 "$plist" "$agent_plist" && chmod 0755 "$work/support" "$work/support/bin" "$work/support/bin/{{app}}" "$work/support/bin/{{app}}-useragent" "$work/daemon" "$work/agent"
-    # The daemon logs into Data, root-only like the Windows data directory;
-    # the service fixes its owner and mode again at every start. On an upgrade
-    # the bootout returns before launchd has let go of the old daemon, and a
-    # bootstrap that comes too soon fails with "Input/output error", so it is
-    # retried for up to 10 s, as run-tapas-smoke.sh does.
-    printf '%s\n' '#!/bin/sh' 'set -e' \
-      'data="/Library/Application Support/{{product}}/Data"' \
-      'plist="/Library/LaunchDaemons/{{identifier}}.plist"' \
-      'mkdir -p "$data" && chown root:wheel "$data" && chmod 0700 "$data"' \
-      '/bin/launchctl bootout system/{{identifier}} 2>/dev/null || true' \
-      'tries=0' \
-      'until /bin/launchctl bootstrap system "$plist"; do' \
-      '  tries=$((tries + 1))' \
-      '  [ "$tries" -lt 10 ] || exit 1' \
-      '  sleep 1' \
-      'done' > "$work/scripts/postinstall"
+    rm -rf "$work" && mkdir -p "$work/scripts"
+    sed -e "s/@VERSION@/{{pkg_version}}/" {{_subst}} installer/embala.toml > "$work/embala.toml"
+    sed {{_subst}} installer/postinstall > "$work/scripts/postinstall"
     chmod 0755 "$work/scripts/postinstall"
-    # The app's component plist sets BundleIsRelocatable false, so Installer
-    # always writes /Applications and never updates a copy of the bundle it
-    # finds elsewhere, such as build/. The staging root stands for
-    # /Applications, so it gets that directory's 0775.
-    mkdir -m 0775 "$work/apps"
-    ditto "{{_app_bundle}}" "$work/apps/{{product}}.app"
-    pkgbuild --analyze --root "$work/apps" "$work/app-component.plist"
-    /usr/libexec/PlistBuddy -c "Set :0:BundleIsRelocatable false" "$work/app-component.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :0:BundleIsRelocatable bool false" "$work/app-component.plist"
-    pkgbuild --root "$work/apps" --component-plist "$work/app-component.plist" --install-location /Applications \
-      --identifier {{identifier}}.app --version {{version}} "$work/app.pkg"
-    pkgbuild --root "$work/support" --install-location "/Library/Application Support/{{product}}" \
-      --identifier {{identifier}}.cli --version {{version}} "$work/cli.pkg"
-    # The helper's LaunchAgent: launchd loads it at each GUI login, and the
-    # daemon starts it for users already signed in once it stores a plan.
-    pkgbuild --root "$work/agent" --install-location /Library/LaunchAgents \
-      --identifier {{identifier}}.useragent --version {{version}} "$work/agent.pkg"
-    # Last, so its postinstall runs after the app, the CLI and the helper are
-    # in place.
-    pkgbuild --root "$work/daemon" --scripts "$work/scripts" --install-location /Library/LaunchDaemons \
-      --identifier {{identifier}}.daemon --version {{version}} "$work/daemon.pkg"
+    build/{{app}} -print-launchd-plist > "$work/{{identifier}}.plist"
+    build/{{app}} -print-useragent-plist > "$work/{{identifier}}.useragent.plist"
+    plutil -lint "$work/{{identifier}}.plist" "$work/{{identifier}}.useragent.plist"
+    identity={{quote(PRODUCTSIGN_IDENTITY)}}
+    if [ -n "$identity" ]; then
+      sign_cmd="productsign --sign $(printf %q "$identity") \$f \$f.signed && mv \$f.signed \$f"
+      sign_cmd=${sign_cmd//\\/\\\\}; sign_cmd=${sign_cmd//\"/\\\"}
+      printf '\n[sign.macos]\ncommand = "%s"\n' "$sign_cmd" >> "$work/embala.toml"
+    fi
+    embala build --config "$work/embala.toml" --formats pkg --out-dir "$work"
     pkg=build/{{app}}-{{version}}.pkg
-    productbuild --package "$work/app.pkg" --package "$work/cli.pkg" --package "$work/agent.pkg" --package "$work/daemon.pkg" \
-      {{ if PRODUCTSIGN_IDENTITY == "" { "" } else { "--sign " + quote(PRODUCTSIGN_IDENTITY) } }} "$pkg"
+    mv "$work/{{app}}-{{pkg_version}}.pkg" "$pkg"
     echo "Built $pkg"
     # The notary variables are passed on, so a `just VAR=... pkg` override
     # reaches the nested just as its environment.

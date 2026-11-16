@@ -143,7 +143,7 @@ and the command line wins when both are set.
 | Variable | Read by | Value |
 | --- | --- | --- |
 | `CODESIGN_IDENTITY` | `build-macos` | The `codesign` identity for the CLI and the app: a Developer ID Application certificate's name or SHA-1, or `-` for an ad-hoc signature. |
-| `PRODUCTSIGN_IDENTITY` | `pkg` | The Developer ID Installer identity for `productbuild --sign`. Needs `CODESIGN_IDENTITY`. |
+| `PRODUCTSIGN_IDENTITY` | `pkg` | The Developer ID Installer identity for `productsign --sign`, which embala runs on the built pkg. Needs `CODESIGN_IDENTITY`. |
 | `NOTARIZE` | `pkg` | `1` runs `just notarize` on the pkg once it is built. Needs both identities and the four variables below; any other value is an error. |
 | `NOTARY_AUTH` | `notarize` | `api-key`, the only mode: an App Store Connect API key. |
 | `NOTARY_API_KEY_PATH` | `notarize` | The key's `.p8` file. |
@@ -162,8 +162,10 @@ runs under the hardened runtime without any.
 `just pkg` checks the variables before anything is built: a
 `PRODUCTSIGN_IDENTITY` without `CODESIGN_IDENTITY`, or `NOTARIZE=1` without
 either identity or one of the notary variables, fails naming the missing
-one. It passes `--sign` to `productbuild` only; the three component pkgs stay
-unsigned, since the product signature covers them. With `NOTARIZE=1` it
+one. It appends a `[sign.macos]` section to the rendered `embala.toml`, so
+embala runs `productsign` on the product archive once it is built; the four
+component pkgs inside stay unsigned, since the product signature covers
+them. With `NOTARIZE=1` it
 then runs `just notarize build/<slug>-<version>.pkg`.
 
 `just notarize <pkg>` runs `xcrun notarytool submit <pkg> --key <path>
