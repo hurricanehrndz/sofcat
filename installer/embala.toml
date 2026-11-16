@@ -1,11 +1,13 @@
 # SofCat installer definition for embala (https://github.com/hurricanehrndz/embala).
 # `just setup` copies the built executables beside rendered copies of this
 # file, install.lua and uninstall.lua under build/setup/ and runs `embala build`
-# there, so `src` paths are plain file names. @VERSION@ is the package version
+# there, so [setup] `src` paths are plain file names; `just pkg` renders it
+# under build/pkg/ (see [[pkg.component]] below). @VERSION@ is the package version
 # (SemVer 2.0, see pkg_version in the justfile); the other @PLACEHOLDERS@ are
 # the justfile brand values (stock SofCat unless `just brand=…`). With SIGN_CMD set, `just setup` appends
 # a [sign.windows] section to the rendered copy, so embala signs setup.exe and
-# the uninstaller stub (site/src/content/docs/reference/code-signing.md).
+# the uninstaller stub, and with PRODUCTSIGN_IDENTITY set, `just pkg` appends
+# a [sign.macos] section (site/src/content/docs/reference/code-signing.md).
 #
 # The setup.exe puts the three executables in C:\Program Files\SofCat and runs
 # `sofcat.exe -serviceinstall`, which registers and starts the SofCat service
@@ -39,3 +41,37 @@ files = [
 # cannot be combined with `main-executable` or `shortcuts`.
 script = "install.lua"
 uninstall-script = "uninstall.lua"
+
+# The macOS .pkg (`just pkg`, rendered under build/pkg/ beside the launchd
+# plists and scripts/postinstall, so the binaries and the app are `../`). Each
+# component is rooted at its own install location, so the payload never lists
+# /Applications or /Library/Application Support: Installer would reset their
+# root:admin owner and 0775 mode to the root:wheel 0755 embala gives every
+# payload directory. The app's component is the bundle itself for that
+# reason. Components install in this order, so the daemon's postinstall,
+# which bootstraps it, runs once the app, the CLI and the helper are in place.
+[[pkg.component]]
+name = "app"
+install-location = "/Applications/@PRODUCT@.app"
+files = [{ src = "../@PRODUCT@.app", dest = "." }]
+
+[[pkg.component]]
+name = "cli"
+install-location = "/Library/Application Support/@PRODUCT@"
+files = [
+  { src = "../@APP@", dest = "bin/@APP@" },
+  { src = "../@APP@-useragent", dest = "bin/@APP@-useragent" },
+]
+
+# The helper's LaunchAgent: launchd loads it at each GUI login, and the daemon
+# starts it for users already signed in once it stores a plan.
+[[pkg.component]]
+name = "useragent"
+install-location = "/Library/LaunchAgents"
+files = [{ src = "@IDENTIFIER@.useragent.plist", dest = "@IDENTIFIER@.useragent.plist" }]
+
+[[pkg.component]]
+name = "daemon"
+install-location = "/Library/LaunchDaemons"
+files = [{ src = "@IDENTIFIER@.plist", dest = "@IDENTIFIER@.plist" }]
+scripts = "scripts"

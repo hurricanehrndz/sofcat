@@ -1,0 +1,18 @@
+#!/bin/sh
+# The macOS .pkg's postinstall (`just pkg` fills in the @PLACEHOLDERS@). The
+# daemon logs into Data, root-only like the Windows data directory; the
+# service fixes its owner and mode again at every start. On an upgrade the
+# bootout returns before launchd has let go of the old daemon, and a bootstrap
+# that comes too soon fails with "Input/output error", so it is retried for up
+# to 10 s, as run-tapas-smoke.sh does.
+set -e
+data="/Library/Application Support/@PRODUCT@/Data"
+plist="/Library/LaunchDaemons/@IDENTIFIER@.plist"
+mkdir -p "$data" && chown root:wheel "$data" && chmod 0700 "$data"
+/bin/launchctl bootout system/@IDENTIFIER@ 2>/dev/null || true
+tries=0
+until /bin/launchctl bootstrap system "$plist"; do
+  tries=$((tries + 1))
+  [ "$tries" -lt 10 ] || exit 1
+  sleep 1
+done
