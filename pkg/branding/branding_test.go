@@ -204,3 +204,15 @@ func TestResolveFontSizes(t *testing.T) {
 		}
 	}
 }
+
+// content_width is a closed set too: an unknown value must leave the UI's
+// default rather than reach it as a layout the CSS has no rules for.
+func TestResolveContentWidth(t *testing.T) {
+	for in, want := range map[string]string{
+		"compact": "compact", "Wide": "wide", "FULL": "full", "": "", "narrow": "", "1200px": "", "100%": "",
+	} {
+		if got := resolve(config.Branding{ContentWidth: in}).ContentWidth; got != want {
+			t.Errorf("content_width %q resolved to %q, want %q", in, got, want)
+		}
+	}
+}

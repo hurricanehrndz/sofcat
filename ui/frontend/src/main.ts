@@ -205,6 +205,7 @@ function applyBranding(next: BrandingView): void {
   }
   root.style.setProperty("--title-scale", String(next.titleScale));
   root.style.setProperty("--tagline-scale", String(next.taglineScale));
+  root.dataset.contentWidth = next.contentWidth;
   // The tab order and the Software tab's heading are branding too.
   renderNav();
   renderCategories();
@@ -386,7 +387,15 @@ function card(item: OptionalInstallItem): HTMLElement {
   details.addEventListener("click", () => openDetail(item));
 
   actions.append(details);
-  article.append(glyph, name, meta, appliesTo, status, actions);
+  // The wrappers let style.css turn a card a sparse row stretches into a
+  // single line: glyph, text, then the buttons.
+  const text = document.createElement("div");
+  text.className = "card-text";
+  text.append(name, meta, appliesTo, status);
+  const body = document.createElement("div");
+  body.className = "card-body";
+  body.append(glyph, text, actions);
+  article.append(body);
   article.dataset.item = item.itemName;
   // A click anywhere else on the card opens Details too. The card is not a
   // control itself, so it nests none: keyboard and screen-reader users reach

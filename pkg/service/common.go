@@ -317,8 +317,9 @@ func brandingSummary(b branding.Branding) (string, error) {
 		ListHeading     string   `json:"listHeading"`
 		TitleSize       string   `json:"titleSize"`
 		TaglineSize     string   `json:"taglineSize"`
+		ContentWidth    string   `json:"contentWidth"`
 		Sections        []string `json:"sections,omitempty"`
-	}{b.Title, b.Tagline, b.HelpURL, b.HelpLabel, b.Accent, b.LogoMime, len(logo), b.BackgroundMime, len(background), b.BackgroundText, b.ListHeading, b.TitleSize, b.TaglineSize, b.Sections})
+	}{b.Title, b.Tagline, b.HelpURL, b.HelpLabel, b.Accent, b.LogoMime, len(logo), b.BackgroundMime, len(background), b.BackgroundText, b.ListHeading, b.TitleSize, b.TaglineSize, b.ContentWidth, b.Sections})
 	return string(line), err
 }
 

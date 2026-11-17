@@ -109,4 +109,6 @@ export type BrandingView = {
   /** Factors on the default banner title (and page heading) and tagline sizes; 1 keeps them. */
   titleScale: number;
   taglineScale: number;
+  /** The admin's content_width: how much of the window the list and pages use. */
+  contentWidth: "compact" | "wide" | "full";
 };

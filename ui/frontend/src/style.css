@@ -249,7 +249,8 @@ button:disabled {
   --banner-paper: #1b1b1f;
 
   min-height: 7.5rem;
-  background: var(--banner-image) center / cover no-repeat var(--brand, var(--accent));
+  background: var(--banner-image) center / cover no-repeat
+    var(--brand, var(--accent));
   color: var(--banner-ink);
 }
 
@@ -361,12 +362,25 @@ button:disabled {
   padding: 0.25rem 0.75rem;
 }
 
+/*
+ * How much of the window the content uses (branding content_width, set as
+ * data-content-width on the root): wide by default, compact for the layout
+ * from before the key, full for no cap at all.
+ */
 main {
   flex: 1;
   width: 100%;
-  max-width: 76rem;
+  max-width: 96rem;
   margin: 0 auto;
   padding: 1.5rem 2rem 2rem;
+}
+
+:root[data-content-width="compact"] main {
+  max-width: 76rem;
+}
+
+:root[data-content-width="full"] main {
+  max-width: none;
 }
 
 h2 {
@@ -415,16 +429,25 @@ h2 {
   font-size: 0.8125rem;
 }
 
+/*
+ * auto-fit drops the empty tracks, so a short row's cards share its width
+ * instead of leaving most of it blank; compact keeps auto-fill, which holds
+ * every card to one column's width.
+ */
 .grid {
   display: grid;
   gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+}
+
+:root[data-content-width="compact"] .grid {
   grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
 }
 
 .card {
   display: flex;
   flex-direction: column;
-  gap: 0.375rem;
+  container-type: inline-size;
   padding: 1rem;
   background: var(--surface);
   border: 1px solid var(--line-soft);
@@ -432,6 +455,21 @@ h2 {
   overflow-wrap: anywhere;
   /* A click anywhere off its buttons opens the item's detail page. */
   cursor: pointer;
+}
+
+:root[data-content-width="compact"] .card {
+  container-type: normal;
+}
+
+.card-body,
+.card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.card-body {
+  flex: 1;
 }
 
 .card:hover {
@@ -468,6 +506,34 @@ h2 {
   gap: 0.5rem;
   margin-top: auto;
   padding-top: 0.5rem;
+}
+
+/*
+ * A card stretched wider than a column, by a row of one or two, is a single
+ * line instead: glyph, text, then the buttons at the far end. Compact cards
+ * are no container, so they keep the column layout at any width.
+ */
+@container (min-width: 30rem) {
+  .card-body {
+    flex-direction: row;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .card-text {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .card h3 {
+    margin-top: 0;
+  }
+
+  .card .card-actions {
+    flex: none;
+    margin-top: 0;
+    padding-top: 0;
+  }
 }
 
 .glyph {
