@@ -30,11 +30,12 @@ func TestSaveSelfServePersistsAndDropsLists(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "service-manifest.yaml")
 
 	saved := Item{
-		Name:            "service-manifest",
-		Installs:        []string{"GoogleChrome"},
-		Uninstalls:      []string{"7zip"},
-		DefaultInstalls: []string{"DemoDefault"},
-		SelectedBy:      map[string]string{"GoogleChrome": "S-1-5-21-1-2-3-1001"},
+		Name:                "service-manifest",
+		Installs:            []string{"GoogleChrome"},
+		Uninstalls:          []string{"7zip"},
+		DefaultInstalls:     []string{"DemoDefault"},
+		SelectedBy:          map[string]string{"GoogleChrome": "S-1-5-21-1-2-3-1001"},
+		PlacementSelections: map[string][]string{"GoogleChrome": {"claude"}},
 		// These must be dropped on save.
 		Includes: []string{"other-manifest"},
 		Catalogs: []string{"prod"},
@@ -61,6 +62,9 @@ func TestSaveSelfServePersistsAndDropsLists(t *testing.T) {
 	// selected_by is the file's own record of who selected each item.
 	if !reflect.DeepEqual(got.SelectedBy, saved.SelectedBy) {
 		t.Fatalf("expected SelectedBy persisted, got %#v", got.SelectedBy)
+	}
+	if !reflect.DeepEqual(got.PlacementSelections, saved.PlacementSelections) {
+		t.Fatalf("expected PlacementSelections persisted, got %#v", got.PlacementSelections)
 	}
 	// Save nils these lists; they marshal as `[]` and load back empty (not nil).
 	if len(got.Includes) != 0 || len(got.Catalogs) != 0 || len(got.Updates) != 0 {

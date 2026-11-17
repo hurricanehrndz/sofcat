@@ -32,11 +32,14 @@ import {
   isItemActive,
   isProgressTick,
   isTerminalState,
+  itemPlacements,
   localErrorState,
   localRecord,
   monogram,
   myItems,
   needsAttention,
+  placementAction,
+  placementStatus,
   progressText,
   refusalText,
   releaseOperation,
@@ -66,6 +69,7 @@ import type {
   ListView,
   OperationView,
   OptionalInstallItem,
+  OptionalInstallPlacement,
 } from "./types.ts";
 
 // When an origin has storage blocked, reading the `localStorage` property
@@ -113,6 +117,7 @@ const activityEmpty = need<HTMLParagraphElement>("#activity-empty");
 const viewDetail = need<HTMLElement>("#view-detail");
 const detailBack = need<HTMLButtonElement>("#detail-back");
 const detailAction = need<HTMLButtonElement>("#detail-action");
+const detailPlacements = need<HTMLUListElement>("#detail-placements");
 const strip = need<HTMLElement>("#operation-strip");
 const stripGlyph = need<HTMLSpanElement>("#strip-glyph");
 const stripBar = need<HTMLProgressElement>("#strip-progress");
@@ -558,8 +563,8 @@ async function runAction(item: OptionalInstallItem, action: ItemAction): Promise
   try {
     const accepted =
       action.method === "InstallItem"
-        ? await api.installItem(item.itemName)
-        : await api.removeItem(item.itemName);
+        ? await api.installItem(item.itemName, action.placement)
+        : await api.removeItem(item.itemName, action.placement);
     operationId = (accepted.operationId ?? "").trim();
     if (!accepted.accepted || !operationId) {
       throw new Error("the service did not accept the request");
@@ -674,9 +679,11 @@ function renderDetail(): void {
   setGlyph(need<HTMLElement>("#detail-glyph"), item);
   setText("#detail-name", item.displayName, item.itemName);
   setText("#detail-developer", item.developer ?? "", "");
+  const placements = itemPlacements(item);
   const appliesTo = need<HTMLParagraphElement>("#detail-applies-to");
-  appliesTo.textContent = appliesToLine(item);
+  appliesTo.textContent = placements.length ? "" : appliesToLine(item);
   appliesTo.hidden = appliesTo.textContent === "";
+  renderPlacements(item, placements);
   setText("#detail-description", item.description ?? "", "No description is published for this item.");
   setText("#detail-developer-value", item.developer ?? "");
   setText("#detail-version", item.version);
@@ -697,6 +704,47 @@ function renderDetail(): void {
   // The Status row already says the catalog state, so the line only appears
   // for work in progress or an outcome.
   updateCardProgress(viewDetail, item, "");
+}
+
+/**
+ * renderPlacements draws one row per placement on the detail page: its label,
+ * its status and the item's action for that placement alone. Rows follow the
+ * item's own button while it has an operation running. The rows are rebuilt,
+ * so focus goes back to the row that had it.
+ */
+function renderPlacements(item: OptionalInstallItem, placements: OptionalInstallPlacement[]): void {
+  const focused = document.activeElement?.closest<HTMLElement>("#detail-placements li")?.dataset.placement;
+  detailPlacements.hidden = placements.length === 0;
+  detailPlacements.setAttribute("aria-label", actionLabel(item, "applies_to"));
+  const busy = isItemActive(active, item.itemName);
+  detailPlacements.replaceChildren(
+    ...placements.map((placement) => {
+      const row = document.createElement("li");
+      row.dataset.placement = placement.name;
+      const label = document.createElement("span");
+      label.className = "placement-label";
+      label.textContent = placement.label;
+      const status = document.createElement("span");
+      status.className = "card-meta";
+      status.textContent = placementStatus(item, placement);
+      row.append(label, status);
+      const derived = placementAction(item, placement);
+      if (derived) {
+        const action = document.createElement("button");
+        action.type = "button";
+        action.className = `pill ${derived.kind === "undo" ? "pill-outline" : "pill-primary"}`;
+        action.textContent = derived.label;
+        action.disabled = busy;
+        action.setAttribute("aria-label", `${derived.label}: ${placement.label}`);
+        action.addEventListener("click", () => void runAction(item, derived));
+        row.append(action);
+      }
+      return row;
+    }),
+  );
+  if (focused !== undefined) {
+    detailPlacements.querySelector<HTMLButtonElement>(`[data-placement="${CSS.escape(focused)}"] button`)?.focus();
+  }
 }
 
 function openDetail(item: OptionalInstallItem, opener: HTMLElement): void {

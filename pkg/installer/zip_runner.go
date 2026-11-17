@@ -239,8 +239,10 @@ func (r *Runner) removeReceipts(item catalog.Item, rcs []receipt.Receipt) bool {
 }
 
 // ScopeExit removes, under R15, every receipt-tracked item that keep rejects:
-// items that left the run's desired set and are not held. It runs after the
-// install pass. Check-only runs remove nothing.
+// items that left the run's desired set and are not held. Of an item keep
+// keeps, it removes the placements the item's subset left (ZipInstaller.Wants)
+// unless the item is held. It runs after the install pass. Check-only runs
+// remove nothing.
 func (r *Runner) ScopeExit(keep func(item string) bool) error {
 	if r.Zip == nil {
 		return nil
@@ -251,8 +253,17 @@ func (r *Runner) ScopeExit(keep func(item string) bool) error {
 	}
 	byItem := map[string][]receipt.Receipt{}
 	var order []string
+	left := map[string][]receipt.Receipt{}
+	var leftOrder []string
 	for _, rc := range all {
 		if keep(rc.Item) {
+			if r.Zip.Wants(rc.Item, rc.Placement) || r.Zip.held(rc.Item) {
+				continue
+			}
+			if _, seen := left[rc.Item]; !seen {
+				leftOrder = append(leftOrder, rc.Item)
+			}
+			left[rc.Item] = append(left[rc.Item], rc)
 			continue
 		}
 		if _, seen := byItem[rc.Item]; !seen {
@@ -271,7 +282,42 @@ func (r *Runner) ScopeExit(keep func(item string) bool) error {
 		slog.Info("Removing item that left the desired set", "item", name)
 		r.removeReceipts(item, rcs)
 	}
+	for _, name := range leftOrder {
+		r.removeLeftPlacements(name, left[name])
+	}
 	return nil
+}
+
+// removeLeftPlacements removes the trees of the placements an item's subset
+// left, keeping the rest of the item. The item stays installed, so only a
+// failure reaches the report. A withdrawn item is skipped, so a cancel can
+// still restore its subset.
+func (r *Runner) removeLeftPlacements(name string, rcs []receipt.Receipt) {
+	item := catalog.Item{Name: name, DisplayName: name, Version: rcs[0].Version}
+	if r.CheckOnly {
+		slog.Info("[CHECK ONLY] Would remove placements the item no longer targets", "item", name)
+		return
+	}
+	if !r.Cancels.act(name) {
+		_ = r.canceled(item)
+		return
+	}
+	slog.Info("Removing placements the item no longer targets", "item", name)
+	r.emit(item, "removing", NoPercent, item.DisplayName)
+	failed := false
+	for _, rc := range rcs {
+		res := r.Zip.Remove(rc)
+		if res.Failed() {
+			slog.Warn("Placement removal FAILED", "item", name, "placement", rc.Placement, "code", res.Code(), "err", res.Err)
+			r.recordPlacement(item, "uninstall", res)
+			failed = true
+		}
+	}
+	if failed {
+		r.emit(item, "failed", NoPercent, errZipFailed.Error())
+		return
+	}
+	r.emit(item, "done", 100, "")
 }
 
 // Regenerate rewrites every placement's files from the receipts

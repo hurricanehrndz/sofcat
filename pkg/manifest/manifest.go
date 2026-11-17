@@ -26,6 +26,12 @@ type Item struct {
 	// item name to the caller's ID (a SID, or a uid in decimal). Only the
 	// self-serve file has it.
 	SelectedBy map[string]string `yaml:"selected_by,omitempty"`
+	// PlacementSelections is the self-serve file's record of the placements a
+	// user chose for a zip item: item name to its placements, sorted. An item
+	// without an entry goes to every placement. It narrows only an item in
+	// the self-serve managed_installs that no admin manifest requires. Only
+	// the self-serve file has it.
+	PlacementSelections map[string][]string `yaml:"placement_selections,omitempty"`
 }
 
 // This abstraction allows us to override when testing

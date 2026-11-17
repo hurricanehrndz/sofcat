@@ -712,7 +712,7 @@ func (sr *serviceRunner) dispatchMutation(ctx context.Context, conn clientConn, 
 	// The caller is resolved first: the command checks it before it changes
 	// anything (R32).
 	requestedBy, caller := requester(conn, logger)
-	resp, err := sr.executeCommandSafe(Command{Action: action, Items: []string{itemName}, caller: caller})
+	resp, err := sr.executeCommandSafe(Command{Action: action, Items: []string{itemName}, Placement: strings.TrimSpace(params.Placement), caller: caller})
 	if err != nil {
 		if errors.Is(err, errNotAuthorized) {
 			logger.Info("self-service request refused: not authorized", "item", itemName,
@@ -720,7 +720,7 @@ func (sr *serviceRunner) dispatchMutation(ctx context.Context, conn clientConn, 
 		}
 		return nil, commandError(err, "")
 	}
-	logger.Info("self-service request accepted", "operationId", resp.OperationID, "item", itemName,
+	logger.Info("self-service request accepted", "operationId", resp.OperationID, "item", itemName, "placement", params.Placement,
 		"requestedBy", requestedBy.Name, "requestedByID", requestedBy.ID, "requestedByAdmin", caller.Admin)
 	sr.registerTrackedOperation(itemName, requestedBy.Name, caller.ID, resp)
 	accepted := AcceptedOperation{OperationID: resp.OperationID, Accepted: true, QueuedAtUTC: nowRFC3339UTC(), RequestedBy: requestedBy.Name}
@@ -817,6 +817,8 @@ func commandError(err error, operationID string) *Error {
 		return newError(codeItemNotRemovable, err.Error(), operationID)
 	case errors.Is(err, errNotAuthorized):
 		return newError(codeNotAuthorized, err.Error(), operationID)
+	case errors.Is(err, errInvalidPlacement):
+		return newError(codeInvalidParams, err.Error(), operationID)
 	default:
 		// Any local user reads this message, and a fetch or file error can
 		// name repository URLs and local paths, so it stays in the log.

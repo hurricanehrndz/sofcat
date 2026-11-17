@@ -24,7 +24,8 @@ these its own ACL.
 
 - `config.yaml` may hold `auth_user`, `auth_pass` and TLS client keys.
 - `Data\service-manifest.yaml` is the self-serve state, including
-  `selected_by`, who selected each item. A user who can write it skips the
+  `selected_by`, who selected each item, and `placement_selections`, the
+  placements an item was narrowed to. A user who can write it skips the
   authorization that the service pipe applies, including the per-user check
   on removals.
 - `Data\cache\` holds installers and scripts that run as SYSTEM.

@@ -174,6 +174,8 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 	managed := managedInstalls(manifests)
 	zip.Managed = func(item string) bool { return managed[item] }
 	zip.Held = func(item string) bool { return heldSet[item] }
+	// A self-serve item a user narrowed to some placements goes only there.
+	zip.Subsets = process.PlacementSubsets(selfServe, ssInstalls, func(item string) bool { return managed[item] || heldSet[item] })
 	runner := &installer.Runner{
 		Report:      run,
 		Checker:     &status.Checker{Zip: zip.Installed, Nupkg: func(id string) (string, bool) { return installer.KeptNupkgVersion(cfg.NupkgPath, id) }},
@@ -272,6 +274,9 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 		// until the next scheduled run saves a fresh one.
 		planDesired, planHeld := userPlanSets(desired, heldSet, run.DeferredItems, cancels.Withdrawn())
 		userPlan := service.UserPlan(planDesired, planHeld, managed, catalogs, table, zip.Guard.GOOS, dir)
+		// The helper removes a placement the item's subset left, as one the
+		// plan no longer lists.
+		userPlan = slices.DeleteFunc(userPlan, func(e service.UserPlacement) bool { return !zip.Wants(e.Item, e.Placement) })
 		service.StageUserArtifacts(context.Background(), zip, userPlan, dir)
 		if err := service.SaveUserPlan(cfg.AppDataPath, service.UserPlacements{Entries: userPlan, Facts: machineFacts, Placements: service.UserSpecs(table, zip.Guard.GOOS), UserFiles: service.UserFileSets(zip, table, zip.Guard.GOOS)}); err != nil {
 			slog.Warn("unable to store the user-placement plan", "err", err)

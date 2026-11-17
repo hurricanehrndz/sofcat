@@ -9,8 +9,8 @@
 # `just bootstrap-tapas-macos` lays out from test/manual/fixtures/tapas, and
 # asserts on the placed trees and receipts: the daemon's label, socket and
 # root-only data directory, managed and self-service placement, removal,
-# adoption of a hand-placed tree, conflict reporting for a user edit, the
-# exclusive-root marker and refusal, a placement outside the write roots, the
+# adding and removing an item one placement at a time, adoption of a
+# hand-placed tree, conflict reporting for a user edit, the exclusive-root marker and refusal, a placement outside the write roots, the
 # marketplace plugins with the generated marketplace.json, the templated Codex
 # catalog and skills index and the settings drop-in, a skill deferred until a
 # Munki report lists its depends_check software, a held
@@ -173,6 +173,24 @@ selected() {
 
 pruned() {
 	[ -z "$(yaml_list "$SELF_SERVE" managed_uninstalls)" ]
+}
+
+# placement_selection ITEM prints ITEM's placement_selections entry in the
+# self-serve manifest on one line, placements space-separated; nothing when
+# the item has none (it goes to every placement).
+placement_selection() {
+	[ -f "$SELF_SERVE" ] || return 0
+	awk -v item="$1" '
+		/^[^[:space:]#]/ { insel = ($0 ~ /^placement_selections:/); initem = 0; next }
+		!insel { next }
+		/^[[:space:]]+[^[:space:]-][^:]*:/ {
+			k = $0; sub(/^[[:space:]]+/, "", k); sub(/:.*/, "", k); gsub(/"/, "", k)
+			initem = (k == item)
+			if (initem) { v = $0; sub(/^[^:]*:/, "", v); gsub(/[\[\]",]/, " ", v); n = split(v, parts, " "); for (i = 1; i <= n; i++) print parts[i] }
+			next
+		}
+		initem && /^[[:space:]]*-/ { v = $0; sub(/^[[:space:]]*-[[:space:]]*/, "", v); gsub(/[[:space:]"]+/, "", v); print v }
+	' "$SELF_SERVE" | tr '\n' ' ' | sed 's/ $//'
 }
 
 # optional_item prints the ListOptionalInstalls object for one item, if listed.
@@ -466,6 +484,90 @@ wait_removed "$CLAUDE_ROOT" claude-skills tapas-optional-skill
 wait_pruned
 assert_skills_index tapas-managed-skill
 pass "tree and receipt gone, managed_uninstalls pruned, skills index back to the managed skill"
+
+# --- Per-placement self-service ---------------------------------------------------
+
+# tapas-choice-skill has two placements on macOS, claude-skills and
+# codex-skills, both per machine here, so a deselected one is removed by the
+# daemon itself.
+CHOICE=tapas-choice-skill
+
+# choice_rows prints the item's status and its placement rows, as
+# "Status claude-skills:Status codex-skills:Status".
+choice_rows() {
+	optional_item "$CHOICE" | jq -r '[.status] + [.placements[]? | .name + ":" + .status] | join(" ")'
+}
+
+step "ListOptionalInstalls lists a row per placement for an item with two"
+opt=$(optional_item "$CHOICE")
+[ -n "$opt" ] || fail "$CHOICE not listed by ListOptionalInstalls"
+printf '%s' "$opt" | jq -e '.status == "NotInstalled" and .isInstalled == false
+	and .placements == [{name: "claude-skills", label: "Claude Code", isInstalled: false, status: "NotInstalled"},
+		{name: "codex-skills", label: "Codex", isInstalled: false, status: "NotInstalled"}]' >/dev/null ||
+	fail "$CHOICE: $opt, want NotInstalled with rows Claude Code and Codex, both NotInstalled"
+optional_item tapas-optional-skill | jq -e 'has("placements") | not' >/dev/null ||
+	fail "tapas-optional-skill, with one placement, lists placements"
+pass "$CHOICE rows Claude Code and Codex, NotInstalled; tapas-optional-skill has no placements"
+
+step "A placement the item does not have is refused and nothing is written"
+manifest_before=$(sha "$SELF_SERVE")
+for p in nope exclusive-skills; do
+	sofcat "InstallItem:$CHOICE:$p" allow-fail
+	[ "$CODE" -ne 0 ] || fail "InstallItem:$CHOICE:$p was accepted"
+	printf '%s' "$OUT" | grep -qF invalid_params || fail "InstallItem:$CHOICE:$p is not an invalid_params refusal: $OUT"
+done
+sofcat "RemoveItem:$CHOICE:nope" allow-fail
+[ "$CODE" -ne 0 ] || fail "RemoveItem:$CHOICE:nope was accepted"
+[ "$(sha "$SELF_SERVE")" = "$manifest_before" ] || fail "a refused request changed $SELF_SERVE: $(cat "$SELF_SERVE")"
+assert_not_placed "$CLAUDE_ROOT" claude-skills "$CHOICE"
+assert_not_placed "$CODEX_ROOT" codex-skills "$CHOICE"
+pass "invalid_params for nope and exclusive-skills; self-serve manifest and both roots untouched"
+
+step "InstallItem for one placement places the item there only"
+assert_succeeded "InstallItem:$CHOICE:claude-skills"
+assert_placed "$CLAUDE_ROOT" claude-skills "$CHOICE"
+assert_not_placed "$CODEX_ROOT" codex-skills "$CHOICE"
+selected "$CHOICE" || fail "$CHOICE is not in the self-serve managed_installs"
+[ "$(placement_selection "$CHOICE")" = claude-skills ] || fail "placement_selections for $CHOICE: '$(placement_selection "$CHOICE")', want claude-skills: $(cat "$SELF_SERVE")"
+rows=$(choice_rows)
+[ "$rows" = "Installed claude-skills:Installed codex-skills:NotInstalled" ] || fail "$CHOICE reads $rows"
+assert_skills_index tapas-managed-skill "$CHOICE"
+pass "placed under claude-skills only; placement_selections [claude-skills]; $rows"
+
+step "InstallItem for the other placement places it too and clears the choice"
+assert_succeeded "InstallItem:$CHOICE:codex-skills"
+assert_placed "$CLAUDE_ROOT" claude-skills "$CHOICE"
+assert_placed "$CODEX_ROOT" codex-skills "$CHOICE"
+[ -z "$(placement_selection "$CHOICE")" ] || fail "placement_selections still narrows $CHOICE: $(cat "$SELF_SERVE")"
+rows=$(choice_rows)
+[ "$rows" = "Installed claude-skills:Installed codex-skills:Installed" ] || fail "$CHOICE reads $rows"
+pass "placed under both roots; no placement_selections entry; $rows"
+
+step "RemoveItem for one placement removes it there and keeps the other"
+codex_rc=$(receipt_path codex-skills "$CHOICE")
+codex_rc_time=$(stat -f %Fm "$codex_rc")
+assert_succeeded "RemoveItem:$CHOICE:claude-skills"
+wait_removed "$CLAUDE_ROOT" claude-skills "$CHOICE"
+assert_placed "$CODEX_ROOT" codex-skills "$CHOICE"
+[ "$(stat -f %Fm "$codex_rc")" = "$codex_rc_time" ] || fail "removing claude-skills rewrote $codex_rc"
+selected "$CHOICE" || fail "$CHOICE left the self-serve managed_installs"
+! yaml_list "$SELF_SERVE" managed_uninstalls | grep -qx "$CHOICE" || fail "$CHOICE is in managed_uninstalls: $(cat "$SELF_SERVE")"
+[ "$(placement_selection "$CHOICE")" = codex-skills ] || fail "placement_selections for $CHOICE: '$(placement_selection "$CHOICE")', want codex-skills: $(cat "$SELF_SERVE")"
+rows=$(choice_rows)
+[ "$rows" = "Installed claude-skills:NotInstalled codex-skills:Installed" ] || fail "$CHOICE reads $rows"
+assert_skills_index tapas-managed-skill
+pass "claude-skills tree and receipt gone, codex-skills kept untouched; still selected, placement_selections [codex-skills]; $rows"
+
+step "RemoveItem for the last placement removes the item"
+assert_succeeded "RemoveItem:$CHOICE:codex-skills"
+wait_removed "$CODEX_ROOT" codex-skills "$CHOICE"
+wait_pruned
+assert_not_placed "$CLAUDE_ROOT" claude-skills "$CHOICE"
+! selected "$CHOICE" || fail "$CHOICE is still in the self-serve managed_installs"
+[ -z "$(placement_selection "$CHOICE")" ] || fail "placement_selections still lists $CHOICE: $(cat "$SELF_SERVE")"
+rows=$(choice_rows)
+[ "$rows" = "NotInstalled claude-skills:NotInstalled codex-skills:NotInstalled" ] || fail "$CHOICE reads $rows"
+pass "tree and receipt gone, not selected, managed_uninstalls pruned; $rows"
 
 # --- Marketplace and settings drop-in -----------------------------------------------
 

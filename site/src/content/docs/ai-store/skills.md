@@ -26,8 +26,12 @@ placements:
     applies_to: [Codex]
 ```
 
-Each skill lands at `<path>/<item_name>`. `applies_to` is the text of the
-storefront's "Applies to" line and does not limit where an item goes.
+Each skill lands at `<path>/<item_name>`. `applies_to` is display text: the
+storefront's "Applies to" line, or, for an item with both placements on the
+OS, the label of each placement's row on its detail page, where the user can
+add or remove it per placement
+([Choosing placements](/zip-items/placements/#choosing-placements)). It does
+not limit where an item goes.
 
 `codex-skills` is per machine on macOS and per user on Windows. In user
 scope the service does not write the tree. It stages the archive, and the

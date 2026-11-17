@@ -36,8 +36,12 @@ export function GetBranding(): $CancellablePromise<branding$0.Branding> {
     });
 }
 
-export function InstallItem(itemName: string): $CancellablePromise<service$0.AcceptedOperation> {
-    return $Call.ByID(1746250097, itemName).then(($result: any) => {
+/**
+ * InstallItem selects itemName, only in placement when one is named; "" is
+ * every placement.
+ */
+export function InstallItem(itemName: string, placement: string): $CancellablePromise<service$0.AcceptedOperation> {
+    return $Call.ByID(1746250097, itemName, placement).then(($result: any) => {
         return $$createType1($result);
     });
 }
@@ -48,8 +52,11 @@ export function ListOptionalInstalls(): $CancellablePromise<service$0.OptionalIn
     });
 }
 
-export function RemoveItem(itemName: string): $CancellablePromise<service$0.AcceptedOperation> {
-    return $Call.ByID(153207584, itemName).then(($result: any) => {
+/**
+ * RemoveItem deselects itemName, or only placement when one is named.
+ */
+export function RemoveItem(itemName: string, placement: string): $CancellablePromise<service$0.AcceptedOperation> {
+    return $Call.ByID(153207584, itemName, placement).then(($result: any) => {
         return $$createType1($result);
     });
 }

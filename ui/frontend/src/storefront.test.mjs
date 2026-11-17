@@ -12,6 +12,9 @@ import {
   statusLabel,
   statusRecord,
   appliesToLine,
+  itemPlacements,
+  placementAction,
+  placementStatus,
 } from "./state.ts";
 
 function item(overrides) {
@@ -144,4 +147,78 @@ test("a card's idle line is the pending or required status, worded by the item's
   assert.equal(cardStatus(item({ isManaged: true, status: "Installed", actionLabels: { installed: "Available" } })), "");
   // The detail page keeps the full status, with the same labels.
   assert.equal(statusLabel({ ...labelled, status: "WillBeInstalled" }), "Will be enabled for you");
+});
+
+const claude = (status, isInstalled = status === "Installed") => ({ name: "claude-skills", label: "Claude Code", isInstalled, status });
+const codex = (status, isInstalled = status === "Installed") => ({ name: "codex-skills", label: "Codex", isInstalled, status });
+
+// Only an item the service sends placements for gets rows; the rest keep the
+// applies-to line and their single button exactly as before.
+test("an item without placements has no rows and keeps its action and status", () => {
+  const plain = item({ appliesTo: ["Claude Code", "Codex"], isManaged: true, isInstalled: true, status: "Installed" });
+  assert.deepEqual(itemPlacements(plain), []);
+  assert.deepEqual(itemPlacements(item({ placements: "claude-skills" })), [], "a non-array cache value is none");
+  assert.deepEqual(deriveAction(plain), { kind: "undo", label: "Remove", method: "RemoveItem" });
+  assert.equal(cardStatus(plain), "");
+  assert.equal(statusLabel(plain), "Installed");
+  assert.equal(appliesToLine(plain), "Applies to: Claude Code, Codex");
+});
+
+// Each row's button is the item's own action for that placement alone, so the
+// request names the placement and a cancel takes back only that placement.
+test("a placement row's button follows its status and names the placement", () => {
+  const labelled = item({
+    isManaged: true,
+    actionLabels: { install: "Add", remove: "Withdraw", cancel: "Stop", pending_remove: "Will be withdrawn" },
+    placements: [claude("Installed"), codex("NotInstalled")],
+  });
+  const row = (status) => placementAction(labelled, codex(status));
+  assert.deepEqual(row("NotInstalled"), { kind: "do", label: "Add", method: "InstallItem", placement: "codex-skills" });
+  assert.deepEqual(row("Installed"), { kind: "undo", label: "Withdraw", method: "RemoveItem", placement: "codex-skills" });
+  assert.deepEqual(row("WillBeInstalled"), { kind: "cancel", label: "Stop", method: "RemoveItem", placement: "codex-skills" });
+  assert.deepEqual(row("WillBeRemoved"), { kind: "cancel", label: "Stop", method: "InstallItem", placement: "codex-skills" });
+  assert.equal(placementStatus(labelled, codex("WillBeRemoved")), "Will be withdrawn");
+  assert.equal(placementStatus(labelled, codex("NotInstalled")), "Not installed");
+  assert.equal(placementStatus(labelled, claude("Installed")), "Installed");
+  // A required item goes everywhere: no row has a button.
+  assert.equal(placementAction({ ...labelled, isRequired: true }, codex("Installed")), null);
+});
+
+// A partly installed item says where it is, and its card keeps Install, a
+// plain install with no placement, which adds the rest.
+test("a partly installed item reads Installed in its placements and keeps Install", () => {
+  const narrowed = item({
+    isManaged: true,
+    isInstalled: true,
+    status: "Installed",
+    actionLabels: { install: "Add" },
+    placements: [claude("Installed"), codex("NotInstalled")],
+  });
+  assert.equal(cardStatus(narrowed), "Installed in Claude Code");
+  assert.equal(statusLabel(narrowed), "Installed in Claude Code");
+  assert.deepEqual(deriveAction(narrowed), { kind: "do", label: "Add", method: "InstallItem" });
+  // Not narrowed: the service reads the item NotInstalled, and the wording is the same.
+  const partial = { ...narrowed, isInstalled: false, status: "NotInstalled" };
+  assert.equal(cardStatus(partial), "Installed in Claude Code");
+
+  // Everywhere, nowhere, or pending: the item's own wording and button.
+  const everywhere = { ...narrowed, placements: [claude("Installed"), codex("Installed")] };
+  assert.equal(cardStatus(everywhere), "");
+  assert.equal(deriveAction(everywhere).method, "RemoveItem");
+  assert.equal(cardStatus({ ...narrowed, isManaged: false, placements: [claude("NotInstalled"), codex("NotInstalled")] }), "");
+  const pending = { ...narrowed, status: "WillBeInstalled", placements: [claude("Installed"), codex("WillBeInstalled")] };
+  assert.equal(cardStatus(pending), "Will be installed");
+  // Cancel undoes only the pending placement: a whole-item removal would
+  // take the installed one with it.
+  assert.deepEqual(deriveAction(pending), { kind: "cancel", label: "Cancel", method: "RemoveItem", placement: "codex-skills" });
+  const removing = { ...narrowed, status: "WillBeRemoved", placements: [claude("WillBeRemoved", true), codex("NotInstalled")] };
+  assert.deepEqual(deriveAction(removing), { kind: "cancel", label: "Cancel", method: "InstallItem", placement: "claude-skills" });
+  // Every placement pending is the whole item's request, cancelled as one.
+  const allPending = { ...narrowed, placements: [claude("WillBeInstalled"), codex("WillBeInstalled")], status: "WillBeInstalled" };
+  assert.deepEqual(deriveAction(allPending), { kind: "cancel", label: "Cancel", method: "RemoveItem" });
+  // Several pending beside one that is not: the rows cancel them, not the card.
+  const third = { name: "other-skills", label: "Other", isInstalled: false, status: "WillBeInstalled" };
+  assert.equal(deriveAction({ ...pending, placements: [...pending.placements, third] }), null);
+  // An installed placement of an item nobody selected offers Install, as the item does.
+  assert.equal(placementAction({ ...narrowed, isManaged: false }, claude("Installed")).method, "InstallItem");
 });

@@ -23,10 +23,12 @@ placements:
     paths:
       darwin: /Library/Application Support/ClaudeCode/.claude/skills
       windows: ${ProgramFiles}\ClaudeCode\.claude\skills
+    applies_to: [Claude Code]
   codex-skills:
     paths:
       windows: ${USERPROFILE}\.agents\skills
     scope: {windows: user}
+    applies_to: [Codex]
 `
 
 // rootlessPlacement extends testPlacements with a placement that has only a
@@ -392,6 +394,22 @@ func TestCheckZipItems(t *testing.T) {
 		"variant placement without paths": {
 			testPlacements + rootlessPlacement, item("  type: zip\n  variants: {harness: {darwin: " + variant + "}}\n"),
 			`placement "harness" has no paths, so it holds no item trees`,
+		},
+		// Two placements on one OS are two storefront rows, told apart only
+		// by applies_to. One placement there needs none.
+		"two placements on an OS, one without applies_to": {
+			strings.Replace(testPlacements, "    applies_to: [Codex]\n", "", 1),
+			item("  type: zip\n  variants: {claude-code-skills: {windows: " + variant + "}, codex-skills: {windows: " + variant + "}}\n"),
+			`placement "codex-skills" needs applies_to`,
+		},
+		"two placements on an OS with the same applies_to": {
+			strings.Replace(testPlacements, "[Codex]", "[Claude Code]", 1),
+			item("  type: zip\n  variants: {claude-code-skills: {windows: " + variant + "}, codex-skills: {windows: " + variant + "}}\n"),
+			`placements "claude-code-skills" and "codex-skills" have the same applies_to (Claude Code) on windows`,
+		},
+		"one placement on each OS without applies_to": {
+			strings.ReplaceAll(strings.Replace(testPlacements, "    applies_to: [Codex]\n", "", 1), "    applies_to: [Claude Code]\n", ""),
+			item("  type: zip\n  variants: {claude-code-skills: {darwin: " + variant + "}, codex-skills: {windows: " + variant + "}}\n"), "",
 		},
 		"template of a placement without paths": {
 			testPlacements + strings.Replace(rootlessPlacement, "'{}'", `'{{ fact "missing" }}'`, 1), chromeInfo,

@@ -50,11 +50,11 @@ func TestServiceLocalManifestAddRemove(t *testing.T) {
 	stubOptional(t, "GoogleChrome", "7zip")
 
 	for _, name := range []string{"GoogleChrome", "7zip"} {
-		if _, _, err := addServiceManagedInstall(cfg, testAdmin, name); err != nil {
+		if _, _, _, err := addServiceManagedInstall(cfg, testAdmin, name, ""); err != nil {
 			t.Fatalf("addServiceManagedInstall failed: %v", err)
 		}
 	}
-	if _, _, err := addServiceManagedInstall(cfg, testAdmin, "GoogleChrome"); err != nil {
+	if _, _, _, err := addServiceManagedInstall(cfg, testAdmin, "GoogleChrome", ""); err != nil {
 		t.Fatalf("addServiceManagedInstall dedupe failed: %v", err)
 	}
 
@@ -62,7 +62,7 @@ func TestServiceLocalManifestAddRemove(t *testing.T) {
 		t.Fatalf("unexpected installs after add: %#v", got)
 	}
 
-	if _, err := removeServiceManagedInstall(cfg, testAdmin, "GoogleChrome"); err != nil {
+	if _, _, err := removeServiceManagedInstall(cfg, testAdmin, "GoogleChrome", ""); err != nil {
 		t.Fatalf("removeServiceManagedInstall failed: %v", err)
 	}
 
@@ -80,7 +80,7 @@ func TestAddServiceManagedInstallsRejectsUnauthorized(t *testing.T) {
 	cfg := config.Configuration{AppDataPath: filepath.Clean(t.TempDir())}
 	stubOptional(t, "GoogleChrome")
 
-	if _, _, err := addServiceManagedInstall(cfg, testAdmin, "NotOptional"); err == nil {
+	if _, _, _, err := addServiceManagedInstall(cfg, testAdmin, "NotOptional", ""); err == nil {
 		t.Fatalf("expected authorization error for unavailable item")
 	}
 	// Nothing should have been written.
@@ -120,7 +120,7 @@ func TestRemoveServiceManagedInstallAuthorization(t *testing.T) {
 			if err := manifest.SaveSelfServe(serviceLocalManifestPath(cfg), tc.before); err != nil {
 				t.Fatal(err)
 			}
-			_, err := removeServiceManagedInstall(cfg, testAdmin, tc.name)
+			_, _, err := removeServiceManagedInstall(cfg, testAdmin, tc.name, "")
 			got := loadManifest(t, cfg)
 			if tc.allowed {
 				if err != nil || !slices.Equal(got.Uninstalls, []string{tc.name}) {
@@ -144,16 +144,16 @@ func TestAddCancelsPendingUninstall(t *testing.T) {
 	cfg := config.Configuration{AppDataPath: filepath.Clean(t.TempDir())}
 	stubOptional(t, "GoogleChrome")
 
-	if _, _, err := addServiceManagedInstall(cfg, testAdmin, "GoogleChrome"); err != nil {
+	if _, _, _, err := addServiceManagedInstall(cfg, testAdmin, "GoogleChrome", ""); err != nil {
 		t.Fatalf("add failed: %v", err)
 	}
-	if _, err := removeServiceManagedInstall(cfg, testAdmin, "GoogleChrome"); err != nil {
+	if _, _, err := removeServiceManagedInstall(cfg, testAdmin, "GoogleChrome", ""); err != nil {
 		t.Fatalf("remove failed: %v", err)
 	}
 	if got := loadManifest(t, cfg).Uninstalls; !reflect.DeepEqual(got, []string{"GoogleChrome"}) {
 		t.Fatalf("expected pending uninstall, got %#v", got)
 	}
-	if _, _, err := addServiceManagedInstall(cfg, testAdmin, "GoogleChrome"); err != nil {
+	if _, _, _, err := addServiceManagedInstall(cfg, testAdmin, "GoogleChrome", ""); err != nil {
 		t.Fatalf("re-add failed: %v", err)
 	}
 	entry := loadManifest(t, cfg)
@@ -283,7 +283,7 @@ func TestWithdrawItemRevertsTheRequestExactly(t *testing.T) {
 			name:   "fresh install",
 			before: manifest.Item{Installs: []string{"7zip"}},
 			request: func(cfg config.Configuration) (selection, error) {
-				_, p, err := addServiceManagedInstall(cfg, testAdmin, "GoogleChrome")
+				_, p, _, err := addServiceManagedInstall(cfg, testAdmin, "GoogleChrome", "")
 				return p, err
 			},
 			requested: selectedForInstall,
@@ -292,7 +292,7 @@ func TestWithdrawItemRevertsTheRequestExactly(t *testing.T) {
 			name:   "install of an item pending removal",
 			before: manifest.Item{Uninstalls: []string{"GoogleChrome"}},
 			request: func(cfg config.Configuration) (selection, error) {
-				_, p, err := addServiceManagedInstall(cfg, testAdmin, "GoogleChrome")
+				_, p, _, err := addServiceManagedInstall(cfg, testAdmin, "GoogleChrome", "")
 				return p, err
 			},
 			requested: selectedForInstall,
@@ -301,7 +301,8 @@ func TestWithdrawItemRevertsTheRequestExactly(t *testing.T) {
 			name:   "removal of a selected item",
 			before: manifest.Item{Installs: []string{"7zip", "GoogleChrome"}},
 			request: func(cfg config.Configuration) (selection, error) {
-				return removeServiceManagedInstall(cfg, testAdmin, "GoogleChrome")
+				p, _, err := removeServiceManagedInstall(cfg, testAdmin, "GoogleChrome", "")
+				return p, err
 			},
 			requested: selectedForRemoval,
 		},
@@ -333,7 +334,7 @@ func TestWithdrawItemRevertsTheRequestExactly(t *testing.T) {
 func TestWithdrawItemRefusedKeepsTheRequest(t *testing.T) {
 	cfg := config.Configuration{AppDataPath: t.TempDir()}
 	stubOptional(t, "GoogleChrome")
-	_, prior, err := addServiceManagedInstall(cfg, testAdmin, "GoogleChrome")
+	_, prior, _, err := addServiceManagedInstall(cfg, testAdmin, "GoogleChrome", "")
 	if err != nil {
 		t.Fatal(err)
 	}

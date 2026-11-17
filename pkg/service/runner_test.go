@@ -93,7 +93,7 @@ func TestServiceStreamStatusReliability(t *testing.T) {
 	_, ctx := startTestRunner(t, cfg, noopRun)
 
 	for i := 0; i < reliabilityIterations(t); i++ {
-		accepted, err := NewClient(cfg.ServicePipeName).InstallItem(ctx, "Slack")
+		accepted, err := NewClient(cfg.ServicePipeName).InstallItem(ctx, "Slack", "")
 		if err != nil {
 			t.Fatalf("iteration %d: installItem: %v", i, err)
 		}
@@ -217,7 +217,7 @@ func TestStreamOperationStatusFailedLifecycle(t *testing.T) {
 		return nil, errors.New("forced managed run failure")
 	})
 
-	accepted, err := NewClient(cfg.ServicePipeName).InstallItem(ctx, "Slack")
+	accepted, err := NewClient(cfg.ServicePipeName).InstallItem(ctx, "Slack", "")
 	if err != nil {
 		t.Fatalf("installItem: %v", err)
 	}
@@ -612,7 +612,7 @@ func TestCancelOperationAcceptedWhileQueuedThenRefused(t *testing.T) {
 	})
 
 	client := NewClient(cfg.ServicePipeName)
-	accepted, err := client.InstallItem(ctx, "Slack")
+	accepted, err := client.InstallItem(ctx, "Slack", "")
 	if err != nil {
 		t.Fatalf("InstallItem failed: %v", err)
 	}
@@ -683,7 +683,7 @@ func TestMutationReturnsWhileRunIsBusy(t *testing.T) {
 	callCtx, callCancel := context.WithTimeout(ctx, 5*time.Second)
 	defer callCancel()
 	client := NewClient(cfg.ServicePipeName)
-	accepted, err := client.InstallItem(callCtx, "Slack")
+	accepted, err := client.InstallItem(callCtx, "Slack", "")
 	if err != nil {
 		t.Fatalf("InstallItem behind a busy run failed: %v", err)
 	}
@@ -694,7 +694,7 @@ func TestMutationReturnsWhileRunIsBusy(t *testing.T) {
 	if !ok || done || events[len(events)-1].State != "Queued" {
 		t.Fatalf("operation should be open and Queued: ok=%v done=%v events=%#v", ok, done, events)
 	}
-	removed, err := client.RemoveItem(callCtx, "Slack")
+	removed, err := client.RemoveItem(callCtx, "Slack", "")
 	if err != nil {
 		t.Fatalf("RemoveItem behind a busy run failed: %v", err)
 	}
@@ -763,7 +763,7 @@ func TestMutationRecordsWhoAsked(t *testing.T) {
 	}
 
 	client := NewClient(cfg.ServicePipeName)
-	accepted, err := client.InstallItem(ctx, "Slack")
+	accepted, err := client.InstallItem(ctx, "Slack", "")
 	if err != nil {
 		t.Fatalf("InstallItem: %v", err)
 	}
@@ -851,7 +851,7 @@ func TestStreamsBeyondTheLimitGetServerBusy(t *testing.T) {
 	cfg := testServiceConfig(t)
 	stubOptional(t, "Slack")
 	sr, ctx := startTestRunner(t, cfg, noopRun)
-	accepted, err := NewClient(cfg.ServicePipeName).InstallItem(ctx, "Slack")
+	accepted, err := NewClient(cfg.ServicePipeName).InstallItem(ctx, "Slack", "")
 	if err != nil {
 		t.Fatalf("InstallItem: %v", err)
 	}

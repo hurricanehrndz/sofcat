@@ -11,6 +11,7 @@ managed_installs:
   - tapas-policy-user-skill
 optional_installs:
   - tapas-optional-skill
+  - tapas-choice-skill
   - tapas-adopt-skill
   - tapas-foreign-skill
   - tapas-outside-skill

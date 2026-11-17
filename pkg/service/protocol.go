@@ -141,6 +141,9 @@ func IsErrorCode(err error, appCode string) bool {
 
 type itemParams struct {
 	ItemName string `json:"itemName"`
+	// Placement narrows an installItem or removeItem to one placement of a
+	// zip item; "" is every placement.
+	Placement string `json:"placement,omitempty"`
 }
 
 type operationParams struct {
@@ -184,6 +187,23 @@ type OptionalInstallItem struct {
 	// AppliesTo is the union of the applies_to of the item's placements,
 	// shown after the applies_to label; display only.
 	AppliesTo []string `json:"appliesTo,omitempty"`
+	// Placements is set only for a zip item with two or more placements on
+	// this OS, in placements.yaml order, so one can be added or removed.
+	Placements []OptionalInstallPlacement `json:"placements,omitempty"`
+
+	// placementNames is every placement the item has on this OS, in table
+	// order: the placements a request for the item may name.
+	placementNames []string
+}
+
+// OptionalInstallPlacement is one placement of an OptionalInstallItem. Label
+// is the placement's applies_to joined with ", ", else its name. Status is
+// Installed, NotInstalled, WillBeInstalled or WillBeRemoved.
+type OptionalInstallPlacement struct {
+	Name        string `json:"name"`
+	Label       string `json:"label"`
+	IsInstalled bool   `json:"isInstalled"`
+	Status      string `json:"status"`
 }
 
 type listOptionalInstallsResponse struct {

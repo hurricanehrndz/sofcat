@@ -22,6 +22,7 @@ type fakeServiceClient struct {
 	listCalls   int
 	installName string
 	removeName  string
+	placement   string
 	streamID    string
 	cancelID    string
 	stream      func(context.Context, func(sofcatservice.OperationStatus) error) error
@@ -36,13 +37,13 @@ func (f *fakeServiceClient) GetBranding(context.Context) (branding.Branding, err
 	return f.branding, nil
 }
 
-func (f *fakeServiceClient) InstallItem(_ context.Context, itemName string) (sofcatservice.AcceptedOperation, error) {
-	f.installName = itemName
+func (f *fakeServiceClient) InstallItem(_ context.Context, itemName, placement string) (sofcatservice.AcceptedOperation, error) {
+	f.installName, f.placement = itemName, placement
 	return f.accepted, nil
 }
 
-func (f *fakeServiceClient) RemoveItem(_ context.Context, itemName string) (sofcatservice.AcceptedOperation, error) {
-	f.removeName = itemName
+func (f *fakeServiceClient) RemoveItem(_ context.Context, itemName, placement string) (sofcatservice.AcceptedOperation, error) {
+	f.removeName, f.placement = itemName, placement
 	return f.accepted, nil
 }
 
@@ -72,19 +73,25 @@ func TestUIServiceValidationAndForwarding(t *testing.T) {
 	if err != nil || len(items) != 1 || client.listCalls != 1 {
 		t.Fatalf("list forwarding failed: items=%#v calls=%d err=%v", items, client.listCalls, err)
 	}
-	if accepted, err := service.InstallItem(" demo "); err != nil || accepted.OperationID != "op-1" || client.installName != "demo" {
+	if accepted, err := service.InstallItem(" demo ", ""); err != nil || accepted.OperationID != "op-1" || client.installName != "demo" {
 		t.Fatalf("install forwarding failed: accepted=%#v name=%q err=%v", accepted, client.installName, err)
 	}
-	if accepted, err := service.RemoveItem(" demo "); err != nil || accepted.OperationID != "op-1" || client.removeName != "demo" {
+	if accepted, err := service.RemoveItem(" demo ", ""); err != nil || accepted.OperationID != "op-1" || client.removeName != "demo" {
 		t.Fatalf("remove forwarding failed: accepted=%#v name=%q err=%v", accepted, client.removeName, err)
+	}
+	if _, err := service.InstallItem("demo", " claude-skills "); err != nil || client.placement != "claude-skills" {
+		t.Fatalf("install placement forwarding failed: placement=%q err=%v", client.placement, err)
+	}
+	if _, err := service.RemoveItem("demo", "codex-skills"); err != nil || client.placement != "codex-skills" {
+		t.Fatalf("remove placement forwarding failed: placement=%q err=%v", client.placement, err)
 	}
 
 	client.installName = ""
 	client.removeName = ""
-	if _, err := service.InstallItem(" \t"); err == nil || client.installName != "" {
+	if _, err := service.InstallItem(" \t", ""); err == nil || client.installName != "" {
 		t.Fatal("blank install item was forwarded")
 	}
-	if _, err := service.RemoveItem(""); err == nil || client.removeName != "" {
+	if _, err := service.RemoveItem("", ""); err == nil || client.removeName != "" {
 		t.Fatal("blank remove item was forwarded")
 	}
 	if err := service.WatchOperation(" "); err == nil || client.streamID != "" {
@@ -111,10 +118,10 @@ func TestUIServiceWithoutStartupRejectsCalls(t *testing.T) {
 	if _, err := service.ListOptionalInstalls(); err == nil || client.listCalls != 0 {
 		t.Fatalf("list forwarded without startup: calls=%d err=%v", client.listCalls, err)
 	}
-	if _, err := service.InstallItem("demo"); err == nil || client.installName != "" {
+	if _, err := service.InstallItem("demo", ""); err == nil || client.installName != "" {
 		t.Fatalf("install forwarded without startup: name=%q err=%v", client.installName, err)
 	}
-	if _, err := service.RemoveItem("demo"); err == nil || client.removeName != "" {
+	if _, err := service.RemoveItem("demo", ""); err == nil || client.removeName != "" {
 		t.Fatalf("remove forwarded without startup: name=%q err=%v", client.removeName, err)
 	}
 	if err := service.WatchOperation("op-1"); err == nil || client.streamID != "" {

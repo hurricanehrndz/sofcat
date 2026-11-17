@@ -151,3 +151,18 @@ func Installed(itemName string, catalogsMap map[int]map[string]catalog.Item, che
 	}
 	return installed
 }
+
+// PlacementSubsets returns the placements each self-serve zip item is
+// narrowed to (installer.ZipInstaller.Subsets): the placement_selections
+// entry of every name in installs, the self-serve installs, except one skip
+// reports. A run skips the items an admin manifest requires, which go to
+// every placement, and the held ones, which it leaves as they are.
+func PlacementSubsets(selfServe manifest.Item, installs []string, skip func(name string) bool) map[string][]string {
+	subsets := map[string][]string{}
+	for _, name := range installs {
+		if subset := selfServe.PlacementSelections[name]; len(subset) > 0 && !skip(name) {
+			subsets[name] = subset
+		}
+	}
+	return subsets
+}
