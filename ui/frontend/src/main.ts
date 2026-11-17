@@ -390,7 +390,8 @@ function card(item: OptionalInstallItem): HTMLElement {
   // control itself, so it nests none: keyboard and screen-reader users reach
   // the same page through its Details button.
   article.addEventListener("click", (event) => {
-    if (opensDetails(event.target instanceof Element ? event.target : null)) {
+    const selecting = !(document.getSelection()?.isCollapsed ?? true);
+    if (opensDetails(event.target instanceof Element ? event.target : null, selecting)) {
       openDetail(item);
     }
   });
@@ -769,6 +770,8 @@ function openDetail(item: OptionalInstallItem): void {
  * closeDetail returns to the list and hands focus to the Details button of the
  * card it came from. The card is found by item, because a refresh while the
  * page was open (the end of every operation brings one) rebuilds the grid.
+ * When the card is gone from the list, dropped by a refresh or hidden by the
+ * filters, focus goes to the search field at the top of the list instead.
  */
 function closeDetail(): void {
   if (viewDetail.hidden || detailItemName === null) {
@@ -776,7 +779,8 @@ function closeDetail(): void {
   }
   const itemName = detailItemName;
   showView(currentView);
-  grid.querySelector<HTMLButtonElement>(`[data-item="${CSS.escape(itemName)}"] .card-details`)?.focus();
+  const details = grid.querySelector<HTMLButtonElement>(`[data-item="${CSS.escape(itemName)}"] .card-details`);
+  (details ?? searchInput).focus();
 }
 
 async function refresh(): Promise<void> {
