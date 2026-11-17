@@ -94,16 +94,38 @@ function sequence(item: MockItem, removing: boolean): MockEvent[] {
   return events;
 }
 
-const acceptedOperations = new Map<string, { item: MockItem; removing: boolean }>();
+type MockRequest = { item: MockItem; removing: boolean; placement: string };
+const acceptedOperations = new Map<string, MockRequest>();
 
-function mutate(itemName: string, removing: boolean): Promise<AcceptedOperation> {
+function mutate(itemName: string, removing: boolean, placement = ""): Promise<AcceptedOperation> {
   const item = items.find((candidate) => candidate.itemName === itemName);
   if (!item) {
     return Promise.reject(new Error(`unknown item ${itemName}`));
   }
+  if (placement && !item.placements?.some((candidate) => candidate.name === placement)) {
+    return Promise.reject(new Error(`invalid_params: unknown placement ${placement} for ${itemName}`));
+  }
   const accepted = accept();
-  acceptedOperations.set(accepted.operationId ?? "", { item, removing });
+  acceptedOperations.set(accepted.operationId ?? "", { item, removing, placement });
   return Promise.resolve(accepted);
+}
+
+/**
+ * settle applies a succeeded request. The mock skips the pending states: a
+ * placement is placed or gone at once, and an item with placements reads
+ * Installed (narrowed) while any of them is.
+ */
+function settle({ item, removing, placement }: MockRequest): void {
+  for (const candidate of item.placements ?? []) {
+    if (!placement || candidate.name === placement) {
+      candidate.isInstalled = !removing;
+      candidate.status = removing ? "NotInstalled" : "Installed";
+    }
+  }
+  const installed = item.placements ? item.placements.some((candidate) => candidate.isInstalled) : !removing;
+  item.isInstalled = installed;
+  item.isManaged = installed;
+  item.status = installed ? "Installed" : "NotInstalled";
 }
 
 // Watched operations, for cancelOperation: pending timers, the state last sent,
@@ -157,9 +179,7 @@ function watch(operationId: string): Promise<void> {
             ...partial,
           };
           if (status.state === "Succeeded") {
-            item.isInstalled = !removing;
-            item.isManaged = !removing;
-            item.status = removing ? "NotInstalled" : "Installed";
+            settle(request);
           }
           entry.state = status.state;
           emit(status);
@@ -215,10 +235,10 @@ export const api: SofCatApi = {
     offline()
       ? Promise.reject(new Error("mock service unavailable (remove ?offline to reconnect)"))
       : new Promise((resolve) =>
-          setTimeout(() => resolve(items.map(({ mock: _mock, ...item }) => item)), 250),
+          setTimeout(() => resolve(items.map(({ mock: _mock, ...item }) => structuredClone(item))), 250),
         ),
-  installItem: (itemName) => mutate(itemName, false),
-  removeItem: (itemName) => mutate(itemName, true),
+  installItem: (itemName, placement) => mutate(itemName, false, placement),
+  removeItem: (itemName, placement) => mutate(itemName, true, placement),
   watchOperation: (operationId) => watch(operationId),
   cancelOperation: (operationId) => cancel(operationId),
   // `?store=` picks the fixture store; `?unbranded` keeps its items and drops

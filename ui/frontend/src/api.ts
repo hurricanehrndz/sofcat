@@ -2,9 +2,10 @@ import type { Branding } from "../bindings/github.com/hurricanehrndz/sofcat/pkg/
 import type {
   AcceptedOperation,
   OptionalInstallItem,
+  OptionalInstallPlacement,
 } from "../bindings/github.com/hurricanehrndz/sofcat/pkg/service/models.js";
 
-export type { AcceptedOperation, Branding, OptionalInstallItem };
+export type { AcceptedOperation, Branding, OptionalInstallItem, OptionalInstallPlacement };
 
 // ponytail: OperationStatus is hand-typed because the committed bindings are
 // generated with -noevents, so no generated model exists for the event payload.
@@ -31,8 +32,9 @@ export type OperationStatus = {
 /** SofCatApi is the entire frontend view of the backend. */
 export type SofCatApi = {
   listOptionalInstalls(): Promise<OptionalInstallItem[]>;
-  installItem(itemName: string): Promise<AcceptedOperation>;
-  removeItem(itemName: string): Promise<AcceptedOperation>;
+  /** installItem and removeItem act on one placement of the item when one is named, else on every one. */
+  installItem(itemName: string, placement?: string): Promise<AcceptedOperation>;
+  removeItem(itemName: string, placement?: string): Promise<AcceptedOperation>;
   watchOperation(operationId: string): Promise<void>;
   /** cancelOperation rejects with the service's operation_not_cancelable message when refused. */
   cancelOperation(operationId: string): Promise<void>;

@@ -396,3 +396,51 @@ func tempDir(t *testing.T) string {
 	}
 	return dir
 }
+
+// TestZipSubset: an item narrowed to some placements targets only those, is
+// installed once they are placed, and scope exit removes its tree from any
+// other placement it holds a receipt for, keeping the item: a user took that
+// placement away. A held item keeps every tree, and check-only removes none.
+func TestZipSubset(t *testing.T) {
+	z, roots := newTestZip(t)
+	item, archive := packVersion(t, "1.0", map[string]string{"SKILL.md": "v1"})
+	for _, name := range []string{"skills", "exclusive"} {
+		wantOutcome(t, "install "+name, z.Apply(item, target(t, z, item, name), archive), OutcomeInstalled)
+	}
+
+	z.Subsets = map[string][]string{"hello": {"skills"}}
+	if machine, _ := z.Targets(item); len(machine) != 1 || machine[0].Placement != "skills" {
+		t.Fatalf("targets = %+v, want skills only", machine)
+	}
+	if err := os.RemoveAll(filepath.Join(roots, "exclusive", "hello")); err != nil {
+		t.Fatal(err)
+	}
+	if !z.Installed(item) {
+		t.Fatal("placed in its only placement, yet not installed")
+	}
+	wantOutcome(t, "reinstall exclusive", z.Apply(item, Target{Placement: "exclusive", Variant: item.Installer.Variants["exclusive"][testOS()], Spec: z.Table.Placements["exclusive"], Known: true}, archive), OutcomeInstalled)
+
+	keep := func(string) bool { return true }
+	z.Held = func(string) bool { return true }
+	if err := (&Runner{Report: &report.Report{}, Zip: z}).ScopeExit(keep); err != nil || !exists(filepath.Join(roots, "exclusive", "hello")) {
+		t.Fatalf("a held item lost the tree outside its subset (err %v)", err)
+	}
+	z.Held = nil
+	if err := (&Runner{Report: &report.Report{}, Zip: z, CheckOnly: true}).ScopeExit(keep); err != nil || !exists(filepath.Join(roots, "exclusive", "hello")) {
+		t.Fatalf("a check-only run removed the tree outside the subset (err %v)", err)
+	}
+
+	r := &Runner{Report: &report.Report{}, Zip: z}
+	if err := r.ScopeExit(keep); err != nil {
+		t.Fatal(err)
+	}
+	if exists(filepath.Join(roots, "exclusive", "hello")) || !exists(filepath.Join(roots, "skills", "hello")) {
+		t.Fatal("scope exit did not remove just the placement outside the subset")
+	}
+	if _, ok, _ := receipt.Read(z.ReceiptDir, "exclusive", "hello"); ok {
+		t.Error("the removed placement kept its receipt")
+	}
+	if len(r.Report.UninstalledItems) != 0 || len(r.Report.FailedItems) != 0 {
+		t.Errorf("report = %+v, want the item neither uninstalled nor failed", r.Report)
+	}
+}

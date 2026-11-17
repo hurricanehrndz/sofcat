@@ -2,7 +2,7 @@ import type { OptionalInstallItem } from "./api.ts";
 
 // The protocol models stay single-sourced in the generated bindings; only the
 // presentation-side shapes live here.
-export type { OperationStatus, OptionalInstallItem } from "./api.ts";
+export type { OperationStatus, OptionalInstallItem, OptionalInstallPlacement } from "./api.ts";
 
 export type ActionMethod = "InstallItem" | "RemoveItem";
 
@@ -17,6 +17,8 @@ export type ItemAction = {
   /** Catalog or placement text, shown only through textContent. */
   label: string;
   method: ActionMethod;
+  /** The one placement the action is for; absent for every placement. */
+  placement?: string;
 };
 
 /** CachedList is the `sofcat.optional-items.v1` localStorage shape. */

@@ -50,6 +50,10 @@ type ZipInstaller struct {
 	// item's managed flag is never rewritten: the run cannot tell whether it
 	// is managed. Nil means nothing is held.
 	Held func(item string) bool
+	// Subsets maps an item to the only placements it targets: a user's
+	// self-serve placement_selections entry. An item without one targets
+	// every placement. Nil means none is narrowed.
+	Subsets map[string][]string
 	// Facts are the run's facts (pkg/facts), which placement file and tree
 	// templates read through fact and cond. Nil means the machine has no
 	// facts, so a template that reads one fails.
@@ -176,15 +180,22 @@ func (z *ZipInstaller) clock() time.Time {
 	return time.Now().UTC()
 }
 
+// Wants reports whether item targets placement name: always, unless
+// Subsets narrows the item to placements without it.
+func (z *ZipInstaller) Wants(item, name string) bool {
+	subset, ok := z.Subsets[item]
+	return !ok || slices.Contains(subset, name)
+}
+
 // Targets returns item's placements on this OS, in table order, then
-// any the table lacks, by name. Placements whose scope here is user are
-// returned apart in user: a machine run skips them, neither failing nor
-// succeeding the item.
+// any the table lacks, by name, leaving out those Wants rejects. Placements
+// whose scope here is user are returned apart in user: a machine run skips
+// them, neither failing nor succeeding the item.
 func (z *ZipInstaller) Targets(item catalog.Item) (machine []Target, user []string) {
 	goos := z.Guard.GOOS
 	variantFor := func(name string) (catalog.Variant, bool) {
 		v, ok := item.Installer.Variants[name][goos]
-		return v, ok
+		return v, ok && z.Wants(item.Name, name)
 	}
 	for _, name := range z.Table.Names() {
 		v, ok := variantFor(name)
@@ -702,13 +713,20 @@ func (z *ZipInstaller) Installed(item catalog.Item) bool {
 		return false
 	}
 	for _, t := range machine {
-		rc, ok, err := receipt.Read(z.ReceiptDir, t.Placement, item.Name)
-		if err != nil || !ok {
-			return false
-		}
-		if empty, err := dirEmpty(rc.Path); err != nil || empty {
+		if !z.PlacementInstalled(item.Name, t.Placement) {
 			return false
 		}
 	}
 	return true
+}
+
+// PlacementInstalled is Installed for one machine-scope placement: item has
+// a receipt there and a non-empty tree at the receipt's path.
+func (z *ZipInstaller) PlacementInstalled(item, name string) bool {
+	rc, ok, err := receipt.Read(z.ReceiptDir, name, item)
+	if err != nil || !ok {
+		return false
+	}
+	empty, err := dirEmpty(rc.Path)
+	return err == nil && !empty
 }

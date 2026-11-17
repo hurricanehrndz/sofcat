@@ -51,7 +51,8 @@ user's operation to watch it.
   operation progress, and is present only when measured: a download of known
   length is; an install or removal is not. An item's detail page shows its
   current phase beside a spinner; a Home card shows no progress, only a
-  pending or required item's status and a failure or deferral reason. The one
+  pending, required or partly installed item's status ("Installed in Claude
+  Code") and a failure or deferral reason. The one
   bar is in the bottom strip, for the operation being worked on, and is
   indeterminate for a phase without a percentage. The record timeline is only
   in Activity.
@@ -157,7 +158,10 @@ badges, a deferral, and Cancel during the download.
 - `?store=apps` (the default): Acme Software Center, Windows installers in
   Productivity, Developer tools and Utilities.
 - `?store=skills`: Acme AI Skills, cross-platform skills and plugins with
-  `appliesTo` names and placement labels.
+  `appliesTo` names and placement labels. Release Notes Writer and SQL Explainer
+  have two placements, so their detail pages show a row per placement
+  (installed, not installed and pending), and SQL Explainer's card reads
+  "Installed in Claude Code".
 - `?unbranded`: the same store's items with empty branding, the stock look.
 - `?offline`: the item list fails, showing the cached list or the offline state.
 

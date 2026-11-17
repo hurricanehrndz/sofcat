@@ -75,6 +75,12 @@ export class OptionalInstallItem {
      */
     "appliesTo"?: string[];
 
+    /**
+     * Placements is set only for a zip item with two or more placements on
+     * this OS, in placements.yaml order, so one can be added or removed.
+     */
+    "placements"?: OptionalInstallPlacement[];
+
     /** Creates a new OptionalInstallItem instance. */
     constructor($$source: Partial<OptionalInstallItem> = {}) {
         if (!("itemName" in $$source)) {
@@ -114,6 +120,7 @@ export class OptionalInstallItem {
     static createFrom($$source: any = {}): OptionalInstallItem {
         const $$createField16_0 = $$createType0;
         const $$createField17_0 = $$createType1;
+        const $$createField18_0 = $$createType3;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("actionLabels" in $$parsedSource) {
             $$parsedSource["actionLabels"] = $$createField16_0($$parsedSource["actionLabels"]);
@@ -121,10 +128,53 @@ export class OptionalInstallItem {
         if ("appliesTo" in $$parsedSource) {
             $$parsedSource["appliesTo"] = $$createField17_0($$parsedSource["appliesTo"]);
         }
+        if ("placements" in $$parsedSource) {
+            $$parsedSource["placements"] = $$createField18_0($$parsedSource["placements"]);
+        }
         return new OptionalInstallItem($$parsedSource as Partial<OptionalInstallItem>);
+    }
+}
+
+/**
+ * OptionalInstallPlacement is one placement of an OptionalInstallItem. Label
+ * is the placement's applies_to joined with ", ", else its name. Status is
+ * Installed, NotInstalled, WillBeInstalled or WillBeRemoved.
+ */
+export class OptionalInstallPlacement {
+    "name": string;
+    "label": string;
+    "isInstalled": boolean;
+    "status": string;
+
+    /** Creates a new OptionalInstallPlacement instance. */
+    constructor($$source: Partial<OptionalInstallPlacement> = {}) {
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("label" in $$source)) {
+            this["label"] = "";
+        }
+        if (!("isInstalled" in $$source)) {
+            this["isInstalled"] = false;
+        }
+        if (!("status" in $$source)) {
+            this["status"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new OptionalInstallPlacement instance from a string or object.
+     */
+    static createFrom($$source: any = {}): OptionalInstallPlacement {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new OptionalInstallPlacement($$parsedSource as Partial<OptionalInstallPlacement>);
     }
 }
 
 // Private type creation functions
 const $$createType0 = $Create.Map($Create.Any, $Create.Any);
 const $$createType1 = $Create.Array($Create.Any);
+const $$createType2 = OptionalInstallPlacement.createFrom;
+const $$createType3 = $Create.Array($$createType2);

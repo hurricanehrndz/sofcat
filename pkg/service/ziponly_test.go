@@ -33,7 +33,7 @@ func TestZipOnlyRejectedItemsNotOffered(t *testing.T) {
 		t.Errorf("listed %+v; want only Zip", items)
 	}
 	for _, name := range []string{"MsiUninstall", "Exe"} {
-		if _, _, err := addServiceManagedInstall(cfg, testAdmin, name); !errors.Is(err, errItemNotAvailable) {
+		if _, _, _, err := addServiceManagedInstall(cfg, testAdmin, name, ""); !errors.Is(err, errItemNotAvailable) {
 			t.Errorf("addServiceManagedInstall(%s) error = %v, want errItemNotAvailable", name, err)
 		}
 	}

@@ -79,21 +79,24 @@ func (c *Client) GetBranding(ctx context.Context) (branding.Branding, error) {
 	return result, nil
 }
 
-func (c *Client) InstallItem(ctx context.Context, itemName string) (AcceptedOperation, error) {
-	return c.mutate(ctx, methodInstallItem, itemName)
+// InstallItem selects itemName, in placement only when one is named (see
+// ui/ARCHITECTURE.md, "Protocol"); "" is every placement.
+func (c *Client) InstallItem(ctx context.Context, itemName, placement string) (AcceptedOperation, error) {
+	return c.mutate(ctx, methodInstallItem, itemName, placement)
 }
 
-func (c *Client) RemoveItem(ctx context.Context, itemName string) (AcceptedOperation, error) {
-	return c.mutate(ctx, methodRemoveItem, itemName)
+// RemoveItem deselects itemName, or only its placement when one is named.
+func (c *Client) RemoveItem(ctx context.Context, itemName, placement string) (AcceptedOperation, error) {
+	return c.mutate(ctx, methodRemoveItem, itemName, placement)
 }
 
-func (c *Client) mutate(ctx context.Context, method, itemName string) (AcceptedOperation, error) {
+func (c *Client) mutate(ctx context.Context, method, itemName, placement string) (AcceptedOperation, error) {
 	itemName = strings.TrimSpace(itemName)
 	if itemName == "" {
 		return AcceptedOperation{}, fmt.Errorf("%s requires itemName", method)
 	}
 	var accepted AcceptedOperation
-	if err := c.call(ctx, method, itemParams{ItemName: itemName}, &accepted, nil); err != nil {
+	if err := c.call(ctx, method, itemParams{ItemName: itemName, Placement: strings.TrimSpace(placement)}, &accepted, nil); err != nil {
 		return AcceptedOperation{}, err
 	}
 	if !accepted.Accepted {

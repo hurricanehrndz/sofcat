@@ -27,7 +27,7 @@ placements:
 | key | The placement name. Variants and the `placements` list of an item file use it. |
 | `paths` | The placement root, keyed by `darwin` and `windows`: a directory with one tree per item at `<root>/<item_name>`. A placement without `paths` is rootless (see Rootless placements). |
 | `scope` | `machine` or `user`, keyed like `paths`. An OS left out is `machine`. In `user` scope the per-user helper places the trees and writes the `files`. A rootless placement is `machine` only. |
-| `applies_to` | Display names, such as `[Desktop]`. The storefront shows a line such as "Applies to: Desktop" for an item (see Storefront labels). Display only: it does not limit where an item is placed. |
+| `applies_to` | Display names, such as `[Desktop]`. Required, and different from the others, on each placement of an item that has two or more on an OS (see Choosing placements). The storefront shows a line such as "Applies to: Desktop" for an item, or labels the placement's row on the detail page (see Storefront labels). Display only: it does not limit where an item is placed. |
 | `action_labels` | Optional storefront label overrides for the placement's items. Keys: `install`, `installing`, `installed`, `remove`, `removing`, `update`, `cancel`, `pending_install`, `pending_remove`, `applies_to`. |
 | `exclusive` | Optional. When true, sofcat does not write into an existing, non-empty root it did not create. |
 | `items_dir` | Optional. Item trees go to `<root>/<items_dir>/<item_name>` instead. A clean relative path, slash-separated, each segment one Windows can hold, whose first segment does not start with `.`. |
@@ -78,7 +78,10 @@ Only placements with a variant for the machine's OS count, for labels and for
 `applies_to`, in file order, without repeats, after the `applies_to` label
 ("Applies to" unless a layer sets it). The line is only text: it names where
 the item is meant to be used and never scopes the item, so a label such as
-"Works in" may read better. For example:
+"Works in" may read better. On the detail page of an item with two or more such
+placements, a row per placement takes the line's place, labelled with that
+placement's `applies_to`; see
+[Choosing placements](#choosing-placements). For example:
 
 ```yaml
 # placements.yaml
@@ -101,6 +104,30 @@ label stays "Remove" unless a layer sets `remove`. The applies-to line reads
 for the next run ("Will be installed", "Will be removed"), which the card
 shows beside its Cancel button. Set them along with `install` and `remove`,
 so the status reads in the same words as the button that made the request.
+
+## Choosing placements
+
+An item with two or more placements that have a variant for the machine's OS
+can be added to or removed from one of them. Its detail page lists the
+placements, each with its `applies_to` as the label, its status and one
+button: the item's `install` label where it is not installed, `remove` where
+it is, and `cancel` beside the `pending_install` or `pending_remove` status of
+a placement waiting for the next run. The card stays as it was, except that an
+item installed in some of its placements but not all reads, for example,
+"Installed in Claude Code", and its install button adds the item to the rest.
+An item with one placement on the OS shows the applies-to line as before.
+
+The rows are told apart only by `applies_to`, so `makecatalogs -check` and
+`makecatalogs build` refuse an item with two or more placements on an OS when
+one of them has no `applies_to` or two of them have the same one.
+
+The choice is stored for the machine, not per user, in the self-serve
+manifest's `placement_selections`, beside `selected_by`. Removing an item from
+its last chosen placement removes it. A run places the item only in its
+chosen placements and removes it from any other it was placed in. An item an
+admin manifest lists in `managed_installs` goes to every placement, whatever
+was chosen. Taking a placement away is a removal, so it is allowed only to the
+user who added the item or an administrator.
 
 ## Write roots
 

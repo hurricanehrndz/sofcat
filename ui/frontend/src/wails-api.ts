@@ -5,8 +5,8 @@ import type { SofCatApi, OperationStatus } from "./api.ts";
 
 export const api: SofCatApi = {
   listOptionalInstalls: () => UIService.ListOptionalInstalls(),
-  installItem: (itemName) => UIService.InstallItem(itemName),
-  removeItem: (itemName) => UIService.RemoveItem(itemName),
+  installItem: (itemName, placement = "") => UIService.InstallItem(itemName, placement),
+  removeItem: (itemName, placement = "") => UIService.RemoveItem(itemName, placement),
   watchOperation: (operationId) => UIService.WatchOperation(operationId),
   cancelOperation: (operationId) => UIService.CancelOperation(operationId),
   getBranding: () => UIService.GetBranding(),

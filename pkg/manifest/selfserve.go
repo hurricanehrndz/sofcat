@@ -46,7 +46,7 @@ func loadSelfServe(path string) (Item, error) {
 
 // SaveSelfServe persists the self-serve manifest at path. It keeps the three
 // self-serve lists (managed_installs, managed_uninstalls, default_installs) and
-// the selected_by record, and drops includes/catalogs/updates/conditional_items,
+// the selected_by and placement_selections records, and drops includes/catalogs/updates/conditional_items,
 // which the self-serve file never owns. It takes no lock: callers go through
 // UpdateSelfServe.
 func SaveSelfServe(path string, entry Item) error {

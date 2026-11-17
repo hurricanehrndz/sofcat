@@ -163,3 +163,19 @@ func TestPruneSelfServeUninstalls(t *testing.T) {
 		t.Fatalf("selected_by after prune = %#v, want %#v", ss.SelectedBy, wantBy)
 	}
 }
+
+// TestPlacementSubsets: a subset narrows only an authorized self-serve
+// install; an item an admin manifest requires (or a held one, which skip
+// also reports) goes everywhere, and an empty entry is no subset.
+func TestPlacementSubsets(t *testing.T) {
+	selfServe := manifest.Item{PlacementSelections: map[string][]string{
+		"narrowed": {"claude"},
+		"required": {"claude"},
+		"empty":    {},
+		"pending":  {"codex"},
+	}}
+	got := PlacementSubsets(selfServe, []string{"narrowed", "required", "empty", "plain"}, func(name string) bool { return name == "required" })
+	if want := map[string][]string{"narrowed": {"claude"}}; !reflect.DeepEqual(got, want) {
+		t.Errorf("PlacementSubsets = %v, want %v", got, want)
+	}
+}

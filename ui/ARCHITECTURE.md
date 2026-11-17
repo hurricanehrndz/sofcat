@@ -56,8 +56,8 @@ answer echoes the `id` with a `result` or an `error`:
 | `getServiceInfo` | none | `{version, protocolVersion: "2.0", apiVersion: 1, capabilities: [methods], busy, uptimeSeconds}` |
 | `listOptionalInstalls` | none | `{items: [OptionalInstallItem]}` (shape below) |
 | `getBranding` | none | `Branding`: `{title, tagline, helpUrl, helpLabel, accent, logoMime, logoBase64, backgroundMime, backgroundBase64, backgroundText, listHeading, sections?}` |
-| `installItem` | `{itemName}` | `AcceptedOperation` |
-| `removeItem` | `{itemName}` | `AcceptedOperation` |
+| `installItem` | `{itemName, placement?}` | `AcceptedOperation` |
+| `removeItem` | `{itemName, placement?}` | `AcceptedOperation` |
 | `cancelOperation` | `{operationId}` | `{canceled: true}` |
 | `streamOperationStatus` | `{operationId}` | `{streamAccepted: true}`, then notifications |
 | `run` | none | `AcceptedOperation` without `operationId`, then one `runResult` notification |
@@ -80,7 +80,7 @@ command-line run fails at once with "another managed run is in progress".
 An `OptionalInstallItem` is `{itemName, displayName, version, catalog,
 description?, category?, section?, developer?, iconName?, restartAction?, isManaged,
 isRequired, isInstalled, status, statusUpdatedAtUtc, lastOperationId?,
-actionLabels?, appliesTo?}`. `actionLabels` holds only the label keys
+actionLabels?, appliesTo?, placements?}`. `actionLabels` holds only the label keys
 (`install`, `installing`, `installed`, `remove`, `removing`, `update`,
 `cancel`, `pending_install`, `pending_remove`, `applies_to`) that resolved: from the catalog item's `custom_action_labels`, else
 from the first of its placements with a variant on this OS, in
@@ -94,6 +94,48 @@ gets at most its own labels. The UI fills in its built-in labels ("Install",
 ```json
 {"itemName":"tapas-optional-plugin","displayName":"Tapas Optional Plugin","version":"1.0.0","catalog":"tapas","isManaged":false,"isRequired":false,"isInstalled":false,"status":"NotInstalled","statusUpdatedAtUtc":"2026-11-03T12:00:00Z","actionLabels":{"install":"Enable for me","installed":"Available","installing":"Making available…","remove":"Withdraw","applies_to":"Works in"},"appliesTo":["Claude Code","Codex"]}
 ```
+
+`placements` is set only for a zip item with two or more placements on this
+OS: one `{name, label, isInstalled, status}` per placement, in
+`placements.yaml` order. `label` is the placement's `applies_to` joined with
+", ", else its name. `status` is `Installed`, `NotInstalled`,
+`WillBeInstalled` or `WillBeRemoved`, worked out as the item's, except that an
+installed placement the user took away from a selected item reads
+`WillBeRemoved`. A user-scope placement is installed when the caller's user
+agent last reported it placed.
+
+```json
+"placements":[{"name":"claude-skills","label":"Claude Code","isInstalled":true,"status":"Installed"},{"name":"codex-skills","label":"Codex","isInstalled":false,"status":"NotInstalled"}]
+```
+
+`installItem` and `removeItem` take an optional `placement`, one of the item's
+placements on this OS, to add or remove the item there only. Without it they
+act on every placement, as before. The service records a choice in the
+self-serve manifest's `placement_selections` (item name to its placements,
+sorted); an item without an entry goes to every placement.
+
+- `installItem` without `placement` selects the item and clears its entry.
+  With one, an item not selected (or waiting for removal) is selected for that
+  placement only; one already narrowed gains it; one selected everywhere is
+  left as it is.
+- `removeItem` without `placement` removes the item and clears its entry. With
+  one, it takes that placement from the item's placements (every placement,
+  when it has no entry) and leaves the item selected for the rest. When none
+  is left, or the item is not selected, it is a plain removal.
+- An entry that comes to cover every placement the item has is cleared.
+- Taking a placement away is a removal for authorization: only the item's
+  selector or an administrator may do it, and never for an item an admin
+  manifest requires.
+- A placement the item does not have on this device, or one named for an item
+  that is not a zip item, is refused with `invalid_params` and nothing changes.
+- A cancel puts back the item's entry with the rest of its selection.
+
+The entry narrows only an item in the self-serve `managed_installs`; one an
+admin manifest lists in `managed_installs` goes to every placement. A run
+places such an item only in its chosen placements, in machine scope and
+through the user-placement plan, and removes its tree from any other
+placement it holds a receipt for. `isInstalled` and `status` of a narrowed
+item are worked out over its chosen placements only.
 
 The two user-placement methods serve the per-user helper,
 `<slug>-useragent.exe` (`cmd/sofcat-useragent`), and are not bound into
@@ -256,7 +298,7 @@ application errors. `data.code` is the stable string clients branch on, and
 | -32700 | `parse_error` | the line is not JSON |
 | -32600 | `invalid_request` | not a JSON-RPC 2.0 request object (batches included), or a request over 64 KiB (`id` null) |
 | -32601 | `method_not_found` | unknown method |
-| -32602 | `invalid_params` | a required param is missing or of the wrong type |
+| -32602 | `invalid_params` | a required param is missing or of the wrong type, or `placement` names a placement the item does not have on this device |
 | -32603 | `internal_error` | the service panicked while handling the request |
 | -32000 | `server_busy` | every handler slot is taken (sent before reading the request, so `id` is null), every stream slot, or every `run` waiter slot |
 | -32001 | `command_failed` | the command failed (for example the manifest fetch) |
@@ -311,8 +353,11 @@ cancellation or error, or a user cancel — end an operation.
 boundary. An item's detail page shows one status line with a spinner while its
 operation runs, naming the record's item when a dependency or updater takes
 over. A Home card shows no progress, and a status only where its button
-cannot say it: a pending item's (its button reads only Cancel) and a required
-item's (it has no button). Otherwise the button names the state, and is
+cannot say it: a pending item's (its button reads only Cancel), a required
+item's (it has no button) and a partly installed item's ("Installed in
+Claude Code": some of its `placements` are installed and some are not; its
+button stays the install one, a plain `installItem` that adds the rest).
+Otherwise the button names the state, and is
 disabled while the item's operation runs; the card's line also appears for a
 `Failed` or `Deferred` outcome or a refused request. The only bar is in the
 bottom `#operation-strip`, which reports one running operation — the earliest
@@ -347,7 +392,23 @@ so `update` is accepted but unused. A card and the detail page add a line such a
 `applies_to` label; it is display text and scopes nothing. An offline cache
 entry from before the rename carries `worksIn` and shows no line. Labels,
 the heading and the applies-to line are catalog or
-admin text and go into the DOM only as `textContent`. A `Deferred` card shows
+admin text and go into the DOM only as `textContent`. On the detail
+page an item with `placements` shows, in place of that line, a list labelled
+with `applies_to` and one row per placement: its `label`, its status in the
+item's wording (`installed`, `pending_install`, `pending_remove`, else "Not
+installed") and one button with the item's labels. `NotInstalled` gets
+`install`, which sends `installItem` with that `placement`; `Installed` gets
+`remove`, `removeItem` with it, on an item with `isManaged`; without it the
+row keeps `install`, as the item does. A pending placement gets `cancel`, which
+sends the opposite mutation for that placement, as the item's own Cancel of a
+pending request does for the item: `removeItem` for `WillBeInstalled`,
+`installItem` for `WillBeRemoved`. The item's own Cancel names the placement
+too when exactly one of several is pending, so it leaves the others as they
+are; with several pending, short of all, the item has no button and the rows
+cancel. Each button's accessible name is "<button
+label>: <placement label>". The rows are disabled while the item's operation
+runs, like its own button, and a required item's rows have none. The
+operation, its progress and its Cancel stay per item. A `Deferred` card shows
 the deferral reason: for `missing_software` the service's message ("Needs Git
 for Windows. Install it first, then try again."), for
 `blocked_by_running_app` "Waiting: close <apps> to continue" (also matched on

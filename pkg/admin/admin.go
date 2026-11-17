@@ -337,6 +337,42 @@ func checkZipItem(path string, inst catalog.InstallerItem, h repoPlacements) []s
 			}
 		}
 	}
+	if h.present && h.problem == "" {
+		problems = append(problems, checkPlacementLabels(path, inst, h.table)...)
+	}
+	return problems
+}
+
+// checkPlacementLabels reports the placements the storefront could not tell
+// apart: an item with two or more placements on an OS gets one row for each
+// there, labelled with the placement's applies_to, so each needs one and no
+// two may read the same.
+func checkPlacementLabels(path string, inst catalog.InstallerItem, table placement.Table) []string {
+	var problems []string
+	for _, goos := range []string{placement.Darwin, placement.Windows} {
+		var names []string
+		for _, name := range table.Names() {
+			if _, ok := inst.Variants[name][goos]; ok {
+				names = append(names, name)
+			}
+		}
+		if len(names) < 2 {
+			continue
+		}
+		labelled := map[string]string{}
+		for _, name := range names {
+			label := strings.Join(table.Placements[name].AppliesTo, ", ")
+			if label == "" {
+				problems = append(problems, fmt.Sprintf("%s: placement %q needs applies_to: the item has %d placements on %s, and the storefront labels each with it", path, name, len(names), goos))
+				continue
+			}
+			if first, ok := labelled[label]; ok {
+				problems = append(problems, fmt.Sprintf("%s: placements %q and %q have the same applies_to (%s) on %s, so the storefront could not tell them apart", path, first, name, label, goos))
+				continue
+			}
+			labelled[label] = name
+		}
+	}
 	return problems
 }
 

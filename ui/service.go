@@ -17,8 +17,8 @@ const operationStatusEvent = "sofcat:operation-status"
 type serviceClient interface {
 	ListOptionalInstalls(context.Context) ([]sofcatservice.OptionalInstallItem, error)
 	GetBranding(context.Context) (branding.Branding, error)
-	InstallItem(context.Context, string) (sofcatservice.AcceptedOperation, error)
-	RemoveItem(context.Context, string) (sofcatservice.AcceptedOperation, error)
+	InstallItem(context.Context, string, string) (sofcatservice.AcceptedOperation, error)
+	RemoveItem(context.Context, string, string) (sofcatservice.AcceptedOperation, error)
 	StreamOperationStatus(context.Context, string, func(sofcatservice.OperationStatus) error) error
 	CancelOperation(context.Context, string) error
 }
@@ -74,15 +74,18 @@ func (s *UIService) GetBranding() (branding.Branding, error) {
 	return b, err
 }
 
-func (s *UIService) InstallItem(itemName string) (sofcatservice.AcceptedOperation, error) {
-	return s.mutate("InstallItem", itemName, s.client.InstallItem)
+// InstallItem selects itemName, only in placement when one is named; "" is
+// every placement.
+func (s *UIService) InstallItem(itemName, placement string) (sofcatservice.AcceptedOperation, error) {
+	return s.mutate("InstallItem", itemName, placement, s.client.InstallItem)
 }
 
-func (s *UIService) RemoveItem(itemName string) (sofcatservice.AcceptedOperation, error) {
-	return s.mutate("RemoveItem", itemName, s.client.RemoveItem)
+// RemoveItem deselects itemName, or only placement when one is named.
+func (s *UIService) RemoveItem(itemName, placement string) (sofcatservice.AcceptedOperation, error) {
+	return s.mutate("RemoveItem", itemName, placement, s.client.RemoveItem)
 }
 
-func (s *UIService) mutate(operation, itemName string, call func(context.Context, string) (sofcatservice.AcceptedOperation, error)) (sofcatservice.AcceptedOperation, error) {
+func (s *UIService) mutate(operation, itemName, placement string, call func(context.Context, string, string) (sofcatservice.AcceptedOperation, error)) (sofcatservice.AcceptedOperation, error) {
 	started := time.Now()
 	itemName = strings.TrimSpace(itemName)
 	if itemName == "" {
@@ -95,7 +98,7 @@ func (s *UIService) mutate(operation, itemName string, call func(context.Context
 		s.logResult(operation, "", err, started)
 		return sofcatservice.AcceptedOperation{}, err
 	}
-	accepted, err := call(ctx, itemName)
+	accepted, err := call(ctx, itemName, strings.TrimSpace(placement))
 	s.logResult(operation, accepted.OperationID, err, started)
 	return accepted, err
 }

@@ -10,6 +10,7 @@ import type {
   OperationStatus,
   OperationView,
   OptionalInstallItem,
+  OptionalInstallPlacement,
 } from "./types.ts";
 
 export const ALL_CATEGORIES = "all";
@@ -231,12 +232,17 @@ export function statusLabel(item: OptionalInstallItem): string {
     return REQUIRED_LABEL;
   }
   switch (item.status) {
-    case "Installed":
-      return actionLabel(item, "installed");
     case "WillBeInstalled":
       return actionLabel(item, "pending_install");
     case "WillBeRemoved":
       return actionLabel(item, "pending_remove");
+  }
+  const partial = partialPlacements(item);
+  if (partial.length) {
+    return `Installed in ${partial.map((placement) => placement.label).join(", ")}`;
+  }
+  if (item.status === "Installed") {
+    return actionLabel(item, "installed");
   }
   const label = stateLabel(item.status);
   return label[0] + label.slice(1).toLowerCase();
@@ -244,12 +250,76 @@ export function statusLabel(item: OptionalInstallItem): string {
 
 /**
  * cardStatus is a Home card's idle line: only what its button cannot say. A
- * pending item's button reads only "Cancel", and a required item has none;
- * otherwise the button already names the state, so the line is "".
+ * pending item's button reads only "Cancel", a required item has none, and a
+ * partly installed item's Install does not say where it already is; otherwise
+ * the button already names the state, so the line is "".
  */
 export function cardStatus(item: OptionalInstallItem): string {
   const pending = item.status === "WillBeInstalled" || item.status === "WillBeRemoved";
-  return item.isRequired || pending ? statusLabel(item) : "";
+  return item.isRequired || pending || partialPlacements(item).length > 0 ? statusLabel(item) : "";
+}
+
+/**
+ * itemPlacements is the item's placements the detail page lists one row each
+ * for, in the service's order; [] for an item it sends none for. A cached list
+ * is untrusted shape-wise, so only well-formed entries count.
+ */
+export function itemPlacements(item: Pick<OptionalInstallItem, "placements">): OptionalInstallPlacement[] {
+  return Array.isArray(item.placements)
+    ? item.placements.filter(
+        (placement) =>
+          typeof placement?.name === "string" &&
+          placement.name !== "" &&
+          typeof placement.label === "string" &&
+          typeof placement.status === "string",
+      )
+    : [];
+}
+
+/**
+ * partialPlacements is where a partly installed item is installed: its
+ * installed placements when some but not all of them are, else [].
+ */
+export function partialPlacements(item: Pick<OptionalInstallItem, "placements">): OptionalInstallPlacement[] {
+  const placements = itemPlacements(item);
+  const installed = placements.filter((placement) => placement.isInstalled === true);
+  return installed.length < placements.length ? installed : [];
+}
+
+/**
+ * placementStatus is one placement row's status, worded by the item's labels
+ * as the item's own status would be.
+ */
+export function placementStatus(item: OptionalInstallItem, placement: OptionalInstallPlacement): string {
+  return statusLabel({ ...item, isRequired: false, placements: undefined, status: placement.status });
+}
+
+/**
+ * placementAction is a placement row's button: the item's own action rules,
+ * applied to the one placement. Cancelling a pending placement reuses the
+ * opposite mutation for that placement, as deriveAction does for the item. An
+ * item the organisation requires goes everywhere, so its rows have none.
+ */
+export function placementAction(item: OptionalInstallItem, placement: OptionalInstallPlacement): ItemAction | null {
+  if (item.isRequired) {
+    return null;
+  }
+  const name = placement.name;
+  switch (placement.status) {
+    case "WillBeInstalled":
+      return { kind: "cancel", label: actionLabel(item, "cancel"), method: "RemoveItem", placement: name };
+    case "WillBeRemoved":
+      return { kind: "cancel", label: actionLabel(item, "cancel"), method: "InstallItem", placement: name };
+    case "Installed":
+      // As for the item: only a selected item offers Remove. Removing one
+      // placement of an unselected item would remove it everywhere.
+      if (item.isManaged) {
+        return { kind: "undo", label: actionLabel(item, "remove"), method: "RemoveItem", placement: name };
+      }
+      return { kind: "do", label: actionLabel(item, "install"), method: "InstallItem", placement: name };
+    default:
+      return { kind: "do", label: actionLabel(item, "install"), method: "InstallItem", placement: name };
+  }
 }
 
 /** REQUESTED_STATE is local: the service accepted the request, no event yet. */
@@ -620,11 +690,23 @@ export function deriveAction(item: OptionalInstallItem): ItemAction | null {
   }
   switch (item.status) {
     case "WillBeInstalled":
-      return { kind: "cancel", label: actionLabel(item, "cancel"), method: "RemoveItem" };
-    case "WillBeRemoved":
-      return { kind: "cancel", label: actionLabel(item, "cancel"), method: "InstallItem" };
+    case "WillBeRemoved": {
+      const method = item.status === "WillBeInstalled" ? "RemoveItem" : "InstallItem";
+      const cancel: ItemAction = { kind: "cancel", label: actionLabel(item, "cancel"), method };
+      // The opposite mutation for the whole item would also undo, or add,
+      // the placements that are not pending. One pending placement is
+      // cancelled alone; several of them, short of all, only on their rows.
+      const placements = itemPlacements(item);
+      const pending = placements.filter((placement) => placement.status === item.status);
+      if (pending.length === 0 || pending.length === placements.length) {
+        return cancel;
+      }
+      return pending.length === 1 ? { ...cancel, placement: pending[0].name } : null;
+    }
     default:
-      return item.isManaged
+      // A partly installed item keeps Install, which adds the rest; its
+      // placements are removed one at a time on the detail page.
+      return item.isManaged && partialPlacements(item).length === 0
         ? { kind: "undo", label: actionLabel(item, "remove"), method: "RemoveItem" }
         : { kind: "do", label: actionLabel(item, "install"), method: "InstallItem" };
   }

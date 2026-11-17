@@ -20,6 +20,7 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/facts"
 	"github.com/hurricanehrndz/sofcat/pkg/installer"
 	"github.com/hurricanehrndz/sofcat/pkg/manifest"
+	"github.com/hurricanehrndz/sofcat/pkg/placement"
 	"github.com/hurricanehrndz/sofcat/pkg/process"
 	"github.com/hurricanehrndz/sofcat/pkg/report"
 	"github.com/hurricanehrndz/sofcat/pkg/status"
@@ -37,6 +38,9 @@ var (
 type Command struct {
 	Action string   `json:"action"`
 	Items  []string `json:"items,omitempty"`
+	// Placement is the one placement an InstallItem or RemoveItem is for, "" for
+	// every one.
+	Placement string `json:"placement,omitempty"`
 
 	progress installer.ProgressFn
 	// cancels is the service's withdrawal bookkeeping, set by the service for
@@ -138,6 +142,14 @@ func parseCommandSpec(spec string) (Command, error) {
 			}
 		}
 	}
+	// InstallItem:itemName:placement names one placement.
+	if (cmd.Action == actionInstallItem || cmd.Action == actionRemoveItem) && len(cmd.Items) == 1 {
+		name, placement, _ := strings.Cut(cmd.Items[0], ":")
+		cmd.Items[0], cmd.Placement = strings.TrimSpace(name), strings.TrimSpace(placement)
+		if cmd.Items[0] == "" {
+			cmd.Items = nil
+		}
+	}
 	return cmd, validateCommand(cmd)
 }
 
@@ -223,13 +235,13 @@ func SendCommand(cfg config.Configuration, spec string) (CommandResponse, error)
 		}
 		return CommandResponse{Status: "ok", Branding: &b, Items: []string{line}}, nil
 	case actionInstallItem:
-		accepted, err := client.InstallItem(ctx, cmd.Items[0])
+		accepted, err := client.InstallItem(ctx, cmd.Items[0], cmd.Placement)
 		if err != nil {
 			return CommandResponse{}, err
 		}
 		return CommandResponse{Status: "ok", OperationID: accepted.OperationID, RequestedBy: accepted.RequestedBy}, nil
 	case actionRemoveItem:
-		accepted, err := client.RemoveItem(ctx, cmd.Items[0])
+		accepted, err := client.RemoveItem(ctx, cmd.Items[0], cmd.Placement)
 		if err != nil {
 			return CommandResponse{}, err
 		}
@@ -320,22 +332,22 @@ func executeCommand(cfg config.Configuration, cmd Command, managedRun func(confi
 		rep, err := managedRun(cfg, cmd.progress, cmd.cancels)
 		return CommandResponse{Status: "ok", report: rep}, err
 	case actionInstallItem:
-		displayName, prior, err := addServiceManagedInstall(cfg, cmd.caller, cmd.Items[0])
+		displayName, prior, requested, err := addServiceManagedInstall(cfg, cmd.caller, cmd.Items[0], cmd.Placement)
 		if err != nil {
 			return CommandResponse{}, err
 		}
 		// A new request starts the item's cancel bookkeeping afresh.
 		cmd.cancels.Reset(cmd.Items[0])
 		operationID := newOperationID()
-		return CommandResponse{Status: "ok", OperationID: operationID, displayName: displayName, prior: prior, requested: prior.next(selectedForInstall, cmd.caller)}, nil
+		return CommandResponse{Status: "ok", OperationID: operationID, displayName: displayName, prior: prior, requested: requested}, nil
 	case actionRemoveItem:
-		prior, err := removeServiceManagedInstall(cfg, cmd.caller, cmd.Items[0])
+		prior, requested, err := removeServiceManagedInstall(cfg, cmd.caller, cmd.Items[0], cmd.Placement)
 		if err != nil {
 			return CommandResponse{}, err
 		}
 		cmd.cancels.Reset(cmd.Items[0])
 		operationID := newOperationID()
-		return CommandResponse{Status: "ok", OperationID: operationID, prior: prior, requested: prior.next(selectedForRemoval, cmd.caller)}, nil
+		return CommandResponse{Status: "ok", OperationID: operationID, prior: prior, requested: requested}, nil
 	case actionListOptionalInstalls:
 		items, err := getOptionalItems(cfg, cmd.caller)
 		if err != nil {
@@ -372,6 +384,13 @@ type selection struct {
 	uninstall bool // listed in managed_uninstalls
 	// selectedBy is the item's selected_by entry, "" when none is recorded.
 	selectedBy string
+	// placements is the item's placement_selections entry, sorted: the only
+	// placements a selected zip item goes to. Nil is every placement.
+	placements []string
+}
+
+func (s selection) equal(o selection) bool {
+	return s.install == o.install && s.uninstall == o.uninstall && s.selectedBy == o.selectedBy && slices.Equal(s.placements, o.placements)
 }
 
 var (
@@ -383,20 +402,94 @@ var (
 	selectedForRemoval = selection{uninstall: true}
 )
 
-// next is the selection caller's request for want sets on an item whose
-// selection is s. Selecting keeps the recorded selector, or records caller
-// when there is none. A removal records its remover, who then owns the
-// pending removal (R32a); an unresolved remover, who can only remove an
-// unowned item, records nobody.
-func (s selection) next(want selection, caller peer) selection {
+// request is an InstallItem or RemoveItem as setSelection checks and applies
+// it: who asked and, for one placement of a zip item, which.
+type request struct {
+	caller peer
+	// placement is the placement asked for, "" for every one; placements is
+	// every placement the item has on this OS, which it is one of.
+	placement  string
+	placements []string
+}
+
+// next is the selection req for want sets on an item whose selection is s.
+// Selecting keeps the recorded selector, or records the caller when there is
+// none. A removal records its remover, who then owns the pending removal
+// (R32a); an unresolved remover, who can only remove an unowned item, records
+// nobody. A request for one placement adds it to, or takes it from, the item's
+// placements (forPlacement).
+func (s selection) next(want selection, req request) selection {
+	want = s.forPlacement(want, req)
 	want.selectedBy = s.selectedBy
 	switch {
-	case want.uninstall && caller.ID != "":
-		want.selectedBy = caller.ID
+	case want.uninstall && req.caller.ID != "":
+		want.selectedBy = req.caller.ID
 	case want.install && want.selectedBy == "":
-		want.selectedBy = caller.ID
+		want.selectedBy = req.caller.ID
 	}
 	return want
+}
+
+// forPlacement is want, a selection for every placement, narrowed to what
+// req's one placement asks of an item whose selection is s. An install adds
+// the placement to the item's placements, or starts them with it when the
+// item is not selected; an item selected everywhere stays so. A removal takes
+// it from them (from every placement when the item has none recorded) and
+// leaves the item selected for the rest, or is a full removal when none is
+// left or the item is not selected. Placements that cover every one the item
+// has are cleared, which is every placement.
+func (s selection) forPlacement(want selection, req request) selection {
+	if req.placement == "" {
+		return want
+	}
+	var subset []string
+	switch {
+	case want.install:
+		if s.install && s.placements == nil {
+			return want
+		}
+		if s.install {
+			subset = slices.Clone(s.placements)
+		}
+		if !slices.Contains(subset, req.placement) {
+			subset = append(subset, req.placement)
+		}
+	case want.uninstall:
+		if !s.install {
+			return want
+		}
+		subset = slices.DeleteFunc(slices.Clone(s.effective(req.placements)), func(p string) bool {
+			return p == req.placement || !slices.Contains(req.placements, p)
+		})
+		if len(subset) == 0 {
+			return want
+		}
+		want = selectedForInstall
+	}
+	if !slices.ContainsFunc(req.placements, func(p string) bool { return !slices.Contains(subset, p) }) {
+		return want
+	}
+	slices.Sort(subset)
+	want.placements = subset
+	return want
+}
+
+// effective is the placements s sends the item to, of all.
+func (s selection) effective(all []string) []string {
+	if s.placements == nil {
+		return all
+	}
+	return s.placements
+}
+
+// narrows reports whether want takes from a selected item any placement s
+// sends it to, of all: a removal for authorization.
+func (s selection) narrows(want selection, all []string) bool {
+	if !s.install || !want.install {
+		return false
+	}
+	kept := want.effective(all)
+	return slices.ContainsFunc(s.effective(all), func(p string) bool { return !slices.Contains(kept, p) })
 }
 
 // authorized reports whether caller may undo what owner asked for: owner
@@ -407,29 +500,31 @@ func authorized(owner string, caller peer) bool {
 }
 
 // setSelection sets name's selection in the self-serve manifest and returns
-// the selection it replaced. Both lists stay deduplicated and sorted.
+// the selection it replaced and the one it set. Both lists stay deduplicated
+// and sorted.
 //
-// With a caller it is that caller's request, checked and recorded under the
-// file's lock: a removal, or an install that would undo a pending removal, is
-// refused with errNotAuthorized unless the caller is the item's selector or an
-// administrator (R32, R32a), and the selector is kept or recorded as next
-// says: a removal's selector is its remover. Without one it sets want as given, selector included: a cancel putting
-// back a selection the service already authorized.
-func setSelection(cfg config.Configuration, name string, want selection, caller *peer) (selection, error) {
-	var prior selection
+// With a request it is that request, checked and recorded under the file's
+// lock: a removal, one that takes a placement from a selected item, or an
+// install that would undo a pending removal, is refused with errNotAuthorized
+// unless the caller is the item's selector or an administrator (R32, R32a),
+// and the selection is what next says: a removal's selector is its remover.
+// Without one it sets want as given, selector and placements included: a
+// cancel putting back a selection the service already authorized.
+func setSelection(cfg config.Configuration, name string, want selection, req *request) (prior, set selection, err error) {
 	var refused error
-	err := manifest.UpdateSelfServe(serviceLocalManifestPath(cfg), func(entry *manifest.Item) bool {
+	err = manifest.UpdateSelfServe(serviceLocalManifestPath(cfg), func(entry *manifest.Item) bool {
 		prior = selection{
 			install:    slices.Contains(entry.Installs, name),
 			uninstall:  slices.Contains(entry.Uninstalls, name),
 			selectedBy: entry.SelectedBy[name],
+			placements: entry.PlacementSelections[name],
 		}
-		if caller != nil {
-			if (want.uninstall || prior.uninstall) && !authorized(prior.selectedBy, *caller) {
+		if req != nil {
+			want = prior.next(want, *req)
+			if (want.uninstall || prior.uninstall || prior.narrows(want, req.placements)) && !authorized(prior.selectedBy, req.caller) {
 				refused = fmt.Errorf("%w: %q", errNotAuthorized, name)
 				return false
 			}
-			want = prior.next(want, *caller)
 		}
 		entry.Installs = setMember(entry.Installs, name, want.install)
 		entry.Uninstalls = setMember(entry.Uninstalls, name, want.uninstall)
@@ -441,12 +536,20 @@ func setSelection(cfg config.Configuration, name string, want selection, caller 
 			}
 			entry.SelectedBy[name] = want.selectedBy
 		}
-		return prior != want
+		if want.placements == nil {
+			delete(entry.PlacementSelections, name)
+		} else {
+			if entry.PlacementSelections == nil {
+				entry.PlacementSelections = make(map[string][]string)
+			}
+			entry.PlacementSelections[name] = want.placements
+		}
+		return !prior.equal(want)
 	})
 	if err == nil {
 		err = refused
 	}
-	return prior, err
+	return prior, want, err
 }
 
 func setMember(list []string, name string, member bool) []string {
@@ -461,52 +564,81 @@ func setMember(list []string, name string, member bool) []string {
 	return list
 }
 
-// addServiceManagedInstall selects name for install. It returns name's catalog
-// display name, which the authorization lookup has already resolved, and the
-// selection it replaced. caller is who asked, for setSelection.
-func addServiceManagedInstall(cfg config.Configuration, caller peer, name string) (string, selection, error) {
+// checkPlacement refuses a request for placement unless it is one of
+// placements, every placement the item has on this OS (none for an item that
+// is not a zip item). "" is every placement and always passes.
+func checkPlacement(name, placement string, placements []string) error {
+	if placement != "" && !slices.Contains(placements, placement) {
+		return fmt.Errorf("%w: %q has no placement %q on this device", errInvalidPlacement, name, placement)
+	}
+	return nil
+}
+
+// addServiceManagedInstall selects name for install, in placement only when
+// one is named. It returns name's catalog display name, which the
+// authorization lookup has already resolved, and the selection it replaced and
+// the one it set. caller is who asked, for setSelection.
+func addServiceManagedInstall(cfg config.Configuration, caller peer, name, placement string) (string, selection, selection, error) {
 	// Authorize the requested name against the currently available optional
 	// installs before writing anything (R3). An unknown name is rejected and the
 	// file is left untouched; the service answers item_not_available.
 	available, err := getOptionalItems(cfg, peer{})
 	if err != nil {
-		return "", selection{}, err
+		return "", selection{}, selection{}, err
 	}
 	i := slices.IndexFunc(available, func(it OptionalInstallItem) bool { return it.ItemName == name })
 	if i < 0 {
-		return "", selection{}, fmt.Errorf("%w: %q", errItemNotAvailable, name)
+		return "", selection{}, selection{}, fmt.Errorf("%w: %q", errItemNotAvailable, name)
 	}
-	prior, err := setSelection(cfg, name, selectedForInstall, &caller)
-	return available[i].DisplayName, prior, err
+	if err = checkPlacement(name, placement, available[i].placementNames); err != nil {
+		return "", selection{}, selection{}, err
+	}
+	prior, set, err := setSelection(cfg, name, selectedForInstall, &request{caller: caller, placement: placement, placements: available[i].placementNames})
+	return available[i].DisplayName, prior, set, err
 }
 
-// removeServiceManagedInstall deselects name and queues its removal, returning
-// the selection it replaced. Only a self-service item may be removed: one the
-// admin manifests offer (optional_installs or default_installs) or one already
-// in the self-serve lists, so a deselected item stays removable after it
-// leaves the offer. An item an admin manifest requires (managed_installs) is
-// never removable, even when it is also offered. Only its selector or an
+// removeServiceManagedInstall deselects name and queues its removal, or with a
+// placement takes only that one from it, returning the selection it replaced
+// and the one it set. Only a self-service item may be removed: one the admin
+// manifests offer (optional_installs or default_installs) or one already in
+// the self-serve lists, so a deselected item stays removable after it leaves
+// the offer. An item an admin manifest requires (managed_installs) is never
+// removable, even when it is also offered. Only its selector or an
 // administrator may remove an item with a recorded selector (setSelection).
-func removeServiceManagedInstall(cfg config.Configuration, caller peer, name string) (selection, error) {
+// A placement must be one the item is offered in now.
+func removeServiceManagedInstall(cfg config.Configuration, caller peer, name, placement string) (selection, selection, error) {
 	download.SetConfig(cfg)
 	manifests, _, _, err := adminManifests(cfg)
 	if err != nil {
-		return selection{}, err
+		return selection{}, selection{}, err
 	}
 	if requiredItems(manifests)[name] {
-		return selection{}, fmt.Errorf("%w: %q is required by your organisation", errItemNotRemovable, name)
+		return selection{}, selection{}, fmt.Errorf("%w: %q is required by your organisation", errItemNotRemovable, name)
 	}
 	selfServe, err := loadServiceLocalManifest(cfg)
 	if err != nil {
-		return selection{}, err
+		return selection{}, selection{}, err
 	}
 	offered := slices.ContainsFunc(manifests, func(m manifest.Item) bool {
 		return slices.Contains(m.OptionalInstalls, name) || slices.Contains(m.DefaultInstalls, name)
 	})
 	if !offered && !slices.Contains(selfServe.Installs, name) && !slices.Contains(selfServe.Uninstalls, name) {
-		return selection{}, fmt.Errorf("%w: %q is not a self-service item", errItemNotRemovable, name)
+		return selection{}, selection{}, fmt.Errorf("%w: %q is not a self-service item", errItemNotRemovable, name)
 	}
-	return setSelection(cfg, name, selectedForRemoval, &caller)
+	req := &request{caller: caller, placement: placement}
+	if placement != "" {
+		available, err := getOptionalItems(cfg, peer{})
+		if err != nil {
+			return selection{}, selection{}, err
+		}
+		if i := slices.IndexFunc(available, func(it OptionalInstallItem) bool { return it.ItemName == name }); i >= 0 {
+			req.placements = available[i].placementNames
+		}
+		if err := checkPlacement(name, placement, req.placements); err != nil {
+			return selection{}, selection{}, err
+		}
+	}
+	return setSelection(cfg, name, selectedForRemoval, req)
 }
 
 // requiredItems is the set of names the admin manifests list in
@@ -534,6 +666,9 @@ var (
 	// errNotAuthorized refuses a caller who may not undo another user's
 	// request (R32), sent as not_authorized.
 	errNotAuthorized = errors.New("only the user who asked for this, or an administrator, can change it")
+	// errInvalidPlacement refuses an installItem or removeItem for a placement
+	// the item does not have on this device, sent as invalid_params.
+	errInvalidPlacement = errors.New("invalid placement")
 )
 
 // withdrawItem is the item side of CancelOperation. It puts back the selection
@@ -542,13 +677,13 @@ var (
 // item first, it restores the request's own selection and returns
 // errNotCancelable.
 func withdrawItem(cfg config.Configuration, cancels *installer.Cancels, name string, prior, requested selection) error {
-	if _, err := setSelection(cfg, name, prior, nil); err != nil {
+	if _, _, err := setSelection(cfg, name, prior, nil); err != nil {
 		return err
 	}
 	if cancels.Cancel(name) {
 		return nil
 	}
-	if _, err := setSelection(cfg, name, requested, nil); err != nil {
+	if _, _, err := setSelection(cfg, name, requested, nil); err != nil {
 		slog.Warn("unable to restore the self-service selection after a refused cancel", "item", name, "err", err)
 	}
 	return errNotCancelable
@@ -628,7 +763,10 @@ func getOptionalItems(cfg config.Configuration, caller peer) ([]OptionalInstallI
 	// One shared checker so the registry snapshot amortizes across items.
 	zip := newZipInstaller(cfg, table)
 	zip.Facts = machineFacts
-	checker := &status.Checker{Zip: userZipInstalled(zip, userPlacementStatusFor(cfg.AppDataPath, caller.ID)), Nupkg: func(id string) (string, bool) { return installer.KeptNupkgVersion(cfg.NupkgPath, id) }}
+	// A selected item a user narrowed to some placements is judged there only.
+	zip.Subsets = process.PlacementSubsets(selfServe, selfServe.Installs, func(name string) bool { return required[name] })
+	reported := userPlacementStatusFor(cfg.AppDataPath, caller.ID)
+	checker := &status.Checker{Zip: userZipInstalled(zip, reported), Nupkg: func(id string) (string, bool) { return installer.KeptNupkgVersion(cfg.NupkgPath, id) }}
 	now := nowRFC3339UTC()
 
 	items := make([]OptionalInstallItem, 0, len(names))
@@ -665,6 +803,7 @@ func getOptionalItems(cfg config.Configuration, caller peer) ([]OptionalInstallI
 		item.IconName = catItem.IconName
 		item.RestartAction = catItem.RestartAction
 		item.ActionLabels, item.AppliesTo = table.Storefront(catItem, zip.Guard.GOOS)
+		item.placementNames, item.Placements = optionalPlacements(catItem, table, zip, reported, item.IsManaged, pendingRemoval[name])
 
 		// Script-only checks are not run on a list call (R9/OQ-C4): report Unknown.
 		if catItem.Check.Script != "" &&
@@ -755,4 +894,50 @@ func newOperationID() string {
 	var b [16]byte
 	_, _ = rand.Read(b[:]) // crypto/rand.Read never returns an error
 	return hex.EncodeToString(b[:])
+}
+
+// optionalPlacements returns the placements zip item has on this OS, in table
+// order, and, for two or more, what the storefront shows of each. A
+// placement's status follows the item's (getOptionalItems), with one more
+// case: an installed placement that a selected item's subset left will be
+// removed. A user-scope placement is installed when the caller's user agent
+// last reported it placed. selected and pendingRemoval are the item's
+// self-serve state.
+func optionalPlacements(item catalog.Item, table placement.Table, zip *installer.ZipInstaller, reported map[string]map[string]userPlacementOutcome, selected, pendingRemoval bool) ([]string, []OptionalInstallPlacement) {
+	if item.Installer.Type != "zip" {
+		return nil, nil
+	}
+	goos := zip.Guard.GOOS
+	var names []string
+	for _, name := range table.Names() {
+		if _, ok := item.Installer.Variants[name][goos]; ok {
+			names = append(names, name)
+		}
+	}
+	if len(names) < 2 {
+		return names, nil
+	}
+	placements := make([]OptionalInstallPlacement, 0, len(names))
+	for _, name := range names {
+		spec := table.Placements[name]
+		p := OptionalInstallPlacement{Name: name, Label: orDefault(strings.Join(spec.AppliesTo, ", "), name)}
+		if spec.ScopeFor(goos) == placement.ScopeUser {
+			p.IsInstalled = placedOutcomes[installer.Outcome(reported[item.Name][name].Outcome)]
+		} else {
+			p.IsInstalled = zip.PlacementInstalled(item.Name, name)
+		}
+		wanted := zip.Wants(item.Name, name)
+		switch {
+		case p.IsInstalled && (pendingRemoval || selected && !wanted):
+			p.Status = "WillBeRemoved"
+		case p.IsInstalled:
+			p.Status = "Installed"
+		case selected && wanted:
+			p.Status = "WillBeInstalled"
+		default:
+			p.Status = "NotInstalled"
+		}
+		placements = append(placements, p)
+	}
+	return names, placements
 }
