@@ -428,6 +428,13 @@ h2 {
   background: var(--surface);
   border: 1px solid var(--line-soft);
   border-radius: 12px;
+  overflow-wrap: anywhere;
+  /* A click anywhere off its buttons opens the item's detail page. */
+  cursor: pointer;
+}
+
+.card:hover {
+  border-color: var(--line);
 }
 
 .card h3 {
@@ -621,6 +628,7 @@ h2 {
 .detail-title {
   flex: 999 1 26rem;
   min-width: 0;
+  overflow-wrap: anywhere;
   display: flex;
   flex-direction: column;
   gap: 0.375rem;
@@ -710,6 +718,7 @@ h2 {
 
 .info dd {
   margin: 0;
+  overflow-wrap: anywhere;
   font-size: 0.9375rem;
 }
 

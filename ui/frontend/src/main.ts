@@ -38,6 +38,7 @@ import {
   monogram,
   myItems,
   needsAttention,
+  opensDetails,
   placementAction,
   placementStatus,
   progressText,
@@ -132,7 +133,6 @@ type View = "list" | "mine" | "activity";
 
 let view: ListView = { items: [], source: "loading", savedAtUtc: "" };
 let lastError = "";
-let dialogOpener: HTMLElement | null = null;
 // The list the detail page was opened from, and which Back returns to.
 let currentView: View = "list";
 // The list tabs the nav shows, and the one last chosen (null for the first):
@@ -380,14 +380,23 @@ function card(item: OptionalInstallItem): HTMLElement {
 
   const details = document.createElement("button");
   details.type = "button";
-  details.className = "pill pill-outline";
+  details.className = "pill pill-outline card-details";
   details.textContent = "Details";
   details.setAttribute("aria-label", `Details for ${item.displayName}`);
-  details.addEventListener("click", () => openDetail(item, details));
+  details.addEventListener("click", () => openDetail(item));
 
   actions.append(details);
   article.append(glyph, name, meta, appliesTo, status, actions);
   article.dataset.item = item.itemName;
+  // A click anywhere else on the card opens Details too. The card is not a
+  // control itself, so it nests none: keyboard and screen-reader users reach
+  // the same page through its Details button.
+  article.addEventListener("click", (event) => {
+    const selecting = !(document.getSelection()?.isCollapsed ?? true);
+    if (opensDetails(event.target instanceof Element ? event.target : null, selecting)) {
+      openDetail(item);
+    }
+  });
   updateCardProgress(article, item, cardStatus(item), true);
   return article;
 }
@@ -749,8 +758,7 @@ function renderPlacements(item: OptionalInstallItem, placements: OptionalInstall
   }
 }
 
-function openDetail(item: OptionalInstallItem, opener: HTMLElement): void {
-  dialogOpener = opener;
+function openDetail(item: OptionalInstallItem): void {
   detailItemName = item.itemName;
   renderDetail();
   viewHome.hidden = true;
@@ -760,14 +768,21 @@ function openDetail(item: OptionalInstallItem, opener: HTMLElement): void {
   detailBack.focus();
 }
 
-/** closeDetail returns to the list and hands focus back to the card it came from. */
+/**
+ * closeDetail returns to the list and hands focus to the Details button of the
+ * card it came from. The card is found by item, because a refresh while the
+ * page was open (the end of every operation brings one) rebuilds the grid.
+ * When the card is gone from the list, dropped by a refresh or hidden by the
+ * filters, focus goes to the search field at the top of the list instead.
+ */
 function closeDetail(): void {
-  if (viewDetail.hidden) {
+  if (viewDetail.hidden || detailItemName === null) {
     return;
   }
+  const itemName = detailItemName;
   showView(currentView);
-  dialogOpener?.focus();
-  dialogOpener = null;
+  const details = grid.querySelector<HTMLButtonElement>(`[data-item="${CSS.escape(itemName)}"] .card-details`);
+  (details ?? searchInput).focus();
 }
 
 async function refresh(): Promise<void> {

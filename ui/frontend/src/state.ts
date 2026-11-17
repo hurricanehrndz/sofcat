@@ -260,6 +260,16 @@ export function cardStatus(item: OptionalInstallItem): string {
 }
 
 /**
+ * opensDetails says whether a click inside a card opens its detail page: a
+ * click anywhere but on a control, so a card's buttons keep their own action,
+ * and not one that ends a drag selecting the card's text (selecting is false
+ * when nothing is selected).
+ */
+export function opensDetails(target: Pick<Element, "closest"> | null, selecting: boolean): boolean {
+  return !selecting && target !== null && target.closest("button, a, input, select, textarea, label") === null;
+}
+
+/**
  * itemPlacements is the item's placements the detail page lists one row each
  * for, in the service's order; [] for an item it sends none for. A cached list
  * is untrusted shape-wise, so only well-formed entries count.
