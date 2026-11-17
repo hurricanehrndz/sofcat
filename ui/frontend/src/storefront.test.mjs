@@ -13,6 +13,7 @@ import {
   statusRecord,
   appliesToLine,
   itemPlacements,
+  opensDetails,
   placementAction,
   placementStatus,
 } from "./state.ts";
@@ -221,4 +222,33 @@ test("a partly installed item reads Installed in its placements and keeps Instal
   assert.equal(deriveAction({ ...pending, placements: [...pending.placements, third] }), null);
   // An installed placement of an item nobody selected offers Install, as the item does.
   assert.equal(placementAction({ ...narrowed, isManaged: false }, claude("Installed")).method, "InstallItem");
+});
+
+// A click on a card's body opens its detail page, but a click on one of its
+// buttons must only run that button: Install from the card must not also
+// leave the list, and nor must selecting the card's text to copy it.
+test("a click on a card opens details except on one of its controls or after a text drag", () => {
+  // A minimal element tree whose closest walks up from the target the way the
+  // DOM's does, matching the simple type selectors opensDetails uses.
+  const node = (tag, parent = null) => ({
+    tag,
+    parent,
+    closest(selector) {
+      const types = selector.split(",").map((part) => part.trim());
+      for (let at = this; at; at = at.parent) {
+        if (types.includes(at.tag)) return at;
+      }
+      return null;
+    },
+  });
+  const card = node("article");
+  const title = node("h3", card);
+  const button = node("button", node("p", card));
+  const label = node("span", button);
+  assert.equal(opensDetails(title, false), true, "the card's name, glyph or text");
+  assert.equal(opensDetails(card, false), true, "the card's padding");
+  assert.equal(opensDetails(button, false), false, "Install, Remove, Cancel or Details");
+  assert.equal(opensDetails(label, false), false, "an element inside a button");
+  assert.equal(opensDetails(title, true), false, "the release that ends selecting the card's text");
+  assert.equal(opensDetails(null, false), false, "a target that is not an element");
 });
