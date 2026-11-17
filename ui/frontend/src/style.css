@@ -292,6 +292,7 @@ button:disabled {
 
 .product-mark {
   display: inline-grid;
+  flex: none;
   place-items: center;
   width: 1.75rem;
   height: 1.75rem;
