@@ -148,7 +148,14 @@ stays. Items held by an unknown `conditional_items` condition are never
 removed.
 
 A zip item's installed status comes from its receipts and trees, never from a
-`check` block.
+`check` block. For a user-scope placement the storefront shows what that
+user's helper last reported. When a user adds or removes such an item, the
+storefront's progress ends only once the run is over and the helper the run
+started for them has placed or removed the tree, so the item reads Installed
+or Not installed straight away. The service waits at most 30 seconds for the
+helper. A user it started no helper for, such as one signed in only over
+SSH, sees the run's outcome at once. A helper that fails to place or remove
+the tree fails the request with its error.
 
 ## Receipts
 

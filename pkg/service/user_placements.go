@@ -447,6 +447,7 @@ func (sr *serviceRunner) dispatchUserPlacements(conn clientConn, req rpcRequest,
 	if err := recordUserPlacementStatus(sr.config().AppDataPath, who.ID, params.Results, time.Now().UTC()); err != nil {
 		logger.Warn("unable to store user placement status", "err", err)
 	}
+	sr.publishUserReport(who.ID, params.Results)
 	return reportUserPlacementsResponse{}, nil
 }
 

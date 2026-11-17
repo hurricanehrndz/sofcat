@@ -137,6 +137,7 @@ func startInSession(session uint32, helper string, started map[string]bool) bool
 		return false
 	}
 	started[sid] = true
+	noteUserSyncStarted(sid)
 	_ = windows.CloseHandle(pi.Thread)
 	_ = windows.CloseHandle(pi.Process)
 	slog.Info("user sync: started the helper", "session", session, "sid", sid, "pid", pi.ProcessId)

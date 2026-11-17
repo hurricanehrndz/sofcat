@@ -127,6 +127,7 @@ func TestStartUserSyncLaunchd(t *testing.T) {
 	fakeGUIUsers(t, 501, 502)
 	loaded := map[string]bool{"gui/501/" + label: true}
 	calls := fakeGUILaunchctl(t, loaded, "bootstrap gui/502 "+plist)
+	started501, started502 := userSyncStartCount("501"), userSyncStartCount("502")
 
 	startUserSyncLaunchd(appData, helper, label, plist)
 	assertCalls(t, calls,
@@ -134,6 +135,10 @@ func TestStartUserSyncLaunchd(t *testing.T) {
 		"print gui/502/"+label, "bootstrap gui/502 "+plist)
 	if _, due := userSyncDue(appData); !due {
 		t.Fatal("plan recorded although user 502's helper did not start")
+	}
+	// An operation waits only for a helper that was started (awaitUserHelper).
+	if userSyncStartCount("501") != started501+1 || userSyncStartCount("502") != started502 {
+		t.Fatal("helper starts not counted by uid")
 	}
 
 	calls = fakeGUILaunchctl(t, loaded)
