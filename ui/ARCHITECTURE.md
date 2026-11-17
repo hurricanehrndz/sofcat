@@ -175,17 +175,20 @@ the first attempt (without a plan it removes nothing). The service also starts
 it, with `--no-retry`, whenever a run stores a plan that differs from the one
 the helpers were last started for: one helper per user SID, in each active or
 disconnected session, with the session's token (UAC-filtered, so unelevated)
-and that user's environment. A plan stored by an elevated administrator's
-`-config` run cannot start helpers (no SeTcbPrivilege), so it is recorded as
-not yet given and the next service run starts them. On macOS the helper,
+and that user's environment. Until every helper has started, each later run
+starts them again, even for a plan that returns to the last one they were
+started for, since a helper may have applied the plan in between. A plan
+stored by an elevated administrator's `-config` run cannot start helpers (no
+SeTcbPrivilege), so it is recorded as not yet given and the next service run
+starts them. On macOS the helper,
 `<slug>-useragent` beside the CLI, is the LaunchAgent `<identifier>.useragent`
 (`/Library/LaunchAgents`, written by `-serviceinstall` and the package), which
 launchd runs once at each GUI login; on a new plan the root service runs
 `launchctl kickstart gui/<uid>/<label>`, or `bootstrap` where it is not
 loaded, for every uid owning a `loginwindow`, with the same record-on-success
 rule. A helper still running is not kickstarted (launchd runs one instance
-and it may have fetched its last plan), so the plan stays due and the next
-run starts it. Its arguments are fixed, so it runs without `--no-retry` there.
+and it may have fetched its last plan), so the next run starts
+it. Its arguments are fixed, so it runs without `--no-retry` there.
 `-serviceremove` boots it out of every such session, deletes the plist and
 ends (SIGTERM) every process running from `/Applications/<Name>.app`.
 The storefront does not sync. One user's syncs run one at a time. Each fetches the plan, takes the

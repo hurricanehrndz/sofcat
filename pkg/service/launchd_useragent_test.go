@@ -189,6 +189,66 @@ func TestStartUserSyncLaunchdHelperRunning(t *testing.T) {
 	}
 }
 
+// A helper still running when plan B was saved may apply B, so a plan that
+// then returns to A, the one the helpers were last started for, must start
+// it again: otherwise the user keeps B's placements, an add never lands and
+// a removed tree stays on disk.
+func TestStartUserSyncLaunchdReturnToStartedPlan(t *testing.T) {
+	appData, helper, plist := userSyncFixture(t)
+	label := identity.UserAgentLabel()
+	fakeGUIUsers(t, 501)
+	running := false
+	orig := launchctl
+	t.Cleanup(func() { launchctl = orig })
+	var calls []string
+	launchctl = func(args ...string) ([]byte, error) {
+		calls = append(calls, strings.Join(args, " "))
+		state := "not running"
+		if running {
+			state = "running"
+		}
+		return []byte("gui/501/" + label + " = {\n\tstate = " + state + "\n}\n"), nil
+	}
+	planA, err := os.ReadFile(UserPlanPath(appData))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	startUserSyncLaunchd(appData, helper, label, plist) // A: started
+	if err := os.WriteFile(UserPlanPath(appData), []byte(`{"entries":[],"facts":{"os":"macos"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	running = true
+	startUserSyncLaunchd(appData, helper, label, plist) // B: skipped
+	if err := os.WriteFile(UserPlanPath(appData), planA, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	running, calls = false, nil
+	started := userSyncStartCount("501")
+	startUserSyncLaunchd(appData, helper, label, plist) // A again
+	assertCalls(t, &calls, "print gui/501/"+label, "kickstart gui/501/"+label)
+	if userSyncStartCount("501") != started+1 {
+		t.Fatal("the helper start was not counted")
+	}
+
+	calls = nil
+	startUserSyncLaunchd(appData, helper, label, plist)
+	assertCalls(t, &calls)
+}
+
+// With nobody signed in there is no helper to start, so the plan is
+// recorded at once and later runs start nothing until it changes.
+func TestStartUserSyncLaunchdNoUsers(t *testing.T) {
+	appData, helper, plist := userSyncFixture(t)
+	fakeGUIUsers(t)
+	calls := fakeGUILaunchctl(t, map[string]bool{})
+	startUserSyncLaunchd(appData, helper, identity.UserAgentLabel(), plist)
+	assertCalls(t, calls)
+	if _, due := userSyncDue(appData); due {
+		t.Fatal("plan still due with nobody signed in")
+	}
+}
+
 // Without the helper or its plist (a CLI run from a build directory, a
 // half-removed install) nothing starts and the plan stays due.
 func TestStartUserSyncLaunchdNeedsHelperAndPlist(t *testing.T) {

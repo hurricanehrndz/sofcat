@@ -268,6 +268,13 @@ func userSyncStartedPath(appDataPath string) string {
 // failed start, a manual run without SYSTEM rights or a service stopped
 // between the save and the start is retried at the next run. With no stored
 // plan there is nothing to hand out.
+//
+// A due plan also clears the record until markUserSyncStarted writes it
+// again, so runs stay due, whatever plan they store, until every helper
+// starts. A helper that started or kept running through an intermediate
+// plan may have applied it; were the plan to return to the recorded one,
+// comparing hashes alone would start nothing and leave that user on the
+// intermediate plan.
 func userSyncDue(appDataPath string) (string, bool) {
 	data, err := os.ReadFile(UserPlanPath(appDataPath))
 	if err != nil {
@@ -276,7 +283,13 @@ func userSyncDue(appDataPath string) (string, bool) {
 	sum := sha256.Sum256(data)
 	hash := hex.EncodeToString(sum[:])
 	started, err := os.ReadFile(userSyncStartedPath(appDataPath))
-	return hash, err != nil || string(started) != hash
+	if err == nil && string(started) == hash {
+		return hash, false
+	}
+	if err := os.Remove(userSyncStartedPath(appDataPath)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		slog.Warn("user sync: unable to clear the plan the helpers were started for", "err", err)
+	}
+	return hash, true
 }
 
 // markUserSyncStarted records hash as the plan the helpers were started for.

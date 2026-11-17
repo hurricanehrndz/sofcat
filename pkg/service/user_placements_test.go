@@ -205,6 +205,15 @@ func TestUserSyncDue(t *testing.T) {
 	if _, due := userSyncDue(appData); !due {
 		t.Fatal("a changed plan is not due")
 	}
+	// Its helpers did not all start, and one that did may have applied it,
+	// so the plan they were started for before is due again.
+	plan.Facts["os"] = "windows"
+	if err := SaveUserPlan(appData, plan); err != nil {
+		t.Fatal(err)
+	}
+	if _, due := userSyncDue(appData); !due {
+		t.Fatal("the plan last started for is not due after an unstarted one")
+	}
 }
 
 // TestUserPlanStoreFromOlderService: a plan stored before the plan carried
