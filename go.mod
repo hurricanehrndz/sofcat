@@ -11,7 +11,7 @@ require (
 	github.com/tailscale/certstore v0.1.1-0.20260409135935-3638fb84b77d
 	github.com/wailsapp/wails/v3 v3.1.0
 	go.yaml.in/yaml/v4 v4.0.0
-	golang.org/x/sys v0.49.0
+	golang.org/x/sys v0.50.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
