@@ -55,7 +55,7 @@ answer echoes the `id` with a `result` or an `error`:
 | --- | --- | --- |
 | `getServiceInfo` | none | `{version, protocolVersion: "2.0", apiVersion: 1, capabilities: [methods], busy, uptimeSeconds}` |
 | `listOptionalInstalls` | none | `{items: [OptionalInstallItem]}` (shape below) |
-| `getBranding` | none | `Branding`: `{title, tagline, helpUrl, helpLabel, accent, logoMime, logoBase64, backgroundMime, backgroundBase64, backgroundText, listHeading, sections?}` |
+| `getBranding` | none | `Branding`: `{title, tagline, helpUrl, helpLabel, accent, logoMime, logoBase64, backgroundMime, backgroundBase64, backgroundText, listHeading, titleSize, taglineSize, sections?}` |
 | `installItem` | `{itemName, placement?}` | `AcceptedOperation` |
 | `removeItem` | `{itemName, placement?}` | `AcceptedOperation` |
 | `cancelOperation` | `{operationId}` | `{canceled: true}` |
@@ -487,7 +487,8 @@ every run, so a policy change applies from the next run without a restart:
    `HKLM\SOFTWARE\Policies\SofCat\branding` on Windows, or the `branding` dict of
    `/Library/Managed Preferences/<IDENTIFIER>.plist` on macOS. The names are the
    `config.yaml` keys (`title`, `tagline`, `logo`, `help_url`, `help_label`,
-   `accent`, `background_image`, `background_text`, `list_heading`, `sections`; `sections` is a
+   `accent`, `background_image`, `background_text`, `list_heading`, `sections`,
+   `title_size`, `tagline_size`; `sections` is a
    REG_MULTI_SZ).
 2. The `branding:` block in `config.yaml`.
 3. Nothing, and the UI keeps its default look.
@@ -499,7 +500,10 @@ runes). The help
 URL must be absolute http or https. The accent must match `#rrggbb`. The logo is
 read from its local path on every call, capped at 512 KiB, and kept only if its
 bytes sniff as PNG, JPEG or SVG. The background image is read the same way,
-capped at 1 MiB, and `background_text` must be `light` or `dark`. A dropped field is logged at debug level and
+capped at 1 MiB, and `background_text` must be `light` or `dark`. `title_size` and
+`tagline_size` must be `small`, `medium`, `large` or `x-large`; the UI turns them into
+the factors 0.85, 1, 1.25 and 1.5 on its default sizes (CSS `--title-scale` and
+`--tagline-scale`), and anything else is 1. A dropped field is logged at debug level and
 never fails the call.
 
 `GetBranding` skips the service command queue, because the UI calls it once

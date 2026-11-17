@@ -106,4 +106,7 @@ export type BrandingView = {
   listHeading: string;
   /** The admin's tab order: these sections come first, in this order. */
   sections: string[];
+  /** Factors on the default banner title (and page heading) and tagline sizes; 1 keeps them. */
+  titleScale: number;
+  taglineScale: number;
 };

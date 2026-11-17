@@ -788,6 +788,13 @@ const DEFAULT_PRODUCT: string = import.meta.env?.VITE_PRODUCT_NAME ?? "SofCat";
 const DEFAULT_HELP_LABEL = "Get help";
 const DEFAULT_LIST_HEADING = "Available software";
 const IMAGE_MIMES = new Set(["image/png", "image/jpeg", "image/svg+xml"]);
+// The title_size and tagline_size names, as factors on the default size.
+const FONT_SCALES = new Map([
+  ["small", 0.85],
+  ["medium", 1],
+  ["large", 1.25],
+  ["x-large", 1.5],
+]);
 
 export function isHexColor(value: string): boolean {
   return /^#[0-9a-fA-F]{6}$/.test(value);
@@ -848,6 +855,8 @@ export function brandingView(payload: unknown): BrandingView {
     productMark: (Array.from(title)[0] ?? "").toUpperCase(),
     showBanner: Boolean(title || tagline || logoSrc || backgroundSrc || helpUrl),
     listHeading: text(raw, "listHeading") || DEFAULT_LIST_HEADING,
+    titleScale: FONT_SCALES.get(text(raw, "titleSize")) ?? 1,
+    taglineScale: FONT_SCALES.get(text(raw, "taglineSize")) ?? 1,
     sections: Array.isArray(raw.sections)
       ? raw.sections
           .filter((name): name is string => typeof name === "string" && name.trim() !== "")

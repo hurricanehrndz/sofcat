@@ -191,3 +191,16 @@ func TestResolveBackgroundText(t *testing.T) {
 		}
 	}
 }
+
+// The font sizes are a closed scale; anything else, a number included, is
+// dropped so the UI keeps today's size instead of an arbitrary one.
+func TestResolveFontSizes(t *testing.T) {
+	for in, want := range map[string]string{
+		"small": "small", "X-Large": "x-large", "medium": "medium", "": "", "huge": "", "24px": "", "2": "",
+	} {
+		got := resolve(config.Branding{TitleSize: in, TaglineSize: in})
+		if got.TitleSize != want || got.TaglineSize != want {
+			t.Errorf("size %q resolved to title %q, tagline %q, want %q", in, got.TitleSize, got.TaglineSize, want)
+		}
+	}
+}

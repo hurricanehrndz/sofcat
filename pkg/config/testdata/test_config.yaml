@@ -20,3 +20,5 @@ branding:
   help_label: Get help
   accent: "#0b6e4f"
   list_heading: Software for your team
+  title_size: large
+  tagline_size: x-large

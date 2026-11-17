@@ -47,6 +47,8 @@ func TestGet(t *testing.T) {
 			Accent:          "#0b6e4f",
 
 			ListHeading: "Software for your team",
+			TitleSize:   "large",
+			TaglineSize: "x-large",
 		},
 		ConfigPath: "testdata/test_config.yaml",
 	}

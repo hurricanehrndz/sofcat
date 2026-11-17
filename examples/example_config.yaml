@@ -31,6 +31,8 @@ app_data_path: c:/cpe/sofcat/cache
 #   background_image: C:\ProgramData\SofCat\branding\banner.jpg  # local PNG, JPEG or SVG, at most 1 MiB; fills the banner in place of the accent
 #   background_text: light                            # banner text over the image: light (default) or dark
 #   list_heading: Software for your team              # replaces "Available software"
+#   title_size: large                                 # banner title and page headings: small, medium (default), large or x-large
+#   tagline_size: medium                              # banner tagline: the same sizes
 #   sections:                                         # storefront tab order; unlisted sections follow alphabetically
 #     - Apps
 #     - Branding

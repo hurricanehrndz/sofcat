@@ -103,6 +103,8 @@ comes from the first source that sets it:
 | `background_image` | Local path to a PNG, JPEG or SVG of at most 1 MiB, checked by content. Fills the banner in place of the accent, cropped to cover it. Buttons and links keep the accent. Pick a wide image with no text near the edges. |
 | `background_text` | `light` (the default) or `dark`. The colour of the banner's title, tagline and help button over `background_image`. sofcat draws nothing over the image, so pick the one that reads on it. |
 | `list_heading` | Plain text, up to 120 characters. Replaces the "Available software" heading; "My items" is unchanged. |
+| `title_size` | `small`, `medium` (the default), `large` or `x-large`. The size of the banner title and, in step with it, the "Available software" (or `list_heading`), "My items" and "Activity" headings: 0.85, 1, 1.25 or 1.5 times the default. Any other value keeps the default. |
+| `tagline_size` | The same four sizes for the banner tagline. |
 | `sections` | A list; a REG_MULTI_SZ as policy. Up to 50 entries of plain text, up to 120 characters each. Sets the storefront tab order: the sections listed come first, then the rest alphabetically. Items without a catalog `section` appear under a "Software" tab, so give every item a section to hide it. |
 
 Set the policy values with Intune (a custom OMA-URI or a registry script), Group
