@@ -249,8 +249,7 @@ button:disabled {
   --banner-paper: #1b1b1f;
 
   min-height: 7.5rem;
-  background: var(--banner-image) center / cover no-repeat
-    var(--brand, var(--accent));
+  background: var(--banner-image) center / cover no-repeat var(--brand, var(--accent));
   color: var(--banner-ink);
 }
 
@@ -510,18 +509,20 @@ h2 {
 
 /*
  * A card stretched wider than a column, by a row of one or two, is a single
- * line instead: glyph, text, then the buttons at the far end. Compact cards
- * are no container, so they keep the column layout at any width.
+ * line instead: glyph, text, then the buttons at the far end. The text keeps
+ * at least 12rem; buttons with long admin labels that do not fit beside it
+ * wrap to a line of their own. Compact cards are no container, so they keep
+ * the column layout at any width.
  */
 @container (min-width: 30rem) {
   .card-body {
-    flex-direction: row;
+    flex-flow: row wrap;
     align-items: center;
-    gap: 1rem;
+    gap: 0.75rem 1rem;
   }
 
   .card-text {
-    flex: 1;
+    flex: 1 1 12rem;
     min-width: 0;
   }
 
@@ -530,7 +531,7 @@ h2 {
   }
 
   .card .card-actions {
-    flex: none;
+    flex: 0 1 auto;
     margin-top: 0;
     padding-top: 0;
   }
