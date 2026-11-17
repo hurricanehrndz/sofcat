@@ -152,8 +152,6 @@ button:disabled {
 
 .pill-large {
   padding: 0.7rem 1.4rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   font-weight: 700;
 }
 
@@ -447,7 +445,9 @@ h2 {
   gap: 0.5rem;
 }
 
-.card-actions {
+/* Two classes, so the auto margin that pins the buttons to the bottom of a
+ * stretched card wins over ".card p". */
+.card .card-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
@@ -652,8 +652,10 @@ h2 {
   font-weight: 600;
 }
 
+/* One minimum width, so Add and Remove line up on both edges. */
 .placements .pill {
   margin-left: auto;
+  min-width: 5.5rem;
 }
 
 #detail-description {
