@@ -13,6 +13,7 @@ import {
   statusRecord,
   appliesToLine,
   itemPlacements,
+  opensDetails,
   placementAction,
   placementStatus,
 } from "./state.ts";
@@ -221,4 +222,15 @@ test("a partly installed item reads Installed in its placements and keeps Instal
   assert.equal(deriveAction({ ...pending, placements: [...pending.placements, third] }), null);
   // An installed placement of an item nobody selected offers Install, as the item does.
   assert.equal(placementAction({ ...narrowed, isManaged: false }, claude("Installed")).method, "InstallItem");
+});
+
+// A click on a card's body opens its detail page, but a click on one of its
+// buttons must only run that button: Install from the card must not also
+// leave the list.
+test("a click on a card opens details except on one of its controls", () => {
+  const at = (control) => ({ closest: (selector) => (control && selector.split(", ").includes(control) ? {} : null) });
+  assert.equal(opensDetails(at(null)), true, "the card's name, glyph or text");
+  assert.equal(opensDetails(at("button")), false, "Install, Remove, Cancel or Details");
+  assert.equal(opensDetails(at("a")), false);
+  assert.equal(opensDetails(null), false, "a target that is not an element");
 });

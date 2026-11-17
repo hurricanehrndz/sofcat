@@ -137,9 +137,12 @@ refresh provides convergence.
 
 ## Keyboard
 
-Everything is reachable with Tab and real buttons. `Ctrl+L` shows or hides
-Activity (like Managed Software Center's ⌘L), and `Escape` leaves the detail page
-or Activity. Both are frontend-only; nothing is added to the bound surface.
+Everything is reachable with Tab and real buttons. A click anywhere on a card
+but its buttons opens the item's detail page, as its Details button does; the
+card itself is not a control, so keyboard and screen-reader users take Details.
+`Ctrl+L` shows or hides Activity (like Managed Software Center's ⌘L), and
+`Escape` leaves the detail page, focusing the card's Details button again, or
+Activity. All of this is frontend-only; nothing is added to the bound surface.
 
 ## Development mock
 
