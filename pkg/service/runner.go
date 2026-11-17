@@ -91,6 +91,10 @@ type serviceRunner struct {
 	busyAction atomic.Value
 	// cancels lets cancelOperation withdraw an item from the run under way.
 	cancels *installer.Cancels
+	// reportWatches are the operations collecting their requester's helper
+	// reports (awaitUserHelper).
+	reportWatchMu sync.Mutex
+	reportWatches map[*userReportWatch]struct{}
 }
 
 // CEILING: streams poll their operation's records every streamPollSleep
@@ -134,8 +138,11 @@ type trackedOperation struct {
 	// unresolved: only they or an administrator may cancel (R32).
 	requestedByID string
 	done          bool
-	lastUpdated   time.Time
-	completedAt   time.Time
+	// awaitingHelper is set once the operation's run has ended and it waits
+	// for the requester's helper; it can no longer be canceled.
+	awaitingHelper bool
+	lastUpdated    time.Time
+	completedAt    time.Time
 
 	// prior and requested are the self-serve selections before and after the
 	// request, for cancelOperation to revert.
@@ -727,7 +734,7 @@ func (sr *serviceRunner) dispatchMutation(ctx context.Context, conn clientConn, 
 	if err := writeResult(conn, req.ID, accepted); err != nil {
 		logger.Warn("failed to write response", "err", err)
 	}
-	sr.scheduleRunAfterMutation(ctx, action, itemName, requestedBy.Name, resp.OperationID)
+	sr.scheduleRunAfterMutation(ctx, action, itemName, requestedBy.Name, caller.ID, resp.OperationID)
 	return nil, nil
 }
 
@@ -829,8 +836,10 @@ func commandError(err error, operationID string) *Error {
 
 // scheduleRunAfterMutation queues the run that carries out a mutation and ends
 // its operation with the outcome. The run records requestedBy against the item
-// in the inventory.
-func (sr *serviceRunner) scheduleRunAfterMutation(ctx context.Context, action, itemName, requestedBy, operationID string) {
+// in the inventory. A run that changed the requester's user-scope placements
+// (requestedByID) ends the operation only once their helper has reported, or
+// its wait has run out (awaitUserHelper).
+func (sr *serviceRunner) scheduleRunAfterMutation(ctx context.Context, action, itemName, requestedBy, requestedByID, operationID string) {
 	if action != actionInstallItem && action != actionRemoveItem {
 		return
 	}
@@ -842,6 +851,10 @@ func (sr *serviceRunner) scheduleRunAfterMutation(ctx context.Context, action, i
 		if requestedBy != "" {
 			run.requestedBy = map[string]string{itemName: requestedBy}
 		}
+		// Read before the run, and watching from then on: the helper the run
+		// starts can report before the run returns.
+		base := sr.newUserHelperBaseline(itemName, requestedByID)
+		defer sr.unwatchUserReports(base.watch)
 		resp, err := sr.submit(ctx, run)
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
@@ -869,7 +882,7 @@ func (sr *serviceRunner) scheduleRunAfterMutation(ctx context.Context, action, i
 			})
 			return
 		}
-		sr.appendOperationEvent(operationID, resolveTerminalEvent(itemName, resp.report))
+		sr.appendOperationEvent(operationID, sr.awaitUserHelper(ctx, operationID, itemName, base, resolveTerminalEvent(itemName, resp.report)))
 	}()
 }
 
@@ -1083,6 +1096,8 @@ func (sr *serviceRunner) cancelOperation(operationID string, caller peer) error 
 		return fmt.Errorf("%w: it has already finished", errNotCancelable)
 	case !authorized(op.requestedByID, caller):
 		return fmt.Errorf("%w: %s", errNotAuthorized, op.requestedDisplayName)
+	case op.awaitingHelper:
+		return fmt.Errorf("%w: work on %s has already started", errNotCancelable, op.requestedDisplayName)
 	}
 	err := withdrawItem(sr.config(), sr.cancels, op.requestedItemName, op.prior, op.requested)
 	if errors.Is(err, errNotCancelable) {

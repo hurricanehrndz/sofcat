@@ -209,7 +209,24 @@ their agent last reported every user-scope one placed (`installed`,
 `current`, `adopted` or `unchanged`); a `conflict` keeps the earlier outcome,
 and an item the caller has no outcome for reads from the machine's receipts.
 The service never opens a user's receipts. A signed-in user gets new content as soon as
-the run that changed the plan ends. `-serviceremove` ends any helper still
+the run that changed the plan ends. An `installItem` or `removeItem` whose
+run succeeded and changed the requester's user-scope entries for its item
+(an entry added or changed and not held, or one dropped that the requester
+last reported placed) stays open until the requester's helper reports on
+each of them, so the list the storefront reloads at the end already reads
+the result (`awaitUserHelper` in `pkg/service/user_placement_wait.go`). It
+waits only when that run started a helper for the requester's SID or uid; a
+requester with no signed-in session (an administrator over SSH), a machine
+without the helper and a failed start end at once. Meanwhile its latest
+record is `Installing` or `Removing` for the item and a cancel is refused as
+work already started. A result for the entry with an error ends it `Failed`,
+with the code a machine-scope placement failure has (`placement_conflict`,
+`placement_refused`, else `item_failed`) and the helper's error, as the row
+stays not installed. A dropped entry's result that still reads placed comes
+from a helper that fetched the old plan and does not count. After 30 seconds
+(`userHelperWait`) the operation ends as the run left it, and the service
+logs a warning. A managed run, the `run` method and `-config` wait for no
+helper. `-serviceremove` ends any helper still
 running beside it, after it removes the `Run` value, and any storefront, so an
 open window does not keep `<slug>-ui.exe` locked against the uninstaller.
 
@@ -347,7 +364,10 @@ such as a failed install retried every run, goes only to the service log. Runner
 record states `Downloading`, `Installing`, `Removing`, `ItemCompleted`, and
 `ItemFailed`; all five are non-terminal. Only `Succeeded`, `Failed`, `Deferred`,
 and `Canceled` — from the requested item's real run report, a service
-cancellation or error, or a user cancel — end an operation.
+cancellation or error, or a user cancel — end an operation. A succeeded run
+that changed the requester's user-scope placements of the item ends it only
+after their helper has reported, or 30 seconds have passed (see the
+user-placement plan above).
 
 `progressPercent` is scoped to the record's `itemName` and may reset at an item
 boundary. An item's detail page shows one status line with a spinner while its

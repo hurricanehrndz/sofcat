@@ -235,7 +235,7 @@ func TestScheduleRunAfterMutationEmitsCanceledTerminalEvent(t *testing.T) {
 	canceledCtx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	sr.scheduleRunAfterMutation(canceledCtx, actionInstallItem, "Slack", "", operationID)
+	sr.scheduleRunAfterMutation(canceledCtx, actionInstallItem, "Slack", "", "", operationID)
 	sr.wg.Wait()
 
 	events, done, ok := sr.snapshotTrackedOperation(operationID)

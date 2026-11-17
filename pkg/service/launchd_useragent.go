@@ -100,6 +100,7 @@ func startUserAgents(uids []int, label, plist string) bool {
 			ok = false
 			continue
 		}
+		noteUserSyncStarted(strconv.Itoa(uid))
 		slog.Info("user sync: started the helper", "uid", uid, "via", args[0])
 	}
 	return ok

@@ -524,20 +524,6 @@ function Get-ChoiceUserEntry {
     return $null
 }
 
-# Wait-ChoiceCodex polls the list, at most every 10 s, until the codex row
-# reads $Codex: the user-scope row follows the helper's report.
-function Wait-ChoiceCodex {
-    param([string]$Codex)
-    $deadline = (Get-Date).AddSeconds($TimeoutSec)
-    while ((Get-Date) -lt $deadline) {
-        $it = Get-OptionalItem "tapas-choice-skill"
-        $row = @(@($it.placements) | Where-Object { $_.name -eq "codex-skills" })
-        if ($row.Count -eq 1 -and $row[0].status -eq $Codex) { return }
-        Start-Sleep -Seconds 10
-    }
-    Fail "timed out after ${TimeoutSec}s waiting for the codex-skills row to read $Codex"
-}
-
 Write-Step "ListOptionalInstalls lists a row per placement for a two-placement item, none for a one-placement item"
 Assert-ChoiceRows "NotInstalled" "NotInstalled" "NotInstalled"
 $opt = Get-OptionalItem "tapas-optional-skill"
@@ -574,8 +560,9 @@ if (@(Get-YamlList $SelfServe "managed_installs") -notcontains "tapas-choice-ski
 $entry = Get-ChoiceUserEntry
 if (-not $entry -or $entry.placement -ne "codex-skills" -or $entry.held) { Fail "the user plan entry for tapas-choice-skill: $($entry | ConvertTo-Json -Compress)" }
 Assert-Placed $claudeRoot "claude-skills" "tapas-choice-skill" | Out-Null
-Wait-For { (Test-Path (Join-Path $choiceTree "SKILL.md")) -and (Test-Path $choiceUserReceipt) } "the helper to place tapas-choice-skill in $choiceTree"
-Wait-ChoiceCodex "Installed"
+# The operation ends only once this user's helper has reported, so the tree
+# and the row are settled when its terminal record arrives: no polling.
+if (-not ((Test-Path (Join-Path $choiceTree "SKILL.md")) -and (Test-Path $choiceUserReceipt))) { Fail "the operation ended before the helper placed tapas-choice-skill in $choiceTree" }
 Assert-ChoiceRows "Installed" "Installed" "Installed"
 Pass "user plan lists codex-skills; the helper placed $choiceTree; no placement_selections entry; both rows Installed"
 
@@ -599,9 +586,8 @@ Wait-Pruned
 if (@(Get-YamlList $SelfServe "managed_installs") -contains "tapas-choice-skill") { Fail "tapas-choice-skill is still in the self-serve managed_installs" }
 if ((Get-Content -LiteralPath $SelfServe -Raw) -match 'tapas-choice-skill') { Fail "$SelfServe still names tapas-choice-skill: $(Get-Content -LiteralPath $SelfServe -Raw)" }
 if (Get-ChoiceUserEntry) { Fail "the user plan still lists tapas-choice-skill" }
-Wait-For { -not (Test-Path $choiceTree) -and -not (Test-Path $choiceUserReceipt) } "the helper to remove $choiceTree and its receipt"
+if ((Test-Path $choiceTree) -or (Test-Path $choiceUserReceipt)) { Fail "the operation ended before the helper removed $choiceTree and its receipt" }
 Assert-NotPlaced $claudeRoot "claude-skills" "tapas-choice-skill"
-Wait-ChoiceCodex "NotInstalled"
 Assert-ChoiceRows "NotInstalled" "NotInstalled" "NotInstalled"
 Pass "deselected and pruned, out of the user plan; the helper removed $choiceTree; both rows NotInstalled"
 
