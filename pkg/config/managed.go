@@ -55,6 +55,8 @@ func managedFields(c *Configuration) map[string]any {
 		"branding.accent":           &c.Branding.Accent,
 		"branding.list_heading":     &c.Branding.ListHeading,
 		"branding.sections":         &c.Branding.Sections,
+		"branding.title_size":       &c.Branding.TitleSize,
+		"branding.tagline_size":     &c.Branding.TaglineSize,
 	}
 }
 

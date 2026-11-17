@@ -107,6 +107,19 @@ test("the list heading is the admin's when set, else Available software", () => 
   assert.equal(brandingView({ listHeading: "Skills" }).showBanner, false);
 });
 
+// The sizes scale today's rems, so no key, or one the shell does not know
+// (a stale cache, a prototype key), must keep the factor at exactly 1.
+test("the title and tagline sizes are a small named scale; anything else keeps the default", () => {
+  const view = brandingView({ titleSize: "x-large", taglineSize: "small" });
+  assert.equal(view.titleScale, 1.5);
+  assert.equal(view.taglineScale, 0.85);
+  assert.equal(brandingView({ titleSize: "large" }).titleScale, 1.25);
+  for (const titleSize of [undefined, "", "medium", "huge", "24px", 2, "constructor"]) {
+    assert.equal(brandingView({ titleSize }).titleScale, 1, String(titleSize));
+  }
+  assert.equal(brandingView({ titleSize: "large" }).showBanner, false);
+});
+
 test("the applies-to line lists the names in the order the service sent, after its label", () => {
   assert.equal(appliesToLine(item({ appliesTo: ["Claude Code", "Codex"] })), "Applies to: Claude Code, Codex");
   assert.equal(

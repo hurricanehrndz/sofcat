@@ -315,8 +315,10 @@ func brandingSummary(b branding.Branding) (string, error) {
 		BackgroundBytes int      `json:"backgroundBytes"`
 		BackgroundText  string   `json:"backgroundText"`
 		ListHeading     string   `json:"listHeading"`
+		TitleSize       string   `json:"titleSize"`
+		TaglineSize     string   `json:"taglineSize"`
 		Sections        []string `json:"sections,omitempty"`
-	}{b.Title, b.Tagline, b.HelpURL, b.HelpLabel, b.Accent, b.LogoMime, len(logo), b.BackgroundMime, len(background), b.BackgroundText, b.ListHeading, b.Sections})
+	}{b.Title, b.Tagline, b.HelpURL, b.HelpLabel, b.Accent, b.LogoMime, len(logo), b.BackgroundMime, len(background), b.BackgroundText, b.ListHeading, b.TitleSize, b.TaglineSize, b.Sections})
 	return string(line), err
 }
 

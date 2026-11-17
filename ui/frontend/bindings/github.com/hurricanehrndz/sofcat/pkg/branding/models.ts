@@ -36,6 +36,13 @@ export class Branding {
      */
     "sections"?: string[];
 
+    /**
+     * TitleSize and TaglineSize are one of FontSizes, or "" for the UI's
+     * default, medium. TitleSize also scales the page headings.
+     */
+    "titleSize": string;
+    "taglineSize": string;
+
     /** Creates a new Branding instance. */
     constructor($$source: Partial<Branding> = {}) {
         if (!("title" in $$source)) {
@@ -70,6 +77,12 @@ export class Branding {
         }
         if (!("listHeading" in $$source)) {
             this["listHeading"] = "";
+        }
+        if (!("titleSize" in $$source)) {
+            this["titleSize"] = "";
+        }
+        if (!("taglineSize" in $$source)) {
+            this["taglineSize"] = "";
         }
 
         Object.assign(this, $$source);

@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -55,7 +56,15 @@ type Branding struct {
 	ListHeading string `json:"listHeading"`
 	// Sections is the storefront tab order; sections it omits follow it.
 	Sections []string `json:"sections,omitempty"`
+	// TitleSize and TaglineSize are one of FontSizes, or "" for the UI's
+	// default, medium. TitleSize also scales the page headings.
+	TitleSize   string `json:"titleSize"`
+	TaglineSize string `json:"taglineSize"`
 }
+
+// FontSizes are the names title_size and tagline_size accept: a small fixed
+// scale rather than a number, so a typo cannot wreck the layout.
+var FontSizes = []string{"small", "medium", "large", "x-large"}
 
 // Resolve returns the validated branding; config.Get has already merged the
 // managed settings over the config.yaml block. The logo file is read on every
@@ -85,14 +94,21 @@ func resolve(in config.Branding) Branding {
 	if path := strings.TrimSpace(in.BackgroundImage); path != "" {
 		out.BackgroundMime, out.BackgroundBase64 = image("background_image", path, MaxBackgroundBytes)
 	}
-	switch text := strings.ToLower(strings.TrimSpace(in.BackgroundText)); text {
-	case "light", "dark":
-		out.BackgroundText = text
-	case "":
-	default:
-		slog.Debug("branding background_text dropped", "backgroundText", text)
-	}
+	out.BackgroundText = oneOf("background_text", in.BackgroundText, "light", "dark")
+	out.TitleSize = oneOf("title_size", in.TitleSize, FontSizes...)
+	out.TaglineSize = oneOf("tagline_size", in.TaglineSize, FontSizes...)
 	return out
+}
+
+// oneOf returns value, trimmed and lowercased, when it is one of allowed, and
+// otherwise "", which leaves the UI's default.
+func oneOf(key, value string, allowed ...string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" || slices.Contains(allowed, value) {
+		return value
+	}
+	slog.Debug("branding "+key+" dropped", "value", value)
+	return ""
 }
 
 // plainText trims, drops control characters (including newlines) and caps

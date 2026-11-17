@@ -213,16 +213,17 @@ button:disabled {
 
 .banner-text p {
   margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .banner-title {
-  font-size: 1.375rem;
+  font-size: calc(1.375rem * var(--title-scale, 1));
   font-weight: 700;
   line-height: 1.2;
 }
 
 .banner-tagline {
-  font-size: 0.875rem;
+  font-size: calc(0.875rem * var(--tagline-scale, 1));
   color: color-mix(in srgb, currentcolor 82%, var(--brand, var(--accent)));
 }
 
@@ -291,6 +292,7 @@ button:disabled {
 
 .product-mark {
   display: inline-grid;
+  flex: none;
   place-items: center;
   width: 1.75rem;
   height: 1.75rem;
@@ -370,6 +372,12 @@ main {
 h2 {
   font-size: 1.25rem;
   margin: 0 0 0.25rem;
+}
+
+/* The page headings scale with the banner title (branding title_size). */
+.page-heading {
+  font-size: calc(1.25rem * var(--title-scale, 1));
+  overflow-wrap: anywhere;
 }
 
 .filters {

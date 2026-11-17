@@ -203,6 +203,8 @@ function applyBranding(next: BrandingView): void {
     root.style.removeProperty("--on-brand");
     delete root.dataset.accent;
   }
+  root.style.setProperty("--title-scale", String(next.titleScale));
+  root.style.setProperty("--tagline-scale", String(next.taglineScale));
   // The tab order and the Software tab's heading are branding too.
   renderNav();
   renderCategories();
