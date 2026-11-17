@@ -464,6 +464,147 @@ Wait-Pruned
 Assert-SkillsIndex @("tapas-managed-skill")
 Pass "tree and receipt gone, managed_uninstalls pruned, skills index back to the managed skill"
 
+# --- Self-service, one placement at a time ------------------------------------------
+
+# tapas-choice-skill has two placements on Windows: claude-skills (machine)
+# and codex-skills (user scope, placed by the signed-in user's helper).
+$choiceTree        = Join-Path $env:USERPROFILE ".agents\skills\tapas-choice-skill"
+$choiceUserReceipt = Join-Path $env:LOCALAPPDATA "Tapas Test\receipts\codex-skills\tapas-choice-skill.json"
+
+# Get-PlacementSelection returns the self-serve placement_selections entry
+# for $Item, @() when it has none.
+function Get-PlacementSelection {
+    param([string]$Item)
+    if (-not (Test-Path $SelfServe)) { return @() }
+    $items = @()
+    $inMap = $false
+    $inItem = $false
+    foreach ($raw in Get-Content -LiteralPath $SelfServe) {
+        if ($raw -match '^placement_selections:') { $inMap = $true; continue }
+        if (-not $inMap) { continue }
+        if ($raw -match '^\S') { break }
+        if ($raw -match ('^\s+' + [regex]::Escape($Item) + ':\s*(.*)$')) {
+            $inline = $Matches[1].Trim()
+            if ($inline) {
+                $inline.Trim('[',']').Split(',') | ForEach-Object { $v = $_.Trim(); if ($v) { $items += $v } }
+            } else {
+                $inItem = $true
+            }
+            continue
+        }
+        if ($inItem) {
+            if ($raw -match '^\s+-\s*(.+?)\s*$') { $items += $Matches[1].Trim() } else { $inItem = $false }
+        }
+    }
+    return @($items)
+}
+
+# Assert-ChoiceRows checks tapas-choice-skill's listed status and its two
+# placement rows, in placements.yaml order with their applies_to labels.
+function Assert-ChoiceRows {
+    param([string]$Status, [string]$Claude, [string]$Codex)
+    $it = Get-OptionalItem "tapas-choice-skill"
+    if (-not $it) { Fail "tapas-choice-skill not listed by ListOptionalInstalls" }
+    $rows = @($it.placements)
+    $got = ($rows | ForEach-Object { "{0}|{1}|{2}|{3}" -f $_.name, $_.label, $_.status, $_.isInstalled }) -join ";"
+    $want = "claude-skills|Claude Code|$Claude|$($Claude -eq 'Installed');codex-skills|Codex|$Codex|$($Codex -eq 'Installed')"
+    if ($got -ne $want) { Fail "tapas-choice-skill placements '$got', want '$want'" }
+    if ($it.status -ne $Status) { Fail "tapas-choice-skill status '$($it.status)', want $Status" }
+}
+
+# Get-ChoiceUserEntry returns tapas-choice-skill's codex-skills entry in the
+# user-placement plan, or $null.
+function Get-ChoiceUserEntry {
+    foreach ($l in (Invoke-SofCat "ListUserPlacements").Out) {
+        $t = "$l".Trim()
+        if (-not $t.StartsWith('{')) { continue }
+        try { $obj = $t | ConvertFrom-Json } catch { continue }
+        if ($obj.item -eq "tapas-choice-skill") { return $obj }
+    }
+    return $null
+}
+
+# Wait-ChoiceCodex polls the list, at most every 10 s, until the codex row
+# reads $Codex: the user-scope row follows the helper's report.
+function Wait-ChoiceCodex {
+    param([string]$Codex)
+    $deadline = (Get-Date).AddSeconds($TimeoutSec)
+    while ((Get-Date) -lt $deadline) {
+        $it = Get-OptionalItem "tapas-choice-skill"
+        $row = @(@($it.placements) | Where-Object { $_.name -eq "codex-skills" })
+        if ($row.Count -eq 1 -and $row[0].status -eq $Codex) { return }
+        Start-Sleep -Seconds 10
+    }
+    Fail "timed out after ${TimeoutSec}s waiting for the codex-skills row to read $Codex"
+}
+
+Write-Step "ListOptionalInstalls lists a row per placement for a two-placement item, none for a one-placement item"
+Assert-ChoiceRows "NotInstalled" "NotInstalled" "NotInstalled"
+$opt = Get-OptionalItem "tapas-optional-skill"
+if ($opt.PSObject.Properties['placements']) { Fail "tapas-optional-skill has placements: $($opt.placements | ConvertTo-Json -Compress)" }
+Pass "tapas-choice-skill rows Claude Code and Codex, NotInstalled; tapas-optional-skill has no placements"
+
+Write-Step "A placement the item does not have is refused and nothing is written"
+$ssBefore = (Get-FileHash -LiteralPath $SelfServe -Algorithm SHA256).Hash
+foreach ($spec in @("InstallItem:tapas-choice-skill:no-such-skills", "RemoveItem:tapas-choice-skill:no-such-skills", "InstallItem:tapas-optional-skill:codex-skills")) {
+    $res = Invoke-SofCat $spec -AllowFail
+    if ($res.Code -eq 0) { Fail "$spec was accepted" }
+    if (($res.Out -join "`n") -notmatch 'no placement') { Fail "$spec refusal does not name the placement: $($res.Out -join ' | ')" }
+}
+if ((Get-FileHash -LiteralPath $SelfServe -Algorithm SHA256).Hash -ne $ssBefore) { Fail "a refused request changed $SelfServe" }
+Assert-NotPlaced $claudeRoot "claude-skills" "tapas-choice-skill"
+Pass "three requests refused with 'no placement'; $SelfServe unchanged"
+
+Write-Step "InstallItem for claude-skills places the item there only and records the choice"
+Assert-Succeeded "InstallItem:tapas-choice-skill:claude-skills"
+Assert-Placed $claudeRoot "claude-skills" "tapas-choice-skill" | Out-Null
+if (@(Get-YamlList $SelfServe "managed_installs") -notcontains "tapas-choice-skill") { Fail "tapas-choice-skill is not in the self-serve managed_installs" }
+$sel = @(Get-PlacementSelection "tapas-choice-skill")
+if (($sel -join ",") -ne "claude-skills") { Fail "placement_selections for tapas-choice-skill is '$($sel -join ',')', want claude-skills: $(Get-Content -LiteralPath $SelfServe -Raw)" }
+if (Get-ChoiceUserEntry) { Fail "the user-placement plan lists tapas-choice-skill although codex-skills was not chosen" }
+Assert-ChoiceRows "Installed" "Installed" "NotInstalled"
+Assert-SkillsIndex @("tapas-managed-skill", "tapas-choice-skill")
+Pass "placed under $claudeRoot; placement_selections [claude-skills]; not in the user plan; rows Installed and NotInstalled"
+
+Write-Step "InstallItem for codex-skills adds the user-scope placement and clears the choice"
+Assert-Succeeded "InstallItem:tapas-choice-skill:codex-skills"
+$sel = @(Get-PlacementSelection "tapas-choice-skill")
+if ($sel.Count -ne 0) { Fail "placement_selections still holds '$($sel -join ',')' for tapas-choice-skill" }
+if (@(Get-YamlList $SelfServe "managed_installs") -notcontains "tapas-choice-skill") { Fail "tapas-choice-skill left the self-serve managed_installs" }
+$entry = Get-ChoiceUserEntry
+if (-not $entry -or $entry.placement -ne "codex-skills" -or $entry.held) { Fail "the user plan entry for tapas-choice-skill: $($entry | ConvertTo-Json -Compress)" }
+Assert-Placed $claudeRoot "claude-skills" "tapas-choice-skill" | Out-Null
+Wait-For { (Test-Path (Join-Path $choiceTree "SKILL.md")) -and (Test-Path $choiceUserReceipt) } "the helper to place tapas-choice-skill in $choiceTree"
+Wait-ChoiceCodex "Installed"
+Assert-ChoiceRows "Installed" "Installed" "Installed"
+Pass "user plan lists codex-skills; the helper placed $choiceTree; no placement_selections entry; both rows Installed"
+
+Write-Step "RemoveItem for claude-skills removes the machine tree and keeps the item for codex-skills"
+Assert-Succeeded "RemoveItem:tapas-choice-skill:claude-skills"
+Wait-Removed $claudeRoot "claude-skills" "tapas-choice-skill"
+if (@(Get-YamlList $SelfServe "managed_installs") -notcontains "tapas-choice-skill") { Fail "tapas-choice-skill left the self-serve managed_installs" }
+if (@(Get-YamlList $SelfServe "managed_uninstalls") -contains "tapas-choice-skill") { Fail "tapas-choice-skill was queued for a full removal" }
+$sel = @(Get-PlacementSelection "tapas-choice-skill")
+if (($sel -join ",") -ne "codex-skills") { Fail "placement_selections for tapas-choice-skill is '$($sel -join ',')', want codex-skills: $(Get-Content -LiteralPath $SelfServe -Raw)" }
+$entry = Get-ChoiceUserEntry
+if (-not $entry -or $entry.placement -ne "codex-skills") { Fail "tapas-choice-skill left the user plan: $($entry | ConvertTo-Json -Compress)" }
+if (-not (Test-Path (Join-Path $choiceTree "SKILL.md"))) { Fail "$choiceTree was removed" }
+Assert-ChoiceRows "Installed" "NotInstalled" "Installed"
+Assert-SkillsIndex @("tapas-managed-skill")
+Pass "machine tree and receipt gone; placement_selections [codex-skills]; user tree kept; rows NotInstalled and Installed"
+
+Write-Step "RemoveItem for the last placement removes the item"
+Assert-Succeeded "RemoveItem:tapas-choice-skill:codex-skills"
+Wait-Pruned
+if (@(Get-YamlList $SelfServe "managed_installs") -contains "tapas-choice-skill") { Fail "tapas-choice-skill is still in the self-serve managed_installs" }
+if ((Get-Content -LiteralPath $SelfServe -Raw) -match 'tapas-choice-skill') { Fail "$SelfServe still names tapas-choice-skill: $(Get-Content -LiteralPath $SelfServe -Raw)" }
+if (Get-ChoiceUserEntry) { Fail "the user plan still lists tapas-choice-skill" }
+Wait-For { -not (Test-Path $choiceTree) -and -not (Test-Path $choiceUserReceipt) } "the helper to remove $choiceTree and its receipt"
+Assert-NotPlaced $claudeRoot "claude-skills" "tapas-choice-skill"
+Wait-ChoiceCodex "NotInstalled"
+Assert-ChoiceRows "NotInstalled" "NotInstalled" "NotInstalled"
+Pass "deselected and pruned, out of the user plan; the helper removed $choiceTree; both rows NotInstalled"
+
 # --- Marketplace and settings drop-in -----------------------------------------------
 
 function Read-Json {
