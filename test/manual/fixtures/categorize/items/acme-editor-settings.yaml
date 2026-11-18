@@ -1,0 +1,7 @@
+item_name: acme-editor-settings
+display_name: Acme Editor Settings
+description: VS Code settings, recommended extensions and code snippets for the engineering team.
+developer: Acme Engineering
+catalog: categorize
+version: 1.0.0
+placements: [acme-files]

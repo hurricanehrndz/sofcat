@@ -1,0 +1,20 @@
+name: categorize_manifest
+catalogs:
+  - categorize
+optional_installs:
+  - acme-git-defaults
+  - acme-vpn-profiles
+  - acme-slack-themes
+  - acme-wallpapers
+  - acme-meeting-backgrounds
+  - acme-editor-settings
+  - acme-ssh-known-hosts
+  - acme-firefox-bookmarks
+  - acme-code-review-skill
+  - acme-meeting-notes-skill
+  - acme-brand-fonts
+  - acme-spreadsheet-templates
+  - acme-podcast-presets
+  - acme-shell-aliases
+  - acme-cad-part-library
+  - acme-starter-pack

@@ -20,6 +20,9 @@ const usage = `Usage: makecatalogs [options] <repo_path>
        makecatalogs build|pack|tree-hash|zip-item ... (-h for each)
 
 Compiles <repo_path>/packages-info/*.yaml into <repo_path>/catalogs/.
+With a <repo_path>/categorize.yaml and SOFCAT_AI_API_KEY set, items without
+a category are categorized by the model it names and the answers are kept
+in <repo_path>/categories.lock.yaml.
 
 Options:
 `
@@ -68,13 +71,20 @@ func run(args []string, stdout, stderr io.Writer) int {
 		flags.Usage()
 		return 2
 	}
-	return compileCatalogs(flags.Arg(0), *check, stdout, stderr)
+	return compileCatalogs(flags.Arg(0), flags.Arg(0), *check, stdout, stderr, stderr)
 }
 
 // compileCatalogs writes repoPath's catalogs, or with check validates the
-// repo and writes nothing, and returns the exit code.
-func compileCatalogs(repoPath string, check bool, stdout, stderr io.Writer) int {
+// repo and writes nothing, and returns the exit code. Items without a
+// category get one from categorizeDir's categorize.yaml and lock file (see
+// applyCategories); check never asks the model. A run without check warns
+// about the repo's problems on problems, which build holds back because its
+// check pass reports them again.
+func compileCatalogs(repoPath, categorizeDir string, check bool, stdout, stderr, problems io.Writer) int {
 	set, err := admin.CollectCatalogs(repoPath)
+	if err == nil {
+		err = applyCategories(categorizeDir, set, !check, stdout, stderr)
+	}
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, "makecatalogs:", err)
 		return 1
@@ -86,7 +96,7 @@ func compileCatalogs(repoPath string, check bool, stdout, stderr io.Writer) int 
 		set.Problems = append(set.Problems, admin.CheckConditionsIndex(repoPath, set)...)
 	} else {
 		for _, problem := range set.Problems {
-			_, _ = fmt.Fprintln(stderr, "warning:", problem)
+			_, _ = fmt.Fprintln(problems, "warning:", problem)
 		}
 		if err := admin.WriteCatalogs(repoPath, set); err != nil {
 			_, _ = fmt.Fprintln(stderr, "makecatalogs:", err)

@@ -1,0 +1,4 @@
+# The model categorizes the items under items/ that have no category. The
+# three that have one (Development, Security, Communication) are its examples.
+model: google/gemini-3.1-flash-lite
+mode: closed
