@@ -33,6 +33,9 @@ import {
   localRecord,
   monogram,
   myItems,
+  actionText,
+  busyAction,
+  endedOperations,
   needsAttention,
   onAccent,
   progressLabel,
@@ -325,6 +328,54 @@ test("active operations disable only their own item and route independently", ()
   assert.equal(isItemActive(active, "DemoOptional"), true, "release does not mutate the previous map");
   assert.equal(afterFirst.get("op-2"), "DemoFailing");
   assert.equal(releaseOperation(afterFirst, "op-unknown").size, 1);
+});
+
+test("an item is busy from the click until the list after its end arrives", () => {
+  const install = { kind: "do", label: "Make available", method: "InstallItem" };
+  const requesting = new Map([["Skill", install]]);
+  const operations = new Map();
+
+  // Before the service answers: a second click must find the item busy.
+  assert.equal(busyAction("Skill", requesting, new Map(), operations), install);
+  assert.equal(busyAction("Other", requesting, new Map(), operations), undefined);
+
+  requesting.delete("Skill");
+  const active = trackOperation(new Map(), "op-1", "Skill");
+  const operation = { operationId: "op-1", action: install, records: [], outcome: "active" };
+  operations.set("op-1", operation);
+  assert.equal(busyAction("Skill", requesting, active, operations), install);
+  assert.deepEqual(endedOperations(active, operations), []);
+
+  // Ended, but the refreshed list is not in yet: still busy, so the old
+  // "Make available" cannot be clicked again before "Remove" shows.
+  operation.outcome = "terminal";
+  assert.equal(busyAction("Skill", requesting, active, operations), install);
+  assert.deepEqual(endedOperations(active, operations), ["op-1"]);
+  assert.equal(busyAction("Skill", requesting, releaseOperation(active, "op-1"), operations), undefined);
+});
+
+test("a busy button reads the item's own installing or removing label", () => {
+  const custom = { actionLabels: { installing: "Making available…", removing: "Withdrawing…" } };
+  const install = { kind: "do", label: "Make available", method: "InstallItem" };
+  const remove = { kind: "undo", label: "Withdraw", method: "RemoveItem" };
+
+  assert.equal(actionText(custom, install, undefined), "Make available");
+  assert.equal(actionText(custom, install, install), "Making available…");
+  assert.equal(actionText(custom, remove, remove), "Withdrawing…");
+  assert.equal(actionText({}, install, install), "Installing…", "built-in without a custom label");
+
+  // Placement rows: only the row the work is for reads busy.
+  const rowA = { ...install, placement: "a" };
+  const rowB = { ...install, placement: "b" };
+  assert.equal(actionText(custom, rowA, rowA, "a"), "Making available…");
+  assert.equal(actionText(custom, rowB, rowA, "b"), "Make available");
+  assert.equal(actionText(custom, rowB, install, "b"), "Making available…", "a whole-item install covers each row");
+  assert.equal(actionText(custom, { ...remove, placement: "b" }, install, "b"), "Withdraw");
+  assert.equal(actionText(custom, install, rowA), "Making available…", "the item's own button follows any work");
+
+  // Cancelling a pending install sends RemoveItem; it must not read "Withdrawing…".
+  const cancel = { kind: "cancel", label: "Cancel", method: "RemoveItem" };
+  assert.equal(actionText(custom, cancel, cancel), "Cancel");
 });
 
 test("records are filed by seq whatever order they arrive in", () => {

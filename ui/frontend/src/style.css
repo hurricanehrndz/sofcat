@@ -130,11 +130,13 @@ button {
     opacity 120ms ease-out;
 }
 
-button:hover:not(:disabled) {
+button:hover:not(:disabled, [aria-disabled="true"]) {
   border-color: var(--accent);
 }
 
-button:disabled {
+/* An action button stays focusable while its item is busy (aria-disabled). */
+button:disabled,
+button[aria-disabled="true"] {
   cursor: not-allowed;
   opacity: 0.55;
 }
@@ -153,7 +155,7 @@ button:disabled {
   color: var(--on-accent);
 }
 
-.pill-primary:hover:not(:disabled) {
+.pill-primary:hover:not(:disabled, [aria-disabled="true"]) {
   filter: brightness(1.1);
 }
 

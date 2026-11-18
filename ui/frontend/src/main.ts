@@ -31,7 +31,9 @@ import {
   glyphTone,
   httpUrl,
   insertRecord,
-  isItemActive,
+  actionText,
+  busyAction,
+  endedOperations,
   isProgressTick,
   isTerminalState,
   itemPlacements,
@@ -149,6 +151,22 @@ let active: ActiveOperations = new Map();
 // Operations started in this session, oldest first; Activity keeps the history.
 const operations = new Map<string, OperationView>();
 let localOperations = 0;
+// The action asked for on each item whose request the service has not
+// answered yet, so its buttons are busy from the click on.
+const requesting = new Map<string, ItemAction>();
+
+function busyOf(itemName: string): ItemAction | undefined {
+  return busyAction(itemName, requesting, active, operations);
+}
+
+/**
+ * markBusy marks an action button busy with aria-disabled rather than
+ * disabled, so it keeps focus and a screen reader still reads its label;
+ * runAction ignores a click on a busy item.
+ */
+function markBusy(button: HTMLButtonElement, busy: ItemAction | undefined): void {
+  button.setAttribute("aria-disabled", String(busy !== undefined));
+}
 
 const brandBanner = need<HTMLElement>("#banner");
 const bannerLogo = need<HTMLSpanElement>("#banner-logo");
@@ -411,12 +429,14 @@ function card(item: OptionalInstallItem): HTMLElement {
     const action = document.createElement("button");
     action.type = "button";
     // Board B draws the undo action (Remove) outlined; the others are solid.
-    action.className = `pill ${derived.kind === "undo" ? "pill-outline" : "pill-primary"}`;
-    action.textContent = derived.label;
-    // Only the item that owns an in-flight operation is disabled; other items
+    action.className = `pill card-action ${derived.kind === "undo" ? "pill-outline" : "pill-primary"}`;
+    // Only the item that owns an in-flight operation is busy; other items
     // stay actionable and route independently by operation ID.
-    action.disabled = isItemActive(active, item.itemName);
-    action.setAttribute("aria-label", `${derived.label} ${item.displayName}`);
+    const busy = busyOf(item.itemName);
+    const label = actionText(item, derived, busy);
+    action.textContent = label;
+    markBusy(action, busy);
+    action.setAttribute("aria-label", `${label} ${item.displayName}`);
     action.addEventListener("click", () => void runAction(item, derived));
     actions.append(action);
   }
@@ -531,6 +551,11 @@ function renderGrid(): void {
     shown,
     viewHome.hidden !== false || viewHome.getAnimations().length > 0,
   );
+  // The rebuild replaces every button, so a focused card button (its action
+  // goes busy at the click) hands focus to its replacement.
+  const focused = grid.contains(document.activeElement) ? document.activeElement : null;
+  const focusedItem = focused?.closest<HTMLElement>(".card")?.dataset.item;
+  const focusedClass = focused?.classList.contains("card-action") ? "card-action" : "card-details";
   grid.replaceChildren(
     ...shown.map((item) => {
       const article = card(item);
@@ -538,6 +563,9 @@ function renderGrid(): void {
       return article;
     }),
   );
+  if (focusedItem !== undefined) {
+    grid.querySelector<HTMLElement>(`[data-item="${CSS.escape(focusedItem)}"] .${focusedClass}`)?.focus();
+  }
   if (listed.length === 0) {
     resultStatus.textContent =
       view.source === "loading"
@@ -633,6 +661,13 @@ function reason(error: unknown): string {
 }
 
 async function runAction(item: OptionalInstallItem, action: ItemAction): Promise<void> {
+  // A second click, or a click on any other button of a busy item, asks for
+  // nothing: the item is busy from the first click until its new state shows.
+  if (busyOf(item.itemName)) {
+    return;
+  }
+  requesting.set(item.itemName, action);
+  render();
   const started = new Date().toISOString();
   let operationId = "";
   try {
@@ -645,6 +680,7 @@ async function runAction(item: OptionalInstallItem, action: ItemAction): Promise
       throw new Error("the service did not accept the request");
     }
   } catch (error) {
+    requesting.delete(item.itemName);
     localOperations += 1;
     const failed: OperationView = {
       operationId: `local-${localOperations}`,
@@ -658,10 +694,11 @@ async function runAction(item: OptionalInstallItem, action: ItemAction): Promise
       failed,
       localRecord(failed.operationId, item, localErrorState(reason(error)), requestErrorText(reason(error)), started),
     );
-    renderCardFor(item.itemName);
+    render();
     return;
   }
 
+  requesting.delete(item.itemName);
   const operation: OperationView = { operationId, item, action, records: [], outcome: "active" };
   operations.set(operationId, operation);
   pushRecord(
@@ -725,8 +762,9 @@ api.onOperationStatus((status) => {
   // ItemCompleted and ItemFailed are per-item records; only the four terminal
   // states end the operation, and only an authoritative list changes the cards.
   if (isTerminalState(record.state)) {
+    // The item stays busy until the refresh below brings its new state, so
+    // its button never shows the old action again in between.
     operation.outcome = "terminal";
-    active = releaseOperation(active, status.operationId);
     render();
     void refresh();
     return;
@@ -770,9 +808,11 @@ function renderDetail(): void {
   detailAction.hidden = derived === null;
   if (derived) {
     detailAction.className = `pill pill-large ${derived.kind === "undo" ? "pill-outline" : "pill-primary"}`;
-    detailAction.textContent = derived.label;
-    detailAction.disabled = isItemActive(active, item.itemName);
-    detailAction.setAttribute("aria-label", `${derived.label} ${item.displayName}`);
+    const busy = busyOf(item.itemName);
+    const label = actionText(item, derived, busy);
+    detailAction.textContent = label;
+    markBusy(detailAction, busy);
+    detailAction.setAttribute("aria-label", `${label} ${item.displayName}`);
     detailAction.onclick = () => void runAction(item, derived);
   }
 
@@ -791,7 +831,7 @@ function renderPlacements(item: OptionalInstallItem, placements: OptionalInstall
   const focused = document.activeElement?.closest<HTMLElement>("#detail-placements li")?.dataset.placement;
   detailPlacements.hidden = placements.length === 0;
   detailPlacements.setAttribute("aria-label", actionLabel(item, "applies_to"));
-  const busy = isItemActive(active, item.itemName);
+  const busy = busyOf(item.itemName);
   detailPlacements.replaceChildren(
     ...placements.map((placement) => {
       const row = document.createElement("li");
@@ -808,9 +848,10 @@ function renderPlacements(item: OptionalInstallItem, placements: OptionalInstall
         const action = document.createElement("button");
         action.type = "button";
         action.className = `pill ${derived.kind === "undo" ? "pill-outline" : "pill-primary"}`;
-        action.textContent = derived.label;
-        action.disabled = busy;
-        action.setAttribute("aria-label", `${derived.label}: ${placement.label}`);
+        const label = actionText(item, derived, busy, placement.name);
+        action.textContent = label;
+        markBusy(action, busy);
+        action.setAttribute("aria-label", `${label}: ${placement.label}`);
         action.addEventListener("click", () => void runAction(item, derived));
         row.append(action);
       }
@@ -864,6 +905,10 @@ function closeDetail(): void {
 }
 
 async function refresh(): Promise<void> {
+  // Only operations that ended before this request are released: a list
+  // fetched earlier may not show their result yet. A failed fetch releases
+  // them too, so a button is never stuck busy while offline.
+  const ended = endedOperations(active, operations);
   try {
     const items = await api.listOptionalInstalls();
     const savedAtUtc = new Date().toISOString();
@@ -873,6 +918,9 @@ async function refresh(): Promise<void> {
   } catch (error) {
     lastError = error instanceof Error ? error.message : String(error);
     view = withFailure(view);
+  }
+  for (const operationId of ended) {
+    active = releaseOperation(active, operationId);
   }
   render();
 }
