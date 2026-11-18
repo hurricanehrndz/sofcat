@@ -924,6 +924,20 @@ export function brandingView(payload: unknown): BrandingView {
   };
 }
 
+/**
+ * withoutLogo is the branding to show when the logo's data does not decode:
+ * no logo anywhere, a text banner, and, with no title to name the
+ * organisation there, the app bar's mark and name back.
+ */
+export function withoutLogo(view: BrandingView): BrandingView {
+  return {
+    ...view,
+    logoSrc: "",
+    bannerStyle: "text",
+    appBarBrand: view.title ? view.appBarBrand : "full",
+  };
+}
+
 // Cancel is offered only before the service starts the item's installer or
 // uninstaller; the service refuses later and never interrupts a running one.
 const CANCELABLE_STATES = new Set([REQUESTED_STATE, "Queued", "Downloading"]);

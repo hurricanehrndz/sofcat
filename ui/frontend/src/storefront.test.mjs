@@ -17,6 +17,7 @@ import {
   opensDetails,
   placementAction,
   placementStatus,
+  withoutLogo,
 } from "./state.ts";
 
 function item(overrides) {
@@ -178,9 +179,8 @@ test("the app bar drops the mark or name only under a banner", () => {
 });
 
 // app_bar_brand must never take the page's only h1 out of the accessibility
-// tree: style.css hides it with a clip, not display or visibility, and a logo
-// banner's image carries the title as its alt text.
-test("a hidden app-bar brand stays in the accessibility tree, and a logo banner is named by its title", () => {
+// tree: style.css hides it with a clip, not display or visibility.
+test("a hidden app-bar brand stays in the accessibility tree", () => {
   const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   assert.equal(html.match(/<h1\b/g)?.length, 1);
   assert.match(html, /<h1 class="product">.*<span id="product-name">/);
@@ -189,8 +189,17 @@ test("a hidden app-bar brand stays in the accessibility tree, and a logo banner 
   assert.ok(rule, "no app_bar_brand rule");
   assert.match(rule[0], /clip-path: inset\(50%\)/);
   assert.doesNotMatch(rule[0], /display|visibility|aria-hidden/);
-  const shell = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
-  assert.match(shell, /bannerTitle\.replaceChildren\(logoImage\(next\.logoSrc, next\.title\)\)/);
+});
+
+// A logo that sniffed as an image but does not decode must not leave the page
+// without a visible name: the banner falls back to text, and with no title
+// to show there, the app bar shows the product again.
+test("a logo that fails to load falls back to text and keeps a visible name", () => {
+  const titled = withoutLogo(brandingView({ ...LOGO, title: "Acme", bannerStyle: "logo", appBarBrand: "none" }));
+  assert.deepEqual([titled.logoSrc, titled.bannerStyle, titled.appBarBrand], ["", "text", "none"]);
+  const untitled = withoutLogo(brandingView({ ...LOGO, tagline: "Hi", bannerStyle: "logo", appBarBrand: "none" }));
+  assert.deepEqual([untitled.logoSrc, untitled.bannerStyle, untitled.appBarBrand], ["", "text", "full"]);
+  assert.equal(untitled.showBanner, true);
 });
 
 test("the applies-to line lists the names in the order the service sent, after its label", () => {

@@ -19,6 +19,7 @@ import {
   bannerMessage,
   connectionLabel,
   brandingView,
+  withoutLogo,
   canCancel,
   cancelTitle,
   cardProgress,
@@ -190,7 +191,15 @@ function applyBranding(next: BrandingView): void {
   if (textStyle) {
     bannerTitle.textContent = next.title;
   } else {
-    bannerTitle.replaceChildren(logoImage(next.logoSrc, next.title));
+    // Named by the title, or the product's name when there is none. A logo
+    // that sniffed as an image but does not decode falls back to text.
+    const wordmark = logoImage(next.logoSrc, next.productName);
+    wordmark.addEventListener("error", () => {
+      if (branding === next) {
+        applyBranding(withoutLogo(next));
+      }
+    });
+    bannerTitle.replaceChildren(wordmark);
   }
   need<HTMLParagraphElement>("#banner-tagline").textContent = next.tagline;
   bannerHelp.hidden = !next.helpUrl;

@@ -204,6 +204,7 @@ button:disabled {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  align-content: center;
   gap: 1rem 2rem;
   padding: 1.75rem 2rem;
   background: var(--brand, var(--accent));
@@ -304,12 +305,15 @@ button:disabled {
  * A logo banner (branding banner_style: logo) shows the logo in the title's
  * place as a wordmark: sized by height, in step with title_size, keeping its
  * shape and shrinking to fit a narrow window. No tile: a wordmark is drawn
- * for the banner it sits on.
+ * for the banner it sits on. The box spans the line and takes its height
+ * from the image's shape, capped, so a wide logo shrunk to the line leaves
+ * no empty band above or below it; object-position aligns the image in it.
  */
 .banner-title img {
-  height: calc(3.5rem * var(--title-scale, 1));
-  max-width: 100%;
-  vertical-align: top;
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: calc(3.5rem * var(--title-scale, 1));
   object-fit: contain;
   object-position: left;
 }
@@ -318,16 +322,19 @@ button:disabled {
  * banner_align (data-align on the banner): left, the default, keeps the logo,
  * text and help button in a row; right mirrors it, the help button at the
  * left; center stacks them in a centred column, the help button last. The
- * DOM order, and so the tab order, stays the same in all three.
+ * DOM order, and so the tab order, stays the same in all three. In each the
+ * content sits in the middle of a banner taller than it (a background image's
+ * minimum height).
  */
 #banner[data-align="center"] {
   flex-direction: column;
+  justify-content: center;
   text-align: center;
 }
 
 #banner[data-align="center"] .banner-text {
   flex: none;
-  max-width: 100%;
+  align-self: stretch;
 }
 
 #banner[data-align="center"] .banner-title img {
