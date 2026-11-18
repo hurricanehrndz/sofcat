@@ -172,6 +172,7 @@ function applyBranding(next: BrandingView): void {
   branding = next;
   brandBanner.hidden = !next.showBanner;
   brandBanner.dataset.align = next.bannerAlign;
+  brandBanner.dataset.height = next.bannerHeight;
   // A text banner shows the logo as a decorative tile beside the title; a
   // logo banner shows it in the title's place, named by the title.
   const textStyle = next.bannerStyle === "text";

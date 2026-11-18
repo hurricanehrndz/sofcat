@@ -71,6 +71,9 @@ type Branding struct {
 	AppBarBrand string `json:"appBarBrand"`
 	BannerStyle string `json:"bannerStyle"`
 	BannerAlign string `json:"bannerAlign"`
+	// BannerHeight is one of BannerHeights, or "" for the UI's default,
+	// medium.
+	BannerHeight string `json:"bannerHeight"`
 }
 
 // FontSizes are the names title_size and tagline_size accept: a small fixed
@@ -99,6 +102,10 @@ var BannerStyles = []string{"text", "logo"}
 
 // BannerAligns are the names banner_align accepts for the banner's content.
 var BannerAligns = []string{"left", "center", "right"}
+
+// BannerHeights are the names banner_height accepts, from a slim banner to a
+// tall one; each is a minimum, so content that needs more room still grows it.
+var BannerHeights = []string{"small", "medium", "large", "x-large"}
 
 // Resolve returns the validated branding; config.Get has already merged the
 // managed settings over the config.yaml block. The logo file is read on every
@@ -136,6 +143,7 @@ func resolve(in config.Branding) Branding {
 	out.AppBarBrand = oneOf("app_bar_brand", in.AppBarBrand, AppBarBrands...)
 	out.BannerStyle = oneOf("banner_style", in.BannerStyle, BannerStyles...)
 	out.BannerAlign = oneOf("banner_align", in.BannerAlign, BannerAligns...)
+	out.BannerHeight = oneOf("banner_height", in.BannerHeight, BannerHeights...)
 	return out
 }
 

@@ -122,4 +122,6 @@ export type BrandingView = {
   bannerStyle: "text" | "logo";
   /** The admin's banner_align: where the banner's content sits. */
   bannerAlign: "left" | "center" | "right";
+  /** The admin's banner_height: the banner's minimum height, from slim to tall. */
+  bannerHeight: "small" | "medium" | "large" | "x-large";
 };

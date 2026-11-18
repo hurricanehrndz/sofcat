@@ -840,6 +840,10 @@ const APP_BAR_BRANDS = new Set(["full", "mark", "none"]);
 // The banner_align names; left is the default.
 const BANNER_ALIGNS = new Set(["left", "center", "right"]);
 
+// The banner_height names; medium, the default, is the banner's height from
+// before the key. style.css holds the heights.
+const BANNER_HEIGHTS = new Set(["small", "medium", "large", "x-large"]);
+
 /** oneOf returns payload[key] when it is one of allowed, else fallback. */
 function oneOf<T extends string>(payload: Record<string, unknown>, key: string, allowed: Set<string>, fallback: T): T {
   const value = text(payload, key);
@@ -916,6 +920,7 @@ export function brandingView(payload: unknown): BrandingView {
     // A logo banner needs a logo; without one the title shows as text.
     bannerStyle: logoSrc && text(raw, "bannerStyle") === "logo" ? "logo" : "text",
     bannerAlign: oneOf(raw, "bannerAlign", BANNER_ALIGNS, "left"),
+    bannerHeight: oneOf(raw, "bannerHeight", BANNER_HEIGHTS, "medium"),
     sections: Array.isArray(raw.sections)
       ? raw.sections
           .filter((name): name is string => typeof name === "string" && name.trim() !== "")

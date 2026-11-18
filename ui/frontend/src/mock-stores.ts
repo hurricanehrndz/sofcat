@@ -349,6 +349,7 @@ export const STORES: Record<StoreName, MockStore> = {
       appBarBrand: "",
       bannerStyle: "",
       bannerAlign: "",
+      bannerHeight: "",
       sections: ["Productivity", "Developer tools", "Utilities"],
     },
   },
@@ -373,6 +374,7 @@ export const STORES: Record<StoreName, MockStore> = {
       appBarBrand: "",
       bannerStyle: "",
       bannerAlign: "",
+      bannerHeight: "",
       sections: ["Skills", "Plugins"],
     },
   },
@@ -397,5 +399,6 @@ export const UNBRANDED: Branding = {
   appBarBrand: "",
   bannerStyle: "",
   bannerAlign: "",
+  bannerHeight: "",
   sections: [],
 };

@@ -63,6 +63,12 @@ export class Branding {
     "bannerStyle": string;
     "bannerAlign": string;
 
+    /**
+     * BannerHeight is one of BannerHeights, or "" for the UI's default,
+     * medium.
+     */
+    "bannerHeight": string;
+
     /** Creates a new Branding instance. */
     constructor($$source: Partial<Branding> = {}) {
         if (!("title" in $$source)) {
@@ -118,6 +124,9 @@ export class Branding {
         }
         if (!("bannerAlign" in $$source)) {
             this["bannerAlign"] = "";
+        }
+        if (!("bannerHeight" in $$source)) {
+            this["bannerHeight"] = "";
         }
 
         Object.assign(this, $$source);
