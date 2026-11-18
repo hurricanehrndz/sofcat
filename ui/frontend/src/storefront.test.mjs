@@ -287,3 +287,25 @@ test("a click on a card opens details except on one of its controls or after a t
   assert.equal(opensDetails(title, true), false, "the release that ends selecting the card's text");
   assert.equal(opensDetails(null, false), false, "a target that is not an element");
 });
+
+// The grid is rebuilt on every status update and refresh. A card that keeps
+// its animation on .card itself would replay it each time and the whole store
+// would flicker through an install; only a card new to the list may animate.
+// Reduced motion is the user's switch for everything else: one rule at the
+// end of style.css stops every animation and transition.
+test("only a card new to the list animates, and reduced motion stops all motion", () => {
+  const css = readFileSync(new URL("./style.css", import.meta.url), "utf8");
+  const cardRule = css.match(/\n\.card \{[^}]*\}/)?.[0] ?? "";
+  assert.notEqual(cardRule, "");
+  assert.equal(/\banimation\b/.test(cardRule), false, ".card itself animates");
+  assert.match(css, /\.card\[data-entering\] \{\s*animation:/);
+  const shell = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
+  assert.match(shell, /toggleAttribute\("data-entering", !before\.has\(item\.itemName\)\)/);
+
+  const reduced = css.slice(css.lastIndexOf("@media (prefers-reduced-motion: reduce)"));
+  assert.match(reduced, /^@media[^{]*\{\s*\*,\s*\*::before,\s*\*::after \{/);
+  for (const property of ["animation-duration", "transition-duration"]) {
+    assert.match(reduced, new RegExp(`${property}: 0\\.01ms !important`));
+  }
+  assert.match(reduced, /animation-iteration-count: 1 !important/);
+});

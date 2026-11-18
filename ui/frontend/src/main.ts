@@ -483,7 +483,16 @@ function renderGrid(): void {
     : tab
       ? (listTabs.find((candidate) => candidate.key === tab)?.label ?? "")
       : branding.listHeading;
-  grid.replaceChildren(...shown.map(card));
+  // Status updates and refreshes rebuild the grid too; only a card it did not
+  // show before eases in, so the cards on screen hold still during an install.
+  const before = new Set([...grid.children].map((child) => (child as HTMLElement).dataset.item));
+  grid.replaceChildren(
+    ...shown.map((item) => {
+      const article = card(item);
+      article.toggleAttribute("data-entering", !before.has(item.itemName));
+      return article;
+    }),
+  );
   if (listed.length === 0) {
     resultStatus.textContent =
       view.source === "loading"
@@ -826,7 +835,9 @@ function showView(next: View, tab?: string): void {
   } else if (changed) {
     // The list tabs and My items share the grid; only switching lists rebuilds
     // it, so Back from the detail page can refocus the card it came from. Each
-    // list has its own categories.
+    // list has its own categories. Emptying it first lets the new list's
+    // cards all ease in, those it shares with the old one too.
+    grid.replaceChildren();
     renderCategories();
     renderGrid();
   }
