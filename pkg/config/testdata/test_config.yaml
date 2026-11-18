@@ -16,8 +16,10 @@ branding:
   logo: C:\ProgramData\SofCat\branding\logo.png
   background_image: C:\ProgramData\SofCat\branding\banner.jpg
   background_text: dark
-  help_url: https://example.com/help
-  help_label: Get help
+  link_url: https://example.com/help
+  link_label: Get help
+  link_placement: app_bar
+  link_position: top_right
   accent: "#0b6e4f"
   list_heading: Software for your team
   title_size: large

@@ -42,8 +42,10 @@ func TestGet(t *testing.T) {
 			Logo:            `C:\ProgramData\SofCat\branding\logo.png`,
 			BackgroundImage: `C:\ProgramData\SofCat\branding\banner.jpg`,
 			BackgroundText:  "dark",
-			HelpURL:         "https://example.com/help",
-			HelpLabel:       "Get help",
+			LinkURL:         "https://example.com/help",
+			LinkLabel:       "Get help",
+			LinkPlacement:   "app_bar",
+			LinkPosition:    "top_right",
 			Accent:          "#0b6e4f",
 
 			ListHeading:     "Software for your team",

@@ -66,7 +66,10 @@ export type OperationView = {
   notice?: string;
 };
 
-/** ActiveOperations maps an accepted, non-terminal operationId to its item. */
+/**
+ * ActiveOperations maps an accepted operationId to its item, from acceptance
+ * until the list fetched after its end arrives.
+ */
 export type ActiveOperations = ReadonlyMap<string, string>;
 
 /** ListSource is where the currently rendered item list came from. */
@@ -92,8 +95,13 @@ export type BrandingView = {
   backgroundSrc: string;
   /** The banner text colour over the background image; light unless the admin picked dark. */
   backgroundText: "light" | "dark";
+  /** The admin's link_url (or help_url), or "" for no link button. */
   helpUrl: string;
   helpLabel: string;
+  /** The admin's link_placement: the link button in the banner or at the app bar's end. */
+  linkPlacement: "banner" | "app_bar";
+  /** The admin's link_position: where in the banner the link sits; auto follows banner_align. */
+  linkPosition: "auto" | "top_left" | "top_right" | "bottom_left" | "bottom_right";
   /** #rrggbb, or "" to keep the default accent. */
   accent: string;
   /** Text colour that reads on `accent`. */

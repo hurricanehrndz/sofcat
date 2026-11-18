@@ -15,7 +15,9 @@
         <p id="banner-title" class="banner-title"></p>
         <p id="banner-tagline" class="banner-tagline"></p>
       </div>
-      <button type="button" id="banner-help" class="pill banner-help" hidden></button>
+      <!-- The admin's link (branding link_url); main.ts moves it to the app bar
+           for link_placement: app_bar. -->
+      <button type="button" id="brand-link" class="pill brand-link" hidden></button>
     </section>
 
     <header class="app-bar">
@@ -30,11 +32,15 @@
           </svg>
         </button>
       </nav>
-      <p id="connection" class="connection" role="status">
-        <span class="connection-dot" aria-hidden="true"></span>
-        <span id="connection-text">Connecting to the %VITE_PRODUCT_NAME% service…</span>
-        <button type="button" id="retry" class="pill pill-outline" hidden>Retry</button>
-      </p>
+      <!-- The bar's end: the admin's link for link_placement: app_bar, then
+           the connection status, kept together when the bar wraps. -->
+      <div id="app-bar-end" class="app-bar-end">
+        <p id="connection" class="connection" role="status">
+          <span class="connection-dot" aria-hidden="true"></span>
+          <span id="connection-text">Connecting to the %VITE_PRODUCT_NAME% service…</span>
+          <button type="button" id="retry" class="pill pill-outline" hidden>Retry</button>
+        </p>
+      </div>
     </header>
 
     <main>

@@ -419,6 +419,70 @@ export function isItemActive(active: ActiveOperations, itemName: string): boolea
 }
 
 /**
+ * busyAction is the action an item's buttons are busy with, or undefined when
+ * they are free: a request the service has not answered yet (requesting, by
+ * item), else the action of an operation still tracked in active. An ended
+ * operation stays tracked until the list fetched after its end arrives, so a
+ * button goes from its action to busy to the opposite action with no
+ * clickable stale label between.
+ */
+export function busyAction(
+  itemName: string,
+  requesting: ReadonlyMap<string, ItemAction>,
+  active: ActiveOperations,
+  operations: ReadonlyMap<string, OperationView>,
+): ItemAction | undefined {
+  const asked = requesting.get(itemName);
+  if (asked) {
+    return asked;
+  }
+  for (const [operationId, name] of active) {
+    if (name === itemName) {
+      return operations.get(operationId)?.action;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * endedOperations are the tracked operations that have ended; a refresh
+ * started after their end releases them once its list arrives.
+ */
+export function endedOperations(
+  active: ActiveOperations,
+  operations: ReadonlyMap<string, OperationView>,
+): string[] {
+  return [...active.keys()].filter((operationId) => operations.get(operationId)?.outcome !== "active");
+}
+
+/**
+ * actionText is an action button's label: the action's own, or while its item
+ * is busy, the item's installing or removing label for the busy action (a
+ * busy Cancel keeps its own label). A
+ * placement row (row set) reads busy only for its own placement, or for an
+ * action on the whole item that does what the row would.
+ */
+export function actionText(
+  item: Pick<OptionalInstallItem, "actionLabels">,
+  action: ItemAction,
+  busy: ItemAction | undefined,
+  row?: string,
+): string {
+  if (!busy) {
+    return action.label;
+  }
+  const own = row === undefined || busy.placement === row || (busy.placement === undefined && busy.method === action.method);
+  if (!own) {
+    return action.label;
+  }
+  // A Cancel sends the opposite mutation, so "Removing…" would misread it.
+  if (busy.kind === "cancel") {
+    return busy.label;
+  }
+  return actionLabel(item, busy.method === "RemoveItem" ? "removing" : "installing");
+}
+
+/**
  * shouldAcceptRecord decides whether a newly arrived status record still
  * belongs to an operation. A finished operation still takes a late record,
  * which insertRecord files before the terminal one; an operation that ended in
@@ -844,6 +908,15 @@ const BANNER_ALIGNS = new Set(["left", "center", "right"]);
 // before the key. style.css holds the heights.
 const BANNER_HEIGHTS = new Set(["small", "medium", "large", "x-large"]);
 
+// The link_placement names: banner, the default and the place from before
+// the key, or app_bar, at the app bar's end before the connection status.
+const LINK_PLACEMENTS = new Set(["banner", "app_bar"]);
+
+// The link_position names: auto, the default, lays the link out with the
+// content as banner_align says; a corner name puts it in that corner of the
+// banner. style.css holds the layouts.
+const LINK_POSITIONS = new Set(["auto", "top_left", "top_right", "bottom_left", "bottom_right"]);
+
 /** oneOf returns payload[key] when it is one of allowed, else fallback. */
 function oneOf<T extends string>(payload: Record<string, unknown>, key: string, allowed: Set<string>, fallback: T): T {
   const value = text(payload, key);
@@ -895,7 +968,10 @@ export function brandingView(payload: unknown): BrandingView {
   const backgroundSrc = imageSrc(text(raw, "backgroundMime"), text(raw, "backgroundBase64"));
   const helpUrl = httpUrl(text(raw, "helpUrl"));
   const accent = isHexColor(text(raw, "accent")) ? text(raw, "accent").toLowerCase() : "";
-  const showBanner = Boolean(title || tagline || logoSrc || backgroundSrc || helpUrl);
+  // A payload from before link_placement (a cached one too) has none: banner.
+  const linkPlacement = oneOf(raw, "linkPlacement", LINK_PLACEMENTS, "banner");
+  // A link in the app bar does not bring up a banner of its own.
+  const showBanner = Boolean(title || tagline || logoSrc || backgroundSrc || (helpUrl && linkPlacement === "banner"));
   return {
     title,
     tagline,
@@ -904,6 +980,8 @@ export function brandingView(payload: unknown): BrandingView {
     backgroundText: text(raw, "backgroundText") === "dark" ? "dark" : "light",
     helpUrl,
     helpLabel: helpUrl ? text(raw, "helpLabel") || DEFAULT_HELP_LABEL : "",
+    linkPlacement,
+    linkPosition: oneOf(raw, "linkPosition", LINK_POSITIONS, "auto"),
     accent,
     onAccent: accent ? onAccent(accent) : "",
     productName: title || DEFAULT_PRODUCT,
