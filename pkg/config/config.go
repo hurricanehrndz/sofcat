@@ -1,12 +1,15 @@
 package config
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 
@@ -191,6 +194,43 @@ func (b *Branding) foldLinkAliases() {
 	b.HelpURL, b.HelpLabel = "", ""
 }
 
+// fillFrom sets each field b leaves blank to def's.
+func (b *Branding) fillFrom(def Branding) {
+	dst, src := reflect.ValueOf(b).Elem(), reflect.ValueOf(def)
+	for i := range dst.NumField() {
+		switch p := dst.Field(i).Addr().Interface().(type) {
+		case *string:
+			if strings.TrimSpace(*p) == "" {
+				*p = src.Field(i).String()
+			}
+		case *[]string:
+			if len(*p) == 0 {
+				dst.Field(i).Set(src.Field(i))
+			}
+		}
+	}
+}
+
+// builtInBranding is the branding compiled into a rebranded build, from the
+// brand's branding.yaml. A field it sets is fixed: neither config.yaml nor
+// the managed settings change it. A variable so tests can supply one.
+var builtInBranding = sync.OnceValues(func() (Branding, error) {
+	return parseBuiltInBranding(compiledBranding)
+})
+
+// parseBuiltInBranding decodes a brand's branding.yaml, the keys of
+// config.yaml's branding block at the top level, rejecting unknown ones.
+func parseBuiltInBranding(data []byte) (Branding, error) {
+	var b Branding
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	if err := dec.Decode(&b); err != nil && !errors.Is(err, io.EOF) {
+		return Branding{}, fmt.Errorf("parse branding.yaml: %w", err)
+	}
+	b.foldLinkAliases()
+	return b, nil
+}
+
 // registerFlags defines sofcat's flags on flag.CommandLine. Get calls it, not
 // init: the user agent and the storefront import this package through
 // pkg/service, and their own command lines must not inherit sofcat's flags.
@@ -339,10 +379,18 @@ func Refresh(cfg Configuration) Configuration {
 }
 
 // resolve returns cfg, config.yaml as parsed, under the managed settings,
-// the command line and the defaults.
+// the build's own branding, the command line and the defaults.
 func resolve(cfg Configuration, managed map[string]any, warn func(string)) Configuration {
 	cfg.Branding.foldLinkAliases()
 	applyManaged(&cfg, managed, warn)
+	// The build's branding wins field by field; the fields it leaves blank
+	// keep the managed or config.yaml value.
+	builtIn, err := builtInBranding()
+	if err != nil {
+		warn(fmt.Sprintf("compiled branding ignored: %v", err))
+	}
+	builtIn.fillFrom(cfg.Branding)
+	cfg.Branding = builtIn
 
 	// If URLPackages wasn't provided, use the repo URL when available.
 	if cfg.URLPackages == "" && cfg.URL != "" {

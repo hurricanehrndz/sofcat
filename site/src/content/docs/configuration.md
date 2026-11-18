@@ -143,6 +143,9 @@ limits are in the UI's
 To ship SofCat under your own name, icon, service and installer instead,
 build a rebrand from
 [`examples/brand/`](https://github.com/hurricanehrndz/sofcat/tree/main/examples/brand).
+A rebrand can also compile in branding from a `branding.yaml`: each field it
+sets wins over `config.yaml` and managed settings, so a deployment can take
+its `url` from MDM and its look from the build.
 
 ## Write roots
 

@@ -95,6 +95,10 @@ comes from the first source that sets it:
 2. The `branding:` block in `config.yaml` (see `examples/example_config.yaml`).
 3. Nothing. The UI then looks exactly as it does unbranded.
 
+A rebranded build can compile in a `branding.yaml` (see
+`examples/brand/README.md`). A field it sets comes before all three, so
+neither policy nor `config.yaml` changes it. Stock SofCat has none.
+
 | Key (policy value and `config.yaml`) | Accepted |
 |---|---|
 | `title` | Plain text, up to 120 characters. Also the window title and the app-bar name. |

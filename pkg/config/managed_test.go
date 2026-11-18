@@ -147,6 +147,67 @@ func TestGetManagedOverridesAndReplacesFile(t *testing.T) {
 	}
 }
 
+// A field a rebranded build's compiled branding sets is fixed: neither
+// config.yaml nor the managed settings change it, so the brand's look cannot
+// be undone by a profile. The fields it leaves out still come from them, and
+// MDM still supplies the repository.
+func TestBuiltInBrandingWinsOverFileAndPolicy(t *testing.T) {
+	old := builtInBranding
+	t.Cleanup(func() { builtInBranding = old })
+	builtInBranding = func() (Branding, error) {
+		return parseBuiltInBranding([]byte("title: Brand title\ntagline: Brand tagline\naccent: '#112233'\nhelp_url: https://brand/help\nsections: [Brand]\n"))
+	}
+	managed := map[string]any{
+		"url":      "https://mdm.example/",
+		"branding": map[string]any{"accent": "#445566", "link_url": "https://mdm/help", "link_label": "MDM label"},
+	}
+	got := resolve(Configuration{Branding: Branding{Title: "File title", ListHeading: "File heading"}}, managed, func(w string) { t.Errorf("warning %q", w) })
+	want := Branding{Title: "Brand title", Tagline: "Brand tagline", Accent: "#112233", LinkURL: "https://brand/help", LinkLabel: "MDM label", ListHeading: "File heading", Sections: []string{"Brand"}}
+	if got.URL != "https://mdm.example/" || !reflect.DeepEqual(got.Branding, want) {
+		t.Fatalf("got url %q branding %+v, want %+v", got.URL, got.Branding, want)
+	}
+}
+
+// A branding.yaml with a key outside the branding block is refused whole and
+// reported, and a build without one fixes nothing.
+func TestBuiltInBrandingRejectsUnknownKeys(t *testing.T) {
+	if _, err := parseBuiltInBranding([]byte("title: T\nurl: https://x/\n")); err == nil {
+		t.Fatal("want an error for a key outside the branding block")
+	}
+	if b, err := parseBuiltInBranding(nil); err != nil || !reflect.DeepEqual(b, Branding{}) {
+		t.Fatalf("empty: %+v, %v", b, err)
+	}
+	old := builtInBranding
+	t.Cleanup(func() { builtInBranding = old })
+	builtInBranding = func() (Branding, error) { return parseBuiltInBranding([]byte("nope: 1\n")) }
+	warnings, warn := collect()
+	if got := resolve(Configuration{}, nil, warn).Branding; !reflect.DeepEqual(got, Branding{}) || len(*warnings) != 1 {
+		t.Fatalf("got %+v, warnings %q", got, *warnings)
+	}
+}
+
+// fillFrom handles strings and lists; a Branding field of another type
+// would silently never take the build's value.
+func TestFillFromCoversEveryBrandingField(t *testing.T) {
+	var def Branding
+	v := reflect.ValueOf(&def).Elem()
+	for i := range v.NumField() {
+		switch f := v.Field(i); f.Kind() {
+		case reflect.String:
+			f.SetString("x")
+		case reflect.Slice:
+			f.Set(reflect.ValueOf([]string{"x"}))
+		default:
+			t.Fatalf("Branding.%s: fillFrom does not handle %s", v.Type().Field(i).Name, f.Kind())
+		}
+	}
+	var got Branding
+	got.fillFrom(def)
+	if !reflect.DeepEqual(got, def) {
+		t.Fatalf("got %+v", got)
+	}
+}
+
 // collect returns a warn func and the warnings it has received.
 func collect() (*[]string, func(string)) {
 	var got []string

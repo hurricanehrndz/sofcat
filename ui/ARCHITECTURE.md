@@ -534,6 +534,10 @@ every run, so a policy change applies from the next run without a restart:
 2. The `branding:` block in `config.yaml`.
 3. Nothing, and the UI keeps its default look.
 
+A rebranded build may compile in a `branding.yaml`
+(`pkg/config/branding_brand.go`, the `brand_branding` tag). A field it sets
+comes before all three: neither policy nor `config.yaml` changes it.
+
 `help_url` and `help_label` are the released names of `link_url` and
 `link_label`. `pkg/config` folds them into the new names source by source
 before the merge: within one source the new name wins, and across sources the
