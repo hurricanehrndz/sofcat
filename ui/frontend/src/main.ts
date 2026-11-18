@@ -206,6 +206,7 @@ function applyBranding(next: BrandingView): void {
   root.style.setProperty("--title-scale", String(next.titleScale));
   root.style.setProperty("--tagline-scale", String(next.taglineScale));
   root.dataset.contentWidth = next.contentWidth;
+  root.dataset.searchPlacement = next.searchPlacement;
   // The tab order and the Software tab's heading are branding too.
   renderNav();
   renderCategories();

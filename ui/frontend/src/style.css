@@ -393,12 +393,47 @@ h2 {
   overflow-wrap: anywhere;
 }
 
+/*
+ * The list's heading and the filters (branding search_placement, set as
+ * data-search-placement on the root). right, the default, puts them on one
+ * row, heading left and filters right, and wraps the filters under the heading
+ * when the row is too narrow; left is the layout from before the key, the
+ * filters above the heading. Only the filters move, so the focus order (nav,
+ * search, category, cards) is the same in both.
+ */
+.list-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.list-head #result-status {
+  margin: 0;
+}
+
+.list-head search {
+  margin-left: auto;
+}
+
+:root[data-search-placement="left"] .list-head {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 1.25rem;
+}
+
+:root[data-search-placement="left"] .list-head search {
+  order: -1;
+  margin-left: 0;
+}
+
 .filters {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem 1.5rem;
   align-items: end;
-  margin-bottom: 1.25rem;
 }
 
 .filters p {
@@ -416,6 +451,10 @@ h2 {
 .filters input,
 .filters select {
   min-width: 14rem;
+  /* One height for both, the search box's natural one: WebKit on macOS
+     ignores a select's vertical padding, which left the category box shorter
+     and its label lower than the search box's. */
+  height: 2.5rem;
   padding: 0.5rem 0.75rem;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -793,6 +832,16 @@ h2 {
 @media (max-width: 40rem) {
   .info {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* A narrow window gives the filters the full width, one under the other. */
+  .list-head search {
+    flex: 1 1 100%;
+    margin-left: 0;
+  }
+
+  .filters p {
+    flex: 1 1 14rem;
   }
 }
 

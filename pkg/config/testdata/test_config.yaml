@@ -23,3 +23,4 @@ branding:
   title_size: large
   tagline_size: x-large
   content_width: full
+  search_placement: left

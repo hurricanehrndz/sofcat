@@ -811,6 +811,10 @@ const FONT_SCALES = new Map([
 // full drops the column's cap. style.css draws each from :root[data-content-width].
 const CONTENT_WIDTHS = new Set(["compact", "wide", "full"]);
 
+// The search_placement names: right (the default) sets the filters on the
+// heading's row, left keeps them above the heading as before the key.
+const SEARCH_PLACEMENTS = new Set(["right", "left"]);
+
 export function isHexColor(value: string): boolean {
   return /^#[0-9a-fA-F]{6}$/.test(value);
 }
@@ -875,6 +879,9 @@ export function brandingView(payload: unknown): BrandingView {
     contentWidth: CONTENT_WIDTHS.has(text(raw, "contentWidth"))
       ? (text(raw, "contentWidth") as BrandingView["contentWidth"])
       : "wide",
+    searchPlacement: SEARCH_PLACEMENTS.has(text(raw, "searchPlacement"))
+      ? (text(raw, "searchPlacement") as BrandingView["searchPlacement"])
+      : "right",
     sections: Array.isArray(raw.sections)
       ? raw.sections
           .filter((name): name is string => typeof name === "string" && name.trim() !== "")

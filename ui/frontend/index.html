@@ -39,23 +39,29 @@
 
     <main>
       <section id="view-home" aria-labelledby="home-heading">
-        <search>
-          <form id="filters" class="filters">
-            <p>
-              <label for="search">Search</label>
-              <input id="search" name="search" type="search" autocomplete="off" />
-            </p>
-            <p>
-              <label for="category">Category</label>
-              <select id="category" name="category">
-                <option value="all">All categories</option>
-              </select>
-            </p>
-          </form>
-        </search>
-
-        <h2 id="home-heading" class="page-heading">Available software</h2>
-        <p id="result-status" role="status" aria-live="polite"></p>
+        <!-- The heading comes first, so a screen reader meets it before the
+             filters whatever branding search_placement says; style.css moves
+             only the filters, and nothing focusable comes before them. -->
+        <div class="list-head">
+          <div class="list-title">
+            <h2 id="home-heading" class="page-heading">Available software</h2>
+            <p id="result-status" role="status" aria-live="polite"></p>
+          </div>
+          <search>
+            <form id="filters" class="filters">
+              <p>
+                <label for="search">Search</label>
+                <input id="search" name="search" type="search" autocomplete="off" />
+              </p>
+              <p>
+                <label for="category">Category</label>
+                <select id="category" name="category">
+                  <option value="all">All categories</option>
+                </select>
+              </p>
+            </form>
+          </search>
+        </div>
         <div id="item-grid" class="grid"></div>
       </section>
 

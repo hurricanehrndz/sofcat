@@ -48,6 +48,12 @@ export class Branding {
      */
     "contentWidth": string;
 
+    /**
+     * SearchPlacement is one of SearchPlacements, or "" for the UI's default,
+     * right.
+     */
+    "searchPlacement": string;
+
     /** Creates a new Branding instance. */
     constructor($$source: Partial<Branding> = {}) {
         if (!("title" in $$source)) {
@@ -91,6 +97,9 @@ export class Branding {
         }
         if (!("contentWidth" in $$source)) {
             this["contentWidth"] = "";
+        }
+        if (!("searchPlacement" in $$source)) {
+            this["searchPlacement"] = "";
         }
 
         Object.assign(this, $$source);

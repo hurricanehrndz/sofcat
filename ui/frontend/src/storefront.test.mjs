@@ -132,6 +132,16 @@ test("the content width is compact, wide or full; anything else is wide", () => 
   }
 });
 
+// style.css moves the filters only for left; anything else (no key, an older
+// service, a typo in a cached payload) must keep the default, right.
+test("the search placement is right or left; anything else is right", () => {
+  assert.equal(brandingView({ searchPlacement: "left" }).searchPlacement, "left");
+  assert.equal(brandingView({ searchPlacement: "right" }).searchPlacement, "right");
+  for (const searchPlacement of [undefined, "", "center", "LEFT", 1, "constructor"]) {
+    assert.equal(brandingView({ searchPlacement }).searchPlacement, "right", String(searchPlacement));
+  }
+});
+
 test("the applies-to line lists the names in the order the service sent, after its label", () => {
   assert.equal(appliesToLine(item({ appliesTo: ["Claude Code", "Codex"] })), "Applies to: Claude Code, Codex");
   assert.equal(
