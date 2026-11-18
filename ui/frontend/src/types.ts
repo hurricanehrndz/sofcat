@@ -111,6 +111,6 @@ export type BrandingView = {
   taglineScale: number;
   /** The admin's content_width: how much of the window the list and pages use. */
   contentWidth: "compact" | "wide" | "full";
-  /** The admin's search_placement: where the list's search and category filters sit. */
-  searchPlacement: "right" | "left";
+  /** The admin's filter_placement: where the list's search and category filters sit. */
+  filterPlacement: "right" | "left";
 };

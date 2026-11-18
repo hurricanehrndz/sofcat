@@ -134,11 +134,11 @@ test("the content width is compact, wide or full; anything else is wide", () => 
 
 // style.css moves the filters only for left; anything else (no key, an older
 // service, a typo in a cached payload) must keep the default, right.
-test("the search placement is right or left; anything else is right", () => {
-  assert.equal(brandingView({ searchPlacement: "left" }).searchPlacement, "left");
-  assert.equal(brandingView({ searchPlacement: "right" }).searchPlacement, "right");
-  for (const searchPlacement of [undefined, "", "center", "LEFT", 1, "constructor"]) {
-    assert.equal(brandingView({ searchPlacement }).searchPlacement, "right", String(searchPlacement));
+test("the filter placement is right or left; anything else is right", () => {
+  assert.equal(brandingView({ filterPlacement: "left" }).filterPlacement, "left");
+  assert.equal(brandingView({ filterPlacement: "right" }).filterPlacement, "right");
+  for (const filterPlacement of [undefined, "", "center", "LEFT", 1, "constructor"]) {
+    assert.equal(brandingView({ filterPlacement }).filterPlacement, "right", String(filterPlacement));
   }
 });
 

@@ -53,7 +53,7 @@ owns it and neither its group nor others can write it.
 | `verbose`, `debug`, `log_file_plain`, `checkonly`, `service_interval` | Yes |
 | `tls_auth`, `tls_client_cert`, `tls_client_key`, `tls_server_cert` (file paths) | Yes |
 | `tls_client_cert_store`, `tls_client_cert_store_field` | Yes |
-| `branding` (`title`, `tagline`, `logo`, `help_url`, `help_label`, `accent`, `background_image`, `background_text`, `list_heading`, `sections`, `title_size`, `tagline_size`, `content_width`, `search_placement`) | Yes, field by field |
+| `branding` (`title`, `tagline`, `logo`, `help_url`, `help_label`, `accent`, `background_image`, `background_text`, `list_heading`, `sections`, `title_size`, `tagline_size`, `content_width`, `filter_placement`) | Yes, field by field |
 | `auth_user`, `auth_pass` | No: ignored with a warning in `sofcat.log` |
 | `app_data_path`, `service_name`, `service_pipe_name` | No: they must match the installed build |
 
