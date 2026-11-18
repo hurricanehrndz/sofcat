@@ -58,6 +58,7 @@ func managedFields(c *Configuration) map[string]any {
 		"branding.title_size":       &c.Branding.TitleSize,
 		"branding.tagline_size":     &c.Branding.TaglineSize,
 		"branding.content_width":    &c.Branding.ContentWidth,
+		"branding.filter_placement": &c.Branding.FilterPlacement,
 	}
 }
 

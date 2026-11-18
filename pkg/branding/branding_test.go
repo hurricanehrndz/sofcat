@@ -216,3 +216,15 @@ func TestResolveContentWidth(t *testing.T) {
 		}
 	}
 }
+
+// filter_placement is a closed set: an unknown value must leave the UI's
+// default, right, rather than a placement the CSS has no rule for.
+func TestResolveFilterPlacement(t *testing.T) {
+	for in, want := range map[string]string{
+		"right": "right", "Left": "left", "LEFT": "left", "": "", "center": "", "top": "",
+	} {
+		if got := resolve(config.Branding{FilterPlacement: in}).FilterPlacement; got != want {
+			t.Errorf("filter_placement %q resolved to %q, want %q", in, got, want)
+		}
+	}
+}

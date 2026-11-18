@@ -62,6 +62,9 @@ type Branding struct {
 	TaglineSize string `json:"taglineSize"`
 	// ContentWidth is one of ContentWidths, or "" for the UI's default, wide.
 	ContentWidth string `json:"contentWidth"`
+	// FilterPlacement is one of FilterPlacements, or "" for the UI's default,
+	// right.
+	FilterPlacement string `json:"filterPlacement"`
 }
 
 // FontSizes are the names title_size and tagline_size accept: a small fixed
@@ -72,6 +75,11 @@ var FontSizes = []string{"small", "medium", "large", "x-large"}
 // from before the key (a 76rem column of fixed-size cards), wide caps the
 // column at 96rem and lets the cards fill the row, and full drops the cap.
 var ContentWidths = []string{"compact", "wide", "full"}
+
+// FilterPlacements are the names filter_placement accepts: right sets the
+// list's search and category filters on the heading's row, at its right,
+// and left keeps them above the heading, the layout from before the key.
+var FilterPlacements = []string{"right", "left"}
 
 // Resolve returns the validated branding; config.Get has already merged the
 // managed settings over the config.yaml block. The logo file is read on every
@@ -105,6 +113,7 @@ func resolve(in config.Branding) Branding {
 	out.TitleSize = oneOf("title_size", in.TitleSize, FontSizes...)
 	out.TaglineSize = oneOf("tagline_size", in.TaglineSize, FontSizes...)
 	out.ContentWidth = oneOf("content_width", in.ContentWidth, ContentWidths...)
+	out.FilterPlacement = oneOf("filter_placement", in.FilterPlacement, FilterPlacements...)
 	return out
 }
 

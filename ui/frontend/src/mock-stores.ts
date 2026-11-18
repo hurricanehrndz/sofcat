@@ -345,6 +345,7 @@ export const STORES: Record<StoreName, MockStore> = {
       titleSize: "",
       taglineSize: "",
       contentWidth: "",
+      filterPlacement: "",
       sections: ["Productivity", "Developer tools", "Utilities"],
     },
   },
@@ -365,6 +366,7 @@ export const STORES: Record<StoreName, MockStore> = {
       titleSize: "",
       taglineSize: "",
       contentWidth: "",
+      filterPlacement: "",
       sections: ["Skills", "Plugins"],
     },
   },
@@ -385,5 +387,6 @@ export const UNBRANDED: Branding = {
   titleSize: "",
   taglineSize: "",
   contentWidth: "",
+  filterPlacement: "",
   sections: [],
 };
