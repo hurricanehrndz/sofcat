@@ -57,6 +57,8 @@ mise.local.toml
 /ui/brand-icon.png
 # The brand write roots `just brand=…` stages for the brand_roots build tag
 /pkg/placement/brand-write-roots.yaml
+# The brand branding defaults `just brand=…` stages for the brand_branding build tag
+/pkg/config/brand-branding.yaml
 
 # Documentation site (site/): dependencies and build output
 site/node_modules/

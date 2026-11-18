@@ -28,7 +28,12 @@ icon_png := if path_exists(_brand_png) == "true" { _brand_png } else { "" }
 # the binaries under the brand_roots tag; without it the stock roots apply.
 _brand_roots := if brand == "" { "" } else { brand / "write-roots.yaml" }
 write_roots := if path_exists(_brand_roots) == "true" { _brand_roots } else { "" }
-_svc_tags := trim_start_match((if write_roots == "" { "" } else { "brand_roots" }) + _zip_tag, ",")
+# A brand's branding.yaml (the keys of config.yaml's branding block) is
+# compiled into the service under the brand_branding tag, as the defaults
+# under config.yaml and managed settings.
+_brand_branding := if brand == "" { "" } else { brand / "branding.yaml" }
+brand_branding := if path_exists(_brand_branding) == "true" { _brand_branding } else { "" }
+_svc_tags := trim_start_match((if write_roots == "" { "" } else { ",brand_roots" }) + (if brand_branding == "" { "" } else { ",brand_branding" }) + _zip_tag, ",")
 _ui_icon_tag := if icon_png == "" { "" } else { ",brand" }
 _ui_tags := "production" + _ui_icon_tag + (if write_roots == "" { "" } else { ",brand_roots" }) + _zip_tag
 # sed arguments filling the @PLACEHOLDERS@ in installer/* and
@@ -339,6 +344,9 @@ archive-macos: pkg
 # install. SLUG, NAME and IDENTIFIER must all keep or all change the stock
 # values: the service, pipe, ProgramData folder, policy key and installer
 # identity derive from them. Two custom brands still need distinct values.
+# A brand branding.yaml is staged as pkg/config/brand-branding.yaml
+# (gitignored) for the brand_branding tag and parsed, so an unknown key fails
+# here.
 brand-check:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -366,6 +374,10 @@ brand-check:
     [ $stock = 0 ] || [ $stock = 3 ] || fail "SLUG, NAME and IDENTIFIER must all differ from stock SofCat (sofcat, SofCat, ca.hrndz.sofcat) or all match it"
     [ "$(head -c 4 {{quote(icon_ico)}} | od -An -tx1 | tr -d ' \n')" = 00000100 ] || fail "{{icon_ico}} is not a Windows .ico"
     [ -z {{quote(icon_png)}} ] || [ "$(head -c 8 {{quote(icon_png)}} | od -An -tx1 | tr -d ' \n')" = 89504e470d0a1a0a ] || fail "{{icon_png}} is not a PNG"
+    if [ -n {{quote(brand_branding)}} ]; then
+      cp {{quote(brand_branding)}} pkg/config/brand-branding.yaml
+      go test -tags brand_branding -run '^TestCompiledBrandingParses$' ./pkg/config >/dev/null || fail "{{brand_branding}} has a key that is not a branding key, or is not YAML (see examples/brand/README.md)"
+    fi
 
 # Standalone makecatalogs for every admin platform (pure Go, no cgo)
 # -> build/makecatalogs-<os>-<arch>[.exe]. With SIGN_CMD set, the two Windows

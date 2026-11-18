@@ -1,12 +1,15 @@
 package config
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 
@@ -185,6 +188,43 @@ func (b *Branding) foldLinkAliases() {
 	b.HelpURL, b.HelpLabel = "", ""
 }
 
+// fillFrom sets each field b leaves blank to def's.
+func (b *Branding) fillFrom(def Branding) {
+	dst, src := reflect.ValueOf(b).Elem(), reflect.ValueOf(def)
+	for i := range dst.NumField() {
+		switch p := dst.Field(i).Addr().Interface().(type) {
+		case *string:
+			if strings.TrimSpace(*p) == "" {
+				*p = src.Field(i).String()
+			}
+		case *[]string:
+			if len(*p) == 0 {
+				dst.Field(i).Set(src.Field(i))
+			}
+		}
+	}
+}
+
+// brandDefaults is the branding compiled into a rebranded build, from the
+// brand's branding.yaml: the last source of each field, under config.yaml
+// and the managed settings. A variable so tests can supply one.
+var brandDefaults = sync.OnceValues(func() (Branding, error) {
+	return parseBrandDefaults(compiledBranding)
+})
+
+// parseBrandDefaults decodes a brand's branding.yaml, the keys of
+// config.yaml's branding block at the top level, rejecting unknown ones.
+func parseBrandDefaults(data []byte) (Branding, error) {
+	var b Branding
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	if err := dec.Decode(&b); err != nil && !errors.Is(err, io.EOF) {
+		return Branding{}, fmt.Errorf("parse branding.yaml: %w", err)
+	}
+	b.foldLinkAliases()
+	return b, nil
+}
+
 // registerFlags defines sofcat's flags on flag.CommandLine. Get calls it, not
 // init: the user agent and the storefront import this package through
 // pkg/service, and their own command lines must not inherit sofcat's flags.
@@ -332,10 +372,15 @@ func Refresh(cfg Configuration) Configuration {
 	return next
 }
 
-// resolve returns cfg, config.yaml as parsed, under the managed settings,
-// the command line and the defaults.
+// resolve returns cfg, config.yaml as parsed, over the build's branding
+// defaults and under the managed settings, the command line and the defaults.
 func resolve(cfg Configuration, managed map[string]any, warn func(string)) Configuration {
 	cfg.Branding.foldLinkAliases()
+	defaults, err := brandDefaults()
+	if err != nil {
+		warn(fmt.Sprintf("compiled branding ignored: %v", err))
+	}
+	cfg.Branding.fillFrom(defaults)
 	applyManaged(&cfg, managed, warn)
 
 	// If URLPackages wasn't provided, use the repo URL when available.
