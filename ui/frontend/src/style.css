@@ -191,9 +191,11 @@ button:disabled {
   }
 }
 
-@keyframes slide-up {
+/* Opacity only: the strip is pinned to the bottom, and moving it down would
+   reach past the page and could flash a scrollbar while it enters. */
+@keyframes fade-in {
   from {
-    transform: translateY(100%);
+    opacity: 0;
   }
 }
 
@@ -529,7 +531,7 @@ h2 {
   transition: border-color 120ms ease-out;
 }
 
-/* Only a card the list did not show before this rebuild (renderGrid). */
+/* Only a card new to a list already on screen (enteringItems in state.ts). */
 .card[data-entering] {
   animation: rise-in 180ms ease-out;
 }
@@ -671,7 +673,7 @@ h2 {
   background: var(--surface);
   border-top: 1px solid var(--line-soft);
   box-shadow: 0 -6px 18px var(--shadow);
-  animation: slide-up 200ms ease-out;
+  animation: fade-in 200ms ease-out;
 }
 
 .glyph-small {

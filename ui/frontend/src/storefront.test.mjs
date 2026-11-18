@@ -9,6 +9,7 @@ import {
   cardProgress,
   cardStatus,
   deriveAction,
+  enteringItems,
   statusLabel,
   statusRecord,
   appliesToLine,
@@ -301,8 +302,6 @@ test("only a card new to the list animates, and reduced motion stops all motion"
     assert.equal(/\banimation\b/.test(rule), false, ".card itself animates");
   }
   assert.match(css, /\.card\[data-entering\] \{\s*animation:/);
-  const shell = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
-  assert.match(shell, /toggleAttribute\("data-entering", !before\.has\(item\.itemName\)\)/);
 
   const reduced = css.slice(css.lastIndexOf("@media (prefers-reduced-motion: reduce)"));
   assert.match(reduced, /^@media[^{]*\{\s*\*,\s*\*::before,\s*\*::after \{/);
@@ -310,4 +309,18 @@ test("only a card new to the list animates, and reduced motion stops all motion"
     assert.match(reduced, new RegExp(`${property}: 0\\.01ms !important`));
   }
   assert.match(reduced, /animation-iteration-count: 1 !important/);
+});
+
+// A status update or refresh rebuilds the grid with the same cards: none may
+// ease in again, or the store flickers through every install. A new list (the
+// grid emptied by a tab switch) eases all its cards in, a widened filter only
+// the cards it brings back, and a page that is itself easing in (launch, Back
+// from details, back from Activity) carries its cards, so none moves twice.
+test("a rebuild eases in only the cards it did not show, and none while the page enters", () => {
+  const items = ["a", "b", "c"].map((itemName) => item({ itemName }));
+  const names = (set) => [...set].sort();
+  assert.deepEqual(names(enteringItems([], items, false)), ["a", "b", "c"], "a new list");
+  assert.deepEqual(names(enteringItems(["a", "b", "c"], items, false)), [], "the same cards again");
+  assert.deepEqual(names(enteringItems(["b"], items, false)), ["a", "c"], "a widened filter");
+  assert.deepEqual(names(enteringItems([], items, true)), [], "the page enters with them");
 });
