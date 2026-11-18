@@ -78,7 +78,7 @@ Only placements with a variant for the machine's OS count, for labels and for
 `applies_to`, in file order, without repeats, after the `applies_to` label
 ("Applies to" unless a layer sets it). The line is only text: it names where
 the item is meant to be used and never scopes the item, so a label such as
-"Works in" may read better. On the detail page of an item with two or more such
+"Works in" may read better. In the dialog of an item with two or more such
 placements, a row per placement takes the line's place, labelled with that
 placement's `applies_to`; see
 [Choosing placements](#choosing-placements). For example:
@@ -108,7 +108,7 @@ so the status reads in the same words as the button that made the request.
 ## Choosing placements
 
 An item with two or more placements that have a variant for the machine's OS
-can be added to or removed from one of them. Its detail page lists the
+can be added to or removed from one of them. Its dialog lists the
 placements, each with its `applies_to` as the label, its status and one
 button: the item's `install` label where it is not installed, `remove` where
 it is, and `cancel` beside the `pending_install` or `pending_remove` status of

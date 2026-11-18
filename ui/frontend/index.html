@@ -83,14 +83,16 @@
         <ol id="activity-list" class="activity"></ol>
         <p id="activity-empty">No operations have been started from this app yet.</p>
       </section>
+    </main>
 
-      <!-- Drill-down detail page, like Managed Software Center's: Back (and
-           Escape) returns to the list and refocuses the card it came from. -->
-      <section id="view-detail" aria-labelledby="detail-name" hidden>
-        <p class="detail-nav">
-          <button type="button" id="detail-back" class="back">
-            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16"><path d="M10 3 5 8l5 5" /></svg>
-            Back
+    <!-- An item's details, in a dialog over the list it was opened from. It
+         grows out of the item's card (main.ts); Close, Escape or a click
+         outside it closes it and refocuses the card. -->
+    <dialog id="item-dialog" aria-labelledby="detail-name">
+      <div class="dialog-body">
+        <p class="dialog-bar">
+          <button type="button" id="detail-close" class="icon-button" aria-label="Close" autofocus>
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16"><path d="m4 4 8 8m0-8-8 8" /></svg>
           </button>
         </p>
         <div class="detail-head">
@@ -99,19 +101,19 @@
             <h2 id="detail-name"></h2>
             <p id="detail-developer"></p>
             <p id="detail-applies-to" hidden></p>
-            <!-- One row per placement, in place of the applies-to line, when
-                 the service sends the item's placements. -->
-            <ul id="detail-placements" class="placements" hidden></ul>
-            <p id="detail-description"></p>
           </div>
-          <button type="button" id="detail-action" class="pill pill-primary pill-large"></button>
+          <!-- The item's action, which carries its progress, and Cancel while
+               an operation on it runs. -->
+          <p class="detail-actions">
+            <button type="button" id="detail-cancel" class="pill pill-outline" hidden></button>
+            <button type="button" id="detail-action" class="pill action pill-large"></button>
+          </p>
         </div>
-        <p class="card-status" aria-live="polite">
-          <svg class="spinner" aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" hidden>
-            <path d="M8 2a6 6 0 1 1-4.24 1.76" />
-          </svg>
-          <span class="status-text"></span>
-        </p>
+        <p class="card-status" aria-live="polite"><span class="status-text"></span></p>
+        <!-- One row per placement, in place of the applies-to line, when
+             the service sends the item's placements. -->
+        <ul id="detail-placements" class="placements" hidden></ul>
+        <p id="detail-description"></p>
         <h3>Information</h3>
         <dl class="info">
           <div><dt>Developer</dt><dd id="detail-developer-value"></dd></div>
@@ -120,21 +122,13 @@
           <div><dt>Status</dt><dd id="detail-status"></dd></div>
           <div><dt>Restart</dt><dd id="detail-restart"></dd></div>
         </dl>
-      </section>
-    </main>
-
-    <!-- The one operation being worked on right now; each item's own state is on its card. -->
-    <footer id="operation-strip" class="strip" aria-label="Current operation" hidden>
-      <span id="strip-glyph" class="glyph glyph-small" aria-hidden="true"></span>
-      <div class="strip-body">
-        <p class="strip-line">
-          <span id="strip-name" class="strip-name"></span>
-          <span id="strip-text" class="strip-text" role="status" aria-live="polite"></span>
-        </p>
-        <progress id="strip-progress" max="100"></progress>
       </div>
-      <button id="strip-cancel" type="button" class="pill pill-outline">Cancel</button>
-    </footer>
+    </dialog>
+
+    <!-- Says each new phase of running work to screen readers; the buttons
+         that show it are not live regions, so a percentage is never read out
+         tick by tick. -->
+    <p id="announcer" class="visually-hidden" role="status" aria-live="polite"></p>
 
     <template id="spinner">
       <svg class="spinner" aria-hidden="true" width="14" height="14" viewBox="0 0 16 16">

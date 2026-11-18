@@ -50,8 +50,7 @@ import {
   stateLabel,
   statusLabel,
   statusRecord,
-  stripLine,
-  stripView,
+  actionProgress,
   tabItems,
   tabs,
   trackOperation,
@@ -678,9 +677,9 @@ test("glyph tone is stable per item and inside the palette", () => {
   }
 });
 
-test("the strip shows the running operation the service is working on, as n of N", () => {
-  const record = (operationId, itemName, state, progressPercent) => ({
-    operationId,
+test("a busy action button carries its item's progress", () => {
+  const record = (state, progressPercent, itemName = "Chrome") => ({
+    operationId: "op-1",
     itemName,
     displayName: itemName,
     state,
@@ -688,61 +687,67 @@ test("the strip shows the running operation the service is working on, as n of N
     timestampUtc: "2026-10-03T22:22:44Z",
     ...(progressPercent === undefined ? {} : { progressPercent }),
   });
-  const operation = (operationId, itemName, outcome, records) => ({
-    operationId,
-    item: item({ itemName, displayName: itemName }),
-    action: { kind: "do", label: "Install", method: "InstallItem" },
-    records,
-    outcome,
-  });
+  const chrome = item({ itemName: "Chrome", displayName: "Chrome" });
+  const install = { kind: "do", label: "Install", method: "InstallItem" };
+  const operation = (outcome, records, action = install) => ({ action, records, outcome });
 
-  assert.equal(stripView([]), null, "nothing running hides the strip");
+  assert.equal(actionProgress(chrome, install, undefined, undefined), null, "a free button keeps its label");
+
+  // From the click: the request is out, then accepted, then queued.
+  const waiting = { label: "Installing…", phase: "waiting" };
+  assert.deepEqual(actionProgress(chrome, install, install, undefined), waiting);
+  assert.deepEqual(actionProgress(chrome, install, install, operation("active", [])), waiting);
+  assert.deepEqual(actionProgress(chrome, install, install, operation("active", [record(REQUESTED_STATE)])), waiting);
+  assert.deepEqual(actionProgress(chrome, install, install, operation("active", [record("Queued")])), waiting);
+
+  // A measured phase fills the bar and says how far.
+  assert.deepEqual(actionProgress(chrome, install, install, operation("active", [record("Downloading", 42)])), {
+    label: "Downloading… 42%",
+    phase: "working",
+    percent: 42,
+  });
+  // An unmeasured one has no percentage, never a made-up one.
+  assert.deepEqual(actionProgress(chrome, install, install, operation("active", [record("Installing")])), {
+    label: "Installing…",
+    phase: "working",
+    percent: undefined,
+  });
+  // A dependency's phase is named, so its percentage is not read as the item's.
   assert.equal(
-    stripView([operation("op-0", "Done", "terminal", [record("op-0", "Done", "Succeeded")])]),
-    null,
-    "finished operations never hold the strip open",
+    actionProgress(chrome, install, install, operation("active", [record("Downloading", 7, "Runtime")])).label,
+    "Downloading Runtime… 7%",
   );
 
-  // Both just accepted: the earliest is shown, with no percentage (indeterminate).
-  const waiting = stripView([
-    operation("op-1", "Chrome", "active", [record("op-1", "Chrome", REQUESTED_STATE)]),
-    operation("op-2", "Zed", "active", [record("op-2", "Zed", "Queued")]),
-  ]);
-  assert.equal(waiting.operation.operationId, "op-1");
-  assert.deepEqual([waiting.position, waiting.total], [1, 2]);
-  assert.equal(waiting.progress.percent, undefined);
-  assert.equal(stripLine(waiting), "Waiting… · 1 of 2");
+  // Between phases the button keeps its own label, with no percentage.
+  assert.deepEqual(
+    actionProgress(chrome, install, install, operation("active", [record("ItemCompleted", 100, "Runtime")])),
+    { label: "Installing…", phase: "working" },
+  );
 
-  // The second one is the one actually reporting: it is shown as 2 of 2 with
-  // its percentage.
-  const working = stripView([
-    operation("op-0", "Done", "terminal", [record("op-0", "Done", "Failed")]),
-    operation("op-1", "Chrome", "active", [record("op-1", "Chrome", REQUESTED_STATE), record("op-1", "Chrome", "Queued")]),
-    operation("op-2", "Zed", "active", [record("op-2", "Zed", REQUESTED_STATE), record("op-2", "Zed", "Downloading", 42)]),
-  ]);
-  assert.equal(working.operation.operationId, "op-2");
-  assert.deepEqual([working.position, working.total], [2, 2]);
-  assert.equal(working.progress.percent, 42);
-  assert.equal(stripLine(working), "Downloading… 42% · 2 of 2");
+  // Ended, the list not in yet: full, so the bar never runs backwards.
+  assert.deepEqual(actionProgress(chrome, install, install, operation("terminal", [record("Succeeded")])), {
+    label: "Installing…",
+    phase: "working",
+    percent: 100,
+  });
 
-  // A phase without a percentage on the wire stays indeterminate.
-  const unmeasured = stripView([
-    operation("op-3", "Chrome", "active", [record("op-3", "Chrome", "ItemCompleted")]),
-  ]);
-  assert.equal(unmeasured.progress.percent, undefined);
-  assert.equal(progressText(unmeasured.progress), "Item Completed…");
+  // A Cancel keeps its own label over the phase.
+  const cancel = { kind: "cancel", label: "Cancel", method: "RemoveItem" };
+  assert.deepEqual(actionProgress(chrome, cancel, cancel, operation("active", [record("Removing")], cancel)), {
+    label: "Cancel",
+    phase: "working",
+  });
 
-  // A refused cancel came from the strip's own button, and Home cards show no
-  // running state, so the strip is where its reason must appear.
-  const refused = stripView([
-    { ...operation("op-4", "Chrome", "active", [record("op-4", "Chrome", "Installing")]), notice: NOT_AUTHORIZED_TEXT },
-  ]);
-  assert.equal(stripLine(refused), `${NOT_AUTHORIZED_TEXT} · 1 of 1`);
+  // A placement row carries progress only for its own placement.
+  const one = { ...install, placement: "claude" };
+  const running = operation("active", [record("Installing")], one);
+  assert.equal(actionProgress(chrome, install, one, running, "codex"), null);
+  assert.equal(actionProgress(chrome, install, one, running, "claude").phase, "working");
 });
 
 test("a Home card shows only outcomes the user has to act on", () => {
-  // The button already names the item's state and the strip shows running
-  // work, so anything else on the card is noise.
+  // The button already names the item's state and carries running work's
+  // progress, so anything else on the card is noise.
   assert.equal(needsAttention(null), false, "idle or succeeded");
   assert.equal(needsAttention({ label: "Installing…", percent: 50, outcome: "active" }), false);
   assert.equal(needsAttention({ label: "Canceled", outcome: "terminal", plain: true }), false);

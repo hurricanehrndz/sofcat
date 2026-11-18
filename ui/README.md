@@ -49,13 +49,14 @@ user's operation to watch it.
 - `progressPercent` is **per item**. It may reset when the event's item changes
   (for example when a dependency or updater runs). It is never aggregate
   operation progress, and is present only when measured: a download of known
-  length is; an install or removal is not. An item's detail page shows its
-  current phase beside a spinner; a Home card shows no progress, only a
-  pending, required or partly installed item's status ("Installed in Claude
-  Code") and a failure or deferral reason. The one
-  bar is in the bottom strip, for the operation being worked on, and is
-  indeterminate for a phase without a percentage. The record timeline is only
-  in Activity.
+  length is; an install or removal is not. An item's action button, on its
+  card and in its dialog, turns into its progress where it stands: from the
+  click it widens and shows a spinner while the request waits, then it is a
+  bar with the phase written in it ("Downloading… 42%"), filled to the
+  percentage when the phase has one and with a band running along it when it
+  has none. A card's status line shows only a pending, required or partly
+  installed item's status ("Installed in Claude Code") and a failure or
+  deferral reason. The record timeline is only in Activity.
 - `ItemCompleted` and `ItemFailed` are **non-terminal**. A dependency failure does
   not end the operation.
 - Only `Succeeded`, `Failed`, `Deferred`, and `Canceled` end an operation.
@@ -63,7 +64,8 @@ user's operation to watch it.
   record the UI calls `ListOptionalInstalls` and replaces the list and cache from
   that authoritative response. If that refresh fails, the previous data is kept
   and marked stale.
-- Cancel, in the bottom strip, works only until the service starts the item's
+- Cancel, beside the action button in the item's dialog while its operation
+  runs, works only until the service starts the item's
   installer or uninstaller (`Requested`, `Queued`, `Downloading`); after that it
   is disabled, and the service refuses a late request with
   `operation_not_cancelable`. A running installer is never interrupted. An
@@ -107,7 +109,7 @@ comes from the first source that sets it:
 | `list_heading` | Plain text, up to 120 characters. Replaces the "Available software" heading; "My items" is unchanged. |
 | `title_size` | `small`, `medium` (the default), `large` or `x-large`. The size of the banner title and, in step with it, the "Available software" (or `list_heading`), "My items" and "Activity" headings: 0.85, 1, 1.25 or 1.5 times the default. Any other value keeps the default. |
 | `tagline_size` | The same four sizes for the banner tagline. |
-| `content_width` | How much of the window the lists, My items, Activity and the detail page use. `wide`, the default, centres them in a column of up to 96rem (1536pt) and lets the cards of a short row share its width: a row of one or two cards shows each as a single line, glyph, name and buttons. `full` drops the column's cap, so the content runs to the window's edges on any screen. `compact` is the layout from before this key: a column of up to 76rem (1216pt) whose cards keep one column's width, leaving the rest of a short row empty. Any other value is `wide`. The banner, app bar and operation strip span the window in all three. |
+| `content_width` | How much of the window the lists, My items and Activity use. `wide`, the default, centres them in a column of up to 96rem (1536pt) and lets the cards of a short row share its width: a row of one or two cards shows each as a single line, glyph, name and buttons. `full` drops the column's cap, so the content runs to the window's edges on any screen. `compact` is the layout from before this key: a column of up to 76rem (1216pt) whose cards keep one column's width, leaving the rest of a short row empty. Any other value is `wide`. The banner, app bar and operation strip span the window in all three. |
 | `filter_placement` | Where the search field and the category list sit above a list and My items. `right`, the default: on the heading's row, at its right edge; when the row is too narrow for both, they move under the heading. `left`: above the heading, at the left, as before this key. In a window narrower than 40rem (640pt) both values stretch the two controls to the full width, one under the other: under the heading for `right`, above it for `left`. Any other value is `right`. Either way the keyboard reaches the search field, then the category list, then the cards. |
 | `banner_style` | `text`, the default: the logo, if any, in a small white tile beside the title. `logo`: the logo in the title's place, as a wordmark with no tile behind it. It is at most 3.5rem (56pt) tall, times the `title_size` factor, keeps its shape and shrinks to fit a narrow window; the tagline and link button stay. `title` is still the window and product name and becomes the logo's text alternative, so set it to the words the logo shows; without a title the product name is. The logo stays out of the app-bar mark and the window icon. Without a usable `logo`, or when the logo's data does not decode, it is `text`. Any other value is `text`. Leave `<title>` and `aria-label` out of an SVG logo: the macOS web view reads them to screen readers in place of the text alternative, in either style. `examples/branding/` has a stock wordmark in light lettering (for the accent or a dark `background_image`) and dark lettering (for a light one, with `background_text: dark`). |
 | `banner_align` | `left` (the default), `center` or `right`: where the banner's logo, title and tagline sit, in either style. `right` mirrors `left`, with the link button at the banner's left edge; `center` stacks logo, title, tagline and link button in a centred column. Any other value is `left`. |
@@ -148,11 +150,12 @@ refresh provides convergence.
 ## Keyboard
 
 Everything is reachable with Tab and real buttons. A click anywhere on a card
-but its buttons opens the item's detail page, as its Details button does (a
-drag that selects the card's text does not); the card itself is not a control,
-so keyboard and screen-reader users take Details. Back or `Escape` leaves the
-detail page and focuses the card's Details button again, or the search field
-when the card is no longer listed. `Ctrl+L` shows or hides Activity (like
+but its action button opens the item's dialog (a drag that selects the card's
+text does not); the card itself is not a control, so its name is a button
+that opens the dialog for keyboard and screen-reader users. The dialog is
+modal and grows out of the card, or just appears under reduced motion. Its
+Close button, `Escape` or a click outside it closes it and focuses the card's
+name again, or the search field when the card is no longer listed. `Ctrl+L` shows or hides Activity (like
 Managed Software Center's ⌘L), and `Escape` leaves it too. All of this is
 frontend-only; nothing is added to the bound surface.
 
@@ -174,7 +177,7 @@ badges, a deferral, and Cancel during the download.
   Productivity, Developer tools and Utilities.
 - `?store=skills`: Acme AI Skills, cross-platform skills and plugins with
   `appliesTo` names and placement labels. Release Notes Writer and SQL Explainer
-  have two placements, so their detail pages show a row per placement
+  have two placements, so their dialogs show a row per placement
   (installed, not installed and pending), and SQL Explainer's card reads
   "Installed in Claude Code".
 - `?unbranded`: the same store's items with empty branding, the stock look.

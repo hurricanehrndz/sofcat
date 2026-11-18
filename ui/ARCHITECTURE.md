@@ -4,7 +4,7 @@
 
 The Wails process runs as the interactive standard user. The SYSTEM SofCat service remains the authorization and filesystem boundary. UI code receives no SofCat configuration, credentials, arbitrary paths, package-server settings, or internal catalog objects.
 
-Any local user can reach the service, so it authorizes each mutation by item, not by caller. `installItem` accepts only an item offered in the admin manifests' `optional_installs`. `removeItem` accepts an item offered there or in `default_installs`, or one already in the self-serve manifest's own lists, so an item stays removable after it leaves the offer. An item an admin manifest lists in `managed_installs` is never removable, even when it is also offered: the service refuses with `item_not_removable`, and the managed run also skips a self-serve uninstall of such an item. `listOptionalInstalls` marks it `isRequired`, and the UI shows it as "Managed by your organisation" with Details but no Install or Remove.
+Any local user can reach the service, so it authorizes each mutation by item, not by caller. `installItem` accepts only an item offered in the admin manifests' `optional_installs`. `removeItem` accepts an item offered there or in `default_installs`, or one already in the self-serve manifest's own lists, so an item stays removable after it leaves the offer. An item an admin manifest lists in `managed_installs` is never removable, even when it is also offered: the service refuses with `item_not_removable`, and the managed run also skips a self-serve uninstall of such an item. `listOptionalInstalls` marks it `isRequired`, and the UI shows it as "Managed by your organisation" with its details but no Install or Remove.
 
 The self-serve manifest is per machine, as in Munki, so on a shared machine (fast user switching, Remote Desktop Services) every user sees one self-service selection. The service also authorizes by caller, so one user cannot undo another's request. It records who selected each item in the self-serve manifest's `selected_by` (item name to SID on Windows, uid elsewhere), from the connection, when `installItem` selects an item that has none recorded; a second user selecting the same item succeeds and leaves the record alone. `removeItem`, and an `installItem` for an item waiting for removal (which takes the removal back), are accepted only from that selector or a local administrator; `cancelOperation` only from the user who requested the operation or an administrator. Anyone else gets `not_authorized`, before anything changes. An administrator is a caller whose pipe client token has `BUILTIN\Administrators` enabled (a UAC-filtered token, where the group is deny-only, is not one); on macOS uid 0 or a member of group `admin`. A caller the service cannot resolve is never an administrator and matches no recorded user. An item with no recorded selector (a `default_installs` item, or one selected before selectors were recorded) stays removable by anyone. The selector is cleared when the item's removal completes, in the same file update that prunes its `managed_uninstalls` entry, so the next user to select it becomes its selector; a cancel that puts back the selection also puts back the selector it had. Streaming is not owned: anyone who knows an operation ID can stream it. IDs are therefore 128 random bits from `crypto/rand`, hex encoded, which no other user can guess.
 
@@ -373,26 +373,32 @@ after their helper has reported, or 30 seconds have passed (see the
 user-placement plan above).
 
 `progressPercent` is scoped to the record's `itemName` and may reset at an item
-boundary. An item's detail page shows one status line with a spinner while its
-operation runs, naming the record's item when a dependency or updater takes
-over. A Home card shows no progress, and a status only where its button
+boundary. A Home card shows a status only where its button
 cannot say it: a pending item's (its button reads only Cancel), a required
 item's (it has no button) and a partly installed item's ("Installed in
 Claude Code": some of its `placements` are installed and some are not; its
 button stays the install one, a plain `installItem` that adds the rest).
 Otherwise the button names the state. From the click until the list fetched
-after the operation's end arrives, the item is busy: its buttons read its
-`installing` or `removing` label (a Cancel keeps `cancel`, since it sends
-the opposite mutation), with no percentage, and are
-`aria-disabled`, so they keep focus and a click on them asks for nothing.
-The button so goes from "Install" to "Installing…" to "Remove", and never
-shows the old action between the end and the refresh; a failed request
-or refresh frees it at once. The card's line also appears for a
-`Failed` or `Deferred` outcome or a refused request. The only bar is in the
-bottom `#operation-strip`, which reports one running operation — the earliest
-the service has started work on — as "n of N" with a `<progress max="100">`
-that is determinate only when the latest record carries a percentage, so a
-download of known length fills it and an install shows it indeterminate. The
+after the operation's end arrives, the item is busy: its buttons are
+`aria-disabled`, so they keep focus and a click on them asks for nothing, and
+the item's action button, on its card and in its dialog, carries its progress
+(`actionProgress` in `state.ts`). While the request is out or the operation
+is `Requested` or `Queued`, the button reads the item's `installing` or
+`removing` label (a Cancel keeps `cancel`, since it sends the opposite
+mutation) beside a spinner. Once work starts it is a bar with the phase
+written in it, naming the record's item when a dependency or updater takes
+over: filled to the percentage when the latest record carries one, so a
+download of known length fills it, and with a band running along it when the
+record carries none, as for an install. After the terminal record it reads
+full until the refreshed list turns it into the opposite action.
+The button so goes from "Install" to "Installing…" to "Downloading… 42%" to
+"Remove", and never shows the old action between the end and the refresh; a
+failed request or refresh frees it at once. The buttons are updated in
+place, never replaced while they show, so the bar and the button's width
+ease from one state to the next. They are not live regions: a
+visually hidden `#announcer` says each new phase once, without its
+percentage. The card's line also appears for a
+`Failed` or `Deferred` outcome or a refused request. The
 percentage is still the record's item's, not an aggregate. The record
 timeline is shown only in Activity, never on the Home view. No percentage is
 fabricated for installs, removals, status checks, no-action items,
@@ -412,17 +418,17 @@ that disappears on a refresh falls back to the first one.
 
 Buttons and status text use the item's labels: `install` on the install
 button, `remove` on the remove button, `cancel` on the Cancel of a pending
-request and on the strip's Cancel, `installing` and `removing` on the busy
+request and on the dialog's Cancel, `installing` and `removing` on the busy
 item's buttons and while its own install or removal runs, `installed` as an installed item's status
-on the detail page, and `pending_install` and `pending_remove` as a pending
-item's status on its card and detail page. Nothing shows an update action yet,
-so `update` is accepted but unused. A card and the detail page add a line such as
+in its dialog, and `pending_install` and `pending_remove` as a pending
+item's status on its card and in its dialog. Nothing shows an update action yet,
+so `update` is accepted but unused. A card and the dialog add a line such as
 "Applies to: Claude Code, Codex" when `appliesTo` is set, prefixed with the
 `applies_to` label; it is display text and scopes nothing. An offline cache
 entry from before the rename carries `worksIn` and shows no line. Labels,
 the heading and the applies-to line are catalog or
-admin text and go into the DOM only as `textContent`. On the detail
-page an item with `placements` shows, in place of that line, a list labelled
+admin text and go into the DOM only as `textContent`. In its dialog
+an item with `placements` shows, in place of that line, a list labelled
 with `applies_to` and one row per placement: its `label`, its status in the
 item's wording (`installed`, `pending_install`, `pending_remove`, else "Not
 installed") and one button with the item's labels. `NotInstalled` gets
@@ -446,17 +452,19 @@ the message, for services that send no code).
 
 ## Cancel
 
-The strip has a Cancel button for the operation it shows. It is enabled only
+An item's dialog has a Cancel button beside the action button while an
+operation on the item runs. It is enabled only
 while that operation's latest record is `Requested`, `Queued` or `Downloading`,
 and otherwise is a real disabled button whose title says why. `CancelOperation`
 skips the command queue, since the run it would stop holds that queue. The
 service accepts it only while the operation is open and no run has started the
 item's install or uninstall command; a running installer is never interrupted.
 Anything else (item acted on, operation finished, unknown ID) is refused with
-`operation_not_cancelable`, and the strip (and the detail page) shows the
+`operation_not_cancelable`, and the item's status line, on its card and in
+its dialog, shows the
 service's message without changing the item. A cancel from anyone but the
 operation's requester or a local administrator is refused with
-`not_authorized`, and the strip says only that person or an administrator can
+`not_authorized`, and the line says only that person or an administrator can
 change the item.
 
 An accepted cancel does three things. It puts back the self-serve selection the

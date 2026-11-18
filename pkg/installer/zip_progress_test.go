@@ -11,7 +11,7 @@ import (
 	"github.com/hurricanehrndz/sofcat/pkg/catalog"
 )
 
-// The strip's bar follows an item's percent, so a zip item's downloads must
+// The action button's bar follows an item's percent, so a zip item's downloads must
 // climb across all its archives without falling back at the second one, and
 // the install that follows must not claim a percentage nobody measured.
 func TestZipDownloadProgressSpansArchives(t *testing.T) {

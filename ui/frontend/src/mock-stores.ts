@@ -147,7 +147,7 @@ const apps: MockItem[] = [
     itemName: "AcmeVPN",
     displayName: "Acme VPN",
     version: "6.1.0",
-    description: "Required on every Acme device: no Install or Remove, only Details.",
+    description: "Required on every Acme device: no Install or Remove, only its details.",
     category: "Security",
     section: "Utilities",
     developer: ACME_IT,
@@ -191,7 +191,7 @@ const skills: MockItem[] = [
     displayName: "Release Notes Writer",
     version: "1.4.0",
     description:
-      "Drafts release notes from merged pull requests in Acme's house style. Requested for Claude Code only; Details adds or removes it per tool.",
+      "Drafts release notes from merged pull requests in Acme's house style. Requested for Claude Code only; its details add or remove it per tool.",
     category: "Writing",
     section: "Skills",
     developer: ACME_AI,
