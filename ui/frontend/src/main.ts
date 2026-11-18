@@ -49,6 +49,7 @@ import {
   placementStatus,
   progressText,
   queueView,
+  itemCancel,
   refusalText,
   releaseOperation,
   requestErrorText,
@@ -226,11 +227,14 @@ function paintAction(
     button.replaceChildren(...(spinner ? [spinner] : []), text, percent);
   }
   button.classList.add("action");
-  const shown = progress?.label ?? label;
+  const measured = progress?.phase === "working" && progress.percent !== undefined;
+  // The percentage says it is still going, so the phase drops its ellipsis
+  // ("Downloading 45%") and fits a narrow button whole.
+  const shown = measured ? (progress?.label ?? "").replace(/\s*(…|\.\.\.)$/, "") : (progress?.label ?? label);
   if (text.textContent !== shown) {
     text.textContent = shown;
   }
-  percent.textContent = progress?.phase === "working" && progress.percent !== undefined ? `${progress.percent}%` : "";
+  percent.textContent = measured ? `${progress?.percent}%` : "";
   percent.hidden = percent.textContent === "";
   if (progress?.phase === "ended") {
     // The work is over, failed or canceled: the name is the action again.
@@ -264,24 +268,27 @@ function setCancel(button: HTMLButtonElement, operation: OperationView): void {
 }
 
 /**
- * paintCancel shows an item's own Cancel beside its action under branding
- * progress: button, while an operation on it runs; not when that operation
- * is itself a cancel, whose busy button already is the way out. A Cancel that
- * goes off or away while it has focus hands it to the action beside it.
+ * paintCancel shows an item's own Cancel beside its action while it has one
+ * (itemCancel). A Cancel that goes off or away while it has focus hands it
+ * to the action beside it, or to fallback when the item shows no action.
  */
-function paintCancel(button: HTMLButtonElement, item: OptionalInstallItem, action: HTMLElement | null): void {
-  const operation = latestOperation(item.itemName);
-  const running =
-    branding.progress === "button" && operation?.outcome === "active" && operation.action.kind !== "cancel"
-      ? operation
-      : undefined;
+function paintCancel(
+  button: HTMLButtonElement,
+  item: OptionalInstallItem,
+  action: HTMLElement,
+  fallback: HTMLElement,
+): void {
+  const running = itemCancel(branding.progress, latestOperation(item.itemName));
   const focused = document.activeElement === button;
   button.hidden = !running;
   if (running) {
     setCancel(button, running);
+  } else {
+    // The label sizes the place style.css keeps for it while hidden.
+    button.textContent = actionLabel(item, "cancel");
   }
   if (focused && (button.hidden || button.disabled)) {
-    action?.focus();
+    (action.hidden ? fallback : action).focus();
   }
 }
 
@@ -568,6 +575,8 @@ function card(item: OptionalInstallItem): HTMLElement {
     cancel.className = "pill pill-outline card-cancel";
     cancel.hidden = true;
     cancel.addEventListener("click", () => cancelFrom(cancel));
+    // style.css keeps Cancel's place after the action, so the action never
+    // moves when Cancel comes or goes, and the DOM order is the one seen.
     actions.append(action, cancel);
   }
 
@@ -610,8 +619,9 @@ function paintCard(article: HTMLElement, item: OptionalInstallItem): void {
     paintAction(action, item, derived);
   }
   const cancel = article.querySelector<HTMLButtonElement>(".card-cancel");
-  if (cancel) {
-    paintCancel(cancel, item, action);
+  const details = article.querySelector<HTMLElement>(".card-details");
+  if (cancel && action && details) {
+    paintCancel(cancel, item, action, details);
   }
   updateCardProgress(article, item, cardStatus(item), true);
 }
@@ -1116,7 +1126,7 @@ function renderDetail(): void {
     paintAction(detailAction, item, derived);
     detailAction.onclick = () => void runAction(item, derived);
   }
-  paintCancel(detailCancel, item, derived ? detailAction : detailBack);
+  paintCancel(detailCancel, item, detailAction, detailBack);
 
   // The Status row already says the catalog state, so the line only appears
   // for work in progress or an outcome.

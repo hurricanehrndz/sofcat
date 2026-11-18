@@ -3,7 +3,17 @@
 // only in development and demo modes, and the production-bundle gate greps for
 // this marker.
 import type { AcceptedOperation, SofCatApi, OperationStatus } from "./api.ts";
-import { type MockItem, STORES, UNBRANDED, offline, progress, storeName, unbranded } from "./mock-stores.ts";
+import {
+  type MockItem,
+  STORES,
+  UNBRANDED,
+  offline,
+  progress,
+  serial,
+  slowList,
+  storeName,
+  unbranded,
+} from "./mock-stores.ts";
 import { isTerminalState } from "./state.ts";
 
 const MOCK_MARKER = "SOFCAT_VITE_MOCK_ONLY";
@@ -139,6 +149,8 @@ type Watched = {
   settle: () => void;
 };
 const watched = new Map<string, Watched>();
+// Under `?serial`, when the operation working last will have ended.
+let serialFreeAt = 0;
 
 function emit(status: OperationStatus): void {
   for (const handler of handlers) {
@@ -159,12 +171,20 @@ function watch(operationId: string): Promise<void> {
   acceptedOperations.delete(operationId);
   const { item, removing } = request;
   const events = sequence(item, removing);
-  const [lastDelay, lastPartial] = events[events.length - 1];
+  // `?serial`: like the service, one operation works at a time and the rest
+  // stay Queued (their first record) until the one before has ended.
+  const start = serial() ? Math.max(0, serialFreeAt - Date.now()) : 0;
+  const [lastEventDelay, lastPartial] = events[events.length - 1];
+  const lastDelay = lastEventDelay + start;
+  if (serial()) {
+    serialFreeAt = Date.now() + lastDelay;
+  }
 
   return new Promise((resolve, reject) => {
     const entry: Watched = { item, state: "", seq: 0, timers: [], settle: resolve };
     watched.set(operationId, entry);
-    for (const [delay, partial] of events) {
+    for (const [eventDelay, partial] of events) {
+      const delay = eventDelay === 0 ? 0 : eventDelay + start;
       entry.timers.push(
         setTimeout(() => {
           const status: OperationStatus = {
@@ -234,9 +254,13 @@ export const api: SofCatApi = {
   listOptionalInstalls: () =>
     offline()
       ? Promise.reject(new Error("mock service unavailable (remove ?offline to reconnect)"))
-      : new Promise((resolve) =>
-          setTimeout(() => resolve(items.map(({ mock: _mock, ...item }) => structuredClone(item))), 250),
-        ),
+      : new Promise((resolve) => {
+          // The list is taken when the request arrives, then answered after
+          // `?slowlist=` ms (default 250): the service queues it behind
+          // running installs, so a slow list must not hold a button forever.
+          const list = items.map(({ mock: _mock, ...item }) => structuredClone(item));
+          setTimeout(() => resolve(list), slowList());
+        }),
   installItem: (itemName, placement) => mutate(itemName, false, placement),
   removeItem: (itemName, placement) => mutate(itemName, true, placement),
   watchOperation: (operationId) => watch(operationId),

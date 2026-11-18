@@ -1114,43 +1114,78 @@ h2 {
 
 /*
  * Branding progress: button. A card's buttons take the same room idle and
- * busy, so the card never changes height as work starts or ends. In a column
- * card the action fills its row and Cancel takes room from it there; Details
- * has the row under it. In a single-line card the buttons keep a fixed
- * width, so whether they wrap under the text depends on the card's width,
- * never on the work.
+ * busy, so the card never changes height and the action never moves under
+ * the pointer as work starts or ends: a double click on Install cannot land
+ * on Cancel. Both orders follow the DOM: action, Cancel, Details. In a
+ * column card the action fills its row and Cancel and Details share the row
+ * under it. In a single-line card the buttons keep a fixed width, with
+ * Cancel's place kept after the action even while it is hidden, so whether
+ * they wrap under the text depends on the card's width, never on the work.
  */
+:root[data-progress="button"] {
+  /* The strip appearing must not narrow the grid by a scrollbar's width. */
+  scrollbar-gutter: stable;
+}
+
+/* Nor may Activity's spinner rewrap the nav and move the page down. */
+:root[data-progress="button"] #nav-busy[hidden] {
+  display: inline-block !important;
+  visibility: hidden;
+}
+
 :root[data-progress="button"] .card .card-actions {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0.5rem 0;
+  grid-template-columns: auto auto;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+:root[data-progress="button"] .card-action {
+  grid-row: 1;
+  grid-column: 1 / -1;
 }
 
 :root[data-progress="button"] .card-cancel {
-  grid-column: 2;
-  margin-left: 0.5rem;
+  grid-row: 2;
+  grid-column: 1;
   color: var(--muted);
 }
 
 :root[data-progress="button"] .card-details {
-  grid-column: 1 / -1;
-  justify-self: start;
+  grid-row: 2;
+  grid-column: 2;
 }
 
 @container (min-width: 30rem) {
   :root[data-progress="button"] .card .card-actions {
-    flex: 0 0 22rem;
+    flex: 0 0 24rem;
     grid-template-columns: minmax(0, 1fr) auto auto;
   }
 
+  :root[data-progress="button"] .card-action {
+    grid-column: 1;
+  }
+
+  :root[data-progress="button"] .card-cancel {
+    grid-row: 1;
+    grid-column: 2;
+  }
+
   :root[data-progress="button"] .card-details {
+    grid-row: 1;
     grid-column: 3;
-    margin-left: 0.5rem;
+  }
+
+  /* Cancel's place is kept, unseen and out of reach, while it is hidden. */
+  :root[data-progress="button"] .card-cancel[hidden] {
+    display: inline-block !important;
+    visibility: hidden;
   }
 }
 
-/* The detail page's action keeps its width as it turns into a bar; Cancel
-   has room kept beside it, so the head does not rewrap. */
+/* The detail page's Cancel sits before the action, its place kept while it
+   is hidden, so the action keeps its width and place as it turns into a bar
+   and as Cancel comes and goes. */
 .detail-actions {
   display: contents;
 }
@@ -1159,7 +1194,11 @@ h2 {
   display: flex;
   flex: 0 1 auto;
   gap: 0.5rem;
-  min-width: min(100%, 17rem);
+}
+
+:root[data-progress="button"] .detail-actions:has(#detail-action:not([hidden])) #detail-cancel[hidden] {
+  display: inline-block !important;
+  visibility: hidden;
 }
 
 :root[data-progress="button"] #detail-action {

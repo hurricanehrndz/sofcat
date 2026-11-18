@@ -39,6 +39,17 @@ export function offline(): boolean {
   return params().has("offline");
 }
 
+/** serial is `?serial`: operations work one at a time, the rest queued, as on the service. */
+export function serial(): boolean {
+  return params().has("serial");
+}
+
+/** slowList is `?slowlist=`: how many ms the item list takes to answer, 250 by default. */
+export function slowList(): number {
+  const ms = Number(params().get("slowlist"));
+  return Number.isFinite(ms) && ms > 0 ? ms : 250;
+}
+
 /** progress is `?progress=`: the branding progress to serve, "" for the store's own. */
 export function progress(): string {
   return params().get("progress") ?? "";

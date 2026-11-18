@@ -404,15 +404,26 @@ button` the bar moves into the busy item's own buttons (`actionProgress` in
 work is for, read "Waiting…" with a spinner while the latest record is
 `Requested` or `Queued` (or the request is unanswered), then the phase over a
 bar filled to the percentage only when the record carries one and
-indeterminate otherwise. Only `Succeeded` fills it; any other end drops it,
-and the button reads its action until the list after the end arrives. The
+indeterminate otherwise. The item is freed exactly as under `strip`: when the
+list fetched after the operation's end arrives (or fails). The service queues
+that list behind running installs, so the wait can be long; meanwhile only a
+`Succeeded` button shows a full bar, and a `Failed`, `Canceled` or `Deferred`
+one shows its action again, still `aria-disabled`, with no bar, spinner or
+`aria-busy`. The
 accessible name stays the busy label with no percentage, `aria-busy` is set,
-and a visually hidden `#announcer` says each new phase once per operation. A
-Cancel beside the action on the card and the detail page follows the strip's
-rules below, and so do the status lines: running work is on the button, so
-they keep only outcomes and a refused cancel's reason. The strip shows only
-while two or more operations run, as a count ("Installing 1 of 3", the place
-`stripView` picks), and is a disclosure button (`aria-expanded`) for a list
+and a visually hidden `#announcer` says each new phase once per operation. An
+item's own Cancel (`itemCancel`) on the card and the detail page follows the
+strip's rules below. Its place is kept while it is hidden, so the action
+never moves under the pointer and a double click on Install cannot land on
+it: on the detail page it sits before the action, on a single-line card
+after it, and on a column card on the row under it, beside Details. The
+status lines keep only outcomes and a refused cancel's reason, since running
+work is on the button. The root reserves the scrollbar's gutter and the
+Activity tab its spinner's width, so neither the strip nor the start of work
+moves or narrows the page. The strip shows only while two or more operations run, as a count
+("Installing 1 of 3", with the item's own installing or removing label and
+the place `stripView` picks; "Waiting 1 of 3" until the service starts on
+any), and is a disclosure button (`aria-expanded`) for a list
 above it: a row per running operation, the working one first, with its state
 and a Cancel. Escape or a click outside closes the list and returns focus to
 the strip when nothing else took it. Cards whose item is unchanged are kept

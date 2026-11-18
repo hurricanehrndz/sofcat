@@ -54,6 +54,7 @@ import {
   stripView,
   actionProgress,
   announcement,
+  itemCancel,
   queueView,
   tabItems,
   tabs,
@@ -820,6 +821,41 @@ test("only a success reads full; a failed, canceled or errored operation shows n
     const ended = actionProgress(chrome, INSTALL, INSTALL, running(states, outcome));
     assert.deepEqual(ended, { label: "Install", phase: "ended" }, states.join(" "));
   }
+});
+
+test("in both modes an ended item stays busy until the list after its end; only the button's look differs", () => {
+  // The service queues the list behind running installs, so this can last a
+  // while. The release is main's rule in both modes: an ended operation is
+  // released only by the refresh that follows it (endedOperations).
+  const active = trackOperation(new Map(), "op", "Chrome");
+  for (const [state, phase, label] of [
+    ["Succeeded", "done", "Installing…"],
+    ["Failed", "ended", "Install"],
+    ["Canceled", "ended", "Install"],
+    ["Deferred", "ended", "Install"],
+  ]) {
+    const operation = { operationId: "op", item: chrome, ...running(["Downloading", state], "terminal") };
+    const operations = new Map([["op", operation]]);
+    const busy = busyAction("Chrome", new Map(), active, operations);
+    assert.equal(busy, INSTALL, state);
+    assert.deepEqual(endedOperations(active, operations), ["op"], state);
+    // While held, the strip-mode label stays the busy one, as on main; the
+    // button-mode look never implies work still going after a non-success.
+    assert.equal(actionText(chrome, INSTALL, busy), "Installing…", state);
+    const shown = actionProgress(chrome, INSTALL, busy, operation);
+    assert.equal(shown.phase, phase, state);
+    assert.equal(shown.label, label, state);
+    assert.equal(busyAction("Chrome", new Map(), releaseOperation(active, "op"), operations), undefined, state);
+  }
+});
+
+test("an item's own Cancel shows only under button, while a non-cancel operation runs", () => {
+  const op = { outcome: "active", action: INSTALL, records: [] };
+  assert.equal(itemCancel("button", op), op);
+  assert.equal(itemCancel("strip", op), undefined);
+  assert.equal(itemCancel("button", { ...op, outcome: "terminal" }), undefined);
+  assert.equal(itemCancel("button", { ...op, action: { kind: "cancel", label: "Cancel", method: "RemoveItem" } }), undefined);
+  assert.equal(itemCancel("button", undefined), undefined);
 });
 
 test("an action on the whole item carries its progress onto the placement rows that do the same", () => {

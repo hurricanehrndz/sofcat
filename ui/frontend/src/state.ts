@@ -862,8 +862,10 @@ export function actionProgress(
   }
   const latest = operation.records.at(-1);
   if (operation.outcome !== "active") {
-    // Only a success reads full; a failed, canceled or deferred operation
-    // must not look finished.
+    // The item stays busy until the list after the end arrives, as under
+    // strip, which on a busy service can take a while. Meanwhile only a
+    // success reads full; a failed, canceled or deferred operation shows its
+    // action again, with no bar or spinner that says work is still going.
     return operation.outcome === "terminal" && latest?.state === "Succeeded"
       ? { label: actionText(item, action, busy, row), phase: "done", percent: 100 }
       : { label: action.label, phase: "ended" };
@@ -1168,6 +1170,22 @@ const CANCELABLE_STATES = new Set([REQUESTED_STATE, "Queued", "Downloading"]);
 /** canCancel is whether an operation whose latest record has this state can still be canceled. */
 export function canCancel(state: string): boolean {
   return CANCELABLE_STATES.has(state.trim());
+}
+
+/**
+ * itemCancel is the operation an item's own Cancel, beside its action, is
+ * for: under branding progress: button it shows while the item's latest
+ * operation runs. Not for an operation that is itself a cancel, whose busy
+ * action already is the way out, and never under strip, where the strip
+ * has it.
+ */
+export function itemCancel(
+  progress: BrandingView["progress"],
+  operation: OperationView | undefined,
+): OperationView | undefined {
+  return progress === "button" && operation?.outcome === "active" && operation.action.kind !== "cancel"
+    ? operation
+    : undefined;
 }
 
 /** cancelTitle explains the strip's Cancel button: what it does, or why it is off. */

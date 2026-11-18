@@ -104,10 +104,12 @@
             <ul id="detail-placements" class="placements" hidden></ul>
             <p id="detail-description"></p>
           </div>
-          <!-- Cancel shows only under branding progress: button. -->
+          <!-- Cancel shows only under branding progress: button. It comes
+               before the action, its place kept, so the action stays where
+               it was clicked and a double click cannot land on Cancel. -->
           <span class="detail-actions">
-            <button type="button" id="detail-action" class="pill pill-primary pill-large"></button>
             <button type="button" id="detail-cancel" class="pill pill-outline" hidden></button>
+            <button type="button" id="detail-action" class="pill pill-primary pill-large"></button>
           </span>
         </div>
         <p class="card-status" aria-live="polite">
