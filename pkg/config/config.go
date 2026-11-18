@@ -137,6 +137,9 @@ type Branding struct {
 	// headings) and the tagline: small, medium (the default), large or x-large.
 	TitleSize   string `yaml:"title_size,omitempty"`
 	TaglineSize string `yaml:"tagline_size,omitempty"`
+	// ContentWidth is how much of the window the storefront uses: compact
+	// (the layout before the key), wide (the default) or full.
+	ContentWidth string `yaml:"content_width,omitempty"`
 	// Sections orders the storefront tabs built from catalog item sections.
 	Sections []string `yaml:"sections,omitempty"`
 }

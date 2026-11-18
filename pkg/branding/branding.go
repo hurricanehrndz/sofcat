@@ -60,11 +60,18 @@ type Branding struct {
 	// default, medium. TitleSize also scales the page headings.
 	TitleSize   string `json:"titleSize"`
 	TaglineSize string `json:"taglineSize"`
+	// ContentWidth is one of ContentWidths, or "" for the UI's default, wide.
+	ContentWidth string `json:"contentWidth"`
 }
 
 // FontSizes are the names title_size and tagline_size accept: a small fixed
 // scale rather than a number, so a typo cannot wreck the layout.
 var FontSizes = []string{"small", "medium", "large", "x-large"}
+
+// ContentWidths are the names content_width accepts: compact keeps the layout
+// from before the key (a 76rem column of fixed-size cards), wide caps the
+// column at 96rem and lets the cards fill the row, and full drops the cap.
+var ContentWidths = []string{"compact", "wide", "full"}
 
 // Resolve returns the validated branding; config.Get has already merged the
 // managed settings over the config.yaml block. The logo file is read on every
@@ -97,6 +104,7 @@ func resolve(in config.Branding) Branding {
 	out.BackgroundText = oneOf("background_text", in.BackgroundText, "light", "dark")
 	out.TitleSize = oneOf("title_size", in.TitleSize, FontSizes...)
 	out.TaglineSize = oneOf("tagline_size", in.TaglineSize, FontSizes...)
+	out.ContentWidth = oneOf("content_width", in.ContentWidth, ContentWidths...)
 	return out
 }
 

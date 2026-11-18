@@ -120,6 +120,18 @@ test("the title and tagline sizes are a small named scale; anything else keeps t
   assert.equal(brandingView({ titleSize: "large" }).showBanner, false);
 });
 
+// style.css only has rules for these three names, and the root attribute is
+// set from this value, so anything else (no key, an older service, a typo
+// that reached a cached payload) must land on the default, wide.
+test("the content width is compact, wide or full; anything else is wide", () => {
+  for (const contentWidth of ["compact", "wide", "full"]) {
+    assert.equal(brandingView({ contentWidth }).contentWidth, contentWidth);
+  }
+  for (const contentWidth of [undefined, "", "narrow", "100%", 2, "constructor"]) {
+    assert.equal(brandingView({ contentWidth }).contentWidth, "wide", String(contentWidth));
+  }
+});
+
 test("the applies-to line lists the names in the order the service sent, after its label", () => {
   assert.equal(appliesToLine(item({ appliesTo: ["Claude Code", "Codex"] })), "Applies to: Claude Code, Codex");
   assert.equal(

@@ -806,6 +806,11 @@ const FONT_SCALES = new Map([
   ["x-large", 1.5],
 ]);
 
+// The content_width names: compact keeps the layout from before the key, wide
+// (the default) widens the column and lets the cards fill a sparse row, and
+// full drops the column's cap. style.css draws each from :root[data-content-width].
+const CONTENT_WIDTHS = new Set(["compact", "wide", "full"]);
+
 export function isHexColor(value: string): boolean {
   return /^#[0-9a-fA-F]{6}$/.test(value);
 }
@@ -867,6 +872,9 @@ export function brandingView(payload: unknown): BrandingView {
     listHeading: text(raw, "listHeading") || DEFAULT_LIST_HEADING,
     titleScale: FONT_SCALES.get(text(raw, "titleSize")) ?? 1,
     taglineScale: FONT_SCALES.get(text(raw, "taglineSize")) ?? 1,
+    contentWidth: CONTENT_WIDTHS.has(text(raw, "contentWidth"))
+      ? (text(raw, "contentWidth") as BrandingView["contentWidth"])
+      : "wide",
     sections: Array.isArray(raw.sections)
       ? raw.sections
           .filter((name): name is string => typeof name === "string" && name.trim() !== "")

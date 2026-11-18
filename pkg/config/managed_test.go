@@ -26,14 +26,14 @@ func TestApplyManagedWinsPerKey(t *testing.T) {
 		"catalogs": []any{"mdm"},
 		"debug":    uint64(0), // REG_DWORD 0
 		"verbose":  true,
-		"branding": map[string]any{"title": "MDM title", "sections": []string{"MDM", "Other"}, "title_size": "large"},
+		"branding": map[string]any{"title": "MDM title", "sections": []string{"MDM", "Other"}, "title_size": "large", "content_width": "compact"},
 	}, warn)
 	want := Configuration{
 		URL:      "https://mdm.example/",
 		Manifest: "file_manifest",
 		Catalogs: []string{"mdm"},
 		Verbose:  true,
-		Branding: Branding{Title: "MDM title", Tagline: "File tagline", Sections: []string{"MDM", "Other"}, TitleSize: "large"},
+		Branding: Branding{Title: "MDM title", Tagline: "File tagline", Sections: []string{"MDM", "Other"}, TitleSize: "large", ContentWidth: "compact"},
 	}
 	if !reflect.DeepEqual(cfg, want) {
 		t.Fatalf("got  %+v\nwant %+v", cfg, want)
@@ -97,7 +97,7 @@ func TestParseManagedPlist(t *testing.T) {
 	<key>catalogs</key><array><string>production</string></array>
 	<key>tls_auth</key><true/>
 	<key>verbose</key><integer>1</integer>
-	<key>branding</key><dict><key>accent</key><string>#0b6e4f</string><key>tagline_size</key><string>small</string></dict>
+	<key>branding</key><dict><key>accent</key><string>#0b6e4f</string><key>tagline_size</key><string>small</string><key>content_width</key><string>full</string></dict>
 </dict>
 </plist>`)
 	managed, err := parseManagedPlist(data)
@@ -106,7 +106,7 @@ func TestParseManagedPlist(t *testing.T) {
 	}
 	var cfg Configuration
 	applyManaged(&cfg, managed, func(string) {})
-	want := Configuration{URL: "https://mdm.example/", Catalogs: []string{"production"}, TLSAuth: true, Verbose: true, Branding: Branding{Accent: "#0b6e4f", TaglineSize: "small"}}
+	want := Configuration{URL: "https://mdm.example/", Catalogs: []string{"production"}, TLSAuth: true, Verbose: true, Branding: Branding{Accent: "#0b6e4f", TaglineSize: "small", ContentWidth: "full"}}
 	if !reflect.DeepEqual(cfg, want) {
 		t.Fatalf("got %+v, want %+v", cfg, want)
 	}

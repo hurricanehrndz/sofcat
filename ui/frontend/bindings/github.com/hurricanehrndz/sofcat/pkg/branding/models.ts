@@ -43,6 +43,11 @@ export class Branding {
     "titleSize": string;
     "taglineSize": string;
 
+    /**
+     * ContentWidth is one of ContentWidths, or "" for the UI's default, wide.
+     */
+    "contentWidth": string;
+
     /** Creates a new Branding instance. */
     constructor($$source: Partial<Branding> = {}) {
         if (!("title" in $$source)) {
@@ -83,6 +88,9 @@ export class Branding {
         }
         if (!("taglineSize" in $$source)) {
             this["taglineSize"] = "";
+        }
+        if (!("contentWidth" in $$source)) {
+            this["contentWidth"] = "";
         }
 
         Object.assign(this, $$source);

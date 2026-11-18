@@ -344,6 +344,7 @@ export const STORES: Record<StoreName, MockStore> = {
       listHeading: "Apps for Acme",
       titleSize: "",
       taglineSize: "",
+      contentWidth: "",
       sections: ["Productivity", "Developer tools", "Utilities"],
     },
   },
@@ -363,6 +364,7 @@ export const STORES: Record<StoreName, MockStore> = {
       listHeading: "Skills for Acme teams",
       titleSize: "",
       taglineSize: "",
+      contentWidth: "",
       sections: ["Skills", "Plugins"],
     },
   },
@@ -382,5 +384,6 @@ export const UNBRANDED: Branding = {
   listHeading: "",
   titleSize: "",
   taglineSize: "",
+  contentWidth: "",
   sections: [],
 };

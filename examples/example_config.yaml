@@ -33,6 +33,7 @@ app_data_path: c:/cpe/sofcat/cache
 #   list_heading: Software for your team              # replaces "Available software"
 #   title_size: large                                 # banner title and page headings: small, medium (default), large or x-large
 #   tagline_size: medium                              # banner tagline: the same sizes
+#   content_width: wide                               # compact (the layout before this key), wide (default) or full
 #   sections:                                         # storefront tab order; unlisted sections follow alphabetically
 #     - Apps
 #     - Branding
