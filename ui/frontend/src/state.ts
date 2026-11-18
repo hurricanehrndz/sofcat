@@ -1067,6 +1067,22 @@ export function canCancel(state: string): boolean {
   return CANCELABLE_STATES.has(state.trim());
 }
 
+/**
+ * itemCancel is the operation the open item's own Cancel, beside its action,
+ * is for: under branding item_view dialog the modal dialog puts the strip's
+ * Cancel out of reach, so it shows while the item's latest operation runs.
+ * Not for an operation that is itself a cancel, whose busy action already is
+ * the way out, and never on the detail page, where the strip has it.
+ */
+export function itemCancel(
+  itemView: BrandingView["itemView"],
+  operation: OperationView | undefined,
+): OperationView | undefined {
+  return itemView === "dialog" && operation?.outcome === "active" && operation.action.kind !== "cancel"
+    ? operation
+    : undefined;
+}
+
 /** cancelTitle explains the strip's Cancel button: what it does, or why it is off. */
 export function cancelTitle(state: string, pending = false): string {
   if (pending) {

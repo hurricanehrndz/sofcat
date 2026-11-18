@@ -40,6 +40,7 @@ import {
   localErrorState,
   localRecord,
   monogram,
+  itemCancel,
   morphFrom,
   myItems,
   needsAttention,
@@ -131,6 +132,7 @@ const detailContent = need<HTMLDivElement>("#detail-content");
 const dialog = need<HTMLDialogElement>("#item-dialog");
 const dialogBody = need<HTMLDivElement>("#item-dialog .dialog-body");
 const detailClose = need<HTMLButtonElement>("#detail-close");
+const detailCancel = need<HTMLButtonElement>("#detail-cancel");
 const strip = need<HTMLElement>("#operation-strip");
 const stripGlyph = need<HTMLSpanElement>("#strip-glyph");
 const stripBar = need<HTMLProgressElement>("#strip-progress");
@@ -174,6 +176,53 @@ function busyOf(itemName: string): ItemAction | undefined {
  */
 function markBusy(button: HTMLButtonElement, busy: ItemAction | undefined): void {
   button.setAttribute("aria-disabled", String(busy !== undefined));
+}
+
+/**
+ * setCancel sets up a Cancel button for an operation: a real disabled button
+ * while the cancel request is out or once the installer has started, its
+ * title saying why. The strip and the dialog's own Cancel share it.
+ */
+function setCancel(button: HTMLButtonElement, operation: OperationView): void {
+  const latest = operation.records.at(-1)?.state ?? "";
+  const pending = Boolean(operation.cancelPending);
+  button.disabled = pending || !canCancel(latest);
+  button.title = cancelTitle(latest, pending);
+  const what = operation.action.method === "RemoveItem" ? "removal" : "install";
+  button.textContent = actionLabel(operation.item, "cancel");
+  button.setAttribute("aria-label", `${button.textContent} ${what} of ${operation.item.displayName}`);
+  button.dataset.operationId = operation.operationId;
+}
+
+/**
+ * paintCancel shows the open item's own Cancel beside its action while it
+ * has one (itemCancel). A Cancel that goes off or away while it has focus
+ * hands it to the action beside it, or to fallback when the item shows no
+ * action, not to the dialog or the page.
+ */
+function paintCancel(
+  button: HTMLButtonElement,
+  item: OptionalInstallItem,
+  action: HTMLElement,
+  fallback: HTMLElement,
+): void {
+  const running = itemCancel(branding.itemView, latestOperation(item.itemName));
+  const focused = document.activeElement === button;
+  button.hidden = !running;
+  if (running) {
+    setCancel(button, running);
+  }
+  if (focused && (button.hidden || button.disabled)) {
+    (action.hidden ? fallback : action).focus();
+  }
+}
+
+/** cancelFrom cancels the operation a Cancel button was set up for, while it runs. */
+function cancelFrom(button: HTMLButtonElement): void {
+  const operation = operations.get(button.dataset.operationId ?? "");
+  if (operation && operation.outcome === "active") {
+    void cancelOperation(operation);
+  }
 }
 
 const brandBanner = need<HTMLElement>("#banner");
@@ -440,7 +489,7 @@ function card(item: OptionalInstallItem): HTMLElement {
     open.className = "card-open";
     open.setAttribute("aria-haspopup", "dialog");
     open.textContent = item.displayName;
-    open.addEventListener("click", () => openDetail(item));
+    open.addEventListener("click", (event) => openDetail(item, event.detail === 0));
     name.append(open);
   } else {
     name.textContent = item.displayName;
@@ -510,7 +559,7 @@ function card(item: OptionalInstallItem): HTMLElement {
   article.addEventListener("click", (event) => {
     const selecting = !(document.getSelection()?.isCollapsed ?? true);
     if (opensDetails(event.target instanceof Element ? event.target : null, selecting)) {
-      openDetail(item);
+      openDetail(item, false);
     }
   });
   updateCardProgress(article, item, cardStatus(item), true);
@@ -580,6 +629,7 @@ function renderCardFor(itemName: string): void {
   }
   if (item && detailItemName === itemName) {
     updateCardProgress(detailContent, item, "");
+    paintCancel(detailCancel, item, detailAction, detailClose);
   }
 }
 
@@ -662,14 +712,7 @@ function renderStrip(): void {
   stripBar.setAttribute("aria-label", `${shown.progress.label} ${item.displayName}`);
   // Cancel stays visible, but is a real disabled button once the installer has
   // started; its title says why.
-  const latest = shown.operation.records.at(-1)?.state ?? "";
-  const pending = Boolean(shown.operation.cancelPending);
-  stripCancel.disabled = pending || !canCancel(latest);
-  stripCancel.title = cancelTitle(latest, pending);
-  const what = shown.operation.action.method === "RemoveItem" ? "removal" : "install";
-  stripCancel.textContent = actionLabel(item, "cancel");
-  stripCancel.setAttribute("aria-label", `${stripCancel.textContent} ${what} of ${item.displayName}`);
-  stripCancel.dataset.operationId = shown.operation.operationId;
+  setCancel(stripCancel, shown.operation);
 }
 
 function renderActivity(): void {
@@ -775,6 +818,7 @@ async function runAction(item: OptionalInstallItem, action: ItemAction): Promise
  */
 async function cancelOperation(operation: OperationView): Promise<void> {
   operation.cancelPending = true;
+  renderCardFor(operation.item.itemName);
   renderStrip();
   try {
     await api.cancelOperation(operation.operationId);
@@ -875,6 +919,7 @@ function renderDetail(): void {
   // The Status row already says the catalog state, so the line only appears
   // for work in progress or an outcome.
   updateCardProgress(detailContent, item, "");
+  paintCancel(detailCancel, item, detailAction, detailClose);
 }
 
 /**
@@ -933,10 +978,14 @@ function setHomeHidden(hidden: boolean): void {
   viewHome.hidden = hidden;
 }
 
-/** openDetail shows an item: its detail page, or its dialog for branding item_view dialog. */
-function openDetail(item: OptionalInstallItem): void {
+/**
+ * openDetail shows an item: its detail page, or its dialog for branding
+ * item_view dialog. focusVisible false (a pointer opened it) opens the dialog
+ * without a focus ring on its close button; the page keeps its own.
+ */
+function openDetail(item: OptionalInstallItem, focusVisible = true): void {
   if (branding.itemView === "dialog") {
-    openDialog(item);
+    openDialog(item, focusVisible);
     return;
   }
   detailItemName = item.itemName;
@@ -956,8 +1005,9 @@ function openDetail(item: OptionalInstallItem): void {
  * by a refresh or hidden by the filters, focus goes to the search field at the
  * top of the list instead.
  */
-function focusCard(itemName: string): void {
-  (cardOf(itemName)?.querySelector<HTMLButtonElement>(`.${openControl(branding.itemView)}`) ?? searchInput).focus();
+function focusCard(itemName: string, focusVisible = true): void {
+  const control = cardOf(itemName)?.querySelector<HTMLButtonElement>(`.${openControl(branding.itemView)}`);
+  focusQuietly(control ?? searchInput, focusVisible);
 }
 
 /** closeDetail closes the open item: back to the list from its page, or its dialog. */
@@ -992,8 +1042,8 @@ function morph(itemName: string, closing: boolean): Animation | null {
   if (!card || reducedMotion.matches || typeof dialog.animate !== "function") {
     return null;
   }
-  // The strip covers the bottom of the window outside the dialog, and is
-  // back there by the time a closing dialog reaches the card.
+  // The strip covers the bottom of the window, so a card behind it is not
+  // on screen either.
   const covered = strip.hidden ? 0 : strip.offsetHeight;
   const viewport = {
     width: document.documentElement.clientWidth,
@@ -1011,36 +1061,97 @@ function morph(itemName: string, closing: boolean): Animation | null {
   });
 }
 
-function openDialog(item: OptionalInstallItem): void {
+function openDialog(item: OptionalInstallItem, focusVisible: boolean): void {
   if (dialog.open) {
     return;
   }
   detailItemName = item.itemName;
   dialogOpenings += 1;
   renderDetail();
-  // A modal dialog makes the rest of the page inert, so the strip (and its
-  // Cancel) moves into the dialog's foot while it is open; dialogClosed puts
-  // it back. It is the same element, so renderStrip runs it unchanged.
-  dialog.append(strip);
   dialog.showModal();
   dialog.scrollTop = 0;
-  detailClose.focus();
+  // showModal has already focused the close button, its first control, with
+  // the web view's own choice of ring. Opened by a pointer, it is focused
+  // again without one, which needs it to lose focus first.
+  if (!focusVisible && quietFocus) {
+    detailClose.blur();
+    focusQuietly(detailClose, false);
+  }
   opening = morph(item.itemName, false);
+  fadeBackdrop(false);
+}
+
+// Whether the web view takes focus({focusVisible}): one that does reads the
+// member, even on an element that cannot take focus.
+const quietFocus = ((): boolean => {
+  let read = false;
+  try {
+    document.createElement("button").focus({
+      get focusVisible() {
+        read = true;
+        return false;
+      },
+    });
+  } catch {
+    // An old web view: no options at all.
+  }
+  return read;
+})();
+
+/**
+ * focusQuietly focuses element, without a focus ring when focusVisible is
+ * false: after a pointer action the ring only says what the pointer already
+ * showed. A web view without the focusVisible option draws its own choice.
+ */
+function focusQuietly(element: HTMLElement, focusVisible: boolean): void {
+  element.focus(focusVisible || !quietFocus ? undefined : { focusVisible: false });
+}
+
+// The backdrop's fade, in or out, while it plays.
+let backdropFade: Animation | null = null;
+
+/**
+ * fadeBackdrop fades the dimmed backdrop in as the dialog opens, or out as it
+ * closes. A close while it is still fading in fades out from where it has got
+ * to; both hold their end, so the backdrop never shows at full dim again
+ * before the dialog closes. Reduced motion, or a web view that cannot animate
+ * a pseudo-element, gives no fade.
+ */
+function fadeBackdrop(closing: boolean): void {
+  if (reducedMotion.matches || typeof dialog.animate !== "function" || !("pseudoElement" in KeyframeEffect.prototype)) {
+    return;
+  }
+  // Where the fade-in has got to: its eased progress is the opacity now. A new
+  // fade out starts there at once, where reverse() would run on for a frame.
+  const from = closing ? (backdropFade?.effect?.getComputedTiming().progress ?? 1) : 0;
+  backdropFade?.cancel();
+  try {
+    backdropFade = dialog.animate(closing ? { opacity: [from, 0] } : { opacity: [0, 1] }, {
+      duration: closing ? 180 * from : 200,
+      easing: "ease-out",
+      fill: "both",
+      pseudoElement: "::backdrop",
+    });
+  } catch {
+    // A web view that animates pseudo-elements but not ::backdrop: no fade,
+    // and the dialog still opens and closes.
+    backdropFade = null;
+  }
 }
 
 /**
  * closeDialog shrinks the dialog back into its card, then closes it and
  * focuses the card (dialogClosed). Closed while it is still growing, it
  * plays that motion back from where it is: measuring it then would take the
- * scaled box for its size.
+ * scaled box for its size. focusVisible false (a pointer closed it) focuses
+ * the card without a focus ring.
  */
-function closeDialog(): void {
+function closeDialog(focusVisible = true): void {
   const itemName = detailItemName;
   if (!dialog.open || itemName === null || "closing" in dialog.dataset) {
     return;
   }
   const openingNow = dialogOpenings;
-  // The backdrop fades while the dialog shrinks (style.css).
   dialog.dataset.closing = "";
   let leaving: Animation | null = null;
   if (opening?.playState === "running" && cardOf(itemName) && !reducedMotion.matches) {
@@ -1056,10 +1167,12 @@ function closeDialog(): void {
       return;
     }
     dialog.close();
-    dialogClosed();
+    dialogClosed(focusVisible);
   };
   if (leaving) {
     leaving.finished.then(finish, finish);
+    // The backdrop fades while the dialog shrinks.
+    fadeBackdrop(true);
   } else {
     finish();
   }
@@ -1071,19 +1184,20 @@ function closeDialog(): void {
  * second Escape without a click between them closes a dialog whatever its
  * cancel handler says).
  */
-function dialogClosed(): void {
+function dialogClosed(focusVisible = true): void {
   const itemName = detailItemName;
   if (dialog.open || itemName === null) {
     return;
   }
   detailItemName = null;
   delete dialog.dataset.closing;
-  dialog.after(strip);
   opening = null;
+  backdropFade?.cancel();
+  backdropFade = null;
   for (const animation of dialog.getAnimations()) {
     animation.cancel();
   }
-  focusCard(itemName);
+  focusCard(itemName, focusVisible);
 }
 
 async function refresh(): Promise<void> {
@@ -1132,12 +1246,8 @@ function showView(next: View, tab?: string): void {
   }
 }
 
-stripCancel.addEventListener("click", () => {
-  const operation = operations.get(stripCancel.dataset.operationId ?? "");
-  if (operation && operation.outcome === "active") {
-    void cancelOperation(operation);
-  }
-});
+stripCancel.addEventListener("click", () => cancelFrom(stripCancel));
+detailCancel.addEventListener("click", () => cancelFrom(detailCancel));
 brandLink.addEventListener("click", () => {
   // The service validated the URL; check again so nothing but http(s) ever
   // leaves the WebView, and open it in the system browser, never in here.
@@ -1157,17 +1267,17 @@ retryButton.addEventListener("click", () => {
 navMine.addEventListener("click", () => showView("mine"));
 navActivity.addEventListener("click", () => showView("activity"));
 detailBack.addEventListener("click", closeDetail);
-detailClose.addEventListener("click", closeDetail);
-// Escape asks the dialog to close, and closeDetail does it with its motion.
+detailClose.addEventListener("click", (event) => closeDialog(event.detail === 0));
+// Escape asks the dialog to close, and closeDialog does it with its motion.
 // When the web view will not let the dialog stay open (the cancel event is
 // not cancelable), the close event below does the rest.
 dialog.addEventListener("cancel", (event) => {
   if (event.cancelable) {
     event.preventDefault();
-    closeDetail();
+    closeDialog();
   }
 });
-dialog.addEventListener("close", dialogClosed);
+dialog.addEventListener("close", () => dialogClosed());
 // A click on the backdrop lands on the dialog element itself, outside its
 // box. Pressing inside and releasing outside, as at the end of selecting the
 // description's text, is not one.
@@ -1184,7 +1294,7 @@ dialog.addEventListener("pointerdown", (event) => {
 });
 dialog.addEventListener("click", (event) => {
   if (pressedOutside && outsideDialog(event)) {
-    closeDetail();
+    closeDialog(false);
   }
   pressedOutside = false;
 });

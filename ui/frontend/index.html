@@ -107,7 +107,15 @@
               <ul id="detail-placements" class="placements" hidden></ul>
               <p id="detail-description"></p>
             </div>
-            <button type="button" id="detail-action" class="pill pill-primary pill-large"></button>
+            <!-- The item's action and, in the dialog only, its own Cancel
+                 while an operation on it runs: the modal dialog puts the
+                 strip's out of reach. Cancel comes first, so the action
+                 stays where it was clicked and a double click cannot land
+                 on Cancel. -->
+            <span class="detail-actions">
+              <button type="button" id="detail-cancel" class="pill pill-outline" hidden></button>
+              <button type="button" id="detail-action" class="pill pill-primary pill-large"></button>
+            </span>
           </div>
           <p class="card-status" aria-live="polite">
             <svg class="spinner" aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" hidden>

@@ -14,6 +14,7 @@ import {
   statusRecord,
   appliesToLine,
   itemPlacements,
+  itemCancel,
   morphFrom,
   openControl,
   opensDetails,
@@ -162,6 +163,29 @@ test("the item view is page or dialog; anything else is page", () => {
 test("the card's control that opens an item follows the item view", () => {
   assert.equal(openControl("page"), "card-details");
   assert.equal(openControl("dialog"), "card-open");
+});
+
+// The modal dialog makes the strip's Cancel unreachable, so the dialog shows
+// its own for the item's running operation; the detail page keeps main's
+// layout, where the strip has the only Cancel. A cancel's own busy button is
+// already the way out, and a finished operation has nothing to cancel.
+test("the item's own Cancel shows in dialog mode while its operation runs", () => {
+  const operation = (outcome, kind = "do") => ({
+    operationId: "op",
+    item: item({}),
+    action: { kind, label: "Install", method: "InstallItem" },
+    records: [],
+    outcome,
+  });
+  const running = operation("active");
+  assert.equal(itemCancel("dialog", running), running);
+  assert.equal(itemCancel("dialog", operation("active", "undo")).action.kind, "undo");
+  assert.equal(itemCancel("page", running), undefined, "the detail page");
+  assert.equal(itemCancel("dialog", operation("active", "cancel")), undefined, "a cancel");
+  for (const outcome of ["terminal", "error"]) {
+    assert.equal(itemCancel("dialog", operation(outcome)), undefined, outcome);
+  }
+  assert.equal(itemCancel("dialog", undefined), undefined, "no operation");
 });
 
 // The dialog grows out of its card only when the user can see the card; a
