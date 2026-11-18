@@ -152,6 +152,9 @@ type Branding struct {
 	// BannerAlign aligns the banner's content: left (the default), center or
 	// right.
 	BannerAlign string `yaml:"banner_align,omitempty"`
+	// BannerHeight is the banner's minimum height: small, medium (the
+	// default), large or x-large.
+	BannerHeight string `yaml:"banner_height,omitempty"`
 	// Sections orders the storefront tabs built from catalog item sections.
 	Sections []string `yaml:"sections,omitempty"`
 }

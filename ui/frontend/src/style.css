@@ -350,6 +350,52 @@ button:disabled {
   object-position: right;
 }
 
+/*
+ * banner_height (data-height on the banner) is a minimum: content that needs
+ * more room, a large title or a wrapped tagline, grows the banner, and the
+ * content stays in its middle. medium, the default, has no rule: the height
+ * from before the key, the content's own (7.5rem at least over an image).
+ * small trims the padding, the gaps and the logo for a slim strip; large
+ * and x-large hold the banner open, over the accent or an image alike.
+ */
+#banner[data-height="small"] {
+  min-height: 0;
+  row-gap: 0.5rem;
+  padding-block: 1rem;
+}
+
+#banner[data-height="small"] .banner-logo {
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0.25rem;
+  border-radius: 9px;
+}
+
+#banner[data-height="small"] .banner-title img {
+  max-height: calc(2.5rem * var(--title-scale, 1));
+}
+
+#banner[data-height="large"] {
+  min-height: 11rem;
+}
+
+#banner[data-height="x-large"] {
+  min-height: 16rem;
+}
+
+/*
+ * A centred banner stacks its logo, text and help button, so its content is
+ * often taller than large's minimum already; there large and x-large add
+ * padding as well, so each step stays taller than the one below.
+ */
+#banner[data-align="center"][data-height="large"] {
+  padding-block: 3rem;
+}
+
+#banner[data-align="center"][data-height="x-large"] {
+  padding-block: 4.5rem;
+}
+
 .app-bar {
   display: flex;
   flex-wrap: wrap;

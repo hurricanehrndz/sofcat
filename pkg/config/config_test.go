@@ -54,6 +54,7 @@ func TestGet(t *testing.T) {
 			AppBarBrand:     "mark",
 			BannerStyle:     "logo",
 			BannerAlign:     "center",
+			BannerHeight:    "x-large",
 		},
 		ConfigPath: "testdata/test_config.yaml",
 	}

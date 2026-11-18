@@ -51,6 +51,7 @@ func TestReadManagedFromRegistry(t *testing.T) {
 		branding.SetStringValue("content_width", "wide"),
 		branding.SetStringValue("filter_placement", "left"),
 		branding.SetStringValue("app_bar_brand", "none"),
+		branding.SetStringValue("banner_height", "x-large"),
 	} {
 		if set != nil {
 			t.Fatal(set)
@@ -67,7 +68,7 @@ func TestReadManagedFromRegistry(t *testing.T) {
 		Catalogs:      []string{"production", "testing"},
 		TLSAuth:       true,
 		AuthPass:      "file",
-		Branding:      Branding{Title: "Policy Title", Sections: []string{"Skills", "Plugins"}, TitleSize: "x-large", ContentWidth: "wide", FilterPlacement: "left", AppBarBrand: "none"},
+		Branding:      Branding{Title: "Policy Title", Sections: []string{"Skills", "Plugins"}, TitleSize: "x-large", ContentWidth: "wide", FilterPlacement: "left", AppBarBrand: "none", BannerHeight: "x-large"},
 	}
 	if !reflect.DeepEqual(cfg, want) {
 		t.Fatalf("got  %#v\nwant %#v", cfg, want)

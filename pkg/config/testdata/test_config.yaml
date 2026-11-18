@@ -27,3 +27,4 @@ branding:
   app_bar_brand: mark
   banner_style: logo
   banner_align: center
+  banner_height: x-large
