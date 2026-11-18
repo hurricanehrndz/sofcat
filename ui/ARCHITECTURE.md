@@ -500,9 +500,11 @@ every run, so a policy change applies from the next run without a restart:
    `app_bar_brand`, `banner_style`, `banner_align`, `banner_height`; `sections` is a
    REG_MULTI_SZ).
 2. The `branding:` block in `config.yaml`.
-3. The branding compiled into a rebranded build from its `branding.yaml`
-   (`pkg/config/branding_brand.go`, the `brand_branding` tag).
-4. Nothing, and the UI keeps its default look.
+3. Nothing, and the UI keeps its default look.
+
+A rebranded build may compile in a `branding.yaml`
+(`pkg/config/branding_brand.go`, the `brand_branding` tag). A field it sets
+comes before all three: neither policy nor `config.yaml` changes it.
 
 `help_url` and `help_label` are the released names of `link_url` and
 `link_label`. `pkg/config` folds them into the new names source by source

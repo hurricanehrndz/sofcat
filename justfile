@@ -29,8 +29,8 @@ icon_png := if path_exists(_brand_png) == "true" { _brand_png } else { "" }
 _brand_roots := if brand == "" { "" } else { brand / "write-roots.yaml" }
 write_roots := if path_exists(_brand_roots) == "true" { _brand_roots } else { "" }
 # A brand's branding.yaml (the keys of config.yaml's branding block) is
-# compiled into the service under the brand_branding tag, as the defaults
-# under config.yaml and managed settings.
+# compiled into the service under the brand_branding tag; the fields it sets win
+# over config.yaml and managed settings.
 _brand_branding := if brand == "" { "" } else { brand / "branding.yaml" }
 brand_branding := if path_exists(_brand_branding) == "true" { _brand_branding } else { "" }
 _svc_tags := trim_start_match((if write_roots == "" { "" } else { ",brand_roots" }) + (if brand_branding == "" { "" } else { ",brand_branding" }) + _zip_tag, ",")

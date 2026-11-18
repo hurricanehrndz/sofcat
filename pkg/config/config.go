@@ -205,16 +205,16 @@ func (b *Branding) fillFrom(def Branding) {
 	}
 }
 
-// brandDefaults is the branding compiled into a rebranded build, from the
-// brand's branding.yaml: the last source of each field, under config.yaml
-// and the managed settings. A variable so tests can supply one.
-var brandDefaults = sync.OnceValues(func() (Branding, error) {
-	return parseBrandDefaults(compiledBranding)
+// builtInBranding is the branding compiled into a rebranded build, from the
+// brand's branding.yaml. A field it sets is fixed: neither config.yaml nor
+// the managed settings change it. A variable so tests can supply one.
+var builtInBranding = sync.OnceValues(func() (Branding, error) {
+	return parseBuiltInBranding(compiledBranding)
 })
 
-// parseBrandDefaults decodes a brand's branding.yaml, the keys of
+// parseBuiltInBranding decodes a brand's branding.yaml, the keys of
 // config.yaml's branding block at the top level, rejecting unknown ones.
-func parseBrandDefaults(data []byte) (Branding, error) {
+func parseBuiltInBranding(data []byte) (Branding, error) {
 	var b Branding
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
@@ -372,16 +372,19 @@ func Refresh(cfg Configuration) Configuration {
 	return next
 }
 
-// resolve returns cfg, config.yaml as parsed, over the build's branding
-// defaults and under the managed settings, the command line and the defaults.
+// resolve returns cfg, config.yaml as parsed, under the managed settings,
+// the build's own branding, the command line and the defaults.
 func resolve(cfg Configuration, managed map[string]any, warn func(string)) Configuration {
 	cfg.Branding.foldLinkAliases()
-	defaults, err := brandDefaults()
+	applyManaged(&cfg, managed, warn)
+	// The build's branding wins field by field; the fields it leaves blank
+	// keep the managed or config.yaml value.
+	builtIn, err := builtInBranding()
 	if err != nil {
 		warn(fmt.Sprintf("compiled branding ignored: %v", err))
 	}
-	cfg.Branding.fillFrom(defaults)
-	applyManaged(&cfg, managed, warn)
+	builtIn.fillFrom(cfg.Branding)
+	cfg.Branding = builtIn
 
 	// If URLPackages wasn't provided, use the repo URL when available.
 	if cfg.URLPackages == "" && cfg.URL != "" {

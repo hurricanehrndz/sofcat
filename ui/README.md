@@ -90,9 +90,11 @@ comes from the first source that sets it:
    names are the `config.yaml` keys; the full key list is at
    <https://sofcat.app/configuration/#managed-settings>.
 2. The `branding:` block in `config.yaml` (see `examples/example_config.yaml`).
-3. The defaults a rebranded build compiled in from its `branding.yaml` (see
-   `examples/brand/README.md`). Stock SofCat has none.
-4. Nothing. The UI then looks exactly as it does unbranded.
+3. Nothing. The UI then looks exactly as it does unbranded.
+
+A rebranded build can compile in a `branding.yaml` (see
+`examples/brand/README.md`). A field it sets comes before all three, so
+neither policy nor `config.yaml` changes it. Stock SofCat has none.
 
 | Key (policy value and `config.yaml`) | Accepted |
 |---|---|
