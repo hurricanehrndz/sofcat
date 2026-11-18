@@ -28,7 +28,7 @@ export default defineConfig({
         },
         {
           label: "Guides",
-          items: ["guides/nupkg-items", "guides/required-software", "guides/conditions", "guides/osquery-inventory"],
+          items: ["guides/nupkg-items", "guides/required-software", "guides/conditions", "guides/ai-categories", "guides/osquery-inventory"],
         },
         {
           label: "Zip items",
