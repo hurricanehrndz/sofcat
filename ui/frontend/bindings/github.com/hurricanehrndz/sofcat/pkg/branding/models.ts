@@ -11,8 +11,22 @@ import { Create as $Create } from "@wailsio/runtime";
 export class Branding {
     "title": string;
     "tagline": string;
+
+    /**
+     * HelpURL and HelpLabel are branding link_url and link_label (or their
+     * old names, help_url and help_label). The protocol keeps the field names
+     * it shipped with, so a cached payload or an older UI still shows the
+     * button.
+     */
     "helpUrl": string;
     "helpLabel": string;
+
+    /**
+     * LinkPlacement and LinkPosition are one of LinkPlacements and
+     * LinkPositions, or "" for the UI's defaults, banner and auto.
+     */
+    "linkPlacement": string;
+    "linkPosition": string;
     "accent": string;
     "logoMime": string;
     "logoBase64": string;
@@ -83,6 +97,12 @@ export class Branding {
         if (!("helpLabel" in $$source)) {
             this["helpLabel"] = "";
         }
+        if (!("linkPlacement" in $$source)) {
+            this["linkPlacement"] = "";
+        }
+        if (!("linkPosition" in $$source)) {
+            this["linkPosition"] = "";
+        }
         if (!("accent" in $$source)) {
             this["accent"] = "";
         }
@@ -136,10 +156,10 @@ export class Branding {
      * Creates a new Branding instance from a string or object.
      */
     static createFrom($$source: any = {}): Branding {
-        const $$createField11_0 = $$createType0;
+        const $$createField13_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("sections" in $$parsedSource) {
-            $$parsedSource["sections"] = $$createField11_0($$parsedSource["sections"]);
+            $$parsedSource["sections"] = $$createField13_0($$parsedSource["sections"]);
         }
         return new Branding($$parsedSource as Partial<Branding>);
     }

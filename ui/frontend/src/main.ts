@@ -152,7 +152,8 @@ let localOperations = 0;
 
 const brandBanner = need<HTMLElement>("#banner");
 const bannerLogo = need<HTMLSpanElement>("#banner-logo");
-const bannerHelp = need<HTMLButtonElement>("#banner-help");
+const brandLink = need<HTMLButtonElement>("#brand-link");
+const appBarEnd = need<HTMLDivElement>("#app-bar-end");
 const productMark = need<HTMLSpanElement>("#product-mark");
 let branding: BrandingView = brandingView(null);
 
@@ -203,8 +204,26 @@ function applyBranding(next: BrandingView): void {
     bannerTitle.replaceChildren(wordmark);
   }
   need<HTMLParagraphElement>("#banner-tagline").textContent = next.tagline;
-  bannerHelp.hidden = !next.helpUrl;
-  bannerHelp.textContent = next.helpLabel;
+  brandLink.hidden = !next.helpUrl;
+  brandLink.textContent = next.helpLabel;
+  // One button, moved: last in the banner, or at the app bar's end before
+  // the connection status, so the tab order follows what the eye sees. Only
+  // a real move re-inserts it: re-inserting drops its focus.
+  const linkParent = next.linkPlacement === "app_bar" ? appBarEnd : brandBanner;
+  if (brandLink.parentElement !== linkParent) {
+    if (linkParent === appBarEnd) {
+      appBarEnd.prepend(brandLink);
+    } else {
+      brandBanner.append(brandLink);
+    }
+  }
+  // A corner keeps the DOM order: the button stays after the text for screen
+  // readers, and it is the banner's only stop in the tab order.
+  if (next.helpUrl && next.linkPlacement === "banner" && next.linkPosition !== "auto") {
+    brandBanner.dataset.linkPosition = next.linkPosition;
+  } else {
+    delete brandBanner.dataset.linkPosition;
+  }
   need<HTMLSpanElement>("#product-name").textContent = next.productName;
   // A logo banner's logo is a wordmark, too wide for the square mark.
   if (next.logoSrc && textStyle) {
@@ -889,7 +908,7 @@ stripCancel.addEventListener("click", () => {
     void cancelOperation(operation);
   }
 });
-bannerHelp.addEventListener("click", () => {
+brandLink.addEventListener("click", () => {
   // The service validated the URL; check again so nothing but http(s) ever
   // leaves the WebView, and open it in the system browser, never in here.
   const url = httpUrl(branding.helpUrl);

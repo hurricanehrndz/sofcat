@@ -22,7 +22,7 @@ func TestResolveValidatesText(t *testing.T) {
 	got := resolve(config.Branding{
 		Title:     "  Acme\r\nSoftware\tCenter  ",
 		Tagline:   strings.Repeat("é", maxTagline+5),
-		HelpLabel: " Get help ",
+		LinkLabel: " Get help ",
 	})
 	if got.Title != "AcmeSoftwareCenter" {
 		t.Errorf("title %q kept control characters", got.Title)
@@ -66,7 +66,7 @@ func TestResolveSections(t *testing.T) {
 
 // The help link is opened in the system browser, so anything but an absolute
 // http(s) URL (javascript:, file:, a bare path) must never reach the UI.
-func TestResolveHelpURL(t *testing.T) {
+func TestResolveLinkURL(t *testing.T) {
 	for value, want := range map[string]string{
 		"https://example.invalid/help": "https://example.invalid/help",
 		" HTTP://intranet/help ":       "http://intranet/help", //nolint:gocritic // mapKey: the whitespace is the input under test
@@ -74,9 +74,9 @@ func TestResolveHelpURL(t *testing.T) {
 		"file:///C:/Windows/notepad":   "",
 		"/help":                        "",
 		"https://":                     "",
-		"https://x/" + strings.Repeat("a", maxHelpURL): "",
+		"https://x/" + strings.Repeat("a", maxLinkURL): "",
 	} {
-		if got := resolve(config.Branding{HelpURL: value}).HelpURL; got != want {
+		if got := resolve(config.Branding{LinkURL: value}).HelpURL; got != want {
 			t.Errorf("help url %q resolved to %q, want %q", value, got, want)
 		}
 	}
@@ -275,6 +275,30 @@ func TestResolveBannerHeight(t *testing.T) {
 	} {
 		if got := resolve(config.Branding{BannerHeight: in}).BannerHeight; got != want {
 			t.Errorf("banner_height %q resolved to %q, want %q", in, got, want)
+		}
+	}
+}
+
+// link_placement is a closed set; anything else leaves the button in the
+// banner, where it was before the key.
+func TestResolveLinkPlacement(t *testing.T) {
+	for in, want := range map[string]string{
+		"banner": "banner", "App_Bar": "app_bar", "": "", "app-bar": "", "header": "",
+	} {
+		if got := resolve(config.Branding{LinkPlacement: in}).LinkPlacement; got != want {
+			t.Errorf("link_placement %q resolved to %q, want %q", in, got, want)
+		}
+	}
+}
+
+// link_position is a closed set too; a free value keeps the button where it
+// was before the key (auto).
+func TestResolveLinkPosition(t *testing.T) {
+	for in, want := range map[string]string{
+		"auto": "auto", "Top_Left": "top_left", "top_right": "top_right", "bottom_left": "bottom_left", "BOTTOM_RIGHT": "bottom_right", "": "", "top-right": "", "top": "", "center": "",
+	} {
+		if got := resolve(config.Branding{LinkPosition: in}).LinkPosition; got != want {
+			t.Errorf("link_position %q resolved to %q, want %q", in, got, want)
 		}
 	}
 }

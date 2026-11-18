@@ -50,8 +50,12 @@ func managedFields(c *Configuration) map[string]any {
 		"branding.logo":             &c.Branding.Logo,
 		"branding.background_image": &c.Branding.BackgroundImage,
 		"branding.background_text":  &c.Branding.BackgroundText,
-		"branding.help_url":         &c.Branding.HelpURL,
-		"branding.help_label":       &c.Branding.HelpLabel,
+		"branding.link_url":         &c.Branding.LinkURL,
+		"branding.link_label":       &c.Branding.LinkLabel,
+		"branding.link_placement":   &c.Branding.LinkPlacement,
+		"branding.link_position":    &c.Branding.LinkPosition,
+		"branding.help_url":         &c.Branding.LinkURL,
+		"branding.help_label":       &c.Branding.LinkLabel,
 		"branding.accent":           &c.Branding.Accent,
 		"branding.list_heading":     &c.Branding.ListHeading,
 		"branding.sections":         &c.Branding.Sections,
@@ -65,6 +69,10 @@ func managedFields(c *Configuration) map[string]any {
 		"branding.banner_height":    &c.Branding.BannerHeight,
 	}
 }
+
+// linkAliases are the released names of branding link_url and link_label;
+// managedFields points them at the new names' fields (see foldLinkAliases).
+var linkAliases = []string{"help_url", "help_label"}
 
 // applyManaged sets each managed value over cfg. A blank string or empty list
 // is unset and keeps config.yaml's value; a list replaces config.yaml's whole.
@@ -114,10 +122,24 @@ func applyManaged(cfg *Configuration, managed map[string]any, warn func(string))
 			warn(fmt.Sprintf("managed setting %s dropped: not a dictionary", name))
 			continue
 		}
-		for key, value := range block {
-			set("branding."+key, value)
+		for _, key := range aliasesFirst(block) {
+			set("branding."+key, block[key])
 		}
 	}
+}
+
+// aliasesFirst returns the branding block's keys with the old link names
+// first, so the new names win where policy sets both.
+func aliasesFirst(block map[string]any) []string {
+	keys := make([]string, 0, len(block))
+	for key := range block {
+		if slices.Contains(linkAliases, key) {
+			keys = append([]string{key}, keys...)
+		} else {
+			keys = append(keys, key)
+		}
+	}
+	return keys
 }
 
 // stringList accepts a list whose entries are all strings.

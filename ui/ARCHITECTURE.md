@@ -55,7 +55,7 @@ answer echoes the `id` with a `result` or an `error`:
 | --- | --- | --- |
 | `getServiceInfo` | none | `{version, protocolVersion: "2.0", apiVersion: 1, capabilities: [methods], busy, uptimeSeconds}` |
 | `listOptionalInstalls` | none | `{items: [OptionalInstallItem]}` (shape below) |
-| `getBranding` | none | `Branding`: `{title, tagline, helpUrl, helpLabel, accent, logoMime, logoBase64, backgroundMime, backgroundBase64, backgroundText, listHeading, titleSize, taglineSize, contentWidth, filterPlacement, appBarBrand, bannerStyle, bannerAlign, bannerHeight, sections?}` |
+| `getBranding` | none | `Branding`: `{title, tagline, helpUrl, helpLabel, linkPlacement, linkPosition, accent, logoMime, logoBase64, backgroundMime, backgroundBase64, backgroundText, listHeading, titleSize, taglineSize, contentWidth, filterPlacement, appBarBrand, bannerStyle, bannerAlign, bannerHeight, sections?}` |
 | `installItem` | `{itemName, placement?}` | `AcceptedOperation` |
 | `removeItem` | `{itemName, placement?}` | `AcceptedOperation` |
 | `cancelOperation` | `{operationId}` | `{canceled: true}` |
@@ -486,7 +486,8 @@ every run, so a policy change applies from the next run without a restart:
 1. Managed settings, for MDM and GPO: values under
    `HKLM\SOFTWARE\Policies\SofCat\branding` on Windows, or the `branding` dict of
    `/Library/Managed Preferences/<IDENTIFIER>.plist` on macOS. The names are the
-   `config.yaml` keys (`title`, `tagline`, `logo`, `help_url`, `help_label`,
+   `config.yaml` keys (`title`, `tagline`, `logo`, `link_url`, `link_label`,
+   `link_placement`, `link_position`, the old names `help_url` and `help_label`,
    `accent`, `background_image`, `background_text`, `list_heading`, `sections`,
    `title_size`, `tagline_size`, `content_width`, `filter_placement`,
    `app_bar_brand`, `banner_style`, `banner_align`, `banner_height`; `sections` is a
@@ -494,10 +495,19 @@ every run, so a policy change applies from the next run without a restart:
 2. The `branding:` block in `config.yaml`.
 3. Nothing, and the UI keeps its default look.
 
+`help_url` and `help_label` are the released names of `link_url` and
+`link_label`. `pkg/config` folds them into the new names source by source
+before the merge: within one source the new name wins, and across sources the
+policy wins as for any key, so a policy still written with `help_url`
+overrides a `config.yaml` that has moved to `link_url`. `getBranding` keeps
+the field names it shipped with, `helpUrl` and `helpLabel`, for the link: an
+older UI, and a branding payload a newer UI cached from an older service,
+still show the button, in the banner (no `linkPlacement` reads as `banner`).
+
 `pkg/branding` validates after the merge, so a bad policy value is dropped rather
 than replaced by the config value. Text is trimmed, stripped of control
-characters and capped (title 120, tagline 240, help label 60, list heading 120
-runes). The help
+characters and capped (title 120, tagline 240, link label 60, list heading 120
+runes). The link
 URL must be absolute http or https. The accent must match `#rrggbb`. The logo is
 read from its local path on every call, capped at 512 KiB, and kept only if its
 bytes sniff as PNG, JPEG or SVG. The background image is read the same way,
@@ -515,7 +525,13 @@ shows, and hidden only visually, so the h1 keeps the product name), as the logo
 in the title's place with the title as its alt text (`text` without a usable
 logo, and no logo in the app-bar mark or the window icon) and as `data-align` on
 the banner. `banner_height` must be `small`, `medium`, `large` or `x-large`; the UI
-sets it as `data-height` on the banner, and anything else is `medium`. A
+sets it as `data-height` on the banner, and anything else is `medium`.
+`link_placement` must be `banner` or `app_bar`, and `link_position` `auto`,
+`top_left`, `top_right`, `bottom_left` or `bottom_right`; anything else is the
+first. The UI moves the one link button to the app bar's end, before the
+connection status, for `app_bar`, where a link alone no longer shows the
+banner and `link_position` is ignored; for a corner of a banner with the link
+it sets `data-link-position` on the banner. A
 dropped field is logged at debug level and
 never fails the call.
 

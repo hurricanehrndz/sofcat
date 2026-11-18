@@ -97,7 +97,7 @@ func TestParseManagedPlist(t *testing.T) {
 	<key>catalogs</key><array><string>production</string></array>
 	<key>tls_auth</key><true/>
 	<key>verbose</key><integer>1</integer>
-	<key>branding</key><dict><key>accent</key><string>#0b6e4f</string><key>tagline_size</key><string>small</string><key>content_width</key><string>full</string><key>filter_placement</key><string>right</string><key>banner_align</key><string>right</string><key>banner_height</key><string>small</string></dict>
+	<key>branding</key><dict><key>accent</key><string>#0b6e4f</string><key>tagline_size</key><string>small</string><key>content_width</key><string>full</string><key>filter_placement</key><string>right</string><key>banner_align</key><string>right</string><key>banner_height</key><string>small</string><key>link_placement</key><string>app_bar</string><key>link_position</key><string>bottom_left</string></dict>
 </dict>
 </plist>`)
 	managed, err := parseManagedPlist(data)
@@ -106,7 +106,7 @@ func TestParseManagedPlist(t *testing.T) {
 	}
 	var cfg Configuration
 	applyManaged(&cfg, managed, func(string) {})
-	want := Configuration{URL: "https://mdm.example/", Catalogs: []string{"production"}, TLSAuth: true, Verbose: true, Branding: Branding{Accent: "#0b6e4f", TaglineSize: "small", ContentWidth: "full", FilterPlacement: "right", BannerAlign: "right", BannerHeight: "small"}}
+	want := Configuration{URL: "https://mdm.example/", Catalogs: []string{"production"}, TLSAuth: true, Verbose: true, Branding: Branding{Accent: "#0b6e4f", TaglineSize: "small", ContentWidth: "full", FilterPlacement: "right", BannerAlign: "right", BannerHeight: "small", LinkPlacement: "app_bar", LinkPosition: "bottom_left"}}
 	if !reflect.DeepEqual(cfg, want) {
 		t.Fatalf("got %+v, want %+v", cfg, want)
 	}
@@ -212,5 +212,34 @@ func TestRefreshWithoutGetKeepsConfiguration(t *testing.T) {
 	cfg := Configuration{URL: "https://hand.example/"}
 	if got := Refresh(cfg); !reflect.DeepEqual(got, cfg) {
 		t.Fatalf("got %+v", got)
+	}
+}
+
+// help_url and help_label still work as link_url and link_label. Within one
+// source the new name wins; across sources managed settings win as for any
+// key, whichever name they use, so a policy written with the old names keeps
+// overriding config.yaml after the file moves to the new ones.
+func TestLinkAliasesFollowSourcePrecedence(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		file    Branding
+		managed map[string]any
+		url     string
+		label   string
+	}{
+		{"old names in the file", Branding{HelpURL: "https://file/old", HelpLabel: "File old"}, nil, "https://file/old", "File old"},
+		{"new name wins in the file", Branding{HelpURL: "https://file/old", LinkURL: "https://file/new", HelpLabel: "File old"}, nil, "https://file/new", "File old"},
+		{"new name wins in policy", Branding{}, map[string]any{"help_url": "https://mdm/old", "link_url": "https://mdm/new", "help_label": "MDM old", "link_label": "MDM new"}, "https://mdm/new", "MDM new"},
+		{"old name in policy beats new name in the file", Branding{LinkURL: "https://file/new", LinkLabel: "File new"}, map[string]any{"help_url": "https://mdm/old"}, "https://mdm/old", "File new"},
+		{"blank new name in policy keeps its old one", Branding{LinkURL: "https://file/new"}, map[string]any{"help_url": "https://mdm/old", "link_url": " "}, "https://mdm/old", ""},
+	} {
+		var managed map[string]any
+		if tc.managed != nil {
+			managed = map[string]any{"branding": tc.managed}
+		}
+		got := resolve(Configuration{Branding: tc.file}, managed, func(w string) { t.Errorf("%s: warning %q", tc.name, w) }).Branding
+		if got.LinkURL != tc.url || got.LinkLabel != tc.label || got.HelpURL != "" || got.HelpLabel != "" {
+			t.Errorf("%s: got url %q label %q (help %q %q), want %q %q", tc.name, got.LinkURL, got.LinkLabel, got.HelpURL, got.HelpLabel, tc.url, tc.label)
+		}
 	}
 }
