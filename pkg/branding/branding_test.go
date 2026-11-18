@@ -247,12 +247,22 @@ func TestResolveBannerLayout(t *testing.T) {
 }
 
 // The example logo banners must pass the logo loader as they are: an SVG
-// under the size cap, with its raster embedded as a data URI.
+// under the size cap, with its raster embedded as a data URI. They carry no
+// name of their own: WKWebView reads an SVG's <title> or aria-label to screen
+// readers over the <img> alt text the UI sets from branding title.
 func TestResolveExampleLogoBanners(t *testing.T) {
 	for _, name := range []string{"sofcat-logo-banner-light.svg", "sofcat-logo-banner-dark.svg"} {
-		got := resolve(config.Branding{Logo: filepath.Join("..", "..", "examples", "branding", name)})
+		path := filepath.Join("..", "..", "examples", "branding", name)
+		got := resolve(config.Branding{Logo: path})
 		if got.LogoMime != "image/svg+xml" || got.LogoBase64 == "" {
 			t.Errorf("%s resolved to logo %q (%d base64 bytes)", name, got.LogoMime, len(got.LogoBase64))
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(data), "<title") || strings.Contains(string(data), "aria-label") {
+			t.Errorf("%s names itself; the UI's alt text must be its only name", name)
 		}
 	}
 }
