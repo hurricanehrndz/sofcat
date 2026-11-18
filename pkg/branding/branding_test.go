@@ -229,6 +229,18 @@ func TestResolveFilterPlacement(t *testing.T) {
 	}
 }
 
+// item_view is a closed set: an unknown value must leave the UI's default,
+// the detail page, rather than a mode the UI has no code for.
+func TestResolveItemView(t *testing.T) {
+	for in, want := range map[string]string{
+		"page": "page", "Dialog": "dialog", "DIALOG": "dialog", "": "", "modal": "", "sheet": "",
+	} {
+		if got := resolve(config.Branding{ItemView: in}).ItemView; got != want {
+			t.Errorf("item_view %q resolved to %q, want %q", in, got, want)
+		}
+	}
+}
+
 // The banner and app-bar keys are closed sets: an unknown value must leave the
 // UI's default rather than a layout the CSS has no rule for.
 func TestResolveBannerLayout(t *testing.T) {

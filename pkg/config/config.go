@@ -166,6 +166,9 @@ type Branding struct {
 	// BannerHeight is the banner's minimum height: small, medium (the
 	// default), large or x-large.
 	BannerHeight string `yaml:"banner_height,omitempty"`
+	// ItemView is how the storefront opens an item: page (the default, a
+	// detail page in the list's place) or dialog (a dialog over the list).
+	ItemView string `yaml:"item_view,omitempty"`
 	// Sections orders the storefront tabs built from catalog item sections.
 	Sections []string `yaml:"sections,omitempty"`
 }

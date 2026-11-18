@@ -82,6 +82,8 @@ type Branding struct {
 	// BannerHeight is one of BannerHeights, or "" for the UI's default,
 	// medium.
 	BannerHeight string `json:"bannerHeight"`
+	// ItemView is one of ItemViews, or "" for the UI's default, page.
+	ItemView string `json:"itemView"`
 }
 
 // FontSizes are the names title_size and tagline_size accept: a small fixed
@@ -114,6 +116,11 @@ var BannerAligns = []string{"left", "center", "right"}
 // BannerHeights are the names banner_height accepts, from a slim banner to a
 // tall one; each is a minimum, so content that needs more room still grows it.
 var BannerHeights = []string{"small", "medium", "large", "x-large"}
+
+// ItemViews are the names item_view accepts: page replaces the list with the
+// item's detail page, the layout from before the key, and dialog opens the
+// same details in a dialog over the list.
+var ItemViews = []string{"page", "dialog"}
 
 // LinkPlacements are the names link_placement accepts: the button in the
 // banner, laid out by banner_align, or at the app bar's end before the
@@ -164,6 +171,7 @@ func resolve(in config.Branding) Branding {
 	out.BannerHeight = oneOf("banner_height", in.BannerHeight, BannerHeights...)
 	out.LinkPlacement = oneOf("link_placement", in.LinkPlacement, LinkPlacements...)
 	out.LinkPosition = oneOf("link_position", in.LinkPosition, LinkPositions...)
+	out.ItemView = oneOf("item_view", in.ItemView, ItemViews...)
 	return out
 }
 

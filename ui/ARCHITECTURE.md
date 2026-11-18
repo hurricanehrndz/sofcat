@@ -55,7 +55,7 @@ answer echoes the `id` with a `result` or an `error`:
 | --- | --- | --- |
 | `getServiceInfo` | none | `{version, protocolVersion: "2.0", apiVersion: 1, capabilities: [methods], busy, uptimeSeconds}` |
 | `listOptionalInstalls` | none | `{items: [OptionalInstallItem]}` (shape below) |
-| `getBranding` | none | `Branding`: `{title, tagline, helpUrl, helpLabel, linkPlacement, linkPosition, accent, logoMime, logoBase64, backgroundMime, backgroundBase64, backgroundText, listHeading, titleSize, taglineSize, contentWidth, filterPlacement, appBarBrand, bannerStyle, bannerAlign, bannerHeight, sections?}` |
+| `getBranding` | none | `Branding`: `{title, tagline, helpUrl, helpLabel, linkPlacement, linkPosition, accent, logoMime, logoBase64, backgroundMime, backgroundBase64, backgroundText, listHeading, titleSize, taglineSize, contentWidth, filterPlacement, appBarBrand, bannerStyle, bannerAlign, bannerHeight, itemView, sections?}` |
 | `installItem` | `{itemName, placement?}` | `AcceptedOperation` |
 | `removeItem` | `{itemName, placement?}` | `AcceptedOperation` |
 | `cancelOperation` | `{operationId}` | `{canceled: true}` |
@@ -497,8 +497,8 @@ every run, so a policy change applies from the next run without a restart:
    `link_placement`, `link_position`, the old names `help_url` and `help_label`,
    `accent`, `background_image`, `background_text`, `list_heading`, `sections`,
    `title_size`, `tagline_size`, `content_width`, `filter_placement`,
-   `app_bar_brand`, `banner_style`, `banner_align`, `banner_height`; `sections` is a
-   REG_MULTI_SZ).
+   `app_bar_brand`, `banner_style`, `banner_align`, `banner_height`, `item_view`;
+   `sections` is a REG_MULTI_SZ).
 2. The `branding:` block in `config.yaml`.
 3. Nothing, and the UI keeps its default look.
 
@@ -538,7 +538,22 @@ sets it as `data-height` on the banner, and anything else is `medium`.
 first. The UI moves the one link button to the app bar's end, before the
 connection status, for `app_bar`, where a link alone no longer shows the
 banner and `link_position` is ignored; for a corner of a banner with the link
-it sets `data-link-position` on the banner. A
+it sets `data-link-position` on the banner. `item_view` must be `page` or
+`dialog`, and anything else is `page`. For `page` a card's Details button, or
+a click on the card, replaces the list with the item's detail page. For
+`dialog` the card has no Details button, its name is a button instead, and
+either opens the item in a modal `<dialog>` over the list. Both show the one
+`#detail-content` subtree, which `renderDetail` fills: `main.ts` mounts it on
+the detail page or in the dialog, and a change of mode closes an item open
+the old way first. The dialog grows out of its card with the Web Animations
+API and shrinks back into it; a close during the grow plays it back from
+where it is, and a card not wholly on screen, or reduced motion, gives no
+motion. Close, `Escape` or a click on the backdrop closes it and refocuses
+the card's name, or the search field once a refresh has dropped the card,
+which also closes the dialog. While it is open, refreshes and progress fill
+the same subtree in place, so focus stays inside it, and the operation strip
+moves into the dialog's foot, since the modal dialog makes the page under it
+inert, and back when it closes. A
 dropped field is logged at debug level and
 never fails the call.
 

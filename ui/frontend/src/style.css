@@ -184,7 +184,9 @@ button[aria-disabled="true"] {
  * and the operation strip ease in as they appear; nothing animates out, so a
  * page change never leaves two pages up or waits before taking focus. An
  * element replays its animation each time it goes from hidden to shown. The
- * reduced-motion rule at the end turns all of it off.
+ * one exception is the item dialog (item_view: dialog), which grows out of
+ * its card and shrinks back into it (main.ts), over its backdrop's fade. The
+ * reduced-motion rules at the end turn all of it off.
  */
 @keyframes rise-in {
   from {
@@ -850,6 +852,18 @@ h2 {
   margin: 0.25rem 0 0;
 }
 
+/* item_view dialog: the card's name is the button that opens its dialog, and
+   it reads as the heading it sits in. */
+.card-open {
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  font-weight: inherit;
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+
 .card p {
   margin: 0;
 }
@@ -1123,12 +1137,12 @@ h2 {
   font-size: 2.5rem;
 }
 
-#view-detail .card-status {
+#detail-content .card-status {
   margin: 1rem 0 0;
   font-size: 0.875rem;
 }
 
-#view-detail h3 {
+#detail-content h3 {
   margin: 2.25rem 0 0.875rem;
   padding-top: 1.25rem;
   border-top: 1px solid var(--line-soft);
@@ -1160,8 +1174,106 @@ h2 {
   font-size: 0.9375rem;
 }
 
+/*
+ * item_view dialog: the same details in a sheet over the dimmed list, never
+ * taller than the window, where it scrolls. main.ts grows it out of the
+ * item's card from the top left corner, so that is its origin. The rules
+ * under #item-dialog fit the page's layout to the narrower sheet.
+ */
+#item-dialog {
+  width: min(44rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  padding: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 24px 60px var(--shadow);
+  overflow: auto;
+  transform-origin: top left;
+}
+
+#item-dialog::backdrop {
+  background: rgb(0 0 0 / 40%);
+  animation: fade-in 200ms ease-out;
+  transition: opacity 180ms ease-out;
+}
+
+#item-dialog[data-closing]::backdrop {
+  opacity: 0;
+}
+
+.dialog-body {
+  padding: 0.75rem 1.5rem 1.5rem;
+  overflow-wrap: anywhere;
+}
+
+.dialog-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 -0.75rem 0.25rem 0;
+}
+
+.icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+}
+
+.icon-button:hover {
+  background: var(--line-soft);
+  color: var(--ink);
+}
+
+.icon-button svg {
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+}
+
+#item-dialog .detail-head {
+  gap: 1rem 1.25rem;
+}
+
+#item-dialog .detail-title {
+  flex: 1 1 14rem;
+}
+
+#item-dialog .detail-title h2 {
+  font-size: 1.5rem;
+}
+
+#item-dialog .glyph-large {
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 18px;
+  font-size: 1.625rem;
+}
+
+#item-dialog .placements,
+#item-dialog #detail-description,
+#item-dialog .info {
+  max-width: none;
+}
+
+#item-dialog .info {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+#item-dialog h3 {
+  margin-top: 1.5rem;
+}
+
 @media (max-width: 40rem) {
-  .info {
+  .info,
+  #item-dialog .info {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1184,5 +1296,11 @@ h2 {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  /* Its own rule: a web view without ::backdrop drops only this one. */
+  ::backdrop {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
   }
 }

@@ -325,8 +325,9 @@ func brandingSummary(b branding.Branding) (string, error) {
 		BannerStyle     string   `json:"bannerStyle"`
 		BannerAlign     string   `json:"bannerAlign"`
 		BannerHeight    string   `json:"bannerHeight"`
+		ItemView        string   `json:"itemView"`
 		Sections        []string `json:"sections,omitempty"`
-	}{b.Title, b.Tagline, b.HelpURL, b.HelpLabel, b.LinkPlacement, b.LinkPosition, b.Accent, b.LogoMime, len(logo), b.BackgroundMime, len(background), b.BackgroundText, b.ListHeading, b.TitleSize, b.TaglineSize, b.ContentWidth, b.FilterPlacement, b.AppBarBrand, b.BannerStyle, b.BannerAlign, b.BannerHeight, b.Sections})
+	}{b.Title, b.Tagline, b.HelpURL, b.HelpLabel, b.LinkPlacement, b.LinkPosition, b.Accent, b.LogoMime, len(logo), b.BackgroundMime, len(background), b.BackgroundText, b.ListHeading, b.TitleSize, b.TaglineSize, b.ContentWidth, b.FilterPlacement, b.AppBarBrand, b.BannerStyle, b.BannerAlign, b.BannerHeight, b.ItemView, b.Sections})
 	return string(line), err
 }
 
