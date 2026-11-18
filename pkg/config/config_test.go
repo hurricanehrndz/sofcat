@@ -51,6 +51,9 @@ func TestGet(t *testing.T) {
 			TaglineSize:     "x-large",
 			ContentWidth:    "full",
 			FilterPlacement: "left",
+			AppBarBrand:     "mark",
+			BannerStyle:     "logo",
+			BannerAlign:     "center",
 		},
 		ConfigPath: "testdata/test_config.yaml",
 	}

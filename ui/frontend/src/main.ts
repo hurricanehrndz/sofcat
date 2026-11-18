@@ -19,6 +19,7 @@ import {
   bannerMessage,
   connectionLabel,
   brandingView,
+  withoutLogo,
   canCancel,
   cancelTitle,
   cardProgress,
@@ -155,9 +156,9 @@ const bannerHelp = need<HTMLButtonElement>("#banner-help");
 const productMark = need<HTMLSpanElement>("#product-mark");
 let branding: BrandingView = brandingView(null);
 
-function logoImage(src: string): HTMLImageElement {
+function logoImage(src: string, alt = ""): HTMLImageElement {
   const img = document.createElement("img");
-  img.alt = "";
+  img.alt = alt;
   img.src = src;
   return img;
 }
@@ -170,8 +171,12 @@ function logoImage(src: string): HTMLImageElement {
 function applyBranding(next: BrandingView): void {
   branding = next;
   brandBanner.hidden = !next.showBanner;
-  bannerLogo.hidden = !next.logoSrc;
-  bannerLogo.replaceChildren(...(next.logoSrc ? [logoImage(next.logoSrc)] : []));
+  brandBanner.dataset.align = next.bannerAlign;
+  // A text banner shows the logo as a decorative tile beside the title; a
+  // logo banner shows it in the title's place, named by the title.
+  const textStyle = next.bannerStyle === "text";
+  bannerLogo.hidden = !textStyle || !next.logoSrc;
+  bannerLogo.replaceChildren(...(textStyle && next.logoSrc ? [logoImage(next.logoSrc)] : []));
   // A background image takes the accent's place in the banner, with the text
   // colour the admin picked for it. The source is a data: URL brandingView
   // built, so it cannot break out of url("").
@@ -182,12 +187,26 @@ function applyBranding(next: BrandingView): void {
     brandBanner.style.removeProperty("--banner-image");
     delete brandBanner.dataset.image;
   }
-  need<HTMLParagraphElement>("#banner-title").textContent = next.title;
+  const bannerTitle = need<HTMLParagraphElement>("#banner-title");
+  if (textStyle) {
+    bannerTitle.textContent = next.title;
+  } else {
+    // Named by the title, or the product's name when there is none. A logo
+    // that sniffed as an image but does not decode falls back to text.
+    const wordmark = logoImage(next.logoSrc, next.productName);
+    wordmark.addEventListener("error", () => {
+      if (branding === next) {
+        applyBranding(withoutLogo(next));
+      }
+    });
+    bannerTitle.replaceChildren(wordmark);
+  }
   need<HTMLParagraphElement>("#banner-tagline").textContent = next.tagline;
   bannerHelp.hidden = !next.helpUrl;
   bannerHelp.textContent = next.helpLabel;
   need<HTMLSpanElement>("#product-name").textContent = next.productName;
-  if (next.logoSrc) {
+  // A logo banner's logo is a wordmark, too wide for the square mark.
+  if (next.logoSrc && textStyle) {
     productMark.replaceChildren(logoImage(next.logoSrc));
   } else if (next.productMark) {
     productMark.textContent = next.productMark;
@@ -208,6 +227,7 @@ function applyBranding(next: BrandingView): void {
   root.style.setProperty("--tagline-scale", String(next.taglineScale));
   root.dataset.contentWidth = next.contentWidth;
   root.dataset.filterPlacement = next.filterPlacement;
+  root.dataset.appBarBrand = next.appBarBrand;
   // The tab order and the Software tab's heading are branding too.
   renderNav();
   renderCategories();

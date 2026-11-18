@@ -105,9 +105,10 @@ func windowTitle(b branding.Branding) string {
 
 // windowIcon is the branding logo when it is a PNG, which is what the Windows
 // icon loader accepts, else the embedded default. It is the title bar,
-// taskbar and Alt+Tab icon.
+// taskbar and Alt+Tab icon. A logo banner's logo is a wordmark, not an icon,
+// so banner_style logo keeps the default.
 func windowIcon(b branding.Branding) []byte {
-	if b.LogoMime != "image/png" {
+	if b.LogoMime != "image/png" || b.BannerStyle == "logo" {
 		return defaultIcon
 	}
 	logo, err := base64.StdEncoding.DecodeString(b.LogoBase64)

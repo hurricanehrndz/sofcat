@@ -17,6 +17,7 @@ import {
   opensDetails,
   placementAction,
   placementStatus,
+  withoutLogo,
 } from "./state.ts";
 
 function item(overrides) {
@@ -141,6 +142,64 @@ test("the filter placement is right or left; anything else is right", () => {
   for (const filterPlacement of [undefined, "", "center", "LEFT", 1, "constructor"]) {
     assert.equal(brandingView({ filterPlacement }).filterPlacement, "right", String(filterPlacement));
   }
+});
+
+const LOGO = { logoMime: "image/png", logoBase64: "iVBORw0KGgo=" };
+
+// A logo banner without a usable logo would show nothing in the title's place,
+// so it falls back to text; an unknown style is text too.
+test("the banner style is logo only with a usable logo; anything else is text", () => {
+  assert.equal(brandingView({ ...LOGO, bannerStyle: "logo" }).bannerStyle, "logo");
+  assert.equal(brandingView({ bannerStyle: "logo", title: "Acme" }).bannerStyle, "text");
+  assert.equal(brandingView({ bannerStyle: "logo", logoMime: "image/gif", logoBase64: "R0lG" }).bannerStyle, "text");
+  for (const bannerStyle of [undefined, "", "text", "LOGO", "image", 1]) {
+    assert.equal(brandingView({ ...LOGO, bannerStyle }).bannerStyle, "text", String(bannerStyle));
+  }
+});
+
+test("the banner aligns left, center or right; anything else is left", () => {
+  for (const bannerAlign of ["left", "center", "right"]) {
+    assert.equal(brandingView({ bannerAlign }).bannerAlign, bannerAlign);
+  }
+  for (const bannerAlign of [undefined, "", "centre", "middle", 2, "constructor"]) {
+    assert.equal(brandingView({ bannerAlign }).bannerAlign, "left", String(bannerAlign));
+  }
+});
+
+// Without a banner the app bar is the only place the product is named, so it
+// keeps the name whatever app_bar_brand says.
+test("the app bar drops the mark or name only under a banner", () => {
+  for (const appBarBrand of ["full", "mark", "none"]) {
+    assert.equal(brandingView({ title: "Acme", appBarBrand }).appBarBrand, appBarBrand);
+    assert.equal(brandingView({ appBarBrand }).appBarBrand, "full", appBarBrand);
+  }
+  for (const appBarBrand of [undefined, "", "hidden", "NONE", 0]) {
+    assert.equal(brandingView({ title: "Acme", appBarBrand }).appBarBrand, "full", String(appBarBrand));
+  }
+});
+
+// app_bar_brand must never take the page's only h1 out of the accessibility
+// tree: style.css hides it with a clip, not display or visibility.
+test("a hidden app-bar brand stays in the accessibility tree", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  assert.equal(html.match(/<h1\b/g)?.length, 1);
+  assert.match(html, /<h1 class="product">.*<span id="product-name">/);
+  const css = readFileSync(new URL("./style.css", import.meta.url), "utf8");
+  const rule = css.match(/:root\[data-app-bar-brand="mark"\] #product-name,\s*:root\[data-app-bar-brand="none"\] \.product \{[^}]*\}/);
+  assert.ok(rule, "no app_bar_brand rule");
+  assert.match(rule[0], /clip-path: inset\(50%\)/);
+  assert.doesNotMatch(rule[0], /display|visibility|aria-hidden/);
+});
+
+// A logo that sniffed as an image but does not decode must not leave the page
+// without a visible name: the banner falls back to text, and with no title
+// to show there, the app bar shows the product again.
+test("a logo that fails to load falls back to text and keeps a visible name", () => {
+  const titled = withoutLogo(brandingView({ ...LOGO, title: "Acme", bannerStyle: "logo", appBarBrand: "none" }));
+  assert.deepEqual([titled.logoSrc, titled.bannerStyle, titled.appBarBrand], ["", "text", "none"]);
+  const untitled = withoutLogo(brandingView({ ...LOGO, tagline: "Hi", bannerStyle: "logo", appBarBrand: "none" }));
+  assert.deepEqual([untitled.logoSrc, untitled.bannerStyle, untitled.appBarBrand], ["", "text", "full"]);
+  assert.equal(untitled.showBanner, true);
 });
 
 test("the applies-to line lists the names in the order the service sent, after its label", () => {

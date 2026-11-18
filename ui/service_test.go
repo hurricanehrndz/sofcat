@@ -338,6 +338,7 @@ func TestWindowIcon(t *testing.T) {
 		{},
 		{LogoMime: "image/svg+xml", LogoBase64: encoded},
 		{LogoMime: "image/png", LogoBase64: "not base64!"},
+		{LogoMime: "image/png", LogoBase64: encoded, BannerStyle: "logo"},
 	} {
 		if got := windowIcon(b); string(got) != string(defaultIcon) {
 			t.Errorf("windowIcon(%+v) did not fall back to the default", b)

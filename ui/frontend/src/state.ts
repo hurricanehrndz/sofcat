@@ -833,6 +833,19 @@ const CONTENT_WIDTHS = new Set(["compact", "wide", "full"]);
 // heading's row, left keeps them above the heading as before the key.
 const FILTER_PLACEMENTS = new Set(["right", "left"]);
 
+// The app_bar_brand names: full (the default) shows the mark and the name,
+// mark the mark only, none neither; style.css hides them only visually.
+const APP_BAR_BRANDS = new Set(["full", "mark", "none"]);
+
+// The banner_align names; left is the default.
+const BANNER_ALIGNS = new Set(["left", "center", "right"]);
+
+/** oneOf returns payload[key] when it is one of allowed, else fallback. */
+function oneOf<T extends string>(payload: Record<string, unknown>, key: string, allowed: Set<string>, fallback: T): T {
+  const value = text(payload, key);
+  return allowed.has(value) ? (value as T) : fallback;
+}
+
 export function isHexColor(value: string): boolean {
   return /^#[0-9a-fA-F]{6}$/.test(value);
 }
@@ -878,6 +891,7 @@ export function brandingView(payload: unknown): BrandingView {
   const backgroundSrc = imageSrc(text(raw, "backgroundMime"), text(raw, "backgroundBase64"));
   const helpUrl = httpUrl(text(raw, "helpUrl"));
   const accent = isHexColor(text(raw, "accent")) ? text(raw, "accent").toLowerCase() : "";
+  const showBanner = Boolean(title || tagline || logoSrc || backgroundSrc || helpUrl);
   return {
     title,
     tagline,
@@ -890,21 +904,37 @@ export function brandingView(payload: unknown): BrandingView {
     onAccent: accent ? onAccent(accent) : "",
     productName: title || DEFAULT_PRODUCT,
     productMark: (Array.from(title)[0] ?? "").toUpperCase(),
-    showBanner: Boolean(title || tagline || logoSrc || backgroundSrc || helpUrl),
+    showBanner,
     listHeading: text(raw, "listHeading") || DEFAULT_LIST_HEADING,
     titleScale: FONT_SCALES.get(text(raw, "titleSize")) ?? 1,
     taglineScale: FONT_SCALES.get(text(raw, "taglineSize")) ?? 1,
-    contentWidth: CONTENT_WIDTHS.has(text(raw, "contentWidth"))
-      ? (text(raw, "contentWidth") as BrandingView["contentWidth"])
-      : "wide",
-    filterPlacement: FILTER_PLACEMENTS.has(text(raw, "filterPlacement"))
-      ? (text(raw, "filterPlacement") as BrandingView["filterPlacement"])
-      : "right",
+    contentWidth: oneOf(raw, "contentWidth", CONTENT_WIDTHS, "wide"),
+    filterPlacement: oneOf(raw, "filterPlacement", FILTER_PLACEMENTS, "right"),
+    // Hiding the product's name only makes sense under a banner that shows
+    // the organisation; without one the app bar keeps it.
+    appBarBrand: showBanner ? oneOf(raw, "appBarBrand", APP_BAR_BRANDS, "full") : "full",
+    // A logo banner needs a logo; without one the title shows as text.
+    bannerStyle: logoSrc && text(raw, "bannerStyle") === "logo" ? "logo" : "text",
+    bannerAlign: oneOf(raw, "bannerAlign", BANNER_ALIGNS, "left"),
     sections: Array.isArray(raw.sections)
       ? raw.sections
           .filter((name): name is string => typeof name === "string" && name.trim() !== "")
           .map((name) => name.trim())
       : [],
+  };
+}
+
+/**
+ * withoutLogo is the branding to show when the logo's data does not decode:
+ * no logo anywhere, a text banner, and, with no title to name the
+ * organisation there, the app bar's mark and name back.
+ */
+export function withoutLogo(view: BrandingView): BrandingView {
+  return {
+    ...view,
+    logoSrc: "",
+    bannerStyle: "text",
+    appBarBrand: view.title ? view.appBarBrand : "full",
   };
 }
 
