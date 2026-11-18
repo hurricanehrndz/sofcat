@@ -1183,7 +1183,10 @@ h2 {
  */
 #item-dialog {
   width: min(44rem, calc(100vw - 2rem));
-  max-height: calc(100vh - 2rem);
+  /* Its top stays put, rather than the dialog re-centring as its content
+     grows or shrinks (a status line, a Cancel) while it is open. */
+  margin-block: max(1rem, 8vh) auto;
+  max-height: calc(100vh - max(1rem, 8vh) - 1rem);
   padding: 0;
   border: 1px solid var(--line-soft);
   border-radius: 16px;
@@ -1244,10 +1247,41 @@ h2 {
   display: contents;
 }
 
+/* In the dialog the action takes a row of its own under the title, at its
+   right end, with Cancel before it on the same line. No label, the action's
+   own or Cancel's, takes width from the text, and the row never wraps: a
+   Cancel too long for it is cut short, so the action stays where it was
+   clicked, and so do the placement rows' buttons. */
 #item-dialog .detail-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex: 1 0 100%;
+  justify-content: flex-end;
+  align-items: center;
   gap: 0.5rem;
+  min-width: 0;
+}
+
+/* A required item has neither button: no empty row. A web view without
+   :has drops only this rule. */
+#item-dialog .detail-actions:not(:has(> :not([hidden]))) {
+  display: none;
+}
+
+#item-dialog #detail-action {
+  flex: none;
+}
+
+#item-dialog #detail-cancel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A double click on a dialog button never selects its label. */
+#item-dialog button {
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 #item-dialog .detail-title {

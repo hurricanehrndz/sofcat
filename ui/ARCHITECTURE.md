@@ -553,10 +553,15 @@ the card's name, or the search field once a refresh has dropped the card,
 which also closes the dialog. While it is open, refreshes and progress fill
 the same subtree in place, so focus stays inside it. The operation strip
 stays at the window's bottom, inert under the backdrop, so the dialog shows
-its own Cancel just before the action while the open item's operation runs
+its own Cancel beside the action while the open item's operation runs
 (`itemCancel`), set up by the strip's own `setCancel`; when it goes off or
 away while focused, focus moves to the action, or to the close button when
-the item shows no action. The page has none. The
+the item shows no action. The page has none. In the dialog the action has a
+row of its own under the title, at its right end, with Cancel before it on
+a line that never wraps (a long Cancel label is cut short), so no label
+takes width from the text, and the dialog's top edge is fixed rather than
+centred. The action's right edge and top, and the placement rows' buttons,
+stay where they were clicked as Cancel and the status line come and go. The
 backdrop fades in as the dialog opens and out as it shrinks back (a close
 with no shrink removes it at once), through the Web Animations API,
 and a close during the fade-in fades out from where it has got to. After a
