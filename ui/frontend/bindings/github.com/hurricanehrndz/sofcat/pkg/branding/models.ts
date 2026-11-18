@@ -83,6 +83,11 @@ export class Branding {
      */
     "bannerHeight": string;
 
+    /**
+     * Progress is one of Progresses, or "" for the UI's default, strip.
+     */
+    "progress": string;
+
     /** Creates a new Branding instance. */
     constructor($$source: Partial<Branding> = {}) {
         if (!("title" in $$source)) {
@@ -147,6 +152,9 @@ export class Branding {
         }
         if (!("bannerHeight" in $$source)) {
             this["bannerHeight"] = "";
+        }
+        if (!("progress" in $$source)) {
+            this["progress"] = "";
         }
 
         Object.assign(this, $$source);

@@ -54,7 +54,9 @@ user's operation to watch it.
   pending, required or partly installed item's status ("Installed in Claude
   Code") and a failure or deferral reason. The one
   bar is in the bottom strip, for the operation being worked on, and is
-  indeterminate for a phase without a percentage. The record timeline is only
+  indeterminate for a phase without a percentage. With branding `progress:
+  button` the bar is in each item's action button instead, and the strip only
+  counts two or more running operations. The record timeline is only
   in Activity.
 - `ItemCompleted` and `ItemFailed` are **non-terminal**. A dependency failure does
   not end the operation.
@@ -63,7 +65,8 @@ user's operation to watch it.
   record the UI calls `ListOptionalInstalls` and replaces the list and cache from
   that authoritative response. If that refresh fails, the previous data is kept
   and marked stale.
-- Cancel, in the bottom strip, works only until the service starts the item's
+- Cancel, in the bottom strip (beside the item's button and in the strip's
+  list with `progress: button`), works only until the service starts the item's
   installer or uninstaller (`Requested`, `Queued`, `Downloading`); after that it
   is disabled, and the service refuses a late request with
   `operation_not_cancelable`. A running installer is never interrupted. An
@@ -113,6 +116,7 @@ comes from the first source that sets it:
 | `banner_align` | `left` (the default), `center` or `right`: where the banner's logo, title and tagline sit, in either style. `right` mirrors `left`, with the link button at the banner's left edge; `center` stacks logo, title, tagline and link button in a centred column. Any other value is `left`. |
 | `banner_height` | The banner's minimum height. `small`: a slim strip, with 1rem of padding above and below, tighter gaps when the content wraps or is centred, a 2.5rem logo tile and a `banner_style: logo` wordmark of 2.5rem times the `title_size` factor; over a `background_image` it drops the 7.5rem minimum and hugs the content too. `medium`, the default: the content's own height, at least 7.5rem (120pt) over a `background_image`. `large`: at least 11rem (176pt). `x-large`: at least 16rem (256pt), room to show more of a background image. Each is a minimum: content that needs more room, a large `title_size` or a title that wraps in a narrow window, grows the banner, and a banner whose content is already taller than the minimum is unchanged. The exception is `banner_align: center`, which stacks logo, text and link button in a column often taller than 11rem: there `large` and `x-large` also add padding (3rem and 4.5rem above and below), so each step is taller than the one below. The content stays in the banner's middle. Over a background image a taller banner shows more of the picture's height, still centred and cropped to cover. Any other value is `medium`. |
 | `app_bar_brand` | What the app bar shows of the product beside the tabs: `full` (the default) the mark and the name, `mark` the mark only, `none` neither. Meant for a banner that already names the organisation: while no banner shows, it is `full`. Screen readers still get the name, the page's heading, in all three. With `none` and a banner that shows neither a title nor a logo, no name is visible anywhere. Any other value is `full`. |
+| `progress` | Where running work shows. `strip`, the default and the look from before this key: the bottom strip shows the operation being worked on, with its bar, "n of N" and Cancel. `button`: each item's action button, on its card and its detail page, carries its own progress: "Waiting…" with a spinner while the request is with the service or queued, then a bar with the phase, filled to the percentage only when the service measured the phase and moving back and forth otherwise. A success fills it; a failure, cancel or deferral drops it. A smaller Cancel sits beside the button while the operation runs, with the strip's rules. The strip then shows only while two or more operations run, as a count ("Installing 1 of 3"); it is a button that opens the list of them above it, one row each, the working one first, with its state and its own Cancel. Escape or a click outside closes the list. Screen readers hear each new phase once per operation, never a percentage. Any other value is `strip`. |
 | `sections` | A list; a REG_MULTI_SZ as policy. Up to 50 entries of plain text, up to 120 characters each. Sets the storefront tab order: the sections listed come first, then the rest alphabetically. Items without a catalog `section` appear under a "Software" tab, so give every item a section to hide it. |
 
 Set the policy values with Intune (a custom OMA-URI or a registry script), Group
@@ -179,6 +183,9 @@ badges, a deferral, and Cancel during the download.
   "Installed in Claude Code".
 - `?unbranded`: the same store's items with empty branding, the stock look.
 - `?offline`: the item list fails, showing the cached list or the offline state.
+- `?progress=button`: branding `progress: button` over either store, so the
+  buttons carry the progress; start two or more installs to see the strip's
+  count and its list.
 
 Each store keeps its own cache and Activity in `localStorage` under the mock, so
 switching stores does not show the other store's list.

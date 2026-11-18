@@ -455,6 +455,11 @@ export function endedOperations(
   return [...active.keys()].filter((operationId) => operations.get(operationId)?.outcome !== "active");
 }
 
+/** ownsBusy is whether a button (a placement row's when row is set) is the one the busy action works for. */
+function ownsBusy(action: ItemAction, busy: ItemAction, row?: string): boolean {
+  return row === undefined || busy.placement === row || (busy.placement === undefined && busy.method === action.method);
+}
+
 /**
  * actionText is an action button's label: the action's own, or while its item
  * is busy, the item's installing or removing label for the busy action (a
@@ -468,11 +473,7 @@ export function actionText(
   busy: ItemAction | undefined,
   row?: string,
 ): string {
-  if (!busy) {
-    return action.label;
-  }
-  const own = row === undefined || busy.placement === row || (busy.placement === undefined && busy.method === action.method);
-  if (!own) {
+  if (!busy || !ownsBusy(action, busy, row)) {
     return action.label;
   }
   // A Cancel sends the opposite mutation, so "Removing…" would misread it.
@@ -771,6 +772,139 @@ export function stripLine(strip: StripView): string {
 }
 
 /**
+ * QueueView is the strip under branding progress: button, where each item's
+ * button carries its own progress: a count of the running operations, and a
+ * row each for the list it opens.
+ */
+export type QueueView = {
+  /** "Installing 1 of 3": the working operation's verb and place, no phase. */
+  line: string;
+  /** The running operations, the working one first, then in service order. */
+  rows: { operation: OperationView; text: string }[];
+};
+
+// The strip's verb for the working operation: Waiting until the service
+// starts on it, else the item's own installing or removing label without its
+// ellipsis ("Adding" for a skill that says "Adding…").
+function queueVerb(operation: OperationView): string {
+  if (!operation.records.some((record) => !WAITING_STATES.has(record.state))) {
+    return "Waiting";
+  }
+  if (operation.action.kind === "cancel") {
+    return "Canceling";
+  }
+  const label = actionLabel(operation.item, operation.action.method === "RemoveItem" ? "removing" : "installing");
+  return label.replace(/\s*(…|\.\.\.)\s*$/, "");
+}
+
+/**
+ * queueView is what the strip shows when progress is in the buttons: null
+ * (the strip hides) while fewer than two operations run, since the one
+ * running shows on its own button. Its place is stripView's.
+ */
+export function queueView(operations: Iterable<OperationView>): QueueView | null {
+  // operations may be a one-shot iterator (a Map's values()).
+  const running = [...operations].filter((operation) => operation.outcome === "active");
+  const shown = stripView(running);
+  if (!shown || shown.total < 2) {
+    return null;
+  }
+  const ordered = [shown.operation, ...running.filter((operation) => operation !== shown.operation)];
+  return {
+    line: `${queueVerb(shown.operation)} ${shown.position} of ${shown.total}`,
+    rows: ordered.map((operation) => ({
+      operation,
+      // The phase or a refused cancel's reason, without a percentage: the
+      // item's button shows that.
+      text:
+        cardProgress(operation.item, operation.records, "active", operation.action.method, operation.notice)
+          ?.label ?? "Waiting…",
+    })),
+  };
+}
+
+/** WAITING_LABEL is what a button reads while its request is with the service or queued. */
+export const WAITING_LABEL = "Waiting…";
+
+/**
+ * ActionProgress is what a busy action button shows under branding progress:
+ * button. waiting: a spinner, before the service starts the work. working: a
+ * bar with the phase, filled to percent when the service measured the phase,
+ * indeterminate otherwise (never a made-up percentage). done: a full bar, for
+ * a success whose new state the next list brings. ended: no bar, for an
+ * operation that failed, was canceled or deferred; its status line says why.
+ */
+export type ActionProgress = {
+  label: string;
+  phase: "waiting" | "working" | "done" | "ended";
+  percent?: number;
+};
+
+/**
+ * actionProgress is the progress an item's action button carries: null while
+ * the button is free or busy with another placement's action, so it keeps its
+ * label. operation is the item's latest, undefined while the request is not
+ * answered yet. A placement row (row set) carries an action on the whole item
+ * that does what the row would, as actionText reads.
+ */
+export function actionProgress(
+  item: Pick<OptionalInstallItem, "itemName" | "actionLabels">,
+  action: ItemAction,
+  busy: ItemAction | undefined,
+  operation: Pick<OperationView, "records" | "outcome" | "action"> | undefined,
+  row?: string,
+): ActionProgress | null {
+  if (!busy || !ownsBusy(action, busy, row)) {
+    return null;
+  }
+  if (!operation) {
+    return { label: WAITING_LABEL, phase: "waiting" };
+  }
+  const latest = operation.records.at(-1);
+  if (operation.outcome !== "active") {
+    // Only a success reads full; a failed, canceled or deferred operation
+    // must not look finished.
+    return operation.outcome === "terminal" && latest?.state === "Succeeded"
+      ? { label: actionText(item, action, busy, row), phase: "done", percent: 100 }
+      : { label: action.label, phase: "ended" };
+  }
+  if (!latest || WAITING_STATES.has(latest.state)) {
+    return { label: WAITING_LABEL, phase: "waiting" };
+  }
+  const label = actionText(item, action, busy, row);
+  // A Cancel sends the opposite mutation, so its own label says more than the
+  // phase. Between phases (a dependency just finished) the button keeps its
+  // installing or removing label rather than naming a record.
+  if (busy.kind === "cancel" || !isItemPhase(latest.state)) {
+    return { label, phase: "working" };
+  }
+  const progress = cardProgress(item, operation.records, "active", operation.action.method);
+  const percent = progress?.percent;
+  return {
+    label: progress?.label ?? label,
+    phase: "working",
+    ...(typeof percent === "number" && Number.isFinite(percent)
+      ? { percent: Math.min(100, Math.max(0, percent)) }
+      : {}),
+  };
+}
+
+/**
+ * announcement is what the announcer says once for an operation's latest
+ * record under branding progress: button, where the buttons are not live
+ * regions: the item and its phase, never a percentage, or "" for nothing.
+ * Main keeps the last line said per operation, so two items whose ticks
+ * alternate are not re-read each time.
+ */
+export function announcement(operation: Pick<OperationView, "item" | "records" | "outcome" | "action">): string {
+  if (operation.outcome !== "active") {
+    return "";
+  }
+  const progress = cardProgress(operation.item, operation.records, "active", operation.action.method);
+  return progress ? `${operation.item.displayName || operation.item.itemName}: ${progress.label}` : "";
+}
+
+/**
  * deriveAction maps an item to its single primary action. Cancelling a pending
  * install or removal reuses the opposite mutation; it is not a new protocol
  * operation. An item the organisation requires has no action: the service
@@ -917,6 +1051,11 @@ const LINK_PLACEMENTS = new Set(["banner", "app_bar"]);
 // banner. style.css holds the layouts.
 const LINK_POSITIONS = new Set(["auto", "top_left", "top_right", "bottom_left", "bottom_right"]);
 
+// The progress names: strip, the default and the look from before the key,
+// shows running work in the bottom strip; button shows it in each item's
+// action button, the strip only counting a queue of two or more.
+const PROGRESSES = new Set(["strip", "button"]);
+
 /** oneOf returns payload[key] when it is one of allowed, else fallback. */
 function oneOf<T extends string>(payload: Record<string, unknown>, key: string, allowed: Set<string>, fallback: T): T {
   const value = text(payload, key);
@@ -999,6 +1138,7 @@ export function brandingView(payload: unknown): BrandingView {
     bannerStyle: logoSrc && text(raw, "bannerStyle") === "logo" ? "logo" : "text",
     bannerAlign: oneOf(raw, "bannerAlign", BANNER_ALIGNS, "left"),
     bannerHeight: oneOf(raw, "bannerHeight", BANNER_HEIGHTS, "medium"),
+    progress: oneOf(raw, "progress", PROGRESSES, "strip"),
     sections: Array.isArray(raw.sections)
       ? raw.sections
           .filter((name): name is string => typeof name === "string" && name.trim() !== "")

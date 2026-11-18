@@ -132,4 +132,6 @@ export type BrandingView = {
   bannerAlign: "left" | "center" | "right";
   /** The admin's banner_height: the banner's minimum height, from slim to tall. */
   bannerHeight: "small" | "medium" | "large" | "x-large";
+  /** The admin's progress: running work in the bottom strip, or in each item's button. */
+  progress: "strip" | "button";
 };

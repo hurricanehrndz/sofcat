@@ -144,6 +144,15 @@ test("the filter placement is right or left; anything else is right", () => {
   }
 });
 
+// Running work moves into the buttons only for button; anything else (no key,
+// an older service, a cached payload from before the key) keeps the strip.
+test("progress is strip or button; anything else is strip", () => {
+  assert.equal(brandingView({ progress: "button" }).progress, "button");
+  for (const progress of [undefined, "", "strip", "BUTTON", "both", 1, "constructor"]) {
+    assert.equal(brandingView({ progress }).progress, "strip", String(progress));
+  }
+});
+
 const LOGO = { logoMime: "image/png", logoBase64: "iVBORw0KGgo=" };
 
 // A logo banner without a usable logo would show nothing in the title's place,

@@ -26,14 +26,14 @@ func TestApplyManagedWinsPerKey(t *testing.T) {
 		"catalogs": []any{"mdm"},
 		"debug":    uint64(0), // REG_DWORD 0
 		"verbose":  true,
-		"branding": map[string]any{"title": "MDM title", "sections": []string{"MDM", "Other"}, "title_size": "large", "content_width": "compact", "filter_placement": "left", "banner_style": "logo", "banner_height": "large"},
+		"branding": map[string]any{"title": "MDM title", "sections": []string{"MDM", "Other"}, "title_size": "large", "content_width": "compact", "filter_placement": "left", "banner_style": "logo", "banner_height": "large", "progress": "button"},
 	}, warn)
 	want := Configuration{
 		URL:      "https://mdm.example/",
 		Manifest: "file_manifest",
 		Catalogs: []string{"mdm"},
 		Verbose:  true,
-		Branding: Branding{Title: "MDM title", Tagline: "File tagline", Sections: []string{"MDM", "Other"}, TitleSize: "large", ContentWidth: "compact", FilterPlacement: "left", BannerStyle: "logo", BannerHeight: "large"},
+		Branding: Branding{Title: "MDM title", Tagline: "File tagline", Sections: []string{"MDM", "Other"}, TitleSize: "large", ContentWidth: "compact", FilterPlacement: "left", BannerStyle: "logo", BannerHeight: "large", Progress: "button"},
 	}
 	if !reflect.DeepEqual(cfg, want) {
 		t.Fatalf("got  %+v\nwant %+v", cfg, want)

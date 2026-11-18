@@ -229,6 +229,18 @@ func TestResolveFilterPlacement(t *testing.T) {
 	}
 }
 
+// progress is a closed set: an unknown value must leave the UI's default,
+// strip, so a typo never moves running work out of the strip.
+func TestResolveProgress(t *testing.T) {
+	for in, want := range map[string]string{
+		"strip": "strip", "Button": "button", "BUTTON": "button", "": "", "bar": "", "both": "",
+	} {
+		if got := resolve(config.Branding{Progress: in}).Progress; got != want {
+			t.Errorf("progress %q resolved to %q, want %q", in, got, want)
+		}
+	}
+}
+
 // The banner and app-bar keys are closed sets: an unknown value must leave the
 // UI's default rather than a layout the CSS has no rule for.
 func TestResolveBannerLayout(t *testing.T) {

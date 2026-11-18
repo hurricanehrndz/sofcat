@@ -180,6 +180,108 @@ button[aria-disabled="true"] {
 }
 
 /*
+ * Branding progress: button. An item's action button turns into its progress
+ * where it stands (paintAction in main.ts sets data-progress and --progress):
+ * a spinner while the request waits, then a bar behind the phase, filled to
+ * --progress when the phase is measured and with a band running along it
+ * when it is not. Only a success reads full; an operation that ended any
+ * other way shows no bar (data-progress="ended") until its new state shows.
+ */
+.action {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-width: 0;
+  overflow: hidden;
+  isolation: isolate;
+  font-variant-numeric: tabular-nums;
+}
+
+.action .spinner {
+  display: none;
+  width: 0.875rem;
+  height: 0.875rem;
+  stroke: currentcolor;
+}
+
+/* A long phase (a dependency's name) is cut short, never wrapped; its
+   percentage keeps its room. */
+.action-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.action-percent {
+  flex: none;
+  margin-left: -0.25rem;
+}
+
+.action[data-progress]:not([data-progress="ended"]) {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--surface));
+  background: var(--accent-soft);
+  color: var(--ink);
+  cursor: progress;
+  filter: none;
+  opacity: 1;
+}
+
+.action[data-progress="waiting"] .spinner {
+  display: block;
+}
+
+/* The bar, under the label. */
+.action::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: -1;
+  width: 0;
+  background: color-mix(in srgb, var(--accent) 45%, var(--surface));
+  opacity: 0;
+  transition:
+    width 320ms ease-out,
+    opacity 200ms ease-out;
+}
+
+.action:is([data-progress="measured"], [data-progress="done"])::before {
+  width: var(--progress, 0%);
+  opacity: 1;
+}
+
+/* Work that failed or was canceled drops its bar at once, never draining it. */
+.action[data-progress="ended"]::before {
+  transition: none;
+}
+
+.action[data-progress="unmeasured"]::before {
+  width: 40%;
+  opacity: 1;
+  transition: opacity 200ms ease-out;
+  animation: sweep 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes sweep {
+  to {
+    transform: translateX(150%);
+  }
+}
+
+/* For screen readers only: the announcer. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/*
  * Motion only says where something came from. A page, a card new to the list
  * and the operation strip ease in as they appear; nothing animates out, so a
  * page change never leaves two pages up or waits before taking focus. An
@@ -1010,6 +1112,151 @@ h2 {
   color: var(--muted);
 }
 
+/*
+ * Branding progress: button. A card's buttons take the same room idle and
+ * busy, so the card never changes height as work starts or ends. In a column
+ * card the action fills its row and Cancel takes room from it there; Details
+ * has the row under it. In a single-line card the buttons keep a fixed
+ * width, so whether they wrap under the text depends on the card's width,
+ * never on the work.
+ */
+:root[data-progress="button"] .card .card-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem 0;
+}
+
+:root[data-progress="button"] .card-cancel {
+  grid-column: 2;
+  margin-left: 0.5rem;
+  color: var(--muted);
+}
+
+:root[data-progress="button"] .card-details {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+@container (min-width: 30rem) {
+  :root[data-progress="button"] .card .card-actions {
+    flex: 0 0 22rem;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  :root[data-progress="button"] .card-details {
+    grid-column: 3;
+    margin-left: 0.5rem;
+  }
+}
+
+/* The detail page's action keeps its width as it turns into a bar; Cancel
+   has room kept beside it, so the head does not rewrap. */
+.detail-actions {
+  display: contents;
+}
+
+:root[data-progress="button"] .detail-actions {
+  display: flex;
+  flex: 0 1 auto;
+  gap: 0.5rem;
+  min-width: min(100%, 17rem);
+}
+
+:root[data-progress="button"] #detail-action {
+  min-width: 11rem;
+}
+
+:root[data-progress="button"] .placements .pill {
+  min-width: 9rem;
+}
+
+/* The strip as a count of running work, which opens the list of it. */
+:root[data-progress="button"] .strip {
+  padding: 0.5rem 1.25rem;
+}
+
+.queue-toggle {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-align: start;
+}
+
+.queue-toggle:hover {
+  background: var(--line-soft);
+}
+
+#queue-text {
+  flex: 1;
+}
+
+.queue-toggle .chevron {
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 160ms ease-out;
+}
+
+.queue-toggle[aria-expanded="true"] .chevron {
+  transform: rotate(180deg);
+}
+
+/* The list opens above the strip, over the page, and scrolls when long. */
+.queue-panel {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  left: 0;
+  max-height: min(50vh, 20rem);
+  overflow: auto;
+  background: var(--surface);
+  border-top: 1px solid var(--line-soft);
+  box-shadow: 0 -6px 18px var(--shadow);
+  animation: fade-in 160ms ease-out;
+}
+
+.queue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.75rem 2rem;
+  list-style: none;
+}
+
+.queue-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+}
+
+.queue-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.queue-state {
+  flex: 1 1 8rem;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.queue-list .pill {
+  flex: none;
+  color: var(--muted);
+}
+
 .view-head {
   display: flex;
   align-items: baseline;
@@ -1184,5 +1431,11 @@ h2 {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  /* A band that cannot run would read as a measured 40%: tint the whole bar. */
+  .action[data-progress="unmeasured"]::before {
+    width: 100%;
+    opacity: 0.45;
   }
 }

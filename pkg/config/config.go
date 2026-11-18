@@ -166,6 +166,9 @@ type Branding struct {
 	// BannerHeight is the banner's minimum height: small, medium (the
 	// default), large or x-large.
 	BannerHeight string `yaml:"banner_height,omitempty"`
+	// Progress is where the storefront shows running work: strip (the
+	// default, a bar along the bottom) or button (in each item's button).
+	Progress string `yaml:"progress,omitempty"`
 	// Sections orders the storefront tabs built from catalog item sections.
 	Sections []string `yaml:"sections,omitempty"`
 }

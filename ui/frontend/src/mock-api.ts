@@ -3,7 +3,7 @@
 // only in development and demo modes, and the production-bundle gate greps for
 // this marker.
 import type { AcceptedOperation, SofCatApi, OperationStatus } from "./api.ts";
-import { type MockItem, STORES, UNBRANDED, offline, storeName, unbranded } from "./mock-stores.ts";
+import { type MockItem, STORES, UNBRANDED, offline, progress, storeName, unbranded } from "./mock-stores.ts";
 import { isTerminalState } from "./state.ts";
 
 const MOCK_MARKER = "SOFCAT_VITE_MOCK_ONLY";
@@ -242,8 +242,10 @@ export const api: SofCatApi = {
   watchOperation: (operationId) => watch(operationId),
   cancelOperation: (operationId) => cancel(operationId),
   // `?store=` picks the fixture store; `?unbranded` keeps its items and drops
-  // its branding, so tabs fall back to alphabetical order.
-  getBranding: () => Promise.resolve({ ...(unbranded() ? UNBRANDED : store.branding) }),
+  // its branding, so tabs fall back to alphabetical order. `?progress=button`
+  // moves running work into the buttons, over either.
+  getBranding: () =>
+    Promise.resolve({ ...(unbranded() ? UNBRANDED : store.branding), ...(progress() ? { progress: progress() } : {}) }),
   openExternal(url) {
     window.open(url, "_blank", "noopener,noreferrer");
     return Promise.resolve();

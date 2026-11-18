@@ -55,7 +55,7 @@ answer echoes the `id` with a `result` or an `error`:
 | --- | --- | --- |
 | `getServiceInfo` | none | `{version, protocolVersion: "2.0", apiVersion: 1, capabilities: [methods], busy, uptimeSeconds}` |
 | `listOptionalInstalls` | none | `{items: [OptionalInstallItem]}` (shape below) |
-| `getBranding` | none | `Branding`: `{title, tagline, helpUrl, helpLabel, linkPlacement, linkPosition, accent, logoMime, logoBase64, backgroundMime, backgroundBase64, backgroundText, listHeading, titleSize, taglineSize, contentWidth, filterPlacement, appBarBrand, bannerStyle, bannerAlign, bannerHeight, sections?}` |
+| `getBranding` | none | `Branding`: `{title, tagline, helpUrl, helpLabel, linkPlacement, linkPosition, accent, logoMime, logoBase64, backgroundMime, backgroundBase64, backgroundText, listHeading, titleSize, taglineSize, contentWidth, filterPlacement, appBarBrand, bannerStyle, bannerAlign, bannerHeight, progress, sections?}` |
 | `installItem` | `{itemName, placement?}` | `AcceptedOperation` |
 | `removeItem` | `{itemName, placement?}` | `AcceptedOperation` |
 | `cancelOperation` | `{operationId}` | `{canceled: true}` |
@@ -398,6 +398,26 @@ timeline is shown only in Activity, never on the Home view. No percentage is
 fabricated for installs, removals, status checks, no-action items,
 blocking-app checks, or pre/post scripts.
 
+All of that is branding `progress: strip`, the default. With `progress:
+button` the bar moves into the busy item's own buttons (`actionProgress` in
+`state.ts`): its card's and detail page's action, and each placement row the
+work is for, read "Waiting…" with a spinner while the latest record is
+`Requested` or `Queued` (or the request is unanswered), then the phase over a
+bar filled to the percentage only when the record carries one and
+indeterminate otherwise. Only `Succeeded` fills it; any other end drops it,
+and the button reads its action until the list after the end arrives. The
+accessible name stays the busy label with no percentage, `aria-busy` is set,
+and a visually hidden `#announcer` says each new phase once per operation. A
+Cancel beside the action on the card and the detail page follows the strip's
+rules below, and so do the status lines: running work is on the button, so
+they keep only outcomes and a refused cancel's reason. The strip shows only
+while two or more operations run, as a count ("Installing 1 of 3", the place
+`stripView` picks), and is a disclosure button (`aria-expanded`) for a list
+above it: a row per running operation, the working one first, with its state
+and a Cancel. Escape or a click outside closes the list and returns focus to
+the strip when nothing else took it. Cards whose item is unchanged are kept
+and repainted in place, so a bar eases rather than restarting.
+
 The app bar carries the connection state (a dot and the cached/stale message
 with Retry). Above it, the `#banner` section stays hidden until branding
 fills it (see Branding). "My items" is the same list filtered on the client to installed or
@@ -497,7 +517,8 @@ every run, so a policy change applies from the next run without a restart:
    `link_placement`, `link_position`, the old names `help_url` and `help_label`,
    `accent`, `background_image`, `background_text`, `list_heading`, `sections`,
    `title_size`, `tagline_size`, `content_width`, `filter_placement`,
-   `app_bar_brand`, `banner_style`, `banner_align`, `banner_height`; `sections` is a
+   `app_bar_brand`, `banner_style`, `banner_align`, `banner_height`, `progress`;
+   `sections` is a
    REG_MULTI_SZ).
 2. The `branding:` block in `config.yaml`.
 3. Nothing, and the UI keeps its default look.
@@ -533,6 +554,8 @@ in the title's place with the title as its alt text (`text` without a usable
 logo, and no logo in the app-bar mark or the window icon) and as `data-align` on
 the banner. `banner_height` must be `small`, `medium`, `large` or `x-large`; the UI
 sets it as `data-height` on the banner, and anything else is `medium`.
+`progress` must be `strip` or `button`; the UI sets it as `data-progress` on
+the root element, and anything else is `strip`.
 `link_placement` must be `banner` or `app_bar`, and `link_position` `auto`,
 `top_left`, `top_right`, `bottom_left` or `bottom_right`; anything else is the
 first. The UI moves the one link button to the app bar's end, before the
