@@ -121,6 +121,13 @@ button {
   border-radius: 6px;
   padding: 0.35rem 0.9rem;
   cursor: pointer;
+  /* A hover, a press or a button disabled while its item works eases in. */
+  transition:
+    background-color 120ms ease-out,
+    border-color 120ms ease-out,
+    color 120ms ease-out,
+    filter 120ms ease-out,
+    opacity 120ms ease-out;
 }
 
 button:hover:not(:disabled) {
@@ -167,6 +174,28 @@ button:disabled {
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+/*
+ * Motion only says where something came from. A page, a card new to the list
+ * and the operation strip ease in as they appear; nothing animates out, so a
+ * page change never leaves two pages up or waits before taking focus. An
+ * element replays its animation each time it goes from hidden to shown. The
+ * reduced-motion rule at the end turns all of it off.
+ */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.375rem);
+  }
+}
+
+/* Opacity only: the strip is pinned to the bottom, and moving it down would
+   reach past the page and could flash a scrollbar while it enters. */
+@keyframes fade-in {
+  from {
+    opacity: 0;
   }
 }
 
@@ -346,6 +375,7 @@ button:disabled {
   height: 8px;
   border-radius: 50%;
   background: var(--pending);
+  transition: background-color 200ms ease-out;
 }
 
 .connection[data-source="live"] .connection-dot {
@@ -372,6 +402,10 @@ main {
   max-width: 96rem;
   margin: 0 auto;
   padding: 1.5rem 2rem 2rem;
+}
+
+main > section {
+  animation: rise-in 180ms ease-out;
 }
 
 :root[data-content-width="compact"] main {
@@ -494,6 +528,12 @@ h2 {
   overflow-wrap: anywhere;
   /* A click anywhere off its buttons opens the item's detail page. */
   cursor: pointer;
+  transition: border-color 120ms ease-out;
+}
+
+/* Only a card new to a list already on screen (enteringItems in state.ts). */
+.card[data-entering] {
+  animation: rise-in 180ms ease-out;
 }
 
 :root[data-content-width="compact"] .card {
@@ -633,6 +673,7 @@ h2 {
   background: var(--surface);
   border-top: 1px solid var(--line-soft);
   box-shadow: 0 -6px 18px var(--shadow);
+  animation: fade-in 200ms ease-out;
 }
 
 .glyph-small {

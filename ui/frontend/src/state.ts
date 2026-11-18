@@ -72,6 +72,24 @@ export function visibleItems(
     .sort(compareItems);
 }
 
+/**
+ * enteringItems names the cards that ease in when the grid is rebuilt: those
+ * it did not show before. Status updates and refreshes rebuild it too, and the
+ * cards already on screen must hold still through them; a page that is itself
+ * easing in (pageEntering) carries its cards, so none of them moves twice.
+ */
+export function enteringItems(
+  shownBefore: Iterable<string | undefined>,
+  shown: OptionalInstallItem[],
+  pageEntering: boolean,
+): Set<string> {
+  if (pageEntering) {
+    return new Set();
+  }
+  const before = new Set(shownBefore);
+  return new Set(shown.map((item) => item.itemName).filter((name) => !before.has(name)));
+}
+
 /** myItems is the "My items" view: what is installed or managed from here. */
 export function myItems(items: OptionalInstallItem[]): OptionalInstallItem[] {
   return items.filter((item) => item.isInstalled || item.isManaged);

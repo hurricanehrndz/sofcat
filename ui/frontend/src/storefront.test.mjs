@@ -9,6 +9,7 @@ import {
   cardProgress,
   cardStatus,
   deriveAction,
+  enteringItems,
   statusLabel,
   statusRecord,
   appliesToLine,
@@ -286,4 +287,40 @@ test("a click on a card opens details except on one of its controls or after a t
   assert.equal(opensDetails(label, false), false, "an element inside a button");
   assert.equal(opensDetails(title, true), false, "the release that ends selecting the card's text");
   assert.equal(opensDetails(null, false), false, "a target that is not an element");
+});
+
+// The grid is rebuilt on every status update and refresh. A card that keeps
+// its animation on .card itself would replay it each time and the whole store
+// would flicker through an install; only a card new to the list may animate.
+// Reduced motion is the user's switch for everything else: one rule at the
+// end of style.css stops every animation and transition.
+test("only a card new to the list animates, and reduced motion stops all motion", () => {
+  const css = readFileSync(new URL("./style.css", import.meta.url), "utf8");
+  const cardRules = [...css.matchAll(/\n\.card \{[^}]*\}/g)].map(([rule]) => rule);
+  assert.notEqual(cardRules.length, 0);
+  for (const rule of cardRules) {
+    assert.equal(/\banimation\b/.test(rule), false, ".card itself animates");
+  }
+  assert.match(css, /\.card\[data-entering\] \{\s*animation:/);
+
+  const reduced = css.slice(css.lastIndexOf("@media (prefers-reduced-motion: reduce)"));
+  assert.match(reduced, /^@media[^{]*\{\s*\*,\s*\*::before,\s*\*::after \{/);
+  for (const property of ["animation-duration", "transition-duration"]) {
+    assert.match(reduced, new RegExp(`${property}: 0\\.01ms !important`));
+  }
+  assert.match(reduced, /animation-iteration-count: 1 !important/);
+});
+
+// A status update or refresh rebuilds the grid with the same cards: none may
+// ease in again, or the store flickers through every install. A new list (the
+// grid emptied by a tab switch) eases all its cards in, a widened filter only
+// the cards it brings back, and a page that is itself easing in (launch, Back
+// from details, back from Activity) carries its cards, so none moves twice.
+test("a rebuild eases in only the cards it did not show, and none while the page enters", () => {
+  const items = ["a", "b", "c"].map((itemName) => item({ itemName }));
+  const names = (set) => [...set].sort();
+  assert.deepEqual(names(enteringItems([], items, false)), ["a", "b", "c"], "a new list");
+  assert.deepEqual(names(enteringItems(["a", "b", "c"], items, false)), [], "the same cards again");
+  assert.deepEqual(names(enteringItems(["b"], items, false)), ["a", "c"], "a widened filter");
+  assert.deepEqual(names(enteringItems([], items, true)), [], "the page enters with them");
 });

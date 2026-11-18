@@ -25,6 +25,7 @@ import {
   cardStatus,
   categories,
   deriveAction,
+  enteringItems,
   fromCache,
   glyphTone,
   httpUrl,
@@ -483,7 +484,20 @@ function renderGrid(): void {
     : tab
       ? (listTabs.find((candidate) => candidate.key === tab)?.label ?? "")
       : branding.listHeading;
-  grid.replaceChildren(...shown.map(card));
+  // The list page is entering while hidden or while its own rise-in runs
+  // (getAnimations flushes styles, so it sees one started this task).
+  const entering = enteringItems(
+    [...grid.children].map((child) => (child as HTMLElement).dataset.item),
+    shown,
+    viewHome.hidden !== false || viewHome.getAnimations().length > 0,
+  );
+  grid.replaceChildren(
+    ...shown.map((item) => {
+      const article = card(item);
+      article.toggleAttribute("data-entering", entering.has(item.itemName));
+      return article;
+    }),
+  );
   if (listed.length === 0) {
     resultStatus.textContent =
       view.source === "loading"
@@ -768,10 +782,24 @@ function renderPlacements(item: OptionalInstallItem, placements: OptionalInstall
   }
 }
 
+/**
+ * setHomeHidden shows or hides the list page. Hiding it ends every card's
+ * entrance: a shown element restarts its animations, and the page's own
+ * rise-in is the only motion it should bring back.
+ */
+function setHomeHidden(hidden: boolean): void {
+  if (hidden) {
+    for (const entering of grid.querySelectorAll("[data-entering]")) {
+      entering.removeAttribute("data-entering");
+    }
+  }
+  viewHome.hidden = hidden;
+}
+
 function openDetail(item: OptionalInstallItem): void {
   detailItemName = item.itemName;
   renderDetail();
-  viewHome.hidden = true;
+  setHomeHidden(true);
   viewActivity.hidden = true;
   viewDetail.hidden = false;
   markNav();
@@ -818,7 +846,7 @@ function showView(next: View, tab?: string): void {
   }
   viewDetail.hidden = true;
   detailItemName = null;
-  viewHome.hidden = next === "activity";
+  setHomeHidden(next === "activity");
   viewActivity.hidden = next !== "activity";
   markNav();
   if (next === "activity") {
@@ -826,7 +854,9 @@ function showView(next: View, tab?: string): void {
   } else if (changed) {
     // The list tabs and My items share the grid; only switching lists rebuilds
     // it, so Back from the detail page can refocus the card it came from. Each
-    // list has its own categories.
+    // list has its own categories. Emptying it first lets the new list's
+    // cards all ease in, those it shares with the old one too.
+    grid.replaceChildren();
     renderCategories();
     renderGrid();
   }
