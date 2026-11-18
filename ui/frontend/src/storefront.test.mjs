@@ -14,6 +14,9 @@ import {
   statusRecord,
   appliesToLine,
   itemPlacements,
+  itemCancel,
+  morphFrom,
+  openControl,
   opensDetails,
   placementAction,
   placementStatus,
@@ -142,6 +145,87 @@ test("the filter placement is right or left; anything else is right", () => {
   for (const filterPlacement of [undefined, "", "center", "LEFT", 1, "constructor"]) {
     assert.equal(brandingView({ filterPlacement }).filterPlacement, "right", String(filterPlacement));
   }
+});
+
+// Running work moves into the buttons only for button; anything else (no key,
+// an older service, a cached payload from before the key) keeps the strip.
+test("progress is strip or button; anything else is strip", () => {
+  assert.equal(brandingView({ progress: "button" }).progress, "button");
+  for (const progress of [undefined, "", "strip", "BUTTON", "both", 1, "constructor"]) {
+    assert.equal(brandingView({ progress }).progress, "strip", String(progress));
+  }
+});
+
+// The detail page is the view from before item_view, so no key, an older
+// service, a cached payload or a typo must all keep it.
+test("the item view is page or dialog; anything else is page", () => {
+  assert.equal(brandingView({ itemView: "dialog" }).itemView, "dialog");
+  assert.equal(brandingView({ itemView: "page" }).itemView, "page");
+  for (const itemView of [undefined, "", "modal", "DIALOG", 1, "constructor"]) {
+    assert.equal(brandingView({ itemView }).itemView, "page", String(itemView));
+  }
+});
+
+// Keyboard and screen-reader users open an item with one button on its card,
+// and closing the item gives that button focus back: Details on a page, the
+// item's name in dialog mode, where the card has no Details button.
+test("the card's control that opens an item follows the item view", () => {
+  assert.equal(openControl("page"), "card-details");
+  assert.equal(openControl("dialog"), "card-open");
+});
+
+// The modal dialog makes the strip's Cancel unreachable, so the dialog shows
+// its own for the item's running operation; the detail page keeps main's
+// layout, where the strip has the only Cancel. A cancel's own busy button is
+// already the way out, and a finished operation has nothing to cancel.
+test("the item's own Cancel shows in the dialog or under progress button while its operation runs", () => {
+  const operation = (outcome, kind = "do") => ({
+    operationId: "op",
+    item: item({}),
+    action: { kind, label: "Install", method: "InstallItem" },
+    records: [],
+    outcome,
+  });
+  const running = operation("active");
+  // Every combination of item_view and progress: only a page under strip,
+  // where the strip's Cancel is in reach and the button shows no progress,
+  // has no Cancel of its own.
+  for (const [itemView, progress, shown] of [
+    ["page", "strip", false],
+    ["page", "button", true],
+    ["dialog", "strip", true],
+    ["dialog", "button", true],
+  ]) {
+    assert.equal(itemCancel(itemView, progress, running), shown ? running : undefined, `${itemView} ${progress}`);
+    assert.equal(itemCancel(itemView, progress, operation("active", "cancel")), undefined, "a cancel");
+    for (const outcome of ["terminal", "error"]) {
+      assert.equal(itemCancel(itemView, progress, operation(outcome)), undefined, outcome);
+    }
+    assert.equal(itemCancel(itemView, progress, undefined), undefined, "no operation");
+  }
+  assert.equal(itemCancel("dialog", "strip", operation("active", "undo")).action.kind, "undo");
+});
+
+// The dialog grows out of its card only when the user can see the card; a
+// card scrolled out of view, even partly, would make it fly in from off screen.
+test("the dialog morphs from its card only when the card is wholly on screen", () => {
+  const viewport = { width: 1000, height: 800 };
+  const dialog = { left: 200, top: 100, width: 600, height: 400 };
+  assert.equal(
+    morphFrom({ left: 20, top: 300, width: 300, height: 100 }, dialog, viewport),
+    "translate(-180px, 200px) scale(0.5, 0.25)",
+  );
+  for (const [card, why] of [
+    [{ left: 20, top: -150, width: 300, height: 100 }, "scrolled above the window"],
+    [{ left: 20, top: -50, width: 300, height: 100 }, "partly above the window"],
+    [{ left: 20, top: 750, width: 300, height: 100 }, "partly below the window"],
+    [{ left: 20, top: 900, width: 300, height: 100 }, "below the window"],
+    [{ left: 900, top: 300, width: 300, height: 100 }, "past the right edge"],
+    [{ left: 20, top: 300, width: 0, height: 0 }, "not laid out"],
+  ]) {
+    assert.equal(morphFrom(card, dialog, viewport), null, why);
+  }
+  assert.equal(morphFrom({ left: 20, top: 300, width: 300, height: 100 }, { ...dialog, width: 0 }, viewport), null);
 });
 
 const LOGO = { logoMime: "image/png", logoBase64: "iVBORw0KGgo=" };

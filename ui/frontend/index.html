@@ -85,7 +85,9 @@
       </section>
 
       <!-- Drill-down detail page, like Managed Software Center's: Back (and
-           Escape) returns to the list and refocuses the card it came from. -->
+           Escape) returns to the list and refocuses the card it came from.
+           For branding item_view: dialog, main.ts moves #detail-content into
+           #item-dialog instead: one copy of an item's details, two places. -->
       <section id="view-detail" aria-labelledby="detail-name" hidden>
         <p class="detail-nav">
           <button type="button" id="detail-back" class="back">
@@ -93,35 +95,59 @@
             Back
           </button>
         </p>
-        <div class="detail-head">
-          <span id="detail-glyph" class="glyph glyph-large" aria-hidden="true"></span>
-          <div class="detail-title">
-            <h2 id="detail-name"></h2>
-            <p id="detail-developer"></p>
-            <p id="detail-applies-to" hidden></p>
-            <!-- One row per placement, in place of the applies-to line, when
-                 the service sends the item's placements. -->
-            <ul id="detail-placements" class="placements" hidden></ul>
-            <p id="detail-description"></p>
+        <div id="detail-content">
+          <div class="detail-head">
+            <span id="detail-glyph" class="glyph glyph-large" aria-hidden="true"></span>
+            <div class="detail-title">
+              <h2 id="detail-name"></h2>
+              <p id="detail-developer"></p>
+              <p id="detail-applies-to" hidden></p>
+              <!-- One row per placement, in place of the applies-to line, when
+                   the service sends the item's placements. -->
+              <ul id="detail-placements" class="placements" hidden></ul>
+              <p id="detail-description"></p>
+            </div>
+            <!-- The item's action and its own Cancel while an operation on
+                 it runs, in the dialog (the modal dialog puts the strip's
+                 out of reach) or under branding progress: button. Cancel
+                 comes first and style.css keeps the action where it is, so
+                 Cancel coming and going never moves it and a double click
+                 on Install cannot land on Cancel. -->
+            <span class="detail-actions">
+              <button type="button" id="detail-cancel" class="pill pill-outline" hidden></button>
+              <button type="button" id="detail-action" class="pill pill-primary pill-large"></button>
+            </span>
           </div>
-          <button type="button" id="detail-action" class="pill pill-primary pill-large"></button>
+          <p class="card-status" aria-live="polite">
+            <svg class="spinner" aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" hidden>
+              <path d="M8 2a6 6 0 1 1-4.24 1.76" />
+            </svg>
+            <span class="status-text"></span>
+          </p>
+          <h3>Information</h3>
+          <dl class="info">
+            <div><dt>Developer</dt><dd id="detail-developer-value"></dd></div>
+            <div><dt>Version</dt><dd id="detail-version"></dd></div>
+            <div><dt>Category</dt><dd id="detail-category"></dd></div>
+            <div><dt>Status</dt><dd id="detail-status"></dd></div>
+            <div><dt>Restart</dt><dd id="detail-restart"></dd></div>
+          </dl>
         </div>
-        <p class="card-status" aria-live="polite">
-          <svg class="spinner" aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" hidden>
-            <path d="M8 2a6 6 0 1 1-4.24 1.76" />
-          </svg>
-          <span class="status-text"></span>
-        </p>
-        <h3>Information</h3>
-        <dl class="info">
-          <div><dt>Developer</dt><dd id="detail-developer-value"></dd></div>
-          <div><dt>Version</dt><dd id="detail-version"></dd></div>
-          <div><dt>Category</dt><dd id="detail-category"></dd></div>
-          <div><dt>Status</dt><dd id="detail-status"></dd></div>
-          <div><dt>Restart</dt><dd id="detail-restart"></dd></div>
-        </dl>
       </section>
     </main>
+
+    <!-- An item's details in a dialog over the list (branding item_view:
+         dialog). It grows out of the item's card (main.ts); Close, Escape or
+         a click outside it closes it and refocuses the card. -->
+    <dialog id="item-dialog" aria-labelledby="detail-name">
+      <div class="dialog-body">
+        <p class="dialog-bar">
+          <button type="button" id="detail-close" class="icon-button" aria-label="Close">
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16"><path d="m4 4 8 8m0-8-8 8" /></svg>
+          </button>
+        </p>
+      </div>
+    </dialog>
 
     <!-- The one operation being worked on right now; each item's own state is on its card. -->
     <footer id="operation-strip" class="strip" aria-label="Current operation" hidden>
@@ -134,7 +160,24 @@
         <progress id="strip-progress" max="100"></progress>
       </div>
       <button id="strip-cancel" type="button" class="pill pill-outline">Cancel</button>
+      <!-- Under branding progress: button the strip only counts a queue of two
+           or more; it opens the list of running work above it. -->
+      <button id="queue-toggle" type="button" class="queue-toggle" aria-expanded="false" aria-controls="queue-panel" hidden>
+        <svg class="spinner" aria-hidden="true" width="14" height="14" viewBox="0 0 16 16">
+          <path d="M8 2a6 6 0 1 1-4.24 1.76" />
+        </svg>
+        <span id="queue-text"></span>
+        <svg class="chevron" aria-hidden="true" width="12" height="12" viewBox="0 0 16 16"><path d="m4 10 4-4 4 4" /></svg>
+      </button>
+      <div id="queue-panel" class="queue-panel" hidden>
+        <ul id="queue-list" class="queue-list" aria-label="Running work"></ul>
+      </div>
     </footer>
+
+    <!-- Under branding progress: button, says each new phase of running work
+         once; the buttons that show it are not live regions, so a percentage
+         is never read out tick by tick. -->
+    <p id="announcer" class="visually-hidden" role="status" aria-live="polite"></p>
 
     <template id="spinner">
       <svg class="spinner" aria-hidden="true" width="14" height="14" viewBox="0 0 16 16">

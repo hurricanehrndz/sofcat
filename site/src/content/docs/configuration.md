@@ -53,7 +53,7 @@ owns it and neither its group nor others can write it.
 | `verbose`, `debug`, `log_file_plain`, `checkonly`, `service_interval` | Yes |
 | `tls_auth`, `tls_client_cert`, `tls_client_key`, `tls_server_cert` (file paths) | Yes |
 | `tls_client_cert_store`, `tls_client_cert_store_field` | Yes |
-| `branding` (`title`, `tagline`, `logo`, `link_url`, `link_label`, `link_placement`, `link_position` (`help_url` and `help_label`, the old names of the first two, still work), `accent`, `background_image`, `background_text`, `list_heading`, `sections`, `title_size`, `tagline_size`, `content_width`, `filter_placement`, `app_bar_brand`, `banner_style`, `banner_align`, `banner_height`) | Yes, field by field |
+| `branding` (`title`, `tagline`, `logo`, `link_url`, `link_label`, `link_placement`, `link_position` (`help_url` and `help_label`, the old names of the first two, still work), `accent`, `background_image`, `background_text`, `list_heading`, `sections`, `title_size`, `tagline_size`, `content_width`, `filter_placement`, `app_bar_brand`, `banner_style`, `banner_align`, `banner_height`, `item_view`, `progress`) | Yes, field by field |
 | `auth_user`, `auth_pass` | No: ignored with a warning in `sofcat.log` |
 | `app_data_path`, `service_name`, `service_pipe_name` | No: they must match the installed build |
 
@@ -135,7 +135,7 @@ every key.
 ## Branding
 
 The storefront's title, tagline, logo, link button and its place, accent colour, banner
-background image, list heading, section tab order, banner height and banner and app-bar layout come from the `branding:` block in `config.yaml` or from
+background image, list heading, section tab order, banner height, banner and app-bar layout, whether an item opens as a page or a dialog (`item_view`) and where running work shows (`progress`) come from the `branding:` block in `config.yaml` or from
 [managed settings](#managed-settings), with no rebuild. The keys and their
 limits are in the UI's
 [branding reference](https://github.com/hurricanehrndz/sofcat/blob/main/ui/README.md#branding).

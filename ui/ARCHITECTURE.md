@@ -55,7 +55,7 @@ answer echoes the `id` with a `result` or an `error`:
 | --- | --- | --- |
 | `getServiceInfo` | none | `{version, protocolVersion: "2.0", apiVersion: 1, capabilities: [methods], busy, uptimeSeconds}` |
 | `listOptionalInstalls` | none | `{items: [OptionalInstallItem]}` (shape below) |
-| `getBranding` | none | `Branding`: `{title, tagline, helpUrl, helpLabel, linkPlacement, linkPosition, accent, logoMime, logoBase64, backgroundMime, backgroundBase64, backgroundText, listHeading, titleSize, taglineSize, contentWidth, filterPlacement, appBarBrand, bannerStyle, bannerAlign, bannerHeight, sections?}` |
+| `getBranding` | none | `Branding`: `{title, tagline, helpUrl, helpLabel, linkPlacement, linkPosition, accent, logoMime, logoBase64, backgroundMime, backgroundBase64, backgroundText, listHeading, titleSize, taglineSize, contentWidth, filterPlacement, appBarBrand, bannerStyle, bannerAlign, bannerHeight, itemView, progress, sections?}` |
 | `installItem` | `{itemName, placement?}` | `AcceptedOperation` |
 | `removeItem` | `{itemName, placement?}` | `AcceptedOperation` |
 | `cancelOperation` | `{operationId}` | `{canceled: true}` |
@@ -398,6 +398,37 @@ timeline is shown only in Activity, never on the Home view. No percentage is
 fabricated for installs, removals, status checks, no-action items,
 blocking-app checks, or pre/post scripts.
 
+All of that is branding `progress: strip`, the default. With `progress:
+button` the bar moves into the busy item's own buttons (`actionProgress` in
+`state.ts`): its card's and detail page's action, and each placement row the
+work is for, read "Waiting…" with a spinner while the latest record is
+`Requested` or `Queued` (or the request is unanswered), then the phase over a
+bar filled to the percentage only when the record carries one and
+indeterminate otherwise. The item is freed exactly as under `strip`: when the
+list fetched after the operation's end arrives (or fails). The service queues
+that list behind running installs, so the wait can be long; meanwhile only a
+`Succeeded` button shows a full bar, and a `Failed`, `Canceled` or `Deferred`
+one shows its action again, still `aria-disabled`, with no bar, spinner or
+`aria-busy`. The
+accessible name stays the busy label with no percentage, `aria-busy` is set,
+and a visually hidden `#announcer` says each new phase once per operation. An
+item's own Cancel (`itemCancel`) on the card and the detail page follows the
+strip's rules below. Its place is kept while it is hidden, so the action
+never moves under the pointer and a double click on Install cannot land on
+it: on the detail page it sits before the action, on a single-line card
+after it, and on a column card on the row under it, beside Details. The
+status lines keep only outcomes and a refused cancel's reason, since running
+work is on the button. The root reserves the scrollbar's gutter and the
+Activity tab its spinner's width, so neither the strip nor the start of work
+moves or narrows the page. The strip shows only while two or more operations run, as a count
+("Installing 1 of 3", with the item's own installing or removing label and
+the place `stripView` picks; "Waiting 1 of 3" until the service starts on
+any), and is a disclosure button (`aria-expanded`) for a list
+above it: a row per running operation, the working one first, with its state
+and a Cancel. Escape or a click outside closes the list and returns focus to
+the strip when nothing else took it. Cards whose item is unchanged are kept
+and repainted in place, so a bar eases rather than restarting.
+
 The app bar carries the connection state (a dot and the cached/stale message
 with Retry). Above it, the `#banner` section stays hidden until branding
 fills it (see Branding). "My items" is the same list filtered on the client to installed or
@@ -497,8 +528,9 @@ every run, so a policy change applies from the next run without a restart:
    `link_placement`, `link_position`, the old names `help_url` and `help_label`,
    `accent`, `background_image`, `background_text`, `list_heading`, `sections`,
    `title_size`, `tagline_size`, `content_width`, `filter_placement`,
-   `app_bar_brand`, `banner_style`, `banner_align`, `banner_height`; `sections` is a
-   REG_MULTI_SZ).
+   `app_bar_brand`, `banner_style`, `banner_align`, `banner_height`, `item_view`,
+   `progress`;
+   `sections` is a REG_MULTI_SZ).
 2. The `branding:` block in `config.yaml`.
 3. Nothing, and the UI keeps its default look.
 
@@ -537,12 +569,46 @@ in the title's place with the title as its alt text (`text` without a usable
 logo, and no logo in the app-bar mark or the window icon) and as `data-align` on
 the banner. `banner_height` must be `small`, `medium`, `large` or `x-large`; the UI
 sets it as `data-height` on the banner, and anything else is `medium`.
+`progress` must be `strip` or `button`; the UI sets it as `data-progress` on
+the root element, and anything else is `strip`.
 `link_placement` must be `banner` or `app_bar`, and `link_position` `auto`,
 `top_left`, `top_right`, `bottom_left` or `bottom_right`; anything else is the
 first. The UI moves the one link button to the app bar's end, before the
 connection status, for `app_bar`, where a link alone no longer shows the
 banner and `link_position` is ignored; for a corner of a banner with the link
-it sets `data-link-position` on the banner. A
+it sets `data-link-position` on the banner. `item_view` must be `page` or
+`dialog`, and anything else is `page`. For `page` a card's Details button, or
+a click on the card, replaces the list with the item's detail page. For
+`dialog` the card has no Details button, its name is a button instead, and
+either opens the item in a modal `<dialog>` over the list. Both show the one
+`#detail-content` subtree, which `renderDetail` fills: `main.ts` mounts it on
+the detail page or in the dialog, and a change of mode closes an item open
+the old way first. The dialog grows out of its card with the Web Animations
+API and shrinks back into it; a close during the grow plays it back from
+where it is, and a card not wholly on screen, or reduced motion, gives no
+motion. Close, `Escape` or a click on the backdrop closes it and refocuses
+the card's name, or the search field once a refresh has dropped the card,
+which also closes the dialog. While it is open, refreshes and progress fill
+the same subtree in place, so focus stays inside it. The operation strip
+stays at the window's bottom, inert under the backdrop, so the dialog shows
+its own Cancel beside the action while the open item's operation runs
+(`itemCancel`), set up by the strip's own `setCancel`; when it goes off or
+away while focused, focus moves to the action, or to the close button when
+the item shows no action. The page has none under `progress: strip`; under
+`button` the page and the dialog both have it, and a card has its own (see
+the progress paragraphs above). The queue list of `progress: button` closes
+when the dialog opens, so it never floats over the backdrop. In the dialog the action has a
+row of its own under the title, at its right end, with Cancel before it on
+a line that never wraps (a long Cancel label is cut short), so no label
+takes width from the text, and the dialog's top edge is fixed rather than
+centred. The action's right edge and top, and the placement rows' buttons,
+stay where they were clicked as Cancel and the status line come and go. The
+backdrop fades in as the dialog opens and out as it shrinks back (a close
+with no shrink removes it at once), through the Web Animations API,
+and a close during the fade-in fades out from where it has got to. After a
+pointer action the dialog focuses its close button, and the card's name on
+close, with `focusVisible: false` where the web view takes it, so only
+keyboard use draws a ring. A
 dropped field is logged at debug level and
 never fails the call.
 
