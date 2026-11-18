@@ -53,7 +53,7 @@ owns it and neither its group nor others can write it.
 | `verbose`, `debug`, `log_file_plain`, `checkonly`, `service_interval` | Yes |
 | `tls_auth`, `tls_client_cert`, `tls_client_key`, `tls_server_cert` (file paths) | Yes |
 | `tls_client_cert_store`, `tls_client_cert_store_field` | Yes |
-| `branding` (`title`, `tagline`, `logo`, `help_url`, `help_label`, `accent`, `background_image`, `background_text`, `list_heading`, `sections`, `title_size`, `tagline_size`, `content_width`, `filter_placement`) | Yes, field by field |
+| `branding` (`title`, `tagline`, `logo`, `help_url`, `help_label`, `accent`, `background_image`, `background_text`, `list_heading`, `sections`, `title_size`, `tagline_size`, `content_width`, `filter_placement`, `app_bar_brand`, `banner_style`, `banner_align`) | Yes, field by field |
 | `auth_user`, `auth_pass` | No: ignored with a warning in `sofcat.log` |
 | `app_data_path`, `service_name`, `service_pipe_name` | No: they must match the installed build |
 
@@ -123,12 +123,13 @@ every key.
 | [`example_package-info.yaml`](https://github.com/hurricanehrndz/sofcat/blob/main/examples/example_package-info.yaml) | One item's package info, the input to `makecatalogs`. |
 | [`placements.yaml`](https://github.com/hurricanehrndz/sofcat/blob/main/examples/placements.yaml) | Placements for zip items. See [Zip items](/zip-items/overview/). |
 | [`zip-items/`](https://github.com/hurricanehrndz/sofcat/tree/main/examples/zip-items) | Two zip items' sources, item trees and generated package-info files. |
+| [`branding/`](https://github.com/hurricanehrndz/sofcat/tree/main/examples/branding) | Two logo-banner wordmarks for `branding.banner_style: logo`: light lettering for a dark or accent banner, dark for a light one. |
 | [`brand/`](https://github.com/hurricanehrndz/sofcat/tree/main/examples/brand) | A rebrand: your own name, icon, service and installer. |
 
 ## Branding
 
 The storefront's title, tagline, logo, help link, accent colour, banner
-background image, list heading and section tab order come from the `branding:` block in `config.yaml` or from
+background image, list heading, section tab order and banner and app-bar layout come from the `branding:` block in `config.yaml` or from
 [managed settings](#managed-settings), with no rebuild. The keys and their
 limits are in the UI's
 [branding reference](https://github.com/hurricanehrndz/sofcat/blob/main/ui/README.md#branding).

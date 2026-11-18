@@ -143,6 +143,15 @@ type Branding struct {
 	// FilterPlacement is where the list's search and category filters sit:
 	// right (the default, on the heading's row) or left (above the heading).
 	FilterPlacement string `yaml:"filter_placement,omitempty"`
+	// AppBarBrand is what the app bar shows of the product: full (the
+	// default, mark and name), mark or none.
+	AppBarBrand string `yaml:"app_bar_brand,omitempty"`
+	// BannerStyle is text (the default, the logo beside the title) or logo
+	// (the logo in the title's place).
+	BannerStyle string `yaml:"banner_style,omitempty"`
+	// BannerAlign aligns the banner's content: left (the default), center or
+	// right.
+	BannerAlign string `yaml:"banner_align,omitempty"`
 	// Sections orders the storefront tabs built from catalog item sections.
 	Sections []string `yaml:"sections,omitempty"`
 }

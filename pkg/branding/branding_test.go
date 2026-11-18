@@ -228,3 +228,31 @@ func TestResolveFilterPlacement(t *testing.T) {
 		}
 	}
 }
+
+// The banner and app-bar keys are closed sets: an unknown value must leave the
+// UI's default rather than a layout the CSS has no rule for.
+func TestResolveBannerLayout(t *testing.T) {
+	for _, tc := range []struct{ brand, style, align, want string }{
+		{"full", "text", "left", "full text left"},
+		{"Mark", " LOGO ", "Center", "mark logo center"},
+		{"none", "logo", "right", "none logo right"},
+		{"", "", "", "  "},
+		{"hidden", "image", "middle", "  "},
+	} {
+		got := resolve(config.Branding{AppBarBrand: tc.brand, BannerStyle: tc.style, BannerAlign: tc.align})
+		if s := got.AppBarBrand + " " + got.BannerStyle + " " + got.BannerAlign; s != tc.want {
+			t.Errorf("%q %q %q resolved to %q, want %q", tc.brand, tc.style, tc.align, s, tc.want)
+		}
+	}
+}
+
+// The example logo banners must pass the logo loader as they are: an SVG
+// under the size cap, with its raster embedded as a data URI.
+func TestResolveExampleLogoBanners(t *testing.T) {
+	for _, name := range []string{"sofcat-logo-banner-light.svg", "sofcat-logo-banner-dark.svg"} {
+		got := resolve(config.Branding{Logo: filepath.Join("..", "..", "examples", "branding", name)})
+		if got.LogoMime != "image/svg+xml" || got.LogoBase64 == "" {
+			t.Errorf("%s resolved to logo %q (%d base64 bytes)", name, got.LogoMime, len(got.LogoBase64))
+		}
+	}
+}

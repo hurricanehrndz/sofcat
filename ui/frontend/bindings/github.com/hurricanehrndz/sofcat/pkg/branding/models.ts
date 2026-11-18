@@ -54,6 +54,15 @@ export class Branding {
      */
     "filterPlacement": string;
 
+    /**
+     * AppBarBrand, BannerStyle and BannerAlign are one of AppBarBrands,
+     * BannerStyles and BannerAligns, or "" for the UI's defaults: full, text
+     * and left.
+     */
+    "appBarBrand": string;
+    "bannerStyle": string;
+    "bannerAlign": string;
+
     /** Creates a new Branding instance. */
     constructor($$source: Partial<Branding> = {}) {
         if (!("title" in $$source)) {
@@ -100,6 +109,15 @@ export class Branding {
         }
         if (!("filterPlacement" in $$source)) {
             this["filterPlacement"] = "";
+        }
+        if (!("appBarBrand" in $$source)) {
+            this["appBarBrand"] = "";
+        }
+        if (!("bannerStyle" in $$source)) {
+            this["bannerStyle"] = "";
+        }
+        if (!("bannerAlign" in $$source)) {
+            this["bannerAlign"] = "";
         }
 
         Object.assign(this, $$source);

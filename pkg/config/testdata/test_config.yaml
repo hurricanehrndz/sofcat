@@ -24,3 +24,6 @@ branding:
   tagline_size: x-large
   content_width: full
   filter_placement: left
+  app_bar_brand: mark
+  banner_style: logo
+  banner_align: center

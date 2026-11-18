@@ -113,4 +113,13 @@ export type BrandingView = {
   contentWidth: "compact" | "wide" | "full";
   /** The admin's filter_placement: where the list's search and category filters sit. */
   filterPlacement: "right" | "left";
+  /**
+   * What the app bar shows of the product: mark and name, the mark only, or
+   * neither. The name stays for screen readers; full while there is no banner.
+   */
+  appBarBrand: "full" | "mark" | "none";
+  /** The banner's title: text beside a logo tile, or the logo in its place (only with a logo). */
+  bannerStyle: "text" | "logo";
+  /** The admin's banner_align: where the banner's content sits. */
+  bannerAlign: "left" | "center" | "right";
 };

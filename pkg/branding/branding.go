@@ -65,6 +65,12 @@ type Branding struct {
 	// FilterPlacement is one of FilterPlacements, or "" for the UI's default,
 	// right.
 	FilterPlacement string `json:"filterPlacement"`
+	// AppBarBrand, BannerStyle and BannerAlign are one of AppBarBrands,
+	// BannerStyles and BannerAligns, or "" for the UI's defaults: full, text
+	// and left.
+	AppBarBrand string `json:"appBarBrand"`
+	BannerStyle string `json:"bannerStyle"`
+	BannerAlign string `json:"bannerAlign"`
 }
 
 // FontSizes are the names title_size and tagline_size accept: a small fixed
@@ -80,6 +86,19 @@ var ContentWidths = []string{"compact", "wide", "full"}
 // list's search and category filters on the heading's row, at its right,
 // and left keeps them above the heading, the layout from before the key.
 var FilterPlacements = []string{"right", "left"}
+
+// AppBarBrands are the names app_bar_brand accepts: what the app bar shows of
+// the product, its mark and name (full), the mark only, or neither. The UI
+// keeps the name for screen readers in all three.
+var AppBarBrands = []string{"full", "mark", "none"}
+
+// BannerStyles are the names banner_style accepts: text shows the logo in a
+// tile beside the title, and logo shows the logo as a wordmark in the title's
+// place, with the title as its text alternative.
+var BannerStyles = []string{"text", "logo"}
+
+// BannerAligns are the names banner_align accepts for the banner's content.
+var BannerAligns = []string{"left", "center", "right"}
 
 // Resolve returns the validated branding; config.Get has already merged the
 // managed settings over the config.yaml block. The logo file is read on every
@@ -114,6 +133,9 @@ func resolve(in config.Branding) Branding {
 	out.TaglineSize = oneOf("tagline_size", in.TaglineSize, FontSizes...)
 	out.ContentWidth = oneOf("content_width", in.ContentWidth, ContentWidths...)
 	out.FilterPlacement = oneOf("filter_placement", in.FilterPlacement, FilterPlacements...)
+	out.AppBarBrand = oneOf("app_bar_brand", in.AppBarBrand, AppBarBrands...)
+	out.BannerStyle = oneOf("banner_style", in.BannerStyle, BannerStyles...)
+	out.BannerAlign = oneOf("banner_align", in.BannerAlign, BannerAligns...)
 	return out
 }
 

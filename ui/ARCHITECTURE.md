@@ -55,7 +55,7 @@ answer echoes the `id` with a `result` or an `error`:
 | --- | --- | --- |
 | `getServiceInfo` | none | `{version, protocolVersion: "2.0", apiVersion: 1, capabilities: [methods], busy, uptimeSeconds}` |
 | `listOptionalInstalls` | none | `{items: [OptionalInstallItem]}` (shape below) |
-| `getBranding` | none | `Branding`: `{title, tagline, helpUrl, helpLabel, accent, logoMime, logoBase64, backgroundMime, backgroundBase64, backgroundText, listHeading, titleSize, taglineSize, contentWidth, filterPlacement, sections?}` |
+| `getBranding` | none | `Branding`: `{title, tagline, helpUrl, helpLabel, accent, logoMime, logoBase64, backgroundMime, backgroundBase64, backgroundText, listHeading, titleSize, taglineSize, contentWidth, filterPlacement, appBarBrand, bannerStyle, bannerAlign, sections?}` |
 | `installItem` | `{itemName, placement?}` | `AcceptedOperation` |
 | `removeItem` | `{itemName, placement?}` | `AcceptedOperation` |
 | `cancelOperation` | `{operationId}` | `{canceled: true}` |
@@ -488,7 +488,8 @@ every run, so a policy change applies from the next run without a restart:
    `/Library/Managed Preferences/<IDENTIFIER>.plist` on macOS. The names are the
    `config.yaml` keys (`title`, `tagline`, `logo`, `help_url`, `help_label`,
    `accent`, `background_image`, `background_text`, `list_heading`, `sections`,
-   `title_size`, `tagline_size`, `content_width`, `filter_placement`; `sections` is a
+   `title_size`, `tagline_size`, `content_width`, `filter_placement`,
+   `app_bar_brand`, `banner_style`, `banner_align`; `sections` is a
    REG_MULTI_SZ).
 2. The `branding:` block in `config.yaml`.
 3. Nothing, and the UI keeps its default look.
@@ -506,7 +507,14 @@ the factors 0.85, 1, 1.25 and 1.5 on its default sizes (CSS `--title-scale` and
 `--tagline-scale`), and anything else is 1. `content_width` must be `compact`, `wide`
 or `full`; the UI sets it as `data-content-width` on the root element, and anything
 else is `wide`. `filter_placement` must be `right` or `left`; the UI sets it as
-`data-filter-placement` on the root element, and anything else is `right`. A
+`data-filter-placement` on the root element, and anything else is `right`.
+`app_bar_brand` must be `full`, `mark` or `none`, `banner_style` `text` or `logo`
+and `banner_align` `left`, `center` or `right`; anything else is the first. The UI
+sets them as `data-app-bar-brand` on the root element (`full` while no banner
+shows, and hidden only visually, so the h1 keeps the product name), as the logo
+in the title's place with the title as its alt text (`text` without a usable
+logo, and no logo in the app-bar mark or the window icon) and as `data-align` on
+the banner. A
 dropped field is logged at debug level and
 never fails the call.
 

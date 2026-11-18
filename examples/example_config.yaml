@@ -35,6 +35,10 @@ app_data_path: c:/cpe/sofcat/cache
 #   tagline_size: medium                              # banner tagline: the same sizes
 #   content_width: wide                               # compact (the layout before this key), wide (default) or full
 #   filter_placement: right                           # search and category: right (default; on the heading's row, at its right edge) or left (above the heading, as before)
+#   banner_style: text                                # text (default; logo tile beside the title) or logo (logo in the title's place, title as its alt text);
+#                                                     #   examples/branding/sofcat-logo-banner-light.svg (dark banners) and -dark.svg (light ones)
+#   banner_align: left                                # banner logo, title and tagline: left (default), center or right
+#   app_bar_brand: full                               # app bar: full (default; mark and name), mark or none; for use with the banner
 #   sections:                                         # storefront tab order; unlisted sections follow alphabetically
 #     - Apps
 #     - Branding
