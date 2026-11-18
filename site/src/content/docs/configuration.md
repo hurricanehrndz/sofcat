@@ -53,12 +53,18 @@ owns it and neither its group nor others can write it.
 | `verbose`, `debug`, `log_file_plain`, `checkonly`, `service_interval` | Yes |
 | `tls_auth`, `tls_client_cert`, `tls_client_key`, `tls_server_cert` (file paths) | Yes |
 | `tls_client_cert_store`, `tls_client_cert_store_field` | Yes |
-| `branding` (`title`, `tagline`, `logo`, `help_url`, `help_label`, `accent`, `background_image`, `background_text`, `list_heading`, `sections`, `title_size`, `tagline_size`, `content_width`, `filter_placement`, `app_bar_brand`, `banner_style`, `banner_align`, `banner_height`) | Yes, field by field |
+| `branding` (`title`, `tagline`, `logo`, `link_url`, `link_label`, `link_placement`, `link_position` (`help_url` and `help_label`, the old names of the first two, still work), `accent`, `background_image`, `background_text`, `list_heading`, `sections`, `title_size`, `tagline_size`, `content_width`, `filter_placement`, `app_bar_brand`, `banner_style`, `banner_align`, `banner_height`) | Yes, field by field |
 | `auth_user`, `auth_pass` | No: ignored with a warning in `sofcat.log` |
 | `app_data_path`, `service_name`, `service_pipe_name` | No: they must match the installed build |
 
 A value of the wrong type is dropped with a warning and the rest of the
-policy still applies. The `WriteRoots` policy lives in the same places; see
+policy still applies.
+
+`branding.help_url` and `help_label` are the old names of `link_url` and
+`link_label`. Where one source, the policy or `config.yaml`, sets both names,
+the new one wins. Across sources the policy wins as for any key, whichever
+name it uses: a policy that still sets `help_url` overrides a `config.yaml`
+that has moved to `link_url`. The `WriteRoots` policy lives in the same places; see
 [Write roots](#write-roots).
 
 On Windows, for example:
@@ -128,7 +134,7 @@ every key.
 
 ## Branding
 
-The storefront's title, tagline, logo, help link, accent colour, banner
+The storefront's title, tagline, logo, link button and its place, accent colour, banner
 background image, list heading, section tab order, banner height and banner and app-bar layout come from the `branding:` block in `config.yaml` or from
 [managed settings](#managed-settings), with no rebuild. The keys and their
 limits are in the UI's

@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"go.yaml.in/yaml/v4"
@@ -128,9 +129,19 @@ type Branding struct {
 	// BackgroundText is the banner text colour over BackgroundImage: light
 	// (the default) or dark.
 	BackgroundText string `yaml:"background_text,omitempty"`
-	HelpURL        string `yaml:"help_url,omitempty"`
-	HelpLabel      string `yaml:"help_label,omitempty"`
-	Accent         string `yaml:"accent,omitempty"`
+	// LinkURL and LinkLabel are the button that opens the admin's page.
+	// LinkPlacement puts it in the banner (the default) or the app bar, and
+	// LinkPosition in the banner: auto (the default) or a corner.
+	LinkURL       string `yaml:"link_url,omitempty"`
+	LinkLabel     string `yaml:"link_label,omitempty"`
+	LinkPlacement string `yaml:"link_placement,omitempty"`
+	LinkPosition  string `yaml:"link_position,omitempty"`
+	// HelpURL and HelpLabel are the released names of link_url and
+	// link_label, still accepted. foldLinkAliases moves them into the new
+	// fields source by source, so nothing past config reads them.
+	HelpURL   string `yaml:"help_url,omitempty"`
+	HelpLabel string `yaml:"help_label,omitempty"`
+	Accent    string `yaml:"accent,omitempty"`
 	// ListHeading replaces the UI's "Available software" heading.
 	ListHeading string `yaml:"list_heading,omitempty"`
 	// TitleSize and TaglineSize scale the banner title (with the page
@@ -157,6 +168,21 @@ type Branding struct {
 	BannerHeight string `yaml:"banner_height,omitempty"`
 	// Sections orders the storefront tabs built from catalog item sections.
 	Sections []string `yaml:"sections,omitempty"`
+}
+
+// foldLinkAliases moves help_url and help_label into link_url and link_label
+// where those are unset, so within one source the new name wins. resolve runs
+// it on config.yaml before applyManaged, which does the same for the managed
+// settings: a policy that still uses an old name overrides config.yaml's new
+// one, as any managed key overrides the file.
+func (b *Branding) foldLinkAliases() {
+	if strings.TrimSpace(b.LinkURL) == "" {
+		b.LinkURL = b.HelpURL
+	}
+	if strings.TrimSpace(b.LinkLabel) == "" {
+		b.LinkLabel = b.HelpLabel
+	}
+	b.HelpURL, b.HelpLabel = "", ""
 }
 
 // registerFlags defines sofcat's flags on flag.CommandLine. Get calls it, not
@@ -309,6 +335,7 @@ func Refresh(cfg Configuration) Configuration {
 // resolve returns cfg, config.yaml as parsed, under the managed settings,
 // the command line and the defaults.
 func resolve(cfg Configuration, managed map[string]any, warn func(string)) Configuration {
+	cfg.Branding.foldLinkAliases()
 	applyManaged(&cfg, managed, warn)
 
 	// If URLPackages wasn't provided, use the repo URL when available.

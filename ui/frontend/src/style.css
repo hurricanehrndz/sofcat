@@ -259,8 +259,10 @@ button[aria-disabled="true"] {
   color: color-mix(in srgb, currentcolor 82%, var(--brand, var(--accent)));
 }
 
-.banner-help {
+#banner .brand-link {
   flex: none;
+  /* A long label wraps inside the pill rather than running off a narrow banner. */
+  max-width: 100%;
   border: 0;
   background: var(--on-brand, var(--on-accent));
   color: var(--brand, var(--accent));
@@ -294,7 +296,7 @@ button[aria-disabled="true"] {
   color: var(--banner-ink);
 }
 
-#banner[data-image] .banner-help {
+#banner[data-image] .brand-link {
   background: var(--banner-ink);
   color: var(--banner-paper);
 }
@@ -322,8 +324,8 @@ button[aria-disabled="true"] {
 
 /*
  * banner_align (data-align on the banner): left, the default, keeps the logo,
- * text and help button in a row; right mirrors it, the help button at the
- * left; center stacks them in a centred column, the help button last. The
+ * text and link button in a row; right mirrors it, the link button at the
+ * left; center stacks them in a centred column, the link button last. The
  * DOM order, and so the tab order, stays the same in all three. In each the
  * content sits in the middle of a banner taller than it (a background image's
  * minimum height).
@@ -386,7 +388,7 @@ button[aria-disabled="true"] {
 }
 
 /*
- * A centred banner stacks its logo, text and help button, so its content is
+ * A centred banner stacks its logo, text and link button, so its content is
  * often taller than large's minimum already; there large and x-large add
  * padding as well, so each step stays taller than the one below.
  */
@@ -396,6 +398,159 @@ button[aria-disabled="true"] {
 
 #banner[data-align="center"][data-height="x-large"] {
   padding-block: 4.5rem;
+}
+
+/*
+ * link_position (data-link-position on the banner, set only for a corner of
+ * a banner that shows the link) puts the button in that corner, inside the
+ * banner's padding. A grid keeps it in the layout, never over the content:
+ * where the corner is on the content's side (or the content is centred) the
+ * button takes a row of its own above or below, and a matching 1fr row on
+ * the other side keeps the content in the banner's middle; the banner grows
+ * when its height leaves no room for them. Where the corner is on the far
+ * side, the button takes a column of its own instead, so the banner keeps
+ * its height, at most 40% of the width, its label wrapping beyond that.
+ * Below 40rem that column would squeeze the text, so the button takes a row
+ * there as well. The DOM order, logo, text, button, never changes: the button
+ * is the banner's only stop in the tab order, and screen readers meet it
+ * after the text, as in auto, wherever the eye does.
+ *
+ * The space between rows is a margin on the item that needs it, not a row
+ * gap, so a row with nothing in it (no logo tile, or small's missing twin
+ * row) leaves no gutters behind.
+ */
+#banner[data-link-position] {
+  --corner-gap: 0.75rem;
+
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: 1fr auto 1fr;
+  align-content: normal;
+  align-items: center;
+  gap: 0;
+}
+
+#banner[data-link-position] .banner-logo {
+  grid-area: logo;
+  margin-inline-end: 2rem;
+}
+
+#banner[data-link-position] .banner-text {
+  grid-area: text;
+}
+
+#banner[data-link-position] .brand-link {
+  grid-area: link;
+}
+
+#banner[data-link-position^="top"] .brand-link {
+  align-self: start;
+  margin-bottom: var(--corner-gap);
+}
+
+#banner[data-link-position^="bottom"] .brand-link {
+  align-self: end;
+  margin-top: var(--corner-gap);
+}
+
+#banner[data-link-position$="left"] .brand-link {
+  justify-self: start;
+}
+
+#banner[data-link-position$="right"] .brand-link {
+  justify-self: end;
+}
+
+#banner[data-link-position^="top"] {
+  grid-template-areas: "link link" "logo text" ". .";
+}
+
+#banner[data-link-position^="bottom"] {
+  grid-template-areas: ". ." "logo text" "link link";
+}
+
+#banner[data-align="right"][data-link-position] {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+#banner[data-align="right"][data-link-position] .banner-logo {
+  margin-inline: 2rem 0;
+}
+
+#banner[data-align="right"][data-link-position^="top"] {
+  grid-template-areas: "link link" "text logo" ". .";
+}
+
+#banner[data-align="right"][data-link-position^="bottom"] {
+  grid-template-areas: ". ." "text logo" "link link";
+}
+
+#banner[data-align="center"][data-link-position] {
+  --corner-gap: 1rem;
+
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 1fr auto auto 1fr;
+}
+
+/*
+ * A centred banner's large and x-large padding would hold the button that
+ * far from its corner; with a corner, the button's row and its empty twin
+ * take that extra height instead, so each step stays taller than the last.
+ */
+#banner[data-align="center"][data-link-position][data-height="large"] {
+  grid-template-rows: minmax(4.5rem, 1fr) auto auto minmax(4.5rem, 1fr);
+  padding-block: 1.75rem;
+}
+
+#banner[data-align="center"][data-link-position][data-height="x-large"] {
+  grid-template-rows: minmax(6rem, 1fr) auto auto minmax(6rem, 1fr);
+  padding-block: 1.75rem;
+}
+
+#banner[data-align="center"][data-link-position] .banner-logo {
+  justify-self: center;
+  margin: 0 0 var(--corner-gap);
+}
+
+#banner[data-align="center"][data-link-position^="top"] {
+  grid-template-areas: "link" "logo" "text" ".";
+}
+
+#banner[data-align="center"][data-link-position^="bottom"] {
+  grid-template-areas: "." "logo" "text" "link";
+}
+
+/*
+ * A small banner is meant to stay slim: the button's row keeps small's
+ * tighter gap and gets no empty twin, so the content sits just beside it
+ * rather than in the banner's exact middle.
+ */
+#banner[data-height="small"][data-link-position] {
+  --corner-gap: 0.5rem;
+
+  grid-template-rows: none;
+}
+
+@media (min-width: 40rem) {
+  #banner[data-align="left"][data-link-position$="right"] {
+    grid-template-columns: auto minmax(0, 1fr) fit-content(40%);
+    grid-template-rows: 1fr;
+    grid-template-areas: "logo text link";
+  }
+
+  #banner[data-align="left"][data-link-position$="right"] .brand-link {
+    margin: 0 0 0 2rem;
+  }
+
+  #banner[data-align="right"][data-link-position$="left"] {
+    grid-template-columns: fit-content(40%) minmax(0, 1fr) auto;
+    grid-template-rows: 1fr;
+    grid-template-areas: "link text logo";
+  }
+
+  #banner[data-align="right"][data-link-position$="left"] .brand-link {
+    margin: 0 2rem 0 0;
+  }
 }
 
 .app-bar {
@@ -473,11 +628,31 @@ button[aria-disabled="true"] {
   font-weight: 600;
 }
 
+/*
+ * The bar's end: the admin's link (link_placement: app_bar) and the
+ * connection status, at the right and wrapping together, the status last
+ * where it has always been. The link is an outlined pill like Retry; a long
+ * label wraps rather than pushing the bar wider than the window.
+ */
+.app-bar-end {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  min-width: 0;
+  margin-left: auto;
+}
+
+.app-bar-end > .brand-link {
+  max-width: 100%;
+}
+
 .connection {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  margin: 0 0 0 auto;
+  margin: 0;
   white-space: nowrap;
   color: var(--muted);
   font-size: 0.8125rem;
@@ -501,7 +676,7 @@ button[aria-disabled="true"] {
   cursor: help;
 }
 
-.connection .pill {
+.app-bar-end .pill {
   padding: 0.25rem 0.75rem;
 }
 

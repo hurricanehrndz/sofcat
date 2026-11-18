@@ -908,6 +908,15 @@ const BANNER_ALIGNS = new Set(["left", "center", "right"]);
 // before the key. style.css holds the heights.
 const BANNER_HEIGHTS = new Set(["small", "medium", "large", "x-large"]);
 
+// The link_placement names: banner, the default and the place from before
+// the key, or app_bar, at the app bar's end before the connection status.
+const LINK_PLACEMENTS = new Set(["banner", "app_bar"]);
+
+// The link_position names: auto, the default, lays the link out with the
+// content as banner_align says; a corner name puts it in that corner of the
+// banner. style.css holds the layouts.
+const LINK_POSITIONS = new Set(["auto", "top_left", "top_right", "bottom_left", "bottom_right"]);
+
 /** oneOf returns payload[key] when it is one of allowed, else fallback. */
 function oneOf<T extends string>(payload: Record<string, unknown>, key: string, allowed: Set<string>, fallback: T): T {
   const value = text(payload, key);
@@ -959,7 +968,10 @@ export function brandingView(payload: unknown): BrandingView {
   const backgroundSrc = imageSrc(text(raw, "backgroundMime"), text(raw, "backgroundBase64"));
   const helpUrl = httpUrl(text(raw, "helpUrl"));
   const accent = isHexColor(text(raw, "accent")) ? text(raw, "accent").toLowerCase() : "";
-  const showBanner = Boolean(title || tagline || logoSrc || backgroundSrc || helpUrl);
+  // A payload from before link_placement (a cached one too) has none: banner.
+  const linkPlacement = oneOf(raw, "linkPlacement", LINK_PLACEMENTS, "banner");
+  // A link in the app bar does not bring up a banner of its own.
+  const showBanner = Boolean(title || tagline || logoSrc || backgroundSrc || (helpUrl && linkPlacement === "banner"));
   return {
     title,
     tagline,
@@ -968,6 +980,8 @@ export function brandingView(payload: unknown): BrandingView {
     backgroundText: text(raw, "backgroundText") === "dark" ? "dark" : "light",
     helpUrl,
     helpLabel: helpUrl ? text(raw, "helpLabel") || DEFAULT_HELP_LABEL : "",
+    linkPlacement,
+    linkPosition: oneOf(raw, "linkPosition", LINK_POSITIONS, "auto"),
     accent,
     onAccent: accent ? onAccent(accent) : "",
     productName: title || DEFAULT_PRODUCT,

@@ -25,9 +25,9 @@ import (
 const (
 	maxTitle     = 120
 	maxTagline   = 240
-	maxHelpLabel = 60
+	maxLinkLabel = 60
 	maxHeading   = 120
-	maxHelpURL   = 2048
+	maxLinkURL   = 2048
 	maxSections  = 50
 	MaxLogoBytes = 512 << 10
 	// MaxBackgroundBytes is larger, for a photograph. The UI keeps the payload
@@ -39,13 +39,21 @@ var accentPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
 // Branding is the GetBranding payload. Unset or rejected fields are empty.
 type Branding struct {
-	Title      string `json:"title"`
-	Tagline    string `json:"tagline"`
-	HelpURL    string `json:"helpUrl"`
-	HelpLabel  string `json:"helpLabel"`
-	Accent     string `json:"accent"`
-	LogoMime   string `json:"logoMime"`
-	LogoBase64 string `json:"logoBase64"`
+	Title   string `json:"title"`
+	Tagline string `json:"tagline"`
+	// HelpURL and HelpLabel are branding link_url and link_label (or their
+	// old names, help_url and help_label). The protocol keeps the field names
+	// it shipped with, so a cached payload or an older UI still shows the
+	// button.
+	HelpURL   string `json:"helpUrl"`
+	HelpLabel string `json:"helpLabel"`
+	// LinkPlacement and LinkPosition are one of LinkPlacements and
+	// LinkPositions, or "" for the UI's defaults, banner and auto.
+	LinkPlacement string `json:"linkPlacement"`
+	LinkPosition  string `json:"linkPosition"`
+	Accent        string `json:"accent"`
+	LogoMime      string `json:"logoMime"`
+	LogoBase64    string `json:"logoBase64"`
 	// Background is the banner's background image. When set, the UI draws it
 	// over the accent colour, with the banner text in BackgroundText: "light"
 	// or "dark", or "" for the UI's default, light.
@@ -107,6 +115,16 @@ var BannerAligns = []string{"left", "center", "right"}
 // tall one; each is a minimum, so content that needs more room still grows it.
 var BannerHeights = []string{"small", "medium", "large", "x-large"}
 
+// LinkPlacements are the names link_placement accepts: the button in the
+// banner, laid out by banner_align, or at the app bar's end before the
+// connection status.
+var LinkPlacements = []string{"banner", "app_bar"}
+
+// LinkPositions are the names link_position accepts for the button in the
+// banner: auto, beside or under the content as banner_align lays it out, or
+// a corner of the banner. The app bar ignores it.
+var LinkPositions = []string{"auto", "top_left", "top_right", "bottom_left", "bottom_right"}
+
 // Resolve returns the validated branding; config.Get has already merged the
 // managed settings over the config.yaml block. The logo file is read on every
 // call, so a replaced logo shows up without a service restart.
@@ -118,8 +136,8 @@ func resolve(in config.Branding) Branding {
 	out := Branding{
 		Title:     plainText(in.Title, maxTitle),
 		Tagline:   plainText(in.Tagline, maxTagline),
-		HelpURL:   helpURL(in.HelpURL),
-		HelpLabel: plainText(in.HelpLabel, maxHelpLabel),
+		HelpURL:   linkURL(in.LinkURL),
+		HelpLabel: plainText(in.LinkLabel, maxLinkLabel),
 
 		ListHeading: plainText(in.ListHeading, maxHeading),
 		Sections:    sectionList(in.Sections),
@@ -144,6 +162,8 @@ func resolve(in config.Branding) Branding {
 	out.BannerStyle = oneOf("banner_style", in.BannerStyle, BannerStyles...)
 	out.BannerAlign = oneOf("banner_align", in.BannerAlign, BannerAligns...)
 	out.BannerHeight = oneOf("banner_height", in.BannerHeight, BannerHeights...)
+	out.LinkPlacement = oneOf("link_placement", in.LinkPlacement, LinkPlacements...)
+	out.LinkPosition = oneOf("link_position", in.LinkPosition, LinkPositions...)
 	return out
 }
 
@@ -196,15 +216,15 @@ func sectionList(values []string) []string {
 	return out
 }
 
-func helpURL(value string) string {
+func linkURL(value string) string {
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return ""
 	}
 	parsed, err := url.Parse(value)
-	if err != nil || len(value) > maxHelpURL || parsed.Host == "" ||
+	if err != nil || len(value) > maxLinkURL || parsed.Host == "" ||
 		(!strings.EqualFold(parsed.Scheme, "http") && !strings.EqualFold(parsed.Scheme, "https")) {
-		slog.Debug("branding help_url dropped", "helpUrl", value, "err", err)
+		slog.Debug("branding link_url (or help_url) dropped", "linkUrl", value, "err", err)
 		return ""
 	}
 	return parsed.String()

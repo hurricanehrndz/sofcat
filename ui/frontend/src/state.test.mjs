@@ -785,6 +785,28 @@ test("brandingView shows the banner for any of title, tagline, logo or help", ()
   assert.equal(brandingView({ helpLabel: "Get help" }).showBanner, false);
 });
 
+// link_placement: a payload without it (an older service, a cached copy) keeps
+// the link in the banner, where a link alone still brings the banner up; in
+// the app bar it does not, and anything else is banner.
+test("brandingView places the link and only a banner link makes a banner", () => {
+  const link = { helpUrl: "https://example.invalid/help" };
+  const cached = brandingView(link);
+  assert.equal(cached.linkPlacement, "banner");
+  assert.equal(cached.linkPosition, "auto");
+  assert.equal(cached.helpLabel, "Get help");
+  const inBar = brandingView({ ...link, linkPlacement: "app_bar", linkPosition: "top_left" });
+  assert.equal(inBar.linkPlacement, "app_bar");
+  assert.equal(inBar.showBanner, false);
+  assert.equal(inBar.helpUrl, "https://example.invalid/help", "the app bar still shows the link");
+  // No banner names the organisation, so the app bar keeps the product's name.
+  assert.equal(brandingView({ ...link, linkPlacement: "app_bar", appBarBrand: "none" }).appBarBrand, "full");
+  assert.equal(brandingView({ ...link, title: "Acme", linkPlacement: "app_bar" }).showBanner, true);
+  assert.equal(brandingView({ ...link, linkPlacement: "header" }).showBanner, true);
+  assert.equal(brandingView({ ...link, linkPlacement: "header" }).linkPlacement, "banner");
+  assert.equal(brandingView({ ...link, linkPosition: "bottom_right" }).linkPosition, "bottom_right");
+  assert.equal(brandingView({ ...link, linkPosition: "middle" }).linkPosition, "auto");
+});
+
 test("brandingView maps the branded board", () => {
   const view = brandingView({
     title: "Acme Software Center",
