@@ -140,9 +140,9 @@ type Branding struct {
 	// ContentWidth is how much of the window the storefront uses: compact
 	// (the layout before the key), wide (the default) or full.
 	ContentWidth string `yaml:"content_width,omitempty"`
-	// SearchPlacement is where the list's search and category filters sit:
+	// FilterPlacement is where the list's search and category filters sit:
 	// right (the default, on the heading's row) or left (above the heading).
-	SearchPlacement string `yaml:"search_placement,omitempty"`
+	FilterPlacement string `yaml:"filter_placement,omitempty"`
 	// Sections orders the storefront tabs built from catalog item sections.
 	Sections []string `yaml:"sections,omitempty"`
 }

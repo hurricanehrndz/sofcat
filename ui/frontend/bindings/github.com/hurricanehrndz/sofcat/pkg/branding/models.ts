@@ -49,10 +49,10 @@ export class Branding {
     "contentWidth": string;
 
     /**
-     * SearchPlacement is one of SearchPlacements, or "" for the UI's default,
+     * FilterPlacement is one of FilterPlacements, or "" for the UI's default,
      * right.
      */
-    "searchPlacement": string;
+    "filterPlacement": string;
 
     /** Creates a new Branding instance. */
     constructor($$source: Partial<Branding> = {}) {
@@ -98,8 +98,8 @@ export class Branding {
         if (!("contentWidth" in $$source)) {
             this["contentWidth"] = "";
         }
-        if (!("searchPlacement" in $$source)) {
-            this["searchPlacement"] = "";
+        if (!("filterPlacement" in $$source)) {
+            this["filterPlacement"] = "";
         }
 
         Object.assign(this, $$source);

@@ -34,7 +34,7 @@ app_data_path: c:/cpe/sofcat/cache
 #   title_size: large                                 # banner title and page headings: small, medium (default), large or x-large
 #   tagline_size: medium                              # banner tagline: the same sizes
 #   content_width: wide                               # compact (the layout before this key), wide (default) or full
-#   search_placement: right                           # list search and category: right (default, on the heading's row) or left (above the heading)
+#   filter_placement: right                           # search and category: right (default; on the heading's row, at its right edge) or left (above the heading, as before)
 #   sections:                                         # storefront tab order; unlisted sections follow alphabetically
 #     - Apps
 #     - Branding

@@ -55,7 +55,7 @@ answer echoes the `id` with a `result` or an `error`:
 | --- | --- | --- |
 | `getServiceInfo` | none | `{version, protocolVersion: "2.0", apiVersion: 1, capabilities: [methods], busy, uptimeSeconds}` |
 | `listOptionalInstalls` | none | `{items: [OptionalInstallItem]}` (shape below) |
-| `getBranding` | none | `Branding`: `{title, tagline, helpUrl, helpLabel, accent, logoMime, logoBase64, backgroundMime, backgroundBase64, backgroundText, listHeading, titleSize, taglineSize, contentWidth, searchPlacement, sections?}` |
+| `getBranding` | none | `Branding`: `{title, tagline, helpUrl, helpLabel, accent, logoMime, logoBase64, backgroundMime, backgroundBase64, backgroundText, listHeading, titleSize, taglineSize, contentWidth, filterPlacement, sections?}` |
 | `installItem` | `{itemName, placement?}` | `AcceptedOperation` |
 | `removeItem` | `{itemName, placement?}` | `AcceptedOperation` |
 | `cancelOperation` | `{operationId}` | `{canceled: true}` |
@@ -488,7 +488,7 @@ every run, so a policy change applies from the next run without a restart:
    `/Library/Managed Preferences/<IDENTIFIER>.plist` on macOS. The names are the
    `config.yaml` keys (`title`, `tagline`, `logo`, `help_url`, `help_label`,
    `accent`, `background_image`, `background_text`, `list_heading`, `sections`,
-   `title_size`, `tagline_size`, `content_width`, `search_placement`; `sections` is a
+   `title_size`, `tagline_size`, `content_width`, `filter_placement`; `sections` is a
    REG_MULTI_SZ).
 2. The `branding:` block in `config.yaml`.
 3. Nothing, and the UI keeps its default look.
@@ -505,8 +505,8 @@ capped at 1 MiB, and `background_text` must be `light` or `dark`. `title_size` a
 the factors 0.85, 1, 1.25 and 1.5 on its default sizes (CSS `--title-scale` and
 `--tagline-scale`), and anything else is 1. `content_width` must be `compact`, `wide`
 or `full`; the UI sets it as `data-content-width` on the root element, and anything
-else is `wide`. `search_placement` must be `right` or `left`; the UI sets it as
-`data-search-placement` on the root element, and anything else is `right`. A
+else is `wide`. `filter_placement` must be `right` or `left`; the UI sets it as
+`data-filter-placement` on the root element, and anything else is `right`. A
 dropped field is logged at debug level and
 never fails the call.
 

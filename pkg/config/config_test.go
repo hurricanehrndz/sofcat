@@ -50,7 +50,7 @@ func TestGet(t *testing.T) {
 			TitleSize:       "large",
 			TaglineSize:     "x-large",
 			ContentWidth:    "full",
-			SearchPlacement: "left",
+			FilterPlacement: "left",
 		},
 		ConfigPath: "testdata/test_config.yaml",
 	}
