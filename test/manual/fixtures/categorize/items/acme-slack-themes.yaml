@@ -1,0 +1,8 @@
+item_name: acme-slack-themes
+display_name: Acme Slack Themes
+description: Sidebar themes and status presets for the company Slack workspace.
+developer: Acme IT
+category: Communication
+catalog: categorize
+version: 1.0.0
+placements: [acme-files]

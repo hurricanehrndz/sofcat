@@ -286,7 +286,10 @@ button[aria-disabled="true"] {
  * and the operation strip ease in as they appear; nothing animates out, so a
  * page change never leaves two pages up or waits before taking focus. An
  * element replays its animation each time it goes from hidden to shown. The
- * reduced-motion rule at the end turns all of it off.
+ * one exception is the item dialog (item_view: dialog), which grows out of
+ * its card and shrinks back into it over its backdrop's fade, and checks
+ * reduced motion itself (main.ts). The reduced-motion rule at the end turns
+ * all the rest off.
  */
 @keyframes rise-in {
   from {
@@ -952,6 +955,18 @@ h2 {
   margin: 0.25rem 0 0;
 }
 
+/* item_view dialog: the card's name is the button that opens its dialog, and
+   it reads as the heading it sits in. */
+.card-open {
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  font-weight: inherit;
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+
 .card p {
   margin: 0;
 }
@@ -1175,21 +1190,21 @@ h2 {
     grid-row: 1;
     grid-column: 3;
   }
-
-  /* Cancel's place is kept, unseen and out of reach, while it is hidden. */
-  :root[data-progress="button"] .card-cancel[hidden] {
-    display: inline-block !important;
-    visibility: hidden;
-  }
 }
 
-/* The detail page's Cancel sits before the action, its place kept while it
-   is hidden, so the action keeps its width and place as it turns into a bar
-   and as Cancel comes and goes. */
-.detail-actions {
-  display: contents;
+/* Cancel's place is kept, unseen and out of reach, while it is hidden: with
+   item_view dialog a card has no Details, and Cancel alone would otherwise
+   add a row to a column card as it appears. */
+:root[data-progress="button"] .card-cancel[hidden] {
+  display: inline-block !important;
+  visibility: hidden;
 }
 
+/* The item's Cancel sits before the action, its place kept while it is
+   hidden, and the action has one width, so the action keeps its place and
+   size as it turns into a bar, as its phase changes and as Cancel comes and
+   goes, on the page and in the dialog (whose own rules below put the pair
+   on a row of their own). A long label is cut short inside the bar. */
 :root[data-progress="button"] .detail-actions {
   display: flex;
   flex: 0 1 auto;
@@ -1202,7 +1217,8 @@ h2 {
 }
 
 :root[data-progress="button"] #detail-action {
-  min-width: 11rem;
+  width: 13rem;
+  max-width: 100%;
 }
 
 :root[data-progress="button"] .placements .pill {
@@ -1409,12 +1425,12 @@ h2 {
   font-size: 2.5rem;
 }
 
-#view-detail .card-status {
+#detail-content .card-status {
   margin: 1rem 0 0;
   font-size: 0.875rem;
 }
 
-#view-detail h3 {
+#detail-content h3 {
   margin: 2.25rem 0 0.875rem;
   padding-top: 1.25rem;
   border-top: 1px solid var(--line-soft);
@@ -1446,8 +1462,147 @@ h2 {
   font-size: 0.9375rem;
 }
 
+/*
+ * item_view dialog: the same details in a sheet over the dimmed list, never
+ * taller than the window, where it scrolls. main.ts grows it out of the
+ * item's card from the top left corner, so that is its origin. The rules
+ * under #item-dialog fit the page's layout to the narrower sheet.
+ */
+#item-dialog {
+  width: min(44rem, calc(100vw - 2rem));
+  /* Its top stays put, rather than the dialog re-centring as its content
+     grows or shrinks (a status line, a Cancel) while it is open. */
+  margin-block: max(1rem, 8vh) auto;
+  max-height: calc(100vh - max(1rem, 8vh) - 1rem);
+  padding: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 24px 60px var(--shadow);
+  overflow: auto;
+  transform-origin: top left;
+}
+
+#item-dialog::backdrop {
+  /* main.ts fades it in and out with the dialog (fadeBackdrop). */
+  background: rgb(0 0 0 / 40%);
+}
+
+.dialog-body {
+  padding: 0.75rem 1.5rem 1.5rem;
+  overflow-wrap: anywhere;
+}
+
+.dialog-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 -0.75rem 0.25rem 0;
+}
+
+.icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+}
+
+.icon-button:hover {
+  background: var(--line-soft);
+  color: var(--ink);
+}
+
+.icon-button svg {
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+}
+
+#item-dialog .detail-head {
+  gap: 1rem 1.25rem;
+}
+
+/* The action and Cancel are the head's last item in the dialog; on the
+   detail page the wrapper is not drawn, and the action keeps its place. */
+.detail-actions {
+  display: contents;
+}
+
+/* In the dialog the action takes a row of its own under the title, at its
+   right end, with Cancel before it on the same line. No label, the action's
+   own or Cancel's, takes width from the text, and the row never wraps: a
+   Cancel too long for it is cut short, so the action stays where it was
+   clicked, and so do the placement rows' buttons. */
+#item-dialog .detail-actions {
+  display: flex;
+  flex: 1 0 100%;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+/* A required item has neither button: no empty row. A web view without
+   :has drops only this rule. */
+#item-dialog .detail-actions:not(:has(> :not([hidden]))) {
+  display: none;
+}
+
+#item-dialog #detail-action {
+  flex: none;
+}
+
+#item-dialog #detail-cancel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A double click on a dialog button never selects its label. */
+#item-dialog button {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#item-dialog .detail-title {
+  flex: 1 1 14rem;
+}
+
+#item-dialog .detail-title h2 {
+  font-size: 1.5rem;
+}
+
+#item-dialog .glyph-large {
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 18px;
+  font-size: 1.625rem;
+}
+
+#item-dialog .placements,
+#item-dialog #detail-description,
+#item-dialog .info {
+  max-width: none;
+}
+
+#item-dialog .info {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+#item-dialog h3 {
+  margin-top: 1.5rem;
+}
+
 @media (max-width: 40rem) {
-  .info {
+  .info,
+  #item-dialog .info {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 

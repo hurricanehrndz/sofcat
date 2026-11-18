@@ -1,0 +1,29 @@
+# <repo>/categorize.yaml: have makecatalogs categorize the items that have no
+# category. See site/src/content/docs/guides/ai-categories.md.
+#
+# The API key is never written here: makecatalogs reads it from the
+# SOFCAT_AI_API_KEY environment variable.
+# base_url: an OpenAI-compatible endpoint; /chat/completions is added to it.
+# Default: OpenRouter.
+base_url: https://openrouter.ai/api/v1
+# model: the model's name as the endpoint knows it. Required. A small, cheap
+# model is enough.
+model: google/gemini-3.1-flash-lite
+# mode: closed (default) lets the model choose only from the known categories;
+# open also lets it propose a new one when none fits.
+mode: closed
+# categories: the known categories. Default: Browsers, Communication,
+# Development, Media, Productivity, Security, Utilities, AI. Categories
+# written by hand in package-info files are always known too.
+categories:
+  - Browsers
+  - Communication
+  - Development
+  - Media
+  - Productivity
+  - Security
+  - Utilities
+  - AI
+# min_weight: the least weight (0 to 1) the best category needs. Under it the
+# item is left without a category. Default: 0.5.
+min_weight: 0.5

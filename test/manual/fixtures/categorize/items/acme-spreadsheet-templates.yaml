@@ -1,0 +1,7 @@
+item_name: acme-spreadsheet-templates
+display_name: Acme Spreadsheet Templates
+description: Budget, expense report and project plan templates for Excel and Numbers.
+developer: Acme Finance
+catalog: categorize
+version: 1.0.0
+placements: [acme-files]

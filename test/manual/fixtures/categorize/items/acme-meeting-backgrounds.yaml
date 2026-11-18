@@ -1,0 +1,7 @@
+item_name: acme-meeting-backgrounds
+display_name: Acme Meeting Backgrounds
+description: Virtual backgrounds for Zoom and Teams video calls.
+developer: Acme Brand Studio
+catalog: categorize
+version: 1.0.0
+placements: [acme-files]

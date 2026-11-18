@@ -288,6 +288,37 @@ export function opensDetails(target: Pick<Element, "closest"> | null, selecting:
 }
 
 /**
+ * openControl is the class of a card's button that opens its item, which
+ * keyboard and screen-reader users reach it by and which gets focus back when
+ * the item closes: the Details button for item_view page, the item's name for
+ * dialog.
+ */
+export function openControl(itemView: BrandingView["itemView"]): "card-details" | "card-open" {
+  return itemView === "dialog" ? "card-open" : "card-details";
+}
+
+/** The parts of a DOMRect morphFrom reads. */
+export type Box = { left: number; top: number; width: number; height: number };
+
+/**
+ * morphFrom is the transform that lays the item dialog, at dialog, over its
+ * card, at card: what the dialog grows out of and shrinks back into. Null
+ * when the card is not wholly inside the viewport (scrolled out of view, even
+ * partly) or either box is empty; the dialog then just appears and
+ * disappears rather than flying in from off screen.
+ */
+export function morphFrom(card: Box, dialog: Box, viewport: { width: number; height: number }): string | null {
+  if (card.width <= 0 || card.height <= 0 || dialog.width <= 0 || dialog.height <= 0) {
+    return null;
+  }
+  if (card.left < 0 || card.top < 0 || card.left + card.width > viewport.width || card.top + card.height > viewport.height) {
+    return null;
+  }
+  const scale = `scale(${card.width / dialog.width}, ${card.height / dialog.height})`;
+  return `translate(${card.left - dialog.left}px, ${card.top - dialog.top}px) ${scale}`;
+}
+
+/**
  * itemPlacements is the item's placements the detail page lists one row each
  * for, in the service's order; [] for an item it sends none for. A cached list
  * is untrusted shape-wise, so only well-formed entries count.
@@ -1057,6 +1088,10 @@ const LINK_POSITIONS = new Set(["auto", "top_left", "top_right", "bottom_left", 
 // shows running work in the bottom strip; button shows it in each item's
 // action button, the strip only counting a queue of two or more.
 const PROGRESSES = new Set(["strip", "button"]);
+// The item_view names: page, the default and the view from before the key,
+// replaces the list with the item's detail page; dialog opens the same
+// details in a dialog over the list.
+const ITEM_VIEWS = new Set(["page", "dialog"]);
 
 /** oneOf returns payload[key] when it is one of allowed, else fallback. */
 function oneOf<T extends string>(payload: Record<string, unknown>, key: string, allowed: Set<string>, fallback: T): T {
@@ -1141,6 +1176,7 @@ export function brandingView(payload: unknown): BrandingView {
     bannerAlign: oneOf(raw, "bannerAlign", BANNER_ALIGNS, "left"),
     bannerHeight: oneOf(raw, "bannerHeight", BANNER_HEIGHTS, "medium"),
     progress: oneOf(raw, "progress", PROGRESSES, "strip"),
+    itemView: oneOf(raw, "itemView", ITEM_VIEWS, "page"),
     sections: Array.isArray(raw.sections)
       ? raw.sections
           .filter((name): name is string => typeof name === "string" && name.trim() !== "")
@@ -1174,16 +1210,21 @@ export function canCancel(state: string): boolean {
 
 /**
  * itemCancel is the operation an item's own Cancel, beside its action, is
- * for: under branding progress: button it shows while the item's latest
- * operation runs. Not for an operation that is itself a cancel, whose busy
- * action already is the way out, and never under strip, where the strip
- * has it.
+ * for, while the item's latest operation runs: in the dialog (branding
+ * item_view dialog), whose modal puts the strip's Cancel out of reach, and
+ * under branding progress: button, where the item's button carries its
+ * progress. A card is never a dialog, so it passes "page". Not for an
+ * operation that is itself a cancel, whose busy action already is the way
+ * out, and not on a page under strip, where the strip has it.
  */
 export function itemCancel(
+  itemView: BrandingView["itemView"],
   progress: BrandingView["progress"],
   operation: OperationView | undefined,
 ): OperationView | undefined {
-  return progress === "button" && operation?.outcome === "active" && operation.action.kind !== "cancel"
+  return (itemView === "dialog" || progress === "button") &&
+    operation?.outcome === "active" &&
+    operation.action.kind !== "cancel"
     ? operation
     : undefined;
 }

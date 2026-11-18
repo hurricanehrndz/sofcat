@@ -55,7 +55,7 @@ answer echoes the `id` with a `result` or an `error`:
 | --- | --- | --- |
 | `getServiceInfo` | none | `{version, protocolVersion: "2.0", apiVersion: 1, capabilities: [methods], busy, uptimeSeconds}` |
 | `listOptionalInstalls` | none | `{items: [OptionalInstallItem]}` (shape below) |
-| `getBranding` | none | `Branding`: `{title, tagline, helpUrl, helpLabel, linkPlacement, linkPosition, accent, logoMime, logoBase64, backgroundMime, backgroundBase64, backgroundText, listHeading, titleSize, taglineSize, contentWidth, filterPlacement, appBarBrand, bannerStyle, bannerAlign, bannerHeight, progress, sections?}` |
+| `getBranding` | none | `Branding`: `{title, tagline, helpUrl, helpLabel, linkPlacement, linkPosition, accent, logoMime, logoBase64, backgroundMime, backgroundBase64, backgroundText, listHeading, titleSize, taglineSize, contentWidth, filterPlacement, appBarBrand, bannerStyle, bannerAlign, bannerHeight, itemView, progress, sections?}` |
 | `installItem` | `{itemName, placement?}` | `AcceptedOperation` |
 | `removeItem` | `{itemName, placement?}` | `AcceptedOperation` |
 | `cancelOperation` | `{operationId}` | `{canceled: true}` |
@@ -528,9 +528,9 @@ every run, so a policy change applies from the next run without a restart:
    `link_placement`, `link_position`, the old names `help_url` and `help_label`,
    `accent`, `background_image`, `background_text`, `list_heading`, `sections`,
    `title_size`, `tagline_size`, `content_width`, `filter_placement`,
-   `app_bar_brand`, `banner_style`, `banner_align`, `banner_height`, `progress`;
-   `sections` is a
-   REG_MULTI_SZ).
+   `app_bar_brand`, `banner_style`, `banner_align`, `banner_height`, `item_view`,
+   `progress`;
+   `sections` is a REG_MULTI_SZ).
 2. The `branding:` block in `config.yaml`.
 3. Nothing, and the UI keeps its default look.
 
@@ -572,7 +572,39 @@ the root element, and anything else is `strip`.
 first. The UI moves the one link button to the app bar's end, before the
 connection status, for `app_bar`, where a link alone no longer shows the
 banner and `link_position` is ignored; for a corner of a banner with the link
-it sets `data-link-position` on the banner. A
+it sets `data-link-position` on the banner. `item_view` must be `page` or
+`dialog`, and anything else is `page`. For `page` a card's Details button, or
+a click on the card, replaces the list with the item's detail page. For
+`dialog` the card has no Details button, its name is a button instead, and
+either opens the item in a modal `<dialog>` over the list. Both show the one
+`#detail-content` subtree, which `renderDetail` fills: `main.ts` mounts it on
+the detail page or in the dialog, and a change of mode closes an item open
+the old way first. The dialog grows out of its card with the Web Animations
+API and shrinks back into it; a close during the grow plays it back from
+where it is, and a card not wholly on screen, or reduced motion, gives no
+motion. Close, `Escape` or a click on the backdrop closes it and refocuses
+the card's name, or the search field once a refresh has dropped the card,
+which also closes the dialog. While it is open, refreshes and progress fill
+the same subtree in place, so focus stays inside it. The operation strip
+stays at the window's bottom, inert under the backdrop, so the dialog shows
+its own Cancel beside the action while the open item's operation runs
+(`itemCancel`), set up by the strip's own `setCancel`; when it goes off or
+away while focused, focus moves to the action, or to the close button when
+the item shows no action. The page has none under `progress: strip`; under
+`button` the page and the dialog both have it, and a card has its own (see
+the progress paragraphs above). The queue list of `progress: button` closes
+when the dialog opens, so it never floats over the backdrop. In the dialog the action has a
+row of its own under the title, at its right end, with Cancel before it on
+a line that never wraps (a long Cancel label is cut short), so no label
+takes width from the text, and the dialog's top edge is fixed rather than
+centred. The action's right edge and top, and the placement rows' buttons,
+stay where they were clicked as Cancel and the status line come and go. The
+backdrop fades in as the dialog opens and out as it shrinks back (a close
+with no shrink removes it at once), through the Web Animations API,
+and a close during the fade-in fades out from where it has got to. After a
+pointer action the dialog focuses its close button, and the card's name on
+close, with `focusVisible: false` where the web view takes it, so only
+keyboard use draws a ring. A
 dropped field is logged at debug level and
 never fails the call.
 

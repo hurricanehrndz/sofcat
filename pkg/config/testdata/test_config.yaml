@@ -31,3 +31,4 @@ branding:
   banner_align: center
   banner_height: x-large
   progress: button
+  item_view: dialog

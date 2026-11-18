@@ -35,6 +35,11 @@ export function unbranded(): boolean {
   return params().has("unbranded");
 }
 
+/** dialogView is `?dialog`: branding item_view dialog over the store's own branding. */
+export function dialogView(): boolean {
+  return params().has("dialog");
+}
+
 export function offline(): boolean {
   return params().has("offline");
 }
@@ -369,6 +374,7 @@ export const STORES: Record<StoreName, MockStore> = {
       bannerAlign: "",
       bannerHeight: "",
       progress: "",
+      itemView: "",
       sections: ["Productivity", "Developer tools", "Utilities"],
     },
   },
@@ -397,6 +403,7 @@ export const STORES: Record<StoreName, MockStore> = {
       bannerAlign: "",
       bannerHeight: "",
       progress: "",
+      itemView: "",
       sections: ["Skills", "Plugins"],
     },
   },
@@ -425,5 +432,6 @@ export const UNBRANDED: Branding = {
   bannerAlign: "",
   bannerHeight: "",
   progress: "",
+  itemView: "",
   sections: [],
 };

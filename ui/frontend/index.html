@@ -85,7 +85,9 @@
       </section>
 
       <!-- Drill-down detail page, like Managed Software Center's: Back (and
-           Escape) returns to the list and refocuses the card it came from. -->
+           Escape) returns to the list and refocuses the card it came from.
+           For branding item_view: dialog, main.ts moves #detail-content into
+           #item-dialog instead: one copy of an item's details, two places. -->
       <section id="view-detail" aria-labelledby="detail-name" hidden>
         <p class="detail-nav">
           <button type="button" id="detail-back" class="back">
@@ -93,41 +95,59 @@
             Back
           </button>
         </p>
-        <div class="detail-head">
-          <span id="detail-glyph" class="glyph glyph-large" aria-hidden="true"></span>
-          <div class="detail-title">
-            <h2 id="detail-name"></h2>
-            <p id="detail-developer"></p>
-            <p id="detail-applies-to" hidden></p>
-            <!-- One row per placement, in place of the applies-to line, when
-                 the service sends the item's placements. -->
-            <ul id="detail-placements" class="placements" hidden></ul>
-            <p id="detail-description"></p>
+        <div id="detail-content">
+          <div class="detail-head">
+            <span id="detail-glyph" class="glyph glyph-large" aria-hidden="true"></span>
+            <div class="detail-title">
+              <h2 id="detail-name"></h2>
+              <p id="detail-developer"></p>
+              <p id="detail-applies-to" hidden></p>
+              <!-- One row per placement, in place of the applies-to line, when
+                   the service sends the item's placements. -->
+              <ul id="detail-placements" class="placements" hidden></ul>
+              <p id="detail-description"></p>
+            </div>
+            <!-- The item's action and its own Cancel while an operation on
+                 it runs, in the dialog (the modal dialog puts the strip's
+                 out of reach) or under branding progress: button. Cancel
+                 comes first and style.css keeps the action where it is, so
+                 Cancel coming and going never moves it and a double click
+                 on Install cannot land on Cancel. -->
+            <span class="detail-actions">
+              <button type="button" id="detail-cancel" class="pill pill-outline" hidden></button>
+              <button type="button" id="detail-action" class="pill pill-primary pill-large"></button>
+            </span>
           </div>
-          <!-- Cancel shows only under branding progress: button. It comes
-               before the action, its place kept, so the action stays where
-               it was clicked and a double click cannot land on Cancel. -->
-          <span class="detail-actions">
-            <button type="button" id="detail-cancel" class="pill pill-outline" hidden></button>
-            <button type="button" id="detail-action" class="pill pill-primary pill-large"></button>
-          </span>
+          <p class="card-status" aria-live="polite">
+            <svg class="spinner" aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" hidden>
+              <path d="M8 2a6 6 0 1 1-4.24 1.76" />
+            </svg>
+            <span class="status-text"></span>
+          </p>
+          <h3>Information</h3>
+          <dl class="info">
+            <div><dt>Developer</dt><dd id="detail-developer-value"></dd></div>
+            <div><dt>Version</dt><dd id="detail-version"></dd></div>
+            <div><dt>Category</dt><dd id="detail-category"></dd></div>
+            <div><dt>Status</dt><dd id="detail-status"></dd></div>
+            <div><dt>Restart</dt><dd id="detail-restart"></dd></div>
+          </dl>
         </div>
-        <p class="card-status" aria-live="polite">
-          <svg class="spinner" aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" hidden>
-            <path d="M8 2a6 6 0 1 1-4.24 1.76" />
-          </svg>
-          <span class="status-text"></span>
-        </p>
-        <h3>Information</h3>
-        <dl class="info">
-          <div><dt>Developer</dt><dd id="detail-developer-value"></dd></div>
-          <div><dt>Version</dt><dd id="detail-version"></dd></div>
-          <div><dt>Category</dt><dd id="detail-category"></dd></div>
-          <div><dt>Status</dt><dd id="detail-status"></dd></div>
-          <div><dt>Restart</dt><dd id="detail-restart"></dd></div>
-        </dl>
       </section>
     </main>
+
+    <!-- An item's details in a dialog over the list (branding item_view:
+         dialog). It grows out of the item's card (main.ts); Close, Escape or
+         a click outside it closes it and refocuses the card. -->
+    <dialog id="item-dialog" aria-labelledby="detail-name">
+      <div class="dialog-body">
+        <p class="dialog-bar">
+          <button type="button" id="detail-close" class="icon-button" aria-label="Close">
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16"><path d="m4 4 8 8m0-8-8 8" /></svg>
+          </button>
+        </p>
+      </div>
+    </dialog>
 
     <!-- The one operation being worked on right now; each item's own state is on its card. -->
     <footer id="operation-strip" class="strip" aria-label="Current operation" hidden>

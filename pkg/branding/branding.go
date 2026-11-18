@@ -84,6 +84,8 @@ type Branding struct {
 	BannerHeight string `json:"bannerHeight"`
 	// Progress is one of Progresses, or "" for the UI's default, strip.
 	Progress string `json:"progress"`
+	// ItemView is one of ItemViews, or "" for the UI's default, page.
+	ItemView string `json:"itemView"`
 }
 
 // FontSizes are the names title_size and tagline_size accept: a small fixed
@@ -121,6 +123,11 @@ var BannerHeights = []string{"small", "medium", "large", "x-large"}
 // operation in a bar along the bottom, and button shows each item's progress
 // in its own button, the strip only counting a queue of two or more.
 var Progresses = []string{"strip", "button"}
+
+// ItemViews are the names item_view accepts: page replaces the list with the
+// item's detail page, the layout from before the key, and dialog opens the
+// same details in a dialog over the list.
+var ItemViews = []string{"page", "dialog"}
 
 // LinkPlacements are the names link_placement accepts: the button in the
 // banner, laid out by banner_align, or at the app bar's end before the
@@ -172,6 +179,7 @@ func resolve(in config.Branding) Branding {
 	out.LinkPlacement = oneOf("link_placement", in.LinkPlacement, LinkPlacements...)
 	out.LinkPosition = oneOf("link_position", in.LinkPosition, LinkPositions...)
 	out.Progress = oneOf("progress", in.Progress, Progresses...)
+	out.ItemView = oneOf("item_view", in.ItemView, ItemViews...)
 	return out
 }
 

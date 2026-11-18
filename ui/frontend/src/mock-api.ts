@@ -7,6 +7,7 @@ import {
   type MockItem,
   STORES,
   UNBRANDED,
+  dialogView,
   offline,
   progress,
   serial,
@@ -266,10 +267,15 @@ export const api: SofCatApi = {
   watchOperation: (operationId) => watch(operationId),
   cancelOperation: (operationId) => cancel(operationId),
   // `?store=` picks the fixture store; `?unbranded` keeps its items and drops
-  // its branding, so tabs fall back to alphabetical order. `?progress=button`
-  // moves running work into the buttons, over either.
+  // its branding, so tabs fall back to alphabetical order; `?dialog` opens
+  // items in a dialog (branding item_view) and `?progress=button` moves
+  // running work into the buttons, either way.
   getBranding: () =>
-    Promise.resolve({ ...(unbranded() ? UNBRANDED : store.branding), ...(progress() ? { progress: progress() } : {}) }),
+    Promise.resolve({
+      ...(unbranded() ? UNBRANDED : store.branding),
+      ...(dialogView() ? { itemView: "dialog" } : {}),
+      ...(progress() ? { progress: progress() } : {}),
+    }),
   openExternal(url) {
     window.open(url, "_blank", "noopener,noreferrer");
     return Promise.resolve();

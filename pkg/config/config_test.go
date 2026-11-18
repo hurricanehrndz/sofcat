@@ -58,6 +58,7 @@ func TestGet(t *testing.T) {
 			BannerAlign:     "center",
 			BannerHeight:    "x-large",
 			Progress:        "button",
+			ItemView:        "dialog",
 		},
 		ConfigPath: "testdata/test_config.yaml",
 	}

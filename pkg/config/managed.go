@@ -68,6 +68,7 @@ func managedFields(c *Configuration) map[string]any {
 		"branding.banner_align":     &c.Branding.BannerAlign,
 		"branding.banner_height":    &c.Branding.BannerHeight,
 		"branding.progress":         &c.Branding.Progress,
+		"branding.item_view":        &c.Branding.ItemView,
 	}
 }
 

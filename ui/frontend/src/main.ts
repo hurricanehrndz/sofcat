@@ -42,14 +42,16 @@ import {
   localErrorState,
   localRecord,
   monogram,
+  itemCancel,
+  morphFrom,
   myItems,
   needsAttention,
+  openControl,
   opensDetails,
   placementAction,
   placementStatus,
   progressText,
   queueView,
-  itemCancel,
   refusalText,
   releaseOperation,
   requestErrorText,
@@ -127,6 +129,13 @@ const viewDetail = need<HTMLElement>("#view-detail");
 const detailBack = need<HTMLButtonElement>("#detail-back");
 const detailAction = need<HTMLButtonElement>("#detail-action");
 const detailPlacements = need<HTMLUListElement>("#detail-placements");
+// An item's details: one subtree, mounted on the detail page or in the dialog
+// as branding item_view says (placeItemView).
+const detailContent = need<HTMLDivElement>("#detail-content");
+const dialog = need<HTMLDialogElement>("#item-dialog");
+const dialogBody = need<HTMLDivElement>("#item-dialog .dialog-body");
+const detailClose = need<HTMLButtonElement>("#detail-close");
+const detailCancel = need<HTMLButtonElement>("#detail-cancel");
 const strip = need<HTMLElement>("#operation-strip");
 const stripGlyph = need<HTMLSpanElement>("#strip-glyph");
 const stripBar = need<HTMLProgressElement>("#strip-progress");
@@ -137,7 +146,6 @@ const queueText = need<HTMLSpanElement>("#queue-text");
 const queuePanel = need<HTMLDivElement>("#queue-panel");
 const queueList = need<HTMLUListElement>("#queue-list");
 const announcer = need<HTMLParagraphElement>("#announcer");
-const detailCancel = need<HTMLButtonElement>("#detail-cancel");
 const spinnerTemplate = need<HTMLTemplateElement>("#spinner");
 
 /**
@@ -155,7 +163,7 @@ let currentView: View = "list";
 let listTabs: ListTab[] = [];
 let lastListTab: string | null = null;
 let navTabsDrawn = "";
-// The item shown on the detail page, or null when the list or Activity is up.
+// The item shown on the detail page or in the dialog, or null when neither is up.
 let detailItemName: string | null = null;
 let activity: ActivityRecord[] = loadActivity(storage);
 let active: ActiveOperations = new Map();
@@ -252,9 +260,10 @@ function paintAction(
 }
 
 /**
- * setCancel makes button the Cancel of operation: a real disabled button once
- * the installer has started, its title saying why. The strip, a card, the
- * detail page and the queue list share it.
+ * setCancel sets up a Cancel button for an operation: a real disabled button
+ * while the cancel request is out or once the installer has started, its
+ * title saying why. The strip, the queue list, a card's and the item's own
+ * Cancel share it.
  */
 function setCancel(button: HTMLButtonElement, operation: OperationView): void {
   const latest = operation.records.at(-1)?.state ?? "";
@@ -269,16 +278,19 @@ function setCancel(button: HTMLButtonElement, operation: OperationView): void {
 
 /**
  * paintCancel shows an item's own Cancel beside its action while it has one
- * (itemCancel). A Cancel that goes off or away while it has focus hands it
- * to the action beside it, or to fallback when the item shows no action.
+ * (itemCancel; a card passes itemView "page", since it is never a dialog).
+ * A Cancel that goes off or away while it has focus hands it to the action
+ * beside it, or to fallback when the item shows no action, not to the
+ * dialog or the page.
  */
 function paintCancel(
   button: HTMLButtonElement,
   item: OptionalInstallItem,
   action: HTMLElement,
   fallback: HTMLElement,
+  itemView: BrandingView["itemView"] = branding.itemView,
 ): void {
-  const running = itemCancel(branding.progress, latestOperation(item.itemName));
+  const running = itemCancel(itemView, branding.progress, latestOperation(item.itemName));
   const focused = document.activeElement === button;
   button.hidden = !running;
   if (running) {
@@ -399,13 +411,33 @@ function applyBranding(next: BrandingView): void {
   root.dataset.filterPlacement = next.filterPlacement;
   root.dataset.appBarBrand = next.appBarBrand;
   root.dataset.progress = next.progress;
-  // The tab order and the Software tab's heading are branding too, and
-  // progress decides where running work shows.
+  // The tab order and the Software tab's heading are branding too, and so
+  // are how a card opens its item and where running work shows.
   renderNav();
   renderCategories();
   renderGrid();
+  placeItemView();
   renderDetail();
   renderStrip();
+}
+
+/**
+ * placeItemView mounts the item's details where branding item_view shows
+ * them: on the detail page or in the dialog. A change of mode, the service's
+ * branding replacing a cached copy, first closes an item open the old way.
+ */
+function placeItemView(): void {
+  const home = branding.itemView === "dialog" ? dialogBody : viewDetail;
+  if (detailContent.parentElement === home) {
+    return;
+  }
+  if (dialog.open) {
+    dialog.close();
+    dialogClosed();
+  } else {
+    closeDetail();
+  }
+  home.append(detailContent);
 }
 
 /** refreshBranding converges on the service's branding; a failure keeps the cached one. */
@@ -538,7 +570,20 @@ function card(item: OptionalInstallItem): HTMLElement {
   setGlyph(glyph, item);
 
   const name = document.createElement("h3");
-  name.textContent = item.displayName;
+  const dialogView = branding.itemView === "dialog";
+  if (dialogView) {
+    // The card has no Details button in dialog mode: its name is the control
+    // that opens the item's dialog for keyboard and screen-reader users.
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "card-open";
+    open.setAttribute("aria-haspopup", "dialog");
+    open.textContent = item.displayName;
+    open.addEventListener("click", (event) => openDetail(item, event.detail === 0));
+    name.append(open);
+  } else {
+    name.textContent = item.displayName;
+  }
 
   const meta = document.createElement("p");
   meta.className = "card-meta";
@@ -580,31 +625,34 @@ function card(item: OptionalInstallItem): HTMLElement {
     actions.append(action, cancel);
   }
 
-  const details = document.createElement("button");
-  details.type = "button";
-  details.className = "pill pill-outline card-details";
-  details.textContent = "Details";
-  details.setAttribute("aria-label", `Details for ${item.displayName}`);
-  details.addEventListener("click", () => openDetail(item));
+  if (!dialogView) {
+    const details = document.createElement("button");
+    details.type = "button";
+    details.className = "pill pill-outline card-details";
+    details.textContent = "Details";
+    details.setAttribute("aria-label", `Details for ${item.displayName}`);
+    details.addEventListener("click", () => openDetail(item));
+    actions.append(details);
+  }
 
-  actions.append(details);
   // The wrappers let style.css turn a card a sparse row stretches into a
-  // single line: glyph, text, then the buttons.
+  // single line: glyph, text, then the buttons. A required item in dialog
+  // mode has no button at all.
   const text = document.createElement("div");
   text.className = "card-text";
   text.append(name, meta, appliesTo, status);
   const body = document.createElement("div");
   body.className = "card-body";
-  body.append(glyph, text, actions);
+  body.append(glyph, text, ...(actions.childElementCount > 0 ? [actions] : []));
   article.append(body);
   article.dataset.item = item.itemName;
-  // A click anywhere else on the card opens Details too. The card is not a
+  // A click anywhere else on the card opens the item too. The card is not a
   // control itself, so it nests none: keyboard and screen-reader users reach
-  // the same page through its Details button.
+  // the same page or dialog through its Details button or its name.
   article.addEventListener("click", (event) => {
     const selecting = !(document.getSelection()?.isCollapsed ?? true);
     if (opensDetails(event.target instanceof Element ? event.target : null, selecting)) {
-      openDetail(item);
+      openDetail(item, false);
     }
   });
   paintCard(article, item);
@@ -619,9 +667,11 @@ function paintCard(article: HTMLElement, item: OptionalInstallItem): void {
     paintAction(action, item, derived);
   }
   const cancel = article.querySelector<HTMLButtonElement>(".card-cancel");
-  const details = article.querySelector<HTMLElement>(".card-details");
-  if (cancel && action && details) {
-    paintCancel(cancel, item, action, details);
+  // The control that opens the item: Details, or the name in dialog mode.
+  const opener = article.querySelector<HTMLElement>(".card-details, .card-open");
+  if (cancel && action && opener) {
+    // A card is never the dialog: only progress button gives it a Cancel.
+    paintCancel(cancel, item, action, opener, "page");
   }
   updateCardProgress(article, item, cardStatus(item), true);
 }
@@ -679,19 +729,26 @@ function updateCardProgress(
   spinner.toggleAttribute("hidden", inButton || progress.outcome !== "active");
 }
 
+/** cardOf is an item's card in the grid, if the list shows it. */
+function cardOf(itemName: string): HTMLElement | null {
+  return grid.querySelector<HTMLElement>(`[data-item="${CSS.escape(itemName)}"]`);
+}
+
 /** renderCardFor refreshes one item's card in place, keeping the rest of the grid untouched. */
 function renderCardFor(itemName: string): void {
-  const article = grid.querySelector<HTMLElement>(`[data-item="${CSS.escape(itemName)}"]`);
+  const article = cardOf(itemName);
   const item = view.items.find((candidate) => candidate.itemName === itemName);
   if (article && item) {
     paintCard(article, item);
   }
   if (item && detailItemName === itemName) {
-    // The detail page's buttons carry the progress under button.
+    // Under button the item's buttons carry the progress, so they are
+    // repainted (in place) as well.
     if (branding.progress === "button") {
       renderDetail();
     } else {
-      updateCardProgress(viewDetail, item, "");
+      updateCardProgress(detailContent, item, "");
+      paintCancel(detailCancel, item, detailAction, detailFallback());
     }
   }
 }
@@ -721,10 +778,11 @@ function renderGrid(): void {
   const focused = grid.contains(document.activeElement) ? document.activeElement : null;
   const focusedItem = focused?.closest<HTMLElement>(".card")?.dataset.item;
   const focusedClass =
-    ["card-action", "card-cancel"].find((name) => focused?.classList.contains(name)) ?? "card-details";
+    ["card-action", "card-cancel"].find((name) => focused?.classList.contains(name)) ?? openControl(branding.itemView);
   const listedCards = new Map([...grid.children].map((child) => [(child as HTMLElement).dataset.item, child]));
   const articles = shown.map((item) => {
-    const source = JSON.stringify(item);
+    // The item view decides the card's controls, so it is part of its source.
+    const source = JSON.stringify([branding.itemView, item]);
     const kept = listedCards.get(item.itemName) as HTMLElement | undefined;
     const article = kept && cardSources.get(kept) === source ? kept : card(item);
     if (article === kept) {
@@ -752,6 +810,11 @@ function renderGrid(): void {
     const target = owner?.querySelector<HTMLButtonElement>(`.${focusedClass}`);
     // A Cancel gone with its operation hands focus to the action beside it.
     (target && !target.hidden && !target.disabled ? target : owner?.querySelector<HTMLElement>(".card-action"))?.focus();
+  }
+  // The dialog stays over its item's card; once a refresh or a branding
+  // change takes the card off the list, there is nothing left to show it over.
+  if (dialog.open && detailItemName !== null && !cardOf(detailItemName)) {
+    closeDetail();
   }
   if (listed.length === 0) {
     resultStatus.textContent =
@@ -1091,11 +1154,18 @@ api.onOperationStatus((status) => {
 });
 
 function setText(selector: string, value: string, fallback = "Not provided"): void {
-  need<HTMLElement>(selector).textContent = value.trim() || fallback;
+  const element = need<HTMLElement>(selector);
+  const text = value.trim() || fallback;
+  // Unchanged text is left alone, so a repaint on every progress tick
+  // (branding progress: button) keeps a selection in the details.
+  if (element.textContent !== text) {
+    element.textContent = text;
+  }
 }
 
 /**
- * renderDetail fills the drill-down page for the item being viewed. It reads
+ * renderDetail fills the item's details, on the drill-down page or in the
+ * dialog, for the item being viewed. It reads
  * the item from the current list, so a refresh after a terminal record updates
  * the status and the action button in place.
  */
@@ -1126,11 +1196,16 @@ function renderDetail(): void {
     paintAction(detailAction, item, derived);
     detailAction.onclick = () => void runAction(item, derived);
   }
-  paintCancel(detailCancel, item, detailAction, detailBack);
 
   // The Status row already says the catalog state, so the line only appears
   // for work in progress or an outcome.
-  updateCardProgress(viewDetail, item, "");
+  updateCardProgress(detailContent, item, "");
+  paintCancel(detailCancel, item, detailAction, detailFallback());
+}
+
+/** detailFallback takes focus from the item's Cancel when it has no action: Close or Back. */
+function detailFallback(): HTMLElement {
+  return dialog.open ? detailClose : detailBack;
 }
 
 /**
@@ -1198,7 +1273,16 @@ function setHomeHidden(hidden: boolean): void {
   viewHome.hidden = hidden;
 }
 
-function openDetail(item: OptionalInstallItem): void {
+/**
+ * openDetail shows an item: its detail page, or its dialog for branding
+ * item_view dialog. focusVisible false (a pointer opened it) opens the dialog
+ * without a focus ring on its close button; the page keeps its own.
+ */
+function openDetail(item: OptionalInstallItem, focusVisible = true): void {
+  if (branding.itemView === "dialog") {
+    openDialog(item, focusVisible);
+    return;
+  }
   detailItemName = item.itemName;
   renderDetail();
   setHomeHidden(true);
@@ -1209,20 +1293,214 @@ function openDetail(item: OptionalInstallItem): void {
 }
 
 /**
- * closeDetail returns to the list and hands focus to the Details button of the
- * card it came from. The card is found by item, because a refresh while the
- * page was open (the end of every operation brings one) rebuilds the grid.
- * When the card is gone from the list, dropped by a refresh or hidden by the
- * filters, focus goes to the search field at the top of the list instead.
+ * focusCard hands focus to the control of the item's card that opens it (its
+ * Details button, or its name in dialog mode). The card is found by item,
+ * because a refresh while the item was open (the end of every operation
+ * brings one) rebuilds the grid. When the card is gone from the list, dropped
+ * by a refresh or hidden by the filters, focus goes to the search field at the
+ * top of the list instead.
  */
+function focusCard(itemName: string, focusVisible = true): void {
+  const control = cardOf(itemName)?.querySelector<HTMLButtonElement>(`.${openControl(branding.itemView)}`);
+  focusQuietly(control ?? searchInput, focusVisible);
+}
+
+/** closeDetail closes the open item: back to the list from its page, or its dialog. */
 function closeDetail(): void {
+  if (dialog.open) {
+    closeDialog();
+    return;
+  }
   if (viewDetail.hidden || detailItemName === null) {
     return;
   }
   const itemName = detailItemName;
   showView(currentView);
-  const details = grid.querySelector<HTMLButtonElement>(`[data-item="${CSS.escape(itemName)}"] .card-details`);
-  (details ?? searchInput).focus();
+  focusCard(itemName);
+}
+
+const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
+// The dialog's grow-out-of-the-card motion while it plays, and a count of the
+// times the dialog opened, so a close that finishes late leaves a later one be.
+let opening: Animation | null = null;
+let dialogOpenings = 0;
+
+/**
+ * morph plays the dialog growing out of the item's card, or shrinking back
+ * into it when closing. Null, and no motion, when the card is not wholly on
+ * screen (morphFrom), the user asked for reduced motion or the web view
+ * cannot animate. It measures the dialog as laid out, so no other motion may
+ * be playing on it.
+ */
+function morph(itemName: string, closing: boolean): Animation | null {
+  const card = cardOf(itemName);
+  if (!card || reducedMotion.matches || typeof dialog.animate !== "function") {
+    return null;
+  }
+  // The strip covers the bottom of the window, so a card behind it is not
+  // on screen either.
+  const covered = strip.hidden ? 0 : strip.offsetHeight;
+  const viewport = {
+    width: document.documentElement.clientWidth,
+    height: document.documentElement.clientHeight - covered,
+  };
+  const from = morphFrom(card.getBoundingClientRect(), dialog.getBoundingClientRect(), viewport);
+  if (!from) {
+    return null;
+  }
+  const small = { transform: from, opacity: 0.2 };
+  const full = { transform: "none", opacity: 1 };
+  return dialog.animate(closing ? [full, small] : [small, full], {
+    duration: closing ? 180 : 280,
+    easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
+  });
+}
+
+function openDialog(item: OptionalInstallItem, focusVisible: boolean): void {
+  if (dialog.open) {
+    return;
+  }
+  detailItemName = item.itemName;
+  dialogOpenings += 1;
+  // The strip is inert under the modal dialog, so its queue list (open from
+  // the keyboard, then Tab to a card) must not float above the backdrop.
+  closeQueue(false);
+  // A modal dialog takes everything outside it out of the accessibility
+  // tree, the announcer too, so it goes in with the dialog while it is open.
+  dialog.append(announcer);
+  renderDetail();
+  dialog.showModal();
+  dialog.scrollTop = 0;
+  // showModal has already focused the close button, its first control, with
+  // the web view's own choice of ring. Opened by a pointer, it is focused
+  // again without one, which needs it to lose focus first.
+  if (!focusVisible && quietFocus) {
+    detailClose.blur();
+    focusQuietly(detailClose, false);
+  }
+  opening = morph(item.itemName, false);
+  fadeBackdrop(false);
+}
+
+// Whether the web view takes focus({focusVisible}): one that does reads the
+// member, even on an element that cannot take focus.
+const quietFocus = ((): boolean => {
+  let read = false;
+  try {
+    document.createElement("button").focus({
+      get focusVisible() {
+        read = true;
+        return false;
+      },
+    });
+  } catch {
+    // An old web view: no options at all.
+  }
+  return read;
+})();
+
+/**
+ * focusQuietly focuses element, without a focus ring when focusVisible is
+ * false: after a pointer action the ring only says what the pointer already
+ * showed. A web view without the focusVisible option draws its own choice.
+ */
+function focusQuietly(element: HTMLElement, focusVisible: boolean): void {
+  element.focus(focusVisible || !quietFocus ? undefined : { focusVisible: false });
+}
+
+// The backdrop's fade, in or out, while it plays.
+let backdropFade: Animation | null = null;
+
+/**
+ * fadeBackdrop fades the dimmed backdrop in as the dialog opens, or out as it
+ * closes. A close while it is still fading in fades out from where it has got
+ * to; both hold their end, so the backdrop never shows at full dim again
+ * before the dialog closes. Reduced motion, or a web view that cannot animate
+ * a pseudo-element, gives no fade.
+ */
+function fadeBackdrop(closing: boolean): void {
+  if (reducedMotion.matches || typeof dialog.animate !== "function" || !("pseudoElement" in KeyframeEffect.prototype)) {
+    return;
+  }
+  // Where the fade-in has got to: its eased progress is the opacity now. A new
+  // fade out starts there at once, where reverse() would run on for a frame.
+  const from = closing ? (backdropFade?.effect?.getComputedTiming().progress ?? 1) : 0;
+  backdropFade?.cancel();
+  try {
+    backdropFade = dialog.animate(closing ? { opacity: [from, 0] } : { opacity: [0, 1] }, {
+      duration: closing ? 180 * from : 200,
+      easing: "ease-out",
+      fill: "both",
+      pseudoElement: "::backdrop",
+    });
+  } catch {
+    // A web view that animates pseudo-elements but not ::backdrop: no fade,
+    // and the dialog still opens and closes.
+    backdropFade = null;
+  }
+}
+
+/**
+ * closeDialog shrinks the dialog back into its card, then closes it and
+ * focuses the card (dialogClosed). Closed while it is still growing, it
+ * plays that motion back from where it is: measuring it then would take the
+ * scaled box for its size. focusVisible false (a pointer closed it) focuses
+ * the card without a focus ring.
+ */
+function closeDialog(focusVisible = true): void {
+  const itemName = detailItemName;
+  if (!dialog.open || itemName === null || "closing" in dialog.dataset) {
+    return;
+  }
+  const openingNow = dialogOpenings;
+  dialog.dataset.closing = "";
+  let leaving: Animation | null = null;
+  if (opening?.playState === "running" && cardOf(itemName) && !reducedMotion.matches) {
+    opening.reverse();
+    leaving = opening;
+  } else {
+    opening?.cancel();
+    leaving = morph(itemName, true);
+  }
+  opening = null;
+  const finish = (): void => {
+    if (dialogOpenings !== openingNow || detailItemName !== itemName) {
+      return;
+    }
+    dialog.close();
+    dialogClosed(focusVisible);
+  };
+  if (leaving) {
+    leaving.finished.then(finish, finish);
+    // The backdrop fades while the dialog shrinks.
+    fadeBackdrop(true);
+  } else {
+    finish();
+  }
+}
+
+/**
+ * dialogClosed ends the open dialog's item once the dialog is closed, however
+ * it closed: by closeDialog, by a mode change, or by the web view itself (a
+ * second Escape without a click between them closes a dialog whatever its
+ * cancel handler says).
+ */
+function dialogClosed(focusVisible = true): void {
+  const itemName = detailItemName;
+  if (dialog.open || itemName === null) {
+    return;
+  }
+  detailItemName = null;
+  // The announcer goes back out with the modal dialog (see openDialog).
+  document.body.append(announcer);
+  delete dialog.dataset.closing;
+  opening = null;
+  backdropFade?.cancel();
+  backdropFade = null;
+  for (const animation of dialog.getAnimations()) {
+    animation.cancel();
+  }
+  focusCard(itemName, focusVisible);
 }
 
 async function refresh(): Promise<void> {
@@ -1310,7 +1588,41 @@ retryButton.addEventListener("click", () => {
 navMine.addEventListener("click", () => showView("mine"));
 navActivity.addEventListener("click", () => showView("activity"));
 detailBack.addEventListener("click", closeDetail);
+detailClose.addEventListener("click", (event) => closeDialog(event.detail === 0));
+// Escape asks the dialog to close, and closeDialog does it with its motion.
+// When the web view will not let the dialog stay open (the cancel event is
+// not cancelable), the close event below does the rest.
+dialog.addEventListener("cancel", (event) => {
+  if (event.cancelable) {
+    event.preventDefault();
+    closeDialog();
+  }
+});
+dialog.addEventListener("close", () => dialogClosed());
+// A click on the backdrop lands on the dialog element itself, outside its
+// box. Pressing inside and releasing outside, as at the end of selecting the
+// description's text, is not one.
+const outsideDialog = (event: MouseEvent): boolean => {
+  const box = dialog.getBoundingClientRect();
+  return (
+    event.target === dialog &&
+    (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom)
+  );
+};
+let pressedOutside = false;
+dialog.addEventListener("pointerdown", (event) => {
+  pressedOutside = outsideDialog(event);
+});
+dialog.addEventListener("click", (event) => {
+  if (pressedOutside && outsideDialog(event)) {
+    closeDialog(false);
+  }
+  pressedOutside = false;
+});
 document.addEventListener("keydown", (event) => {
+  // The dialog opens only over a list, and opening it closes the queue list,
+  // so none of the Escapes below applies while it is open; its own cancel
+  // event handles Escape.
   if (event.key === "Escape" && !queuePanel.hidden) {
     // The open queue list is the innermost thing Escape can close.
     event.preventDefault();
@@ -1331,7 +1643,10 @@ document.addEventListener("keydown", (event) => {
     event.key.toLowerCase() === "l"
   ) {
     event.preventDefault();
-    showView(viewActivity.hidden ? "activity" : "list");
+    // The dialog is modal: the pages under it keep still while it is open.
+    if (!dialog.open) {
+      showView(viewActivity.hidden ? "activity" : "list");
+    }
   }
 });
 

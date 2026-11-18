@@ -108,7 +108,8 @@ so the status reads in the same words as the button that made the request.
 ## Choosing placements
 
 An item with two or more placements that have a variant for the machine's OS
-can be added to or removed from one of them. Its detail page lists the
+can be added to or removed from one of them. Its detail page (or dialog, with
+`branding.item_view: dialog`) lists the
 placements, each with its `applies_to` as the label, its status and one
 button: the item's `install` label where it is not installed, `remove` where
 it is, and `cancel` beside the `pending_install` or `pending_remove` status of

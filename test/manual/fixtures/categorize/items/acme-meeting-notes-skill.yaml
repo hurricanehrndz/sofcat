@@ -1,0 +1,7 @@
+item_name: acme-meeting-notes-skill
+display_name: Meeting Notes Skill
+description: An AI assistant skill that turns call transcripts into action items and summaries.
+developer: Acme AI Platform
+catalog: categorize
+version: 1.0.0
+placements: [acme-files]

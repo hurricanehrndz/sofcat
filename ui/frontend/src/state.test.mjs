@@ -54,7 +54,6 @@ import {
   stripView,
   actionProgress,
   announcement,
-  itemCancel,
   queueView,
   tabItems,
   tabs,
@@ -847,15 +846,6 @@ test("in both modes an ended item stays busy until the list after its end; only 
     assert.equal(shown.label, label, state);
     assert.equal(busyAction("Chrome", new Map(), releaseOperation(active, "op"), operations), undefined, state);
   }
-});
-
-test("an item's own Cancel shows only under button, while a non-cancel operation runs", () => {
-  const op = { outcome: "active", action: INSTALL, records: [] };
-  assert.equal(itemCancel("button", op), op);
-  assert.equal(itemCancel("strip", op), undefined);
-  assert.equal(itemCancel("button", { ...op, outcome: "terminal" }), undefined);
-  assert.equal(itemCancel("button", { ...op, action: { kind: "cancel", label: "Cancel", method: "RemoveItem" } }), undefined);
-  assert.equal(itemCancel("button", undefined), undefined);
 });
 
 test("an action on the whole item carries its progress onto the placement rows that do the same", () => {

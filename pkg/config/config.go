@@ -169,6 +169,9 @@ type Branding struct {
 	// Progress is where the storefront shows running work: strip (the
 	// default, a bar along the bottom) or button (in each item's button).
 	Progress string `yaml:"progress,omitempty"`
+	// ItemView is how the storefront opens an item: page (the default, a
+	// detail page in the list's place) or dialog (a dialog over the list).
+	ItemView string `yaml:"item_view,omitempty"`
 	// Sections orders the storefront tabs built from catalog item sections.
 	Sections []string `yaml:"sections,omitempty"`
 }

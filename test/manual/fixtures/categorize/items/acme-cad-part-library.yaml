@@ -1,0 +1,7 @@
+item_name: acme-cad-part-library
+display_name: Acme CAD Part Library
+description: Standard 3D parts, fasteners and drawing title blocks for the mechanical design team's CAD software.
+developer: Acme Hardware
+catalog: categorize
+version: 1.0.0
+placements: [acme-files]
