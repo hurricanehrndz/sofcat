@@ -1,0 +1,8 @@
+item_name: acme-git-defaults
+display_name: Acme Git Defaults
+description: Shared gitconfig, commit message template and pre-commit hooks for company repositories.
+developer: Acme Engineering
+category: Development
+catalog: categorize
+version: 1.0.0
+placements: [acme-files]

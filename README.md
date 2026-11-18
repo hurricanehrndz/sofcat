@@ -50,6 +50,9 @@ What already works:
 - **Installable conditions.** An item can require an architecture, Windows
   build, model or a fact your own scripts provide, as with Munki's
   `installable_condition`. See [Installable conditions](site/src/content/docs/guides/conditions.md).
+- **AI categories.** `makecatalogs` can categorize new items with a model
+  behind OpenRouter, a Cloudflare AI Gateway or LiteLLM. See
+  [AI categories](site/src/content/docs/guides/ai-categories.md).
 - **Zip items.** Package directory trees, from wallpapers to AI skills, as deterministic
   zips with `makecatalogs`. On Windows a per-user helper
   (`<slug>-useragent.exe`, started at logon and on every plan change) places them in each user's

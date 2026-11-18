@@ -1,0 +1,7 @@
+# One placement: every item of this fixture is a directory of files under it.
+placements:
+  acme-files:
+    paths:
+      darwin: /Library/Application Support/Acme/Files
+      windows: ${ProgramData}\Acme\Files
+    applies_to: [This computer]

@@ -1,0 +1,7 @@
+item_name: acme-podcast-presets
+display_name: Acme Podcast Presets
+description: Audio editing presets, intro music and loudness settings for the company podcast.
+developer: Acme Marketing
+catalog: categorize
+version: 1.0.0
+placements: [acme-files]

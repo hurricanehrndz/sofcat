@@ -1,0 +1,7 @@
+item_name: acme-code-review-skill
+display_name: Code Review Skill
+description: An AI agent skill that reviews pull requests against the Acme engineering guidelines.
+developer: Acme AI Platform
+catalog: categorize
+version: 1.0.0
+placements: [acme-files]

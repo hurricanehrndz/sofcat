@@ -1,0 +1,7 @@
+item_name: acme-shell-aliases
+display_name: Acme Shell Aliases
+description: Handy shell aliases and small scripts for everyday command-line chores.
+developer: Acme IT
+catalog: categorize
+version: 1.0.0
+placements: [acme-files]

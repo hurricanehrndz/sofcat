@@ -1,0 +1,7 @@
+item_name: acme-ssh-known-hosts
+display_name: Acme SSH Known Hosts
+description: Pinned SSH host keys for company servers, so connections are verified against known fingerprints.
+developer: Acme IT
+catalog: categorize
+version: 1.0.0
+placements: [acme-files]

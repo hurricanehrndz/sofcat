@@ -20,7 +20,8 @@ under <out>/<prefix>/, writes <out>/packages-info/<item_name>.yaml, compiles
 the catalogs and runs the -check pass. It plans every item before it touches
 <out>, then wipes <out> down to an empty catalogs/ directory and rebuilds
 it, so a build that fails part way can be rerun; it refuses an <out> that is
-not empty and has no catalogs/ directory.
+not empty and has no catalogs/ directory. A categorize.yaml in <source>
+categorizes the items; its categories.lock.yaml is kept in <source>.
 
 Options:
 `
@@ -64,11 +65,11 @@ func runBuild(args []string, stdout, stderr io.Writer) int {
 	// The check pass reports every problem the write pass would warn about,
 	// so the write pass's warnings are shown only if it fails.
 	var warnings bytes.Buffer
-	if code := compileCatalogs(*out, false, stdout, &warnings); code != 0 {
+	if code := compileCatalogs(*out, source, false, stdout, stderr, &warnings); code != 0 {
 		_, _ = io.Copy(stderr, &warnings)
 		return code
 	}
-	return compileCatalogs(*out, true, io.Discard, stderr)
+	return compileCatalogs(*out, source, true, io.Discard, stderr, stderr)
 }
 
 // planBuild reads placements.yaml and every item file under source and
