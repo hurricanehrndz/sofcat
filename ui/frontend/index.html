@@ -107,11 +107,12 @@
               <ul id="detail-placements" class="placements" hidden></ul>
               <p id="detail-description"></p>
             </div>
-            <!-- The item's action and, in the dialog only, its own Cancel
-                 while an operation on it runs: the modal dialog puts the
-                 strip's out of reach. In the dialog style.css gives them a
-                 row of their own, the action at its right end, so Cancel
-                 coming and going never moves it. -->
+            <!-- The item's action and its own Cancel while an operation on
+                 it runs, in the dialog (the modal dialog puts the strip's
+                 out of reach) or under branding progress: button. Cancel
+                 comes first and style.css keeps the action where it is, so
+                 Cancel coming and going never moves it and a double click
+                 on Install cannot land on Cancel. -->
             <span class="detail-actions">
               <button type="button" id="detail-cancel" class="pill pill-outline" hidden></button>
               <button type="button" id="detail-action" class="pill pill-primary pill-large"></button>
@@ -159,7 +160,24 @@
         <progress id="strip-progress" max="100"></progress>
       </div>
       <button id="strip-cancel" type="button" class="pill pill-outline">Cancel</button>
+      <!-- Under branding progress: button the strip only counts a queue of two
+           or more; it opens the list of running work above it. -->
+      <button id="queue-toggle" type="button" class="queue-toggle" aria-expanded="false" aria-controls="queue-panel" hidden>
+        <svg class="spinner" aria-hidden="true" width="14" height="14" viewBox="0 0 16 16">
+          <path d="M8 2a6 6 0 1 1-4.24 1.76" />
+        </svg>
+        <span id="queue-text"></span>
+        <svg class="chevron" aria-hidden="true" width="12" height="12" viewBox="0 0 16 16"><path d="m4 10 4-4 4 4" /></svg>
+      </button>
+      <div id="queue-panel" class="queue-panel" hidden>
+        <ul id="queue-list" class="queue-list" aria-label="Running work"></ul>
+      </div>
     </footer>
+
+    <!-- Under branding progress: button, says each new phase of running work
+         once; the buttons that show it are not live regions, so a percentage
+         is never read out tick by tick. -->
+    <p id="announcer" class="visually-hidden" role="status" aria-live="polite"></p>
 
     <template id="spinner">
       <svg class="spinner" aria-hidden="true" width="14" height="14" viewBox="0 0 16 16">

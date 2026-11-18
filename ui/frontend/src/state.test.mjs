@@ -52,6 +52,9 @@ import {
   statusRecord,
   stripLine,
   stripView,
+  actionProgress,
+  announcement,
+  queueView,
   tabItems,
   tabs,
   trackOperation,
@@ -738,6 +741,209 @@ test("the strip shows the running operation the service is working on, as n of N
     { ...operation("op-4", "Chrome", "active", [record("op-4", "Chrome", "Installing")]), notice: NOT_AUTHORIZED_TEXT },
   ]);
   assert.equal(stripLine(refused), `${NOT_AUTHORIZED_TEXT} · 1 of 1`);
+});
+
+const progressRecord = (state, extra = {}) => ({
+  operationId: "op",
+  itemName: "Chrome",
+  displayName: "Chrome",
+  state,
+  message: "",
+  timestampUtc: "2026-10-03T22:22:44Z",
+  ...extra,
+});
+const INSTALL = { kind: "do", label: "Install", method: "InstallItem" };
+const chrome = item({ itemName: "Chrome", displayName: "Chrome" });
+const running = (states, outcome = "active", action = INSTALL) => ({
+  action,
+  outcome,
+  records: states.map((state) => (typeof state === "string" ? progressRecord(state) : state)),
+});
+
+test("a button waits with a spinner and reads Waiting… until the service starts the work", () => {
+  // Not answered yet: there is no operation.
+  assert.deepEqual(actionProgress(chrome, INSTALL, INSTALL, undefined), { label: "Waiting…", phase: "waiting" });
+  for (const states of [[], [REQUESTED_STATE], [REQUESTED_STATE, "Queued"]]) {
+    assert.deepEqual(actionProgress(chrome, INSTALL, INSTALL, running(states)), { label: "Waiting…", phase: "waiting" });
+  }
+  // A free button, or another placement's work, keeps the button's label.
+  assert.equal(actionProgress(chrome, INSTALL, undefined, running(["Queued"])), null);
+  const row = { ...INSTALL, placement: "codex" };
+  assert.equal(actionProgress(chrome, row, { ...INSTALL, placement: "claude" }, running(["Queued"]), "codex"), null);
+});
+
+test("a working button is filled only when the service measured the phase", () => {
+  const measured = actionProgress(chrome, INSTALL, INSTALL, running([progressRecord("Downloading", { progressPercent: 42 })]));
+  assert.deepEqual(measured, { label: "Downloading…", phase: "working", percent: 42 });
+  // The item's own installing label, indeterminate: the engine measures only downloads.
+  assert.deepEqual(actionProgress(chrome, INSTALL, INSTALL, running(["Downloading", "Installing"])), {
+    label: "Installing…",
+    phase: "working",
+  });
+  // A dependency's phase is named, so its percentage is not read as the item's.
+  const dependency = progressRecord("Downloading", { itemName: "Runtime", displayName: "Runtime", progressPercent: 10 });
+  assert.deepEqual(actionProgress(chrome, INSTALL, INSTALL, running([dependency])), {
+    label: "Downloading Runtime…",
+    phase: "working",
+    percent: 10,
+  });
+  // Between phases the button keeps its busy label, never a record's name.
+  assert.deepEqual(actionProgress(chrome, INSTALL, INSTALL, running(["Downloading", "ItemCompleted"])), {
+    label: "Installing…",
+    phase: "working",
+  });
+  // A busy Cancel says Cancel, not the opposite mutation's phase.
+  const cancel = { kind: "cancel", label: "Cancel", method: "RemoveItem" };
+  assert.deepEqual(actionProgress(chrome, cancel, cancel, running(["Removing"], "active", cancel)), {
+    label: "Cancel",
+    phase: "working",
+  });
+  // An out-of-range percentage is held to the bar.
+  assert.equal(
+    actionProgress(chrome, INSTALL, INSTALL, running([progressRecord("Downloading", { progressPercent: 140 })])).percent,
+    100,
+  );
+});
+
+test("only a success reads full; a failed, canceled or errored operation shows no bar", () => {
+  assert.deepEqual(actionProgress(chrome, INSTALL, INSTALL, running(["Installing", "Succeeded"], "terminal")), {
+    label: "Installing…",
+    phase: "done",
+    percent: 100,
+  });
+  for (const [states, outcome] of [
+    [["Downloading", "Failed"], "terminal"],
+    [["Downloading", "Canceled"], "terminal"],
+    [["Downloading", "Deferred"], "terminal"],
+    [["Downloading", ERROR_STATE], "error"],
+  ]) {
+    const ended = actionProgress(chrome, INSTALL, INSTALL, running(states, outcome));
+    assert.deepEqual(ended, { label: "Install", phase: "ended" }, states.join(" "));
+  }
+});
+
+test("in both modes an ended item stays busy until the list after its end; only the button's look differs", () => {
+  // The service queues the list behind running installs, so this can last a
+  // while. The release is main's rule in both modes: an ended operation is
+  // released only by the refresh that follows it (endedOperations).
+  const active = trackOperation(new Map(), "op", "Chrome");
+  for (const [state, phase, label] of [
+    ["Succeeded", "done", "Installing…"],
+    ["Failed", "ended", "Install"],
+    ["Canceled", "ended", "Install"],
+    ["Deferred", "ended", "Install"],
+  ]) {
+    const operation = { operationId: "op", item: chrome, ...running(["Downloading", state], "terminal") };
+    const operations = new Map([["op", operation]]);
+    const busy = busyAction("Chrome", new Map(), active, operations);
+    assert.equal(busy, INSTALL, state);
+    assert.deepEqual(endedOperations(active, operations), ["op"], state);
+    // While held, the strip-mode label stays the busy one, as on main; the
+    // button-mode look never implies work still going after a non-success.
+    assert.equal(actionText(chrome, INSTALL, busy), "Installing…", state);
+    const shown = actionProgress(chrome, INSTALL, busy, operation);
+    assert.equal(shown.phase, phase, state);
+    assert.equal(shown.label, label, state);
+    assert.equal(busyAction("Chrome", new Map(), releaseOperation(active, "op"), operations), undefined, state);
+  }
+});
+
+test("an action on the whole item carries its progress onto the placement rows that do the same", () => {
+  const add = { kind: "do", label: "Install", method: "InstallItem", placement: "codex" };
+  const work = running([progressRecord("Downloading", { progressPercent: 30 })]);
+  assert.deepEqual(actionProgress(chrome, add, INSTALL, work, "codex"), {
+    label: "Downloading…",
+    phase: "working",
+    percent: 30,
+  });
+  // A Remove row does not do what the whole-item install does.
+  const remove = { kind: "undo", label: "Remove", method: "RemoveItem", placement: "claude" };
+  assert.equal(actionProgress(chrome, remove, INSTALL, work, "claude"), null);
+  // The row's own action carries it; a sibling row does not.
+  assert.equal(actionProgress(chrome, add, add, work, "codex").percent, 30);
+  assert.equal(actionProgress(chrome, { ...add, placement: "claude" }, add, work, "claude"), null);
+});
+
+test("with progress in the buttons the strip only counts two or more running operations", () => {
+  const operation = (operationId, itemName, outcome, states, action = INSTALL) => ({
+    operationId,
+    item: item({ itemName, displayName: itemName }),
+    action,
+    records: states.map((state) => ({ ...progressRecord(state), operationId, itemName, displayName: itemName })),
+    outcome,
+  });
+  assert.equal(queueView([]), null);
+  // One running: its own button shows it.
+  assert.equal(queueView([operation("op-1", "Chrome", "active", ["Downloading"])]), null);
+  assert.equal(
+    queueView([operation("op-0", "Done", "terminal", ["Succeeded"]), operation("op-1", "Chrome", "active", ["Queued"])]),
+    null,
+  );
+
+  // main.ts passes a Map's values(), an iterator that can be read only once.
+  const queue = queueView(
+    new Map(
+      [
+        operation("op-1", "Chrome", "active", [REQUESTED_STATE, "Queued"]),
+        operation("op-2", "Zed", "active", [REQUESTED_STATE, "Downloading"]),
+        { ...operation("op-3", "Slack", "active", ["Queued"]), notice: NOT_AUTHORIZED_TEXT },
+      ].map((operation) => [operation.operationId, operation]),
+    ).values(),
+  );
+  // A count only: no phase and no percentage. The place is stripView's.
+  assert.equal(queue.line, "Installing 2 of 3");
+  // The working one first, then service order; each row's state without a percentage.
+  assert.deepEqual(
+    queue.rows.map(({ operation, text }) => [operation.operationId, text]),
+    [
+      ["op-2", "Downloading…"],
+      ["op-1", "Waiting…"],
+      ["op-3", NOT_AUTHORIZED_TEXT],
+    ],
+  );
+  const removing = queueView([
+    operation("op-1", "Chrome", "active", ["Removing"], { kind: "undo", label: "Remove", method: "RemoveItem" }),
+    operation("op-2", "Zed", "active", ["Queued"]),
+  ]);
+  assert.equal(removing.line, "Removing 1 of 2");
+  // Nothing started yet: the strip waits, as every row does.
+  const waiting = queueView([
+    operation("op-1", "Chrome", "active", [REQUESTED_STATE, "Queued"]),
+    operation("op-2", "Zed", "active", ["Queued"]),
+  ]);
+  assert.equal(waiting.line, "Waiting 1 of 2");
+  // The item's own installing label, as its button reads it.
+  const adding = queueView([
+    { ...operation("op-1", "Skill", "active", ["Downloading"]), item: item({ actionLabels: { installing: "Adding…" } }) },
+    operation("op-2", "Zed", "active", ["Queued"]),
+  ]);
+  assert.equal(adding.line, "Adding 1 of 2");
+});
+
+test("the strip's own view is unchanged by where the buttons show progress", () => {
+  // queueView is a separate view: stripView still reports the working
+  // operation with its phase and percentage, and still shows a lone one.
+  const lone = [
+    {
+      operationId: "op-1",
+      item: chrome,
+      action: INSTALL,
+      records: [progressRecord("Downloading", { progressPercent: 42 })],
+      outcome: "active",
+    },
+  ];
+  assert.equal(stripLine(stripView(lone)), "Downloading… 42% · 1 of 1");
+  assert.equal(queueView(lone), null);
+});
+
+test("the announcer says the item and its phase, never a percentage", () => {
+  const operation = { item: chrome, action: INSTALL, outcome: "active", records: [progressRecord("Queued")] };
+  assert.equal(announcement(operation), "Chrome: Waiting…");
+  const ticks = [42, 43].map((progressPercent) =>
+    announcement({ ...operation, records: [progressRecord("Downloading", { progressPercent })] }),
+  );
+  assert.deepEqual(ticks, ["Chrome: Downloading…", "Chrome: Downloading…"]);
+  assert.equal(announcement({ ...operation, outcome: "terminal" }), "");
 });
 
 test("a Home card shows only outcomes the user has to act on", () => {

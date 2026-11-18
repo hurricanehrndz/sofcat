@@ -42,6 +42,8 @@ app_data_path: c:/cpe/sofcat/cache
 #   banner_align: left                                # banner logo, title and tagline: left (default), center or right
 #   banner_height: medium                             # banner minimum height: small (slim), medium (default), large or x-large; content grows it
 #   app_bar_brand: full                               # app bar: full (default; mark and name), mark or none; for use with the banner
+#   progress: strip                                   # running work: strip (default; a bar along the bottom) or button (in each item's button,
+#                                                     #   with a Cancel beside it; the strip only counts two or more and opens their list)
 #   item_view: page                                   # how a card opens its item: page (default; a detail page in the list's place) or dialog (over the list)
 #   sections:                                         # storefront tab order; unlisted sections follow alphabetically
 #     - Apps

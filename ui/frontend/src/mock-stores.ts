@@ -44,6 +44,22 @@ export function offline(): boolean {
   return params().has("offline");
 }
 
+/** serial is `?serial`: operations work one at a time, the rest queued, as on the service. */
+export function serial(): boolean {
+  return params().has("serial");
+}
+
+/** slowList is `?slowlist=`: how many ms the item list takes to answer, 250 by default. */
+export function slowList(): number {
+  const ms = Number(params().get("slowlist"));
+  return Number.isFinite(ms) && ms > 0 ? ms : 250;
+}
+
+/** progress is `?progress=`: the branding progress to serve, "" for the store's own. */
+export function progress(): string {
+  return params().get("progress") ?? "";
+}
+
 // Original marks drawn for the fictional Acme; btoa keeps them editable here.
 const APPS_LOGO =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#0b6e4f"/>' +
@@ -357,6 +373,7 @@ export const STORES: Record<StoreName, MockStore> = {
       bannerStyle: "",
       bannerAlign: "",
       bannerHeight: "",
+      progress: "",
       itemView: "",
       sections: ["Productivity", "Developer tools", "Utilities"],
     },
@@ -385,6 +402,7 @@ export const STORES: Record<StoreName, MockStore> = {
       bannerStyle: "",
       bannerAlign: "",
       bannerHeight: "",
+      progress: "",
       itemView: "",
       sections: ["Skills", "Plugins"],
     },
@@ -413,6 +431,7 @@ export const UNBRANDED: Branding = {
   bannerStyle: "",
   bannerAlign: "",
   bannerHeight: "",
+  progress: "",
   itemView: "",
   sections: [],
 };

@@ -32,6 +32,8 @@ import {
   httpUrl,
   insertRecord,
   actionText,
+  actionProgress,
+  announcement,
   busyAction,
   endedOperations,
   isProgressTick,
@@ -49,6 +51,7 @@ import {
   placementAction,
   placementStatus,
   progressText,
+  queueView,
   refusalText,
   releaseOperation,
   requestErrorText,
@@ -137,6 +140,12 @@ const strip = need<HTMLElement>("#operation-strip");
 const stripGlyph = need<HTMLSpanElement>("#strip-glyph");
 const stripBar = need<HTMLProgressElement>("#strip-progress");
 const stripCancel = need<HTMLButtonElement>("#strip-cancel");
+const stripBody = need<HTMLDivElement>(".strip-body");
+const queueToggle = need<HTMLButtonElement>("#queue-toggle");
+const queueText = need<HTMLSpanElement>("#queue-text");
+const queuePanel = need<HTMLDivElement>("#queue-panel");
+const queueList = need<HTMLUListElement>("#queue-list");
+const announcer = need<HTMLParagraphElement>("#announcer");
 const spinnerTemplate = need<HTMLTemplateElement>("#spinner");
 
 /**
@@ -164,6 +173,12 @@ let localOperations = 0;
 // The action asked for on each item whose request the service has not
 // answered yet, so its buttons are busy from the click on.
 const requesting = new Map<string, ItemAction>();
+// Under branding progress: button, the line the announcer last said for each
+// running operation, so each phase is said once however ticks interleave.
+const announced = new Map<string, string>();
+// The item data each card was built from: renderGrid keeps a card whose item
+// is unchanged and repaints it in place, so its button's bar eases.
+const cardSources = new WeakMap<Element, string>();
 
 function busyOf(itemName: string): ItemAction | undefined {
   return busyAction(itemName, requesting, active, operations);
@@ -179,9 +194,76 @@ function markBusy(button: HTMLButtonElement, busy: ItemAction | undefined): void
 }
 
 /**
+ * paintAction writes an item's action into its button, in place; the caller
+ * sets its classes. Under branding progress: strip it is the label, or while
+ * the item is busy its installing or removing label. Under button the busy
+ * button carries the progress (actionProgress): a spinner while it waits,
+ * then a bar the stylesheet draws from data-progress and --progress. The
+ * accessible name stays the busy label, never a percentage, and the
+ * announcer says each phase. A placement row's button names its row.
+ */
+function paintAction(
+  button: HTMLButtonElement,
+  item: OptionalInstallItem,
+  action: ItemAction,
+  row?: OptionalInstallPlacement,
+): void {
+  const busy = busyOf(item.itemName);
+  const label = actionText(item, action, busy, row?.name);
+  markBusy(button, busy);
+  button.setAttribute("aria-label", row ? `${label}: ${row.label}` : `${label} ${item.displayName}`);
+  if (branding.progress === "strip") {
+    button.classList.remove("action");
+    button.removeAttribute("aria-busy");
+    delete button.dataset.progress;
+    button.style.removeProperty("--progress");
+    button.textContent = label;
+    return;
+  }
+  // A request not answered yet has no operation: the item's last one is over.
+  const operation = requesting.has(item.itemName) ? undefined : latestOperation(item.itemName);
+  const progress = actionProgress(item, action, busy, operation, row?.name);
+  let text = button.querySelector<HTMLSpanElement>(".action-label");
+  let percent = button.querySelector<HTMLSpanElement>(".action-percent");
+  if (!text || !percent) {
+    text = document.createElement("span");
+    text.className = "action-label";
+    // The percentage has its own span, so a long phase is cut short before it is.
+    percent = document.createElement("span");
+    percent.className = "action-percent";
+    const spinner = spinnerTemplate.content.firstElementChild?.cloneNode(true);
+    button.replaceChildren(...(spinner ? [spinner] : []), text, percent);
+  }
+  button.classList.add("action");
+  const measured = progress?.phase === "working" && progress.percent !== undefined;
+  // The percentage says it is still going, so the phase drops its ellipsis
+  // ("Downloading 45%") and fits a narrow button whole.
+  const shown = measured ? (progress?.label ?? "").replace(/\s*(…|\.\.\.)$/, "") : (progress?.label ?? label);
+  if (text.textContent !== shown) {
+    text.textContent = shown;
+  }
+  percent.textContent = measured ? `${progress?.percent}%` : "";
+  percent.hidden = percent.textContent === "";
+  if (progress?.phase === "ended") {
+    // The work is over, failed or canceled: the name is the action again.
+    button.setAttribute("aria-label", row ? `${progress.label}: ${row.label}` : `${progress.label} ${item.displayName}`);
+  }
+  if (progress) {
+    button.dataset.progress =
+      progress.phase === "working" ? (progress.percent === undefined ? "unmeasured" : "measured") : progress.phase;
+    button.style.setProperty("--progress", `${progress.percent ?? 0}%`);
+  } else {
+    delete button.dataset.progress;
+    button.style.removeProperty("--progress");
+  }
+  button.setAttribute("aria-busy", String(progress !== null && progress.phase !== "ended"));
+}
+
+/**
  * setCancel sets up a Cancel button for an operation: a real disabled button
  * while the cancel request is out or once the installer has started, its
- * title saying why. The strip and the dialog's own Cancel share it.
+ * title saying why. The strip, the queue list, a card's and the item's own
+ * Cancel share it.
  */
 function setCancel(button: HTMLButtonElement, operation: OperationView): void {
   const latest = operation.records.at(-1)?.state ?? "";
@@ -195,22 +277,27 @@ function setCancel(button: HTMLButtonElement, operation: OperationView): void {
 }
 
 /**
- * paintCancel shows the open item's own Cancel beside its action while it
- * has one (itemCancel). A Cancel that goes off or away while it has focus
- * hands it to the action beside it, or to fallback when the item shows no
- * action, not to the dialog or the page.
+ * paintCancel shows an item's own Cancel beside its action while it has one
+ * (itemCancel; a card passes itemView "page", since it is never a dialog).
+ * A Cancel that goes off or away while it has focus hands it to the action
+ * beside it, or to fallback when the item shows no action, not to the
+ * dialog or the page.
  */
 function paintCancel(
   button: HTMLButtonElement,
   item: OptionalInstallItem,
   action: HTMLElement,
   fallback: HTMLElement,
+  itemView: BrandingView["itemView"] = branding.itemView,
 ): void {
-  const running = itemCancel(branding.itemView, latestOperation(item.itemName));
+  const running = itemCancel(itemView, branding.progress, latestOperation(item.itemName));
   const focused = document.activeElement === button;
   button.hidden = !running;
   if (running) {
     setCancel(button, running);
+  } else {
+    // The label sizes the place style.css keeps for it while hidden.
+    button.textContent = actionLabel(item, "cancel");
   }
   if (focused && (button.hidden || button.disabled)) {
     (action.hidden ? fallback : action).focus();
@@ -323,12 +410,15 @@ function applyBranding(next: BrandingView): void {
   root.dataset.contentWidth = next.contentWidth;
   root.dataset.filterPlacement = next.filterPlacement;
   root.dataset.appBarBrand = next.appBarBrand;
-  // The tab order and the Software tab's heading are branding too, and so is
-  // how a card opens its item.
+  root.dataset.progress = next.progress;
+  // The tab order and the Software tab's heading are branding too, and so
+  // are how a card opens its item and where running work shows.
   renderNav();
   renderCategories();
   renderGrid();
   placeItemView();
+  renderDetail();
+  renderStrip();
 }
 
 /**
@@ -522,14 +612,17 @@ function card(item: OptionalInstallItem): HTMLElement {
     // Board B draws the undo action (Remove) outlined; the others are solid.
     action.className = `pill card-action ${derived.kind === "undo" ? "pill-outline" : "pill-primary"}`;
     // Only the item that owns an in-flight operation is busy; other items
-    // stay actionable and route independently by operation ID.
-    const busy = busyOf(item.itemName);
-    const label = actionText(item, derived, busy);
-    action.textContent = label;
-    markBusy(action, busy);
-    action.setAttribute("aria-label", `${label} ${item.displayName}`);
+    // stay actionable and route independently by operation ID (paintCard).
     action.addEventListener("click", () => void runAction(item, derived));
-    actions.append(action);
+    // Cancel, beside the action, shows only under branding progress: button.
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "pill pill-outline card-cancel";
+    cancel.hidden = true;
+    cancel.addEventListener("click", () => cancelFrom(cancel));
+    // style.css keeps Cancel's place after the action, so the action never
+    // moves when Cancel comes or goes, and the DOM order is the one seen.
+    actions.append(action, cancel);
   }
 
   if (!dialogView) {
@@ -562,8 +655,25 @@ function card(item: OptionalInstallItem): HTMLElement {
       openDetail(item, false);
     }
   });
-  updateCardProgress(article, item, cardStatus(item), true);
+  paintCard(article, item);
   return article;
+}
+
+/** paintCard writes what changes while an item works into its card, in place. */
+function paintCard(article: HTMLElement, item: OptionalInstallItem): void {
+  const action = article.querySelector<HTMLButtonElement>(".card-action");
+  const derived = deriveAction(item);
+  if (action && derived) {
+    paintAction(action, item, derived);
+  }
+  const cancel = article.querySelector<HTMLButtonElement>(".card-cancel");
+  // The control that opens the item: Details, or the name in dialog mode.
+  const opener = article.querySelector<HTMLElement>(".card-details, .card-open");
+  if (cancel && action && opener) {
+    // A card is never the dialog: only progress button gives it a Cancel.
+    paintCancel(cancel, item, action, opener, "page");
+  }
+  updateCardProgress(article, item, cardStatus(item), true);
 }
 
 /** latestOperation is the most recently started operation on an item, if any. */
@@ -583,7 +693,9 @@ function latestOperation(itemName: string): OperationView | undefined {
  * spinner and one line while the operation runs and the outcome afterwards.
  * warningsOnly (a Home card) shows idleText in place of running work and keeps
  * only outcomes that need attention. The bar is only in the bottom strip and
- * the full timeline only in Activity.
+ * the full timeline only in Activity. Under branding progress: button the
+ * bar is the item's button, so every status line keeps only outcomes that
+ * need attention and the reason a cancel was refused while the work goes on.
  */
 function updateCardProgress(
   container: HTMLElement,
@@ -601,7 +713,9 @@ function updateCardProgress(
   const progress = operation
     ? cardProgress(item, operation.records, operation.outcome, operation.action.method, operation.notice)
     : null;
-  if (!progress || (warningsOnly && !needsAttention(progress))) {
+  const inButton = branding.progress === "button";
+  const refused = inButton && operation?.outcome === "active" && Boolean(operation.notice);
+  if (!progress || ((warningsOnly || inButton) && !needsAttention(progress) && !refused)) {
     text.textContent = idleText;
     status.hidden = idleText === "";
     delete status.dataset.outcome;
@@ -612,7 +726,7 @@ function updateCardProgress(
   status.hidden = false;
   // "plain" opts out of the warning box the stylesheet gives finished outcomes.
   status.dataset.outcome = progress.plain ? "plain" : progress.outcome;
-  spinner.toggleAttribute("hidden", progress.outcome !== "active");
+  spinner.toggleAttribute("hidden", inButton || progress.outcome !== "active");
 }
 
 /** cardOf is an item's card in the grid, if the list shows it. */
@@ -625,11 +739,17 @@ function renderCardFor(itemName: string): void {
   const article = cardOf(itemName);
   const item = view.items.find((candidate) => candidate.itemName === itemName);
   if (article && item) {
-    updateCardProgress(article, item, cardStatus(item), true);
+    paintCard(article, item);
   }
   if (item && detailItemName === itemName) {
-    updateCardProgress(detailContent, item, "");
-    paintCancel(detailCancel, item, detailAction, detailClose);
+    // Under button the item's buttons carry the progress, so they are
+    // repainted (in place) as well.
+    if (branding.progress === "button") {
+      renderDetail();
+    } else {
+      updateCardProgress(detailContent, item, "");
+      paintCancel(detailCancel, item, detailAction, detailFallback());
+    }
   }
 }
 
@@ -651,20 +771,45 @@ function renderGrid(): void {
     shown,
     viewHome.hidden !== false || viewHome.getAnimations().length > 0,
   );
-  // The rebuild replaces every button, so a focused card button (its action
-  // goes busy at the click) hands focus to its replacement.
+  // A card whose item is unchanged stays and is repainted in place, so its
+  // button's bar eases on; any other is rebuilt. A rebuild replaces the
+  // card's buttons, so a focused card button (its action goes busy at the
+  // click) hands focus to its replacement.
   const focused = grid.contains(document.activeElement) ? document.activeElement : null;
   const focusedItem = focused?.closest<HTMLElement>(".card")?.dataset.item;
-  const focusedClass = focused?.classList.contains("card-action") ? "card-action" : openControl(branding.itemView);
-  grid.replaceChildren(
-    ...shown.map((item) => {
-      const article = card(item);
-      article.toggleAttribute("data-entering", entering.has(item.itemName));
-      return article;
-    }),
-  );
-  if (focusedItem !== undefined) {
-    grid.querySelector<HTMLElement>(`[data-item="${CSS.escape(focusedItem)}"] .${focusedClass}`)?.focus();
+  const focusedClass =
+    ["card-action", "card-cancel"].find((name) => focused?.classList.contains(name)) ?? openControl(branding.itemView);
+  const listedCards = new Map([...grid.children].map((child) => [(child as HTMLElement).dataset.item, child]));
+  const articles = shown.map((item) => {
+    // The item view decides the card's controls, so it is part of its source.
+    const source = JSON.stringify([branding.itemView, item]);
+    const kept = listedCards.get(item.itemName) as HTMLElement | undefined;
+    const article = kept && cardSources.get(kept) === source ? kept : card(item);
+    if (article === kept) {
+      paintCard(article, item);
+    } else {
+      cardSources.set(article, source);
+    }
+    article.toggleAttribute("data-entering", entering.has(item.itemName));
+    return article;
+  });
+  // Stale cards go first, so placing the rest moves none that stays.
+  const keep = new Set<Element>(articles);
+  for (const child of [...grid.children]) {
+    if (!keep.has(child)) {
+      child.remove();
+    }
+  }
+  articles.forEach((article, index) => {
+    if (grid.children[index] !== article) {
+      grid.insertBefore(article, grid.children[index] ?? null);
+    }
+  });
+  if (focusedItem !== undefined && !grid.contains(document.activeElement)) {
+    const owner = grid.querySelector<HTMLElement>(`[data-item="${CSS.escape(focusedItem)}"]`);
+    const target = owner?.querySelector<HTMLButtonElement>(`.${focusedClass}`);
+    // A Cancel gone with its operation hands focus to the action beside it.
+    (target && !target.hidden && !target.disabled ? target : owner?.querySelector<HTMLElement>(".card-action"))?.focus();
   }
   // The dialog stays over its item's card; once a refresh or a branding
   // change takes the card off the list, there is nothing left to show it over.
@@ -695,6 +840,16 @@ function renderGrid(): void {
  */
 function renderStrip(): void {
   navBusy.toggleAttribute("hidden", active.size === 0);
+  const inButton = branding.progress === "button";
+  for (const part of [stripGlyph, stripBody, stripCancel]) {
+    part.hidden = inButton;
+  }
+  if (inButton) {
+    renderQueue();
+    return;
+  }
+  queueToggle.hidden = true;
+  closeQueue(false);
   const shown = stripView(operations.values());
   strip.hidden = !shown;
   if (!shown) {
@@ -713,6 +868,121 @@ function renderStrip(): void {
   // Cancel stays visible, but is a real disabled button once the installer has
   // started; its title says why.
   setCancel(stripCancel, shown.operation);
+}
+
+/**
+ * renderQueue is the strip under branding progress: button. Each item's
+ * button shows its own progress, so the strip shows only while two or more
+ * operations run, and then only their count: a button that opens the list of
+ * them above it, each row with its own Cancel. Rows are kept per operation
+ * and updated in place, so a screen reader in the list is not thrown out of
+ * it by every tick.
+ */
+function renderQueue(): void {
+  const queue = queueView(operations.values());
+  if (!queue) {
+    // Focus inside a strip about to hide would fall to the page's body.
+    const hadFocus = strip.contains(document.activeElement);
+    closeQueue(false);
+    strip.hidden = true;
+    queueToggle.hidden = true;
+    if (hadFocus) {
+      focusAfterQueue();
+    }
+    return;
+  }
+  strip.hidden = false;
+  queueToggle.hidden = false;
+  queueText.textContent = queue.line;
+  const focusedRow = document.activeElement?.closest<HTMLElement>("#queue-list li")?.dataset.operationId;
+  const rows = new Map([...queueList.children].map((row) => [(row as HTMLElement).dataset.operationId, row]));
+  const wanted = queue.rows.map(({ operation, text }) => {
+    const row = (rows.get(operation.operationId) as HTMLLIElement | undefined) ?? queueRow(operation);
+    const [glyph, name, state, cancel] = row.children as unknown as [HTMLElement, HTMLElement, HTMLElement, HTMLButtonElement];
+    setGlyph(glyph, operation.item);
+    name.textContent = operation.item.displayName;
+    if (state.textContent !== text) {
+      state.textContent = text;
+    }
+    setCancel(cancel, operation);
+    return row;
+  });
+  const keep = new Set<Element>(wanted);
+  for (const row of [...queueList.children]) {
+    if (!keep.has(row)) {
+      row.remove();
+    }
+  }
+  wanted.forEach((row, index) => {
+    if (queueList.children[index] !== row) {
+      queueList.insertBefore(row, queueList.children[index] ?? null);
+    }
+  });
+  // A Cancel that went off or away with its row hands focus to the strip.
+  if (focusedRow !== undefined && !queuePanel.hidden) {
+    const cancel = queueList.querySelector<HTMLButtonElement>(`[data-operation-id="${CSS.escape(focusedRow)}"] button`);
+    if (!cancel || cancel.disabled) {
+      queueToggle.focus();
+    } else if (!queueList.contains(document.activeElement)) {
+      cancel.focus();
+    }
+  }
+}
+
+/** queueRow builds an empty row of the queue list; renderQueue fills it. */
+function queueRow(operation: OperationView): HTMLLIElement {
+  const row = document.createElement("li");
+  row.dataset.operationId = operation.operationId;
+  const glyph = document.createElement("span");
+  glyph.className = "glyph glyph-small";
+  glyph.setAttribute("aria-hidden", "true");
+  const name = document.createElement("span");
+  name.className = "queue-name";
+  const state = document.createElement("span");
+  state.className = "queue-state";
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.className = "pill pill-outline";
+  cancel.addEventListener("click", () => cancelFrom(cancel));
+  row.append(glyph, name, state, cancel);
+  return row;
+}
+
+/** openQueue shows the queue list above the strip; focus stays on the strip. */
+function openQueue(): void {
+  queuePanel.hidden = false;
+  queueToggle.setAttribute("aria-expanded", "true");
+}
+
+/** closeQueue hides the queue list, handing focus back to the strip when asked. */
+function closeQueue(refocus: boolean): void {
+  if (queuePanel.hidden) {
+    return;
+  }
+  queuePanel.hidden = true;
+  queueToggle.setAttribute("aria-expanded", "false");
+  if (refocus && !queueToggle.hidden) {
+    queueToggle.focus();
+  }
+}
+
+/**
+ * focusAfterQueue gives focus a place when the strip hides with it inside:
+ * the action of the item still running when its card or page shows, else
+ * the top of the page shown.
+ */
+function focusAfterQueue(): void {
+  const running = [...operations.values()].find((operation) => operation.outcome === "active");
+  if (!viewDetail.hidden) {
+    (detailAction.hidden ? detailBack : detailAction).focus();
+    return;
+  }
+  // A card on a hidden page (Activity) cannot take focus.
+  const action =
+    running && !viewHome.hidden
+      ? grid.querySelector<HTMLElement>(`[data-item="${CSS.escape(running.item.itemName)}"] .card-action`)
+      : null;
+  (action ?? (viewHome.hidden ? navActivity : searchInput)).focus();
 }
 
 function renderActivity(): void {
@@ -837,6 +1107,7 @@ function failOperation(operationId: string, message: string): void {
     return;
   }
   operation.outcome = "error";
+  announced.delete(operationId);
   active = releaseOperation(active, operationId);
   pushRecord(
     operation,
@@ -864,6 +1135,7 @@ api.onOperationStatus((status) => {
     // The item stays busy until the refresh below brings its new state, so
     // its button never shows the old action again in between.
     operation.outcome = "terminal";
+    announced.delete(operation.operationId);
     render();
     void refresh();
     return;
@@ -872,10 +1144,23 @@ api.onOperationStatus((status) => {
   // announces the new state without re-reading the whole grid.
   renderCardFor(operation.item.itemName);
   renderStrip();
+  // Under button the buttons are not live regions: the announcer says each
+  // new phase once per operation, without its percentage.
+  const line = branding.progress === "button" ? announcement(operation) : "";
+  if (line && announced.get(operation.operationId) !== line) {
+    announced.set(operation.operationId, line);
+    announcer.textContent = line;
+  }
 });
 
 function setText(selector: string, value: string, fallback = "Not provided"): void {
-  need<HTMLElement>(selector).textContent = value.trim() || fallback;
+  const element = need<HTMLElement>(selector);
+  const text = value.trim() || fallback;
+  // Unchanged text is left alone, so a repaint on every progress tick
+  // (branding progress: button) keeps a selection in the details.
+  if (element.textContent !== text) {
+    element.textContent = text;
+  }
 }
 
 /**
@@ -908,58 +1193,68 @@ function renderDetail(): void {
   detailAction.hidden = derived === null;
   if (derived) {
     detailAction.className = `pill pill-large ${derived.kind === "undo" ? "pill-outline" : "pill-primary"}`;
-    const busy = busyOf(item.itemName);
-    const label = actionText(item, derived, busy);
-    detailAction.textContent = label;
-    markBusy(detailAction, busy);
-    detailAction.setAttribute("aria-label", `${label} ${item.displayName}`);
+    paintAction(detailAction, item, derived);
     detailAction.onclick = () => void runAction(item, derived);
   }
 
   // The Status row already says the catalog state, so the line only appears
   // for work in progress or an outcome.
   updateCardProgress(detailContent, item, "");
-  paintCancel(detailCancel, item, detailAction, detailClose);
+  paintCancel(detailCancel, item, detailAction, detailFallback());
+}
+
+/** detailFallback takes focus from the item's Cancel when it has no action: Close or Back. */
+function detailFallback(): HTMLElement {
+  return dialog.open ? detailClose : detailBack;
 }
 
 /**
  * renderPlacements draws one row per placement on the detail page: its label,
  * its status and the item's action for that placement alone. Rows follow the
- * item's own button while it has an operation running. The rows are rebuilt,
- * so focus goes back to the row that had it.
+ * item's own button while it has an operation running. The rows are built
+ * once per item and set of placements, then updated in place, so focus and a
+ * button's bar stay; a rebuild hands focus back to the row that had it.
  */
 function renderPlacements(item: OptionalInstallItem, placements: OptionalInstallPlacement[]): void {
   const focused = document.activeElement?.closest<HTMLElement>("#detail-placements li")?.dataset.placement;
   detailPlacements.hidden = placements.length === 0;
   detailPlacements.setAttribute("aria-label", actionLabel(item, "applies_to"));
-  const busy = busyOf(item.itemName);
-  detailPlacements.replaceChildren(
-    ...placements.map((placement) => {
-      const row = document.createElement("li");
-      row.dataset.placement = placement.name;
-      const label = document.createElement("span");
-      label.className = "placement-label";
-      label.textContent = placement.label;
-      const status = document.createElement("span");
-      status.className = "card-meta";
-      status.textContent = placementStatus(item, placement);
-      row.append(label, status);
-      const derived = placementAction(item, placement);
-      if (derived) {
+  const rows = JSON.stringify([item.itemName, ...placements.map((placement) => placement.name)]);
+  if (detailPlacements.dataset.rows !== rows) {
+    detailPlacements.dataset.rows = rows;
+    detailPlacements.replaceChildren(
+      ...placements.map((placement) => {
+        const row = document.createElement("li");
+        row.dataset.placement = placement.name;
+        const label = document.createElement("span");
+        label.className = "placement-label";
+        const status = document.createElement("span");
+        status.className = "card-meta";
         const action = document.createElement("button");
         action.type = "button";
-        action.className = `pill ${derived.kind === "undo" ? "pill-outline" : "pill-primary"}`;
-        const label = actionText(item, derived, busy, placement.name);
-        action.textContent = label;
-        markBusy(action, busy);
-        action.setAttribute("aria-label", `${label}: ${placement.label}`);
-        action.addEventListener("click", () => void runAction(item, derived));
-        row.append(action);
-      }
-      return row;
-    }),
-  );
-  if (focused !== undefined) {
+        row.append(label, status, action);
+        return row;
+      }),
+    );
+  }
+  placements.forEach((placement, index) => {
+    const [label, status, action] = detailPlacements.children[index].children as unknown as [
+      HTMLElement,
+      HTMLElement,
+      HTMLButtonElement,
+    ];
+    label.textContent = placement.label;
+    status.textContent = placementStatus(item, placement);
+    // An item the organisation requires has no action on any row.
+    const derived = placementAction(item, placement);
+    action.hidden = derived === null;
+    if (derived) {
+      action.className = `pill ${derived.kind === "undo" ? "pill-outline" : "pill-primary"}`;
+      paintAction(action, item, derived, placement);
+      action.onclick = () => void runAction(item, derived);
+    }
+  });
+  if (focused !== undefined && !detailPlacements.contains(document.activeElement)) {
     detailPlacements.querySelector<HTMLButtonElement>(`[data-placement="${CSS.escape(focused)}"] button`)?.focus();
   }
 }
@@ -1067,6 +1362,12 @@ function openDialog(item: OptionalInstallItem, focusVisible: boolean): void {
   }
   detailItemName = item.itemName;
   dialogOpenings += 1;
+  // The strip is inert under the modal dialog, so its queue list (open from
+  // the keyboard, then Tab to a card) must not float above the backdrop.
+  closeQueue(false);
+  // A modal dialog takes everything outside it out of the accessibility
+  // tree, the announcer too, so it goes in with the dialog while it is open.
+  dialog.append(announcer);
   renderDetail();
   dialog.showModal();
   dialog.scrollTop = 0;
@@ -1190,6 +1491,8 @@ function dialogClosed(focusVisible = true): void {
     return;
   }
   detailItemName = null;
+  // The announcer goes back out with the modal dialog (see openDialog).
+  document.body.append(announcer);
   delete dialog.dataset.closing;
   opening = null;
   backdropFade?.cancel();
@@ -1248,6 +1551,24 @@ function showView(next: View, tab?: string): void {
 
 stripCancel.addEventListener("click", () => cancelFrom(stripCancel));
 detailCancel.addEventListener("click", () => cancelFrom(detailCancel));
+queueToggle.addEventListener("click", () => {
+  if (queuePanel.hidden) {
+    openQueue();
+  } else {
+    closeQueue(true);
+  }
+});
+// A click outside the strip closes the queue list. Focus goes back to the
+// strip only when the click left it nowhere (on no control), so a click on
+// another control keeps the focus that control took.
+document.addEventListener("click", (event) => {
+  // composedPath, not contains: a click can re-render its own target away.
+  if (queuePanel.hidden || event.composedPath().includes(strip)) {
+    return;
+  }
+  const lost = document.activeElement === null || document.activeElement === document.body || strip.contains(document.activeElement);
+  closeQueue(lost);
+});
 brandLink.addEventListener("click", () => {
   // The service validated the URL; check again so nothing but http(s) ever
   // leaves the WebView, and open it in the system browser, never in here.
@@ -1299,9 +1620,14 @@ dialog.addEventListener("click", (event) => {
   pressedOutside = false;
 });
 document.addEventListener("keydown", (event) => {
-  // The dialog opens only over a list, so neither Escape below applies while
-  // it is open; its own cancel event handles Escape.
-  if (event.key === "Escape" && !viewDetail.hidden) {
+  // The dialog opens only over a list, and opening it closes the queue list,
+  // so none of the Escapes below applies while it is open; its own cancel
+  // event handles Escape.
+  if (event.key === "Escape" && !queuePanel.hidden) {
+    // The open queue list is the innermost thing Escape can close.
+    event.preventDefault();
+    closeQueue(true);
+  } else if (event.key === "Escape" && !viewDetail.hidden) {
     event.preventDefault();
     closeDetail();
   } else if (event.key === "Escape" && !viewActivity.hidden) {
