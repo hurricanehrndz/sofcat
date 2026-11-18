@@ -1064,6 +1064,17 @@ const CONTENT_WIDTHS = new Set(["compact", "wide", "full"]);
 // heading's row, left keeps them above the heading as before the key.
 const FILTER_PLACEMENTS = new Set(["right", "left"]);
 
+// The nav_placement names: top (the default) keeps the app bar across the
+// window, as before the key, and left makes it a column down the window's
+// side. style.css draws each from :root[data-nav-placement].
+const NAV_PLACEMENTS = new Set(["top", "left"]);
+
+// The category_filter names: select (the default) keeps the Category select
+// beside the search field, list shows the categories as buttons in a left
+// bar. style.css shows the list only there, so with the bar at the top list
+// is select.
+const CATEGORY_FILTERS = new Set(["select", "list"]);
+
 // The app_bar_brand names: full (the default) shows the mark and the name,
 // mark the mark only, none neither; style.css hides them only visually.
 const APP_BAR_BRANDS = new Set(["full", "mark", "none"]);
@@ -1168,6 +1179,8 @@ export function brandingView(payload: unknown): BrandingView {
     taglineScale: FONT_SCALES.get(text(raw, "taglineSize")) ?? 1,
     contentWidth: oneOf(raw, "contentWidth", CONTENT_WIDTHS, "wide"),
     filterPlacement: oneOf(raw, "filterPlacement", FILTER_PLACEMENTS, "right"),
+    navPlacement: oneOf(raw, "navPlacement", NAV_PLACEMENTS, "top"),
+    categoryFilter: oneOf(raw, "categoryFilter", CATEGORY_FILTERS, "select"),
     // Hiding the product's name only makes sense under a banner that shows
     // the organisation; without one the app bar keeps it.
     appBarBrand: showBanner ? oneOf(raw, "appBarBrand", APP_BAR_BRANDS, "full") : "full",

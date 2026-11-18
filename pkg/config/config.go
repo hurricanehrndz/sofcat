@@ -157,6 +157,14 @@ type Branding struct {
 	// FilterPlacement is where the list's search and category filters sit:
 	// right (the default, on the heading's row) or left (above the heading).
 	FilterPlacement string `yaml:"filter_placement,omitempty"`
+	// NavPlacement is where the bar with the product, the pages and the
+	// connection status sits: top (the default, across the window) or left
+	// (a column down its side).
+	NavPlacement string `yaml:"nav_placement,omitempty"`
+	// CategoryFilter is how a list's category is chosen: select (the default,
+	// beside the search field) or list (buttons in a left bar; with the bar
+	// at the top it is select).
+	CategoryFilter string `yaml:"category_filter,omitempty"`
 	// AppBarBrand is what the app bar shows of the product: full (the
 	// default, mark and name), mark or none.
 	AppBarBrand string `yaml:"app_bar_brand,omitempty"`

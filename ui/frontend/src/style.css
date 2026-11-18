@@ -134,6 +134,21 @@ button:hover:not(:disabled, [aria-disabled="true"]) {
   border-color: var(--accent);
 }
 
+/* A press gives a little, so a click is felt before its result shows. */
+.pill {
+  transition:
+    background-color 160ms ease-out,
+    border-color 160ms ease-out,
+    color 160ms ease-out,
+    filter 160ms ease-out,
+    opacity 160ms ease-out,
+    transform 120ms ease-out;
+}
+
+.pill:active:not(:disabled, [aria-disabled="true"]) {
+  transform: scale(0.96);
+}
+
 /* An action button stays focusable while its item is busy (aria-disabled). */
 button:disabled,
 button[aria-disabled="true"] {
@@ -294,7 +309,7 @@ button[aria-disabled="true"] {
 @keyframes rise-in {
   from {
     opacity: 0;
-    transform: translateY(0.375rem);
+    transform: translateY(0.5rem);
   }
 }
 
@@ -707,13 +722,43 @@ button[aria-disabled="true"] {
   white-space: nowrap;
 }
 
+/* The bar's parts sit in the bar itself; the sidebar makes this a box. */
+.app-bar-inner {
+  display: contents;
+}
+
 .app-bar nav {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   gap: 0.25rem;
 }
 
+/*
+ * The marker is the current page's highlight. main.ts moves it under that
+ * page's button (placeMarker) and it eases there, so the highlight slides
+ * from one page to the next instead of jumping.
+ */
+.nav-marker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  pointer-events: none;
+  transition:
+    transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    width 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    height 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* The sidebar's categories; a top bar has the Category select instead. */
+.app-bar .category-nav {
+  display: none;
+}
+
 .nav-link {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
@@ -721,15 +766,25 @@ button[aria-disabled="true"] {
   border: 0;
   border-radius: 8px;
   background: transparent;
+  text-align: start;
 }
 
 .nav-link:hover:not(:disabled) {
-  background: var(--accent-soft);
+  background: color-mix(in srgb, var(--accent-soft) 60%, transparent);
 }
 
+/* The marker is the current page's background. */
 .nav-link[aria-current="page"] {
-  background: var(--accent-soft);
   color: var(--accent);
+  font-weight: 600;
+}
+
+.nav-link[aria-current="page"]:hover {
+  background: transparent;
+}
+
+.category-link[aria-current="true"] {
+  background: var(--line-soft);
   font-weight: 600;
 }
 
@@ -799,7 +854,7 @@ main {
 }
 
 main > section {
-  animation: rise-in 180ms ease-out;
+  animation: rise-in 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 :root[data-content-width="compact"] main {
@@ -927,7 +982,8 @@ h2 {
 
 /* Only a card new to a list already on screen (enteringItems in state.ts). */
 .card[data-entering] {
-  animation: rise-in 180ms ease-out;
+  animation: rise-in 280ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+  animation-delay: calc(var(--enter-order, 0) * 30ms);
 }
 
 :root[data-content-width="compact"] .card {
@@ -1598,6 +1654,131 @@ h2 {
 
 #item-dialog h3 {
   margin-top: 1.5rem;
+}
+
+/*
+ * nav_placement: left (data-nav-placement on the root), in a window at least
+ * 40rem wide: the app bar becomes a column down the window's left, under the
+ * banner, with the product at its top, the pages and, at its foot, the
+ * admin's link (link_placement: app_bar) and the connection status. It stays
+ * put while the content scrolls, and the operation strip keeps to the
+ * content's column, clear of the bar's foot. With category_filter: list
+ * (data-category-filter) the bar also lists the current list's categories,
+ * and the Category select gives way to them; the search field stays where
+ * filter_placement puts it. A narrower window, like nav_placement: top,
+ * keeps the bar across the top with the select.
+ */
+@media (min-width: 40rem) {
+  :root[data-nav-placement="left"] body {
+    display: grid;
+    grid-template-columns: 15rem minmax(0, 1fr);
+    grid-template-rows: auto 1fr auto;
+  }
+
+  :root[data-nav-placement="left"] #banner {
+    grid-column: 1 / -1;
+  }
+
+  :root[data-nav-placement="left"] .app-bar {
+    grid-row: 2 / 4;
+    display: block;
+    padding: 0;
+    border-bottom: 0;
+    border-right: 1px solid var(--line-soft);
+  }
+
+  :root[data-nav-placement="left"] .app-bar-inner {
+    position: sticky;
+    top: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    min-height: min(100%, 100vh);
+    max-height: 100vh;
+    padding: 1.25rem 0.75rem 1rem;
+    overflow-y: auto;
+  }
+
+  :root[data-nav-placement="left"] .product {
+    margin: 0;
+    padding: 0 0.5rem;
+    overflow-wrap: anywhere;
+  }
+
+  :root[data-nav-placement="left"] .app-bar nav {
+    flex-flow: column nowrap;
+    gap: 0.125rem;
+  }
+
+  :root[data-nav-placement="left"] .nav-link {
+    width: 100%;
+    font-size: 0.9375rem;
+    padding: 0.4375rem 0.75rem;
+    overflow-wrap: anywhere;
+  }
+
+  /* My items and Activity are the user's own pages, set apart from the lists. */
+  :root[data-nav-placement="left"] #nav-mine {
+    margin-top: 0.875rem;
+  }
+
+  :root[data-nav-placement="left"][data-category-filter="list"] .app-bar .category-nav:not([hidden]) {
+    display: flex;
+  }
+
+  :root[data-nav-placement="left"] .category-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+
+  :root[data-nav-placement="left"] .category-link {
+    color: var(--muted);
+    font-size: 0.875rem;
+  }
+
+  :root[data-nav-placement="left"] .category-link[aria-current="true"] {
+    color: var(--ink);
+  }
+
+  .side-heading {
+    margin: 0 0 0.25rem;
+    padding: 0 0.75rem;
+    color: var(--muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  :root[data-nav-placement="left"][data-category-filter="list"] #category-field {
+    display: none;
+  }
+
+  :root[data-nav-placement="left"] .app-bar-end {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+    margin: auto 0 0;
+    padding: 0.75rem 0.5rem 0;
+    border-top: 1px solid var(--line-soft);
+  }
+
+  :root[data-nav-placement="left"] .connection {
+    flex-wrap: wrap;
+    white-space: normal;
+  }
+
+  :root[data-nav-placement="left"] main {
+    grid-row: 2;
+    grid-column: 2;
+    margin: 0 auto;
+  }
+
+  :root[data-nav-placement="left"] .strip {
+    grid-row: 3;
+    grid-column: 2;
+  }
 }
 
 @media (max-width: 40rem) {

@@ -69,6 +69,13 @@ export class Branding {
     "filterPlacement": string;
 
     /**
+     * NavPlacement and CategoryFilter are one of NavPlacements and
+     * CategoryFilters, or "" for the UI's defaults, top and select.
+     */
+    "navPlacement": string;
+    "categoryFilter": string;
+
+    /**
      * AppBarBrand, BannerStyle and BannerAlign are one of AppBarBrands,
      * BannerStyles and BannerAligns, or "" for the UI's defaults: full, text
      * and left.
@@ -145,6 +152,12 @@ export class Branding {
         }
         if (!("filterPlacement" in $$source)) {
             this["filterPlacement"] = "";
+        }
+        if (!("navPlacement" in $$source)) {
+            this["navPlacement"] = "";
+        }
+        if (!("categoryFilter" in $$source)) {
+            this["categoryFilter"] = "";
         }
         if (!("appBarBrand" in $$source)) {
             this["appBarBrand"] = "";

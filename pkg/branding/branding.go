@@ -73,6 +73,10 @@ type Branding struct {
 	// FilterPlacement is one of FilterPlacements, or "" for the UI's default,
 	// right.
 	FilterPlacement string `json:"filterPlacement"`
+	// NavPlacement and CategoryFilter are one of NavPlacements and
+	// CategoryFilters, or "" for the UI's defaults, top and select.
+	NavPlacement   string `json:"navPlacement"`
+	CategoryFilter string `json:"categoryFilter"`
 	// AppBarBrand, BannerStyle and BannerAlign are one of AppBarBrands,
 	// BannerStyles and BannerAligns, or "" for the UI's defaults: full, text
 	// and left.
@@ -101,6 +105,17 @@ var ContentWidths = []string{"compact", "wide", "full"}
 // list's search and category filters on the heading's row, at its right,
 // and left keeps them above the heading, the layout from before the key.
 var FilterPlacements = []string{"right", "left"}
+
+// NavPlacements are the names nav_placement accepts: top keeps the bar with
+// the product, the pages and the connection status across the window, the
+// layout from before the key, and left makes it a column down its side.
+var NavPlacements = []string{"top", "left"}
+
+// CategoryFilters are the names category_filter accepts: select keeps the
+// Category select beside the search field, as before the key, and list shows
+// the categories as buttons in a left bar. With the bar at the top the UI
+// shows the select for either.
+var CategoryFilters = []string{"select", "list"}
 
 // AppBarBrands are the names app_bar_brand accepts: what the app bar shows of
 // the product, its mark and name (full), the mark only, or neither. The UI
@@ -172,6 +187,8 @@ func resolve(in config.Branding) Branding {
 	out.TaglineSize = oneOf("tagline_size", in.TaglineSize, FontSizes...)
 	out.ContentWidth = oneOf("content_width", in.ContentWidth, ContentWidths...)
 	out.FilterPlacement = oneOf("filter_placement", in.FilterPlacement, FilterPlacements...)
+	out.NavPlacement = oneOf("nav_placement", in.NavPlacement, NavPlacements...)
+	out.CategoryFilter = oneOf("category_filter", in.CategoryFilter, CategoryFilters...)
 	out.AppBarBrand = oneOf("app_bar_brand", in.AppBarBrand, AppBarBrands...)
 	out.BannerStyle = oneOf("banner_style", in.BannerStyle, BannerStyles...)
 	out.BannerAlign = oneOf("banner_align", in.BannerAlign, BannerAligns...)

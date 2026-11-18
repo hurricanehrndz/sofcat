@@ -63,6 +63,8 @@ func managedFields(c *Configuration) map[string]any {
 		"branding.tagline_size":     &c.Branding.TaglineSize,
 		"branding.content_width":    &c.Branding.ContentWidth,
 		"branding.filter_placement": &c.Branding.FilterPlacement,
+		"branding.nav_placement":    &c.Branding.NavPlacement,
+		"branding.category_filter":  &c.Branding.CategoryFilter,
 		"branding.app_bar_brand":    &c.Branding.AppBarBrand,
 		"branding.banner_style":     &c.Branding.BannerStyle,
 		"branding.banner_align":     &c.Branding.BannerAlign,
