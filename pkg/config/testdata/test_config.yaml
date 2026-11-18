@@ -30,3 +30,4 @@ branding:
   banner_style: logo
   banner_align: center
   banner_height: x-large
+  item_view: dialog
