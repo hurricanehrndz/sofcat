@@ -419,6 +419,70 @@ export function isItemActive(active: ActiveOperations, itemName: string): boolea
 }
 
 /**
+ * busyAction is the action an item's buttons are busy with, or undefined when
+ * they are free: a request the service has not answered yet (requesting, by
+ * item), else the action of an operation still tracked in active. An ended
+ * operation stays tracked until the list fetched after its end arrives, so a
+ * button goes from its action to busy to the opposite action with no
+ * clickable stale label between.
+ */
+export function busyAction(
+  itemName: string,
+  requesting: ReadonlyMap<string, ItemAction>,
+  active: ActiveOperations,
+  operations: ReadonlyMap<string, OperationView>,
+): ItemAction | undefined {
+  const asked = requesting.get(itemName);
+  if (asked) {
+    return asked;
+  }
+  for (const [operationId, name] of active) {
+    if (name === itemName) {
+      return operations.get(operationId)?.action;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * endedOperations are the tracked operations that have ended; a refresh
+ * started after their end releases them once its list arrives.
+ */
+export function endedOperations(
+  active: ActiveOperations,
+  operations: ReadonlyMap<string, OperationView>,
+): string[] {
+  return [...active.keys()].filter((operationId) => operations.get(operationId)?.outcome !== "active");
+}
+
+/**
+ * actionText is an action button's label: the action's own, or while its item
+ * is busy, the item's installing or removing label for the busy action (a
+ * busy Cancel keeps its own label). A
+ * placement row (row set) reads busy only for its own placement, or for an
+ * action on the whole item that does what the row would.
+ */
+export function actionText(
+  item: Pick<OptionalInstallItem, "actionLabels">,
+  action: ItemAction,
+  busy: ItemAction | undefined,
+  row?: string,
+): string {
+  if (!busy) {
+    return action.label;
+  }
+  const own = row === undefined || busy.placement === row || (busy.placement === undefined && busy.method === action.method);
+  if (!own) {
+    return action.label;
+  }
+  // A Cancel sends the opposite mutation, so "Removing…" would misread it.
+  if (busy.kind === "cancel") {
+    return busy.label;
+  }
+  return actionLabel(item, busy.method === "RemoveItem" ? "removing" : "installing");
+}
+
+/**
  * shouldAcceptRecord decides whether a newly arrived status record still
  * belongs to an operation. A finished operation still takes a late record,
  * which insertRecord files before the terminal one; an operation that ended in

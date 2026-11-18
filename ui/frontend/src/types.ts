@@ -66,7 +66,10 @@ export type OperationView = {
   notice?: string;
 };
 
-/** ActiveOperations maps an accepted, non-terminal operationId to its item. */
+/**
+ * ActiveOperations maps an accepted operationId to its item, from acceptance
+ * until the list fetched after its end arrives.
+ */
 export type ActiveOperations = ReadonlyMap<string, string>;
 
 /** ListSource is where the currently rendered item list came from. */
