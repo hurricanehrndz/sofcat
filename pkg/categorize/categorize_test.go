@@ -78,11 +78,14 @@ func TestResolveClosed(t *testing.T) {
 		"swiss": {"Utilities": 0.4, "Development": 0.3, "Security": 0.3},
 		// Only an unknown category.
 		"odd": {"Gadgets": 1},
+		// An even split is no decision.
+		"tie": {"Media": 0.5, "Utilities": 0.5},
 	}}
 	items := []Item{
 		{Name: "chrome", DisplayName: "Chrome"},
 		{Name: "swiss"},
 		{Name: "odd"},
+		{Name: "tie"},
 		{Name: "missing"},
 		{Name: "slack", Category: "Chat"},
 		{Name: "chrome", DisplayName: "Chrome"}, // the same item in a second catalog
@@ -103,11 +106,11 @@ func TestResolveClosed(t *testing.T) {
 	if _, ok := res.Lock.Items["slack"]; ok {
 		t.Error("a hand-written category was locked")
 	}
-	if res.Asked != 3 || !reflect.DeepEqual(res.Pending, []string{"missing"}) || !reflect.DeepEqual(res.Undecided, []string{"odd", "swiss"}) {
+	if res.Asked != 4 || !reflect.DeepEqual(res.Pending, []string{"missing"}) || !reflect.DeepEqual(res.Undecided, []string{"odd", "swiss", "tie"}) {
 		t.Errorf("asked %d, pending %v, undecided %v", res.Asked, res.Pending, res.Undecided)
 	}
 	req := asker.reqs[0]
-	if len(asker.reqs) != 1 || len(req.Items) != 4 || req.Open {
+	if len(asker.reqs) != 1 || len(req.Items) != 5 || req.Open {
 		t.Errorf("requests: %+v", asker.reqs)
 	}
 	// The hand-written category is known and its item is an example.

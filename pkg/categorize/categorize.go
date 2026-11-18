@@ -277,7 +277,8 @@ func Resolve(ctx context.Context, cfg *Config, asker Asker, old Lock, items []It
 // are matched to the known categories whatever their case; a name that is
 // not known is dropped in closed mode and scaled by newCategoryFactor in
 // open mode. The weights are then normalised to a sum of 1, and the best
-// one wins if it reaches MinWeight. Ties go to the name that sorts first.
+// one wins if it reaches MinWeight and no other ties with it: an even split
+// is the model not knowing.
 func decide(cfg *Config, known *categorySet, raw map[string]float64) Entry {
 	weights := map[string]float64{}
 	var total float64
@@ -302,15 +303,19 @@ func decide(cfg *Config, known *categorySet, raw map[string]float64) Entry {
 		return Entry{}
 	}
 	var best string
+	tied := false
 	for _, name := range slices.Sorted(maps.Keys(weights)) {
 		// Three decimals keep the lock file readable and stable.
 		weights[name] = float64(int(weights[name]/total*1000+0.5)) / 1000
-		if best == "" || weights[name] > weights[best] {
-			best = name
+		switch {
+		case best == "" || weights[name] > weights[best]:
+			best, tied = name, false
+		case weights[name] == weights[best]:
+			tied = true
 		}
 	}
 	entry := Entry{Weights: weights}
-	if weights[best] >= cfg.MinWeight {
+	if weights[best] >= cfg.MinWeight && !tied {
 		entry.Category = best
 	}
 	return entry

@@ -1,0 +1,7 @@
+item_name: acme-firefox-bookmarks
+display_name: Acme Firefox Bookmarks
+description: Firefox bookmarks and homepage for the intranet, HR portal and help desk.
+developer: Acme IT
+catalog: categorize
+version: 1.0.0
+placements: [acme-files]

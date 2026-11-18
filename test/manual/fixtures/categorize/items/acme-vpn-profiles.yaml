@@ -1,0 +1,8 @@
+item_name: acme-vpn-profiles
+display_name: Acme VPN Profiles
+description: WireGuard connection profiles for the office and data-centre networks.
+developer: Acme IT
+category: Security
+catalog: categorize
+version: 1.0.0
+placements: [acme-files]

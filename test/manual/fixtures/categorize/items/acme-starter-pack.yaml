@@ -1,0 +1,6 @@
+item_name: acme-starter-pack
+display_name: Acme Starter Pack
+description: Files.
+catalog: categorize
+version: 1.0.0
+placements: [acme-files]

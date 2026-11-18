@@ -1,0 +1,7 @@
+item_name: acme-brand-fonts
+display_name: Acme Brand Fonts
+description: The company typefaces for documents and presentations.
+developer: Acme Brand Studio
+catalog: categorize
+version: 1.0.0
+placements: [acme-files]

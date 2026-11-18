@@ -8,7 +8,7 @@
 base_url: https://openrouter.ai/api/v1
 # model: the model's name as the endpoint knows it. Required. A small, cheap
 # model is enough.
-model: anthropic/claude-haiku-5.5
+model: google/gemini-3.1-flash-lite
 # mode: closed (default) lets the model choose only from the known categories;
 # open also lets it propose a new one when none fits.
 mode: closed

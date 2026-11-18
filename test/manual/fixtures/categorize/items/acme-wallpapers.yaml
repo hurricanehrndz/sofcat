@@ -1,0 +1,7 @@
+item_name: acme-wallpapers
+display_name: Acme Wallpapers
+description: Company desktop wallpapers in light and dark variants.
+developer: Acme Brand Studio
+catalog: categorize
+version: 1.0.0
+placements: [acme-files]

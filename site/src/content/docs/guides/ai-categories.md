@@ -17,7 +17,7 @@ CI. Devices never see the API key and never call the model.
 
    ```yaml
    base_url: https://openrouter.ai/api/v1
-   model: anthropic/claude-haiku-5.5
+   model: google/gemini-3.1-flash-lite
    ```
 
 2. Give `makecatalogs` the API key in its environment:
@@ -81,8 +81,9 @@ each. `makecatalogs` then:
    multiplies their weight by 0.75, so a new category has to clearly beat the
    existing ones before it is coined;
 3. scales the weights to a sum of 1 and takes the heaviest;
-4. uses it if its weight reaches `min_weight`, and otherwise leaves the item
-   without a category rather than guess.
+4. uses it if its weight reaches `min_weight` and no other category has the
+   same weight, and otherwise leaves the item without a category rather than
+   guess.
 
 Items you categorized by hand are sent along as examples (up to 20), so the
 model follows how your repository uses its categories.
