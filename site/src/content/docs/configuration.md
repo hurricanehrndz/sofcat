@@ -58,7 +58,13 @@ owns it and neither its group nor others can write it.
 | `app_data_path`, `service_name`, `service_pipe_name` | No: they must match the installed build |
 
 A value of the wrong type is dropped with a warning and the rest of the
-policy still applies. The `WriteRoots` policy lives in the same places; see
+policy still applies.
+
+`branding.help_url` and `help_label` are the old names of `link_url` and
+`link_label`. Where one source, the policy or `config.yaml`, sets both names,
+the new one wins. Across sources the policy wins as for any key, whichever
+name it uses: a policy that still sets `help_url` overrides a `config.yaml`
+that has moved to `link_url`. The `WriteRoots` policy lives in the same places; see
 [Write roots](#write-roots).
 
 On Windows, for example:

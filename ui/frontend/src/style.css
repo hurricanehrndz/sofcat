@@ -412,14 +412,20 @@ button:disabled {
  * there as well. The DOM order, logo, text, button, never changes: the button
  * is the banner's only stop in the tab order, and screen readers meet it
  * after the text, as in auto, wherever the eye does.
+ *
+ * The space between rows is a margin on the item that needs it, not a row
+ * gap, so a row with nothing in it (no logo tile, or small's missing twin
+ * row) leaves no gutters behind.
  */
 #banner[data-link-position] {
+  --corner-gap: 0.75rem;
+
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   grid-template-rows: 1fr auto 1fr;
   align-content: normal;
   align-items: center;
-  gap: 0.75rem 0;
+  gap: 0;
 }
 
 #banner[data-link-position] .banner-logo {
@@ -437,10 +443,12 @@ button:disabled {
 
 #banner[data-link-position^="top"] .brand-link {
   align-self: start;
+  margin-bottom: var(--corner-gap);
 }
 
 #banner[data-link-position^="bottom"] .brand-link {
   align-self: end;
+  margin-top: var(--corner-gap);
 }
 
 #banner[data-link-position$="left"] .brand-link {
@@ -476,9 +484,10 @@ button:disabled {
 }
 
 #banner[data-align="center"][data-link-position] {
+  --corner-gap: 1rem;
+
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: 1fr auto auto 1fr;
-  row-gap: 1rem;
 }
 
 /*
@@ -487,18 +496,18 @@ button:disabled {
  * take that extra height instead, so each step stays taller than the last.
  */
 #banner[data-align="center"][data-link-position][data-height="large"] {
-  grid-template-rows: minmax(3.5rem, 1fr) auto auto minmax(3.5rem, 1fr);
+  grid-template-rows: minmax(4.5rem, 1fr) auto auto minmax(4.5rem, 1fr);
   padding-block: 1.75rem;
 }
 
 #banner[data-align="center"][data-link-position][data-height="x-large"] {
-  grid-template-rows: minmax(5rem, 1fr) auto auto minmax(5rem, 1fr);
+  grid-template-rows: minmax(6rem, 1fr) auto auto minmax(6rem, 1fr);
   padding-block: 1.75rem;
 }
 
 #banner[data-align="center"][data-link-position] .banner-logo {
   justify-self: center;
-  margin: 0;
+  margin: 0 0 var(--corner-gap);
 }
 
 #banner[data-align="center"][data-link-position^="top"] {
@@ -509,6 +518,17 @@ button:disabled {
   grid-template-areas: "." "logo" "text" "link";
 }
 
+/*
+ * A small banner is meant to stay slim: the button's row keeps small's
+ * tighter gap and gets no empty twin, so the content sits just beside it
+ * rather than in the banner's exact middle.
+ */
+#banner[data-height="small"][data-link-position] {
+  --corner-gap: 0.5rem;
+
+  grid-template-rows: none;
+}
+
 @media (min-width: 40rem) {
   #banner[data-align="left"][data-link-position$="right"] {
     grid-template-columns: auto minmax(0, 1fr) fit-content(40%);
@@ -517,7 +537,7 @@ button:disabled {
   }
 
   #banner[data-align="left"][data-link-position$="right"] .brand-link {
-    margin-inline-start: 2rem;
+    margin: 0 0 0 2rem;
   }
 
   #banner[data-align="right"][data-link-position$="left"] {
@@ -527,7 +547,7 @@ button:disabled {
   }
 
   #banner[data-align="right"][data-link-position$="left"] .brand-link {
-    margin-inline-end: 2rem;
+    margin: 0 2rem 0 0;
   }
 }
 

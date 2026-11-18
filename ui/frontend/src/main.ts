@@ -207,11 +207,15 @@ function applyBranding(next: BrandingView): void {
   brandLink.hidden = !next.helpUrl;
   brandLink.textContent = next.helpLabel;
   // One button, moved: last in the banner, or at the app bar's end before
-  // the connection status, so the tab order follows what the eye sees.
-  if (next.linkPlacement === "app_bar") {
-    appBarEnd.prepend(brandLink);
-  } else {
-    brandBanner.append(brandLink);
+  // the connection status, so the tab order follows what the eye sees. Only
+  // a real move re-inserts it: re-inserting drops its focus.
+  const linkParent = next.linkPlacement === "app_bar" ? appBarEnd : brandBanner;
+  if (brandLink.parentElement !== linkParent) {
+    if (linkParent === appBarEnd) {
+      appBarEnd.prepend(brandLink);
+    } else {
+      brandBanner.append(brandLink);
+    }
   }
   // A corner keeps the DOM order: the button stays after the text for screen
   // readers, and it is the banner's only stop in the tab order.

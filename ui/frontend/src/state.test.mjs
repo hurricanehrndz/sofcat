@@ -747,6 +747,8 @@ test("brandingView places the link and only a banner link makes a banner", () =>
   assert.equal(inBar.linkPlacement, "app_bar");
   assert.equal(inBar.showBanner, false);
   assert.equal(inBar.helpUrl, "https://example.invalid/help", "the app bar still shows the link");
+  // No banner names the organisation, so the app bar keeps the product's name.
+  assert.equal(brandingView({ ...link, linkPlacement: "app_bar", appBarBrand: "none" }).appBarBrand, "full");
   assert.equal(brandingView({ ...link, title: "Acme", linkPlacement: "app_bar" }).showBanner, true);
   assert.equal(brandingView({ ...link, linkPlacement: "header" }).showBanner, true);
   assert.equal(brandingView({ ...link, linkPlacement: "header" }).linkPlacement, "banner");

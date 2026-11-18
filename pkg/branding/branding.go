@@ -224,7 +224,7 @@ func linkURL(value string) string {
 	parsed, err := url.Parse(value)
 	if err != nil || len(value) > maxLinkURL || parsed.Host == "" ||
 		(!strings.EqualFold(parsed.Scheme, "http") && !strings.EqualFold(parsed.Scheme, "https")) {
-		slog.Debug("branding link_url dropped", "linkUrl", value, "err", err)
+		slog.Debug("branding link_url (or help_url) dropped", "linkUrl", value, "err", err)
 		return ""
 	}
 	return parsed.String()
