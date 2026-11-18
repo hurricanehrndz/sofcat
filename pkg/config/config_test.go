@@ -53,6 +53,7 @@ func TestGet(t *testing.T) {
 			TaglineSize:     "x-large",
 			ContentWidth:    "full",
 			FilterPlacement: "left",
+			Navigation:      "tabs",
 			AppBarBrand:     "mark",
 			BannerStyle:     "logo",
 			BannerAlign:     "center",

@@ -36,6 +36,7 @@ app_data_path: c:/cpe/sofcat/cache
 #   title_size: large                                 # banner title and page headings: small, medium (default), large or x-large
 #   tagline_size: medium                              # banner tagline: the same sizes
 #   content_width: wide                               # compact (the layout before this key), wide (default) or full
+#   navigation: sidebar                               # sidebar (default; pages and categories in a column at the left) or tabs (pages as tabs in the app bar, as before)
 #   filter_placement: right                           # search and category: right (default; on the heading's row, at its right edge) or left (above the heading, as before)
 #   banner_style: text                                # text (default; logo tile beside the title) or logo (logo in the title's place, title as its alt text);
 #                                                     #   examples/branding/sofcat-logo-banner-light.svg (dark banners) and -dark.svg (light ones)
