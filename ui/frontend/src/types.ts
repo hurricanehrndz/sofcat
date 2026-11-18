@@ -121,6 +121,10 @@ export type BrandingView = {
   contentWidth: "compact" | "wide" | "full";
   /** The admin's filter_placement: where the list's search and category filters sit. */
   filterPlacement: "right" | "left";
+  /** The admin's nav_placement: the app bar across the top of the window or down its left side. */
+  navPlacement: "top" | "left";
+  /** The admin's category_filter: the Category select, or a list of buttons in a left bar. */
+  categoryFilter: "select" | "list";
   /**
    * What the app bar shows of the product: mark and name, the mark only, or
    * neither. The name stays for screen readers; full while there is no banner.

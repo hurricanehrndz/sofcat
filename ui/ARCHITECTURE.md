@@ -55,7 +55,7 @@ answer echoes the `id` with a `result` or an `error`:
 | --- | --- | --- |
 | `getServiceInfo` | none | `{version, protocolVersion: "2.0", apiVersion: 1, capabilities: [methods], busy, uptimeSeconds}` |
 | `listOptionalInstalls` | none | `{items: [OptionalInstallItem]}` (shape below) |
-| `getBranding` | none | `Branding`: `{title, tagline, helpUrl, helpLabel, linkPlacement, linkPosition, accent, logoMime, logoBase64, backgroundMime, backgroundBase64, backgroundText, listHeading, titleSize, taglineSize, contentWidth, filterPlacement, appBarBrand, bannerStyle, bannerAlign, bannerHeight, itemView, progress, sections?}` |
+| `getBranding` | none | `Branding`: `{title, tagline, helpUrl, helpLabel, linkPlacement, linkPosition, accent, logoMime, logoBase64, backgroundMime, backgroundBase64, backgroundText, listHeading, titleSize, taglineSize, contentWidth, filterPlacement, navPlacement, categoryFilter, appBarBrand, bannerStyle, bannerAlign, bannerHeight, itemView, progress, sections?}` |
 | `installItem` | `{itemName, placement?}` | `AcceptedOperation` |
 | `removeItem` | `{itemName, placement?}` | `AcceptedOperation` |
 | `cancelOperation` | `{operationId}` | `{canceled: true}` |
@@ -528,6 +528,7 @@ every run, so a policy change applies from the next run without a restart:
    `link_placement`, `link_position`, the old names `help_url` and `help_label`,
    `accent`, `background_image`, `background_text`, `list_heading`, `sections`,
    `title_size`, `tagline_size`, `content_width`, `filter_placement`,
+   `nav_placement`, `category_filter`,
    `app_bar_brand`, `banner_style`, `banner_align`, `banner_height`, `item_view`,
    `progress`;
    `sections` is a REG_MULTI_SZ).
@@ -561,6 +562,17 @@ the factors 0.85, 1, 1.25 and 1.5 on its default sizes (CSS `--title-scale` and
 or `full`; the UI sets it as `data-content-width` on the root element, and anything
 else is `wide`. `filter_placement` must be `right` or `left`; the UI sets it as
 `data-filter-placement` on the root element, and anything else is `right`.
+`nav_placement` must be `top` or `left` and `category_filter` `select` or
+`list`; the UI sets them as `data-nav-placement` and `data-category-filter`
+on the root element, and anything else is the first. The header is one
+element in both placements: `style.css` lays it out as a column at the left
+for `left` in a window of 40rem or more, and as a bar across the top
+otherwise. For `list` the column also shows the current list's categories as
+buttons that set the Category select, which stays the one place the choice
+is kept and is hidden while the buttons show; with the bar across the top
+the buttons never show, so `list` is `select` there. The current page's
+highlight is one marker element that `main.ts` moves under the current
+page's button, so it slides between pages in either placement.
 `app_bar_brand` must be `full`, `mark` or `none`, `banner_style` `text` or `logo`
 and `banner_align` `left`, `center` or `right`; anything else is the first. The UI
 sets them as `data-app-bar-brand` on the root element (`full` while no banner

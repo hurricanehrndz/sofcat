@@ -253,6 +253,26 @@ func TestResolveItemView(t *testing.T) {
 	}
 }
 
+// nav_placement and category_filter are closed sets: an unknown value must
+// leave the UI's defaults, the bar at the top and the Category select, so a
+// typo never moves the bar.
+func TestResolveNavPlacementAndCategoryFilter(t *testing.T) {
+	for in, want := range map[string]string{
+		"top": "top", "Left": "left", "LEFT": "left", "": "", "sidebar": "", "right": "",
+	} {
+		if got := resolve(config.Branding{NavPlacement: in}).NavPlacement; got != want {
+			t.Errorf("nav_placement %q resolved to %q, want %q", in, got, want)
+		}
+	}
+	for in, want := range map[string]string{
+		"select": "select", "List": "list", "LIST": "list", "": "", "chips": "", "sidebar": "",
+	} {
+		if got := resolve(config.Branding{CategoryFilter: in}).CategoryFilter; got != want {
+			t.Errorf("category_filter %q resolved to %q, want %q", in, got, want)
+		}
+	}
+}
+
 // The banner and app-bar keys are closed sets: an unknown value must leave the
 // UI's default rather than a layout the CSS has no rule for.
 func TestResolveBannerLayout(t *testing.T) {

@@ -321,6 +321,8 @@ func brandingSummary(b branding.Branding) (string, error) {
 		TaglineSize     string   `json:"taglineSize"`
 		ContentWidth    string   `json:"contentWidth"`
 		FilterPlacement string   `json:"filterPlacement"`
+		NavPlacement    string   `json:"navPlacement"`
+		CategoryFilter  string   `json:"categoryFilter"`
 		AppBarBrand     string   `json:"appBarBrand"`
 		BannerStyle     string   `json:"bannerStyle"`
 		BannerAlign     string   `json:"bannerAlign"`
@@ -328,7 +330,7 @@ func brandingSummary(b branding.Branding) (string, error) {
 		ItemView        string   `json:"itemView"`
 		Progress        string   `json:"progress"`
 		Sections        []string `json:"sections,omitempty"`
-	}{b.Title, b.Tagline, b.HelpURL, b.HelpLabel, b.LinkPlacement, b.LinkPosition, b.Accent, b.LogoMime, len(logo), b.BackgroundMime, len(background), b.BackgroundText, b.ListHeading, b.TitleSize, b.TaglineSize, b.ContentWidth, b.FilterPlacement, b.AppBarBrand, b.BannerStyle, b.BannerAlign, b.BannerHeight, b.ItemView, b.Progress, b.Sections})
+	}{b.Title, b.Tagline, b.HelpURL, b.HelpLabel, b.LinkPlacement, b.LinkPosition, b.Accent, b.LogoMime, len(logo), b.BackgroundMime, len(background), b.BackgroundText, b.ListHeading, b.TitleSize, b.TaglineSize, b.ContentWidth, b.FilterPlacement, b.NavPlacement, b.CategoryFilter, b.AppBarBrand, b.BannerStyle, b.BannerAlign, b.BannerHeight, b.ItemView, b.Progress, b.Sections})
 	return string(line), err
 }
 

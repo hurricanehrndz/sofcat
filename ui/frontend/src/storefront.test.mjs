@@ -137,6 +137,20 @@ test("the content width is compact, wide or full; anything else is wide", () => 
   }
 });
 
+// The bar moves and the categories become a list only when asked: no key, an
+// older service or a typo in a cached payload must keep the look from before
+// the keys, the bar at the top and the Category select.
+test("the nav placement is top or left and the category filter select or list; anything else is the first", () => {
+  assert.equal(brandingView({ navPlacement: "left" }).navPlacement, "left");
+  for (const navPlacement of [undefined, "", "top", "LEFT", "sidebar", 1, "constructor"]) {
+    assert.equal(brandingView({ navPlacement }).navPlacement, "top", String(navPlacement));
+  }
+  assert.equal(brandingView({ categoryFilter: "list" }).categoryFilter, "list");
+  for (const categoryFilter of [undefined, "", "select", "LIST", "chips", 1, "constructor"]) {
+    assert.equal(brandingView({ categoryFilter }).categoryFilter, "select", String(categoryFilter));
+  }
+});
+
 // style.css moves the filters only for left; anything else (no key, an older
 // service, a typo in a cached payload) must keep the default, right.
 test("the filter placement is right or left; anything else is right", () => {

@@ -9,6 +9,8 @@ import {
   UNBRANDED,
   dialogView,
   offline,
+  categoryFilter,
+  navPlacement,
   progress,
   serial,
   slowList,
@@ -269,12 +271,15 @@ export const api: SofCatApi = {
   // `?store=` picks the fixture store; `?unbranded` keeps its items and drops
   // its branding, so tabs fall back to alphabetical order; `?dialog` opens
   // items in a dialog (branding item_view) and `?progress=button` moves
-  // running work into the buttons, either way.
+  // running work into the buttons, either way; `?nav=left` puts the bar
+  // down the side and `?categories=list` lists the categories in it.
   getBranding: () =>
     Promise.resolve({
       ...(unbranded() ? UNBRANDED : store.branding),
       ...(dialogView() ? { itemView: "dialog" } : {}),
       ...(progress() ? { progress: progress() } : {}),
+      ...(navPlacement() ? { navPlacement: navPlacement() } : {}),
+      ...(categoryFilter() ? { categoryFilter: categoryFilter() } : {}),
     }),
   openExternal(url) {
     window.open(url, "_blank", "noopener,noreferrer");

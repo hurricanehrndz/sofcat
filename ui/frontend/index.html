@@ -20,26 +20,41 @@
       <button type="button" id="brand-link" class="pill brand-link" hidden></button>
     </section>
 
+    <!-- The app bar: a bar across the top, or a column down the window's left
+         (branding nav_placement: left, in a window of 40rem or more).
+         style.css lays out both. -->
     <header class="app-bar">
-      <h1 class="product"><span id="product-mark" class="product-mark" aria-hidden="true"><img alt="" src="/sofcat-icon.png" /></span><span id="product-name">%VITE_PRODUCT_NAME%</span></h1>
-      <!-- main.ts adds a button per list tab (catalog section) before My items. -->
-      <nav aria-label="Primary">
-        <button type="button" id="nav-mine" class="nav-link" data-view="mine">My items</button>
-        <button type="button" id="nav-activity" class="nav-link" data-view="activity" aria-keyshortcuts="Control+L">
-          Activity
-          <svg id="nav-busy" class="spinner" aria-hidden="true" width="12" height="12" viewBox="0 0 16 16" hidden>
-            <path d="M8 2a6 6 0 1 1-4.24 1.76" />
-          </svg>
-        </button>
-      </nav>
-      <!-- The bar's end: the admin's link for link_placement: app_bar, then
-           the connection status, kept together when the bar wraps. -->
-      <div id="app-bar-end" class="app-bar-end">
-        <p id="connection" class="connection" role="status">
-          <span class="connection-dot" aria-hidden="true"></span>
-          <span id="connection-text">Connecting to the %VITE_PRODUCT_NAME% service…</span>
-          <button type="button" id="retry" class="pill pill-outline" hidden>Retry</button>
-        </p>
+      <div class="app-bar-inner">
+        <h1 class="product"><span id="product-mark" class="product-mark" aria-hidden="true"><img alt="" src="/sofcat-icon.png" /></span><span id="product-name">%VITE_PRODUCT_NAME%</span></h1>
+        <!-- main.ts adds a button per list tab (catalog section) before My items. -->
+        <nav id="primary-nav" aria-label="Primary">
+          <!-- Slides to the current page's button (placeMarker in main.ts). -->
+          <span id="nav-marker" class="nav-marker" aria-hidden="true"></span>
+          <button type="button" id="nav-mine" class="nav-link" data-view="mine">My items</button>
+          <button type="button" id="nav-activity" class="nav-link" data-view="activity" aria-keyshortcuts="Control+L">
+            Activity
+            <svg id="nav-busy" class="spinner" aria-hidden="true" width="12" height="12" viewBox="0 0 16 16" hidden>
+              <path d="M8 2a6 6 0 1 1-4.24 1.76" />
+            </svg>
+          </button>
+        </nav>
+        <!-- The current list's categories, in a left bar under branding
+             category_filter: list; otherwise the Category select beside the
+             search field does the same. main.ts fills it and keeps the two
+             in step. -->
+        <nav id="category-nav" class="category-nav" aria-labelledby="category-nav-heading" hidden>
+          <p id="category-nav-heading" class="side-heading">Categories</p>
+          <div id="category-list" class="category-list"></div>
+        </nav>
+        <!-- The bar's end: the admin's link for link_placement: app_bar, then
+             the connection status, kept together when the bar wraps. -->
+        <div id="app-bar-end" class="app-bar-end">
+          <p id="connection" class="connection" role="status">
+            <span class="connection-dot" aria-hidden="true"></span>
+            <span id="connection-text">Connecting to the %VITE_PRODUCT_NAME% service…</span>
+            <button type="button" id="retry" class="pill pill-outline" hidden>Retry</button>
+          </p>
+        </div>
       </div>
     </header>
 
@@ -59,7 +74,7 @@
                 <label for="search">Search</label>
                 <input id="search" name="search" type="search" autocomplete="off" />
               </p>
-              <p>
+              <p id="category-field">
                 <label for="category">Category</label>
                 <select id="category" name="category">
                   <option value="all">All categories</option>
