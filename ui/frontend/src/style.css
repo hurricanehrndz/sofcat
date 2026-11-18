@@ -164,6 +164,108 @@ button[aria-disabled="true"] {
   font-weight: 700;
 }
 
+/*
+ * An item's action button turns into its progress where it stands
+ * (paintAction in main.ts sets data-progress and --progress). From the click
+ * it widens and shows a spinner while the request waits; once work starts it
+ * is a bar with the phase written in it, filled to --progress when the phase
+ * is measured and with a band running along it when it is not.
+ */
+.action {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-width: 0;
+  overflow: hidden;
+  isolation: isolate;
+  font-variant-numeric: tabular-nums;
+  transition:
+    background-color 200ms ease-out,
+    border-color 200ms ease-out,
+    color 200ms ease-out,
+    filter 120ms ease-out,
+    min-width 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.action .spinner {
+  display: none;
+  width: 0.875rem;
+  height: 0.875rem;
+  stroke: currentcolor;
+}
+
+/* The label of a long phase (a dependency's name) is cut short, not wrapped. */
+.action-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.action[data-progress] {
+  min-width: 11rem;
+  max-width: 100%;
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--surface));
+  background: var(--accent-soft);
+  color: var(--ink);
+  cursor: progress;
+  opacity: 1;
+}
+
+.action[data-progress="waiting"] .spinner {
+  display: block;
+}
+
+/* The bar, under the label. Its rounded end is the leading edge. */
+.action::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: -1;
+  width: 0;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--accent) 45%, var(--surface));
+  opacity: 0;
+  transition:
+    width 320ms ease-out,
+    opacity 200ms ease-out;
+}
+
+.action[data-progress="measured"]::before {
+  width: var(--progress, 0%);
+  opacity: 1;
+}
+
+.action[data-progress="unmeasured"]::before {
+  width: 40%;
+  opacity: 1;
+  transition: opacity 200ms ease-out;
+  animation: sweep 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes sweep {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(150%);
+  }
+}
+
+/* For screen readers only (the announcer). */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .spinner {
   flex: none;
   fill: none;
@@ -180,11 +282,12 @@ button[aria-disabled="true"] {
 }
 
 /*
- * Motion only says where something came from. A page, a card new to the list
- * and the operation strip ease in as they appear; nothing animates out, so a
- * page change never leaves two pages up or waits before taking focus. An
- * element replays its animation each time it goes from hidden to shown. The
- * reduced-motion rule at the end turns all of it off.
+ * Motion says where something came from and what it turned into. A page and
+ * a card new to the list ease in as they appear; an item's dialog grows out
+ * of its card and shrinks back into it (main.ts); an action button eases into
+ * its progress. A page change never leaves two pages up or waits before
+ * taking focus. An element replays its animation each time it goes from
+ * hidden to shown. The reduced-motion rule at the end turns all of it off.
  */
 @keyframes rise-in {
   from {
@@ -193,8 +296,7 @@ button[aria-disabled="true"] {
   }
 }
 
-/* Opacity only: the strip is pinned to the bottom, and moving it down would
-   reach past the page and could flash a scrollbar while it enters. */
+/* The dialog's backdrop. */
 @keyframes fade-in {
   from {
     opacity: 0;
@@ -815,9 +917,12 @@ h2 {
   border: 1px solid var(--line-soft);
   border-radius: 12px;
   overflow-wrap: anywhere;
-  /* A click anywhere off its buttons opens the item's detail page. */
+  /* A click anywhere off its button opens the item's dialog. */
   cursor: pointer;
-  transition: border-color 120ms ease-out;
+  transition:
+    border-color 160ms ease-out,
+    box-shadow 160ms ease-out,
+    transform 160ms ease-out;
 }
 
 /* Only a card new to a list already on screen (enteringItems in state.ts). */
@@ -842,6 +947,8 @@ h2 {
 
 .card:hover {
   border-color: var(--line);
+  box-shadow: 0 6px 18px var(--shadow);
+  transform: translateY(-1px);
 }
 
 .card h3 {
@@ -849,6 +956,18 @@ h2 {
   font-weight: 600;
   margin: 0.25rem 0 0;
 }
+
+/* The card's name opens its dialog; it reads as the heading it sits in. */
+.card-open {
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  font-weight: inherit;
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+
 
 .card p {
   margin: 0;
@@ -951,65 +1070,6 @@ h2 {
   border-radius: 6px;
 }
 
-/* The one progress bar: the operation being worked on, pinned to the bottom. */
-.strip {
-  position: sticky;
-  bottom: 0;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem 1rem;
-  padding: 0.75rem 2rem 0.875rem;
-  background: var(--surface);
-  border-top: 1px solid var(--line-soft);
-  box-shadow: 0 -6px 18px var(--shadow);
-  animation: fade-in 200ms ease-out;
-}
-
-.glyph-small {
-  width: 2.25rem;
-  height: 2.25rem;
-  border-radius: 9px;
-  font-size: 0.875rem;
-}
-
-.strip-body {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.375rem;
-}
-
-.strip-line {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem 0.75rem;
-  align-items: baseline;
-  margin: 0;
-}
-
-.strip-name {
-  font-size: 0.875rem;
-  font-weight: 600;
-}
-
-.strip-text {
-  color: var(--muted);
-  font-size: 0.8125rem;
-}
-
-.strip progress {
-  width: 100%;
-  height: 0.375rem;
-  accent-color: var(--accent);
-}
-
-/* Cancel, as the board draws it: outlined, muted, at the end of the strip. */
-.strip .pill {
-  flex: none;
-  color: var(--muted);
-}
-
 .view-head {
   display: flex;
   align-items: baseline;
@@ -1033,38 +1093,87 @@ h2 {
 }
 
 /* Detail page: a drill-down, not a dialog. Back (and Escape) returns to the list. */
-.detail-nav {
-  margin: 0 0 1.25rem;
+/*
+ * An item's dialog: a sheet over the dimmed list, no wider than its content
+ * needs and never taller than the window, where it scrolls. main.ts grows it
+ * out of the item's card from the top left corner, so that is its origin.
+ */
+#item-dialog {
+  width: min(44rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  padding: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 24px 60px var(--shadow);
+  overflow: auto;
+  transform-origin: top left;
 }
 
-.back {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.5rem 0.875rem 0.5rem 0.625rem;
+#item-dialog::backdrop {
+  background: rgb(0 0 0 / 40%);
+  animation: fade-in 200ms ease-out;
+  transition: opacity 180ms ease-out;
+}
+
+#item-dialog[data-closing]::backdrop {
+  opacity: 0;
+}
+
+.dialog-body {
+  padding: 0.75rem 1.5rem 1.5rem;
+  overflow-wrap: anywhere;
+}
+
+.dialog-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 -0.75rem 0.25rem 0;
+}
+
+.icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
   border: 0;
-  border-radius: 999px;
-  background: var(--line-soft);
-  font-size: 0.875rem;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
 }
 
-.back svg {
+.icon-button:hover {
+  background: var(--line-soft);
+  color: var(--ink);
+}
+
+.icon-button svg {
   fill: none;
   stroke: currentcolor;
-  stroke-width: 2;
+  stroke-width: 1.75;
   stroke-linecap: round;
-  stroke-linejoin: round;
 }
 
 .detail-head {
   display: flex;
   flex-wrap: wrap;
-  gap: 1.5rem;
-  align-items: flex-start;
+  gap: 1rem 1.25rem;
+  align-items: center;
+}
+
+/* The action sits at the head's right end, Cancel before it. */
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin: 0 0 0 auto;
 }
 
 .detail-title {
-  flex: 999 1 26rem;
+  flex: 1 1 14rem;
   min-width: 0;
   overflow-wrap: anywhere;
   display: flex;
@@ -1073,7 +1182,7 @@ h2 {
 }
 
 .detail-title h2 {
-  font-size: 1.875rem;
+  font-size: 1.5rem;
   line-height: 1.15;
   margin: 0;
 }
@@ -1086,12 +1195,12 @@ h2 {
 /* Per-placement rows: label, status, then the placement's button. */
 .placements {
   list-style: none;
-  margin: 0.25rem 0 0;
+  margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  max-width: 32rem;
+  margin-top: 1.25rem;
 }
 
 .placements li {
@@ -1111,25 +1220,29 @@ h2 {
   min-width: 5.5rem;
 }
 
+.placements .action[data-progress] {
+  min-width: 9rem;
+}
+
 #detail-description {
-  margin-top: 0.375rem;
-  max-width: 60ch;
+  margin: 1.25rem 0 0;
+  font-size: 0.9375rem;
 }
 
 .glyph-large {
-  width: 7.5rem;
-  height: 7.5rem;
-  border-radius: 26px;
-  font-size: 2.5rem;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 18px;
+  font-size: 1.625rem;
 }
 
-#view-detail .card-status {
+#item-dialog .card-status {
   margin: 1rem 0 0;
   font-size: 0.875rem;
 }
 
-#view-detail h3 {
-  margin: 2.25rem 0 0.875rem;
+#item-dialog h3 {
+  margin: 1.5rem 0 0.875rem;
   padding-top: 1.25rem;
   border-top: 1px solid var(--line-soft);
   font-size: 1.125rem;
@@ -1137,9 +1250,8 @@ h2 {
 
 .info {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1.25rem 1.5rem;
-  max-width: 60rem;
   margin: 0;
 }
 

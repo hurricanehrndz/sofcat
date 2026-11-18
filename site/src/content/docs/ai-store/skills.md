@@ -28,7 +28,7 @@ placements:
 
 Each skill lands at `<path>/<item_name>`. `applies_to` is display text: the
 storefront's "Applies to" line, or, for an item with both placements on the
-OS, the label of each placement's row on its detail page, where the user can
+OS, the label of each placement's row in its dialog, where the user can
 add or remove it per placement
 ([Choosing placements](/zip-items/placements/#choosing-placements)). It does
 not limit where an item goes.

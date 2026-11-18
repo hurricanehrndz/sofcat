@@ -31,7 +31,7 @@ import {
   glyphTone,
   httpUrl,
   insertRecord,
-  actionText,
+  actionProgress,
   busyAction,
   endedOperations,
   isProgressTick,
@@ -55,8 +55,6 @@ import {
   showRetry,
   statusLabel,
   statusRecord,
-  stripLine,
-  stripView,
   type ListTab,
   tabItems,
   tabs,
@@ -119,32 +117,27 @@ const resultStatus = need<HTMLParagraphElement>("#result-status");
 const grid = need<HTMLDivElement>("#item-grid");
 const activityList = need<HTMLOListElement>("#activity-list");
 const activityEmpty = need<HTMLParagraphElement>("#activity-empty");
-const viewDetail = need<HTMLElement>("#view-detail");
-const detailBack = need<HTMLButtonElement>("#detail-back");
+const dialog = need<HTMLDialogElement>("#item-dialog");
+const detailClose = need<HTMLButtonElement>("#detail-close");
 const detailAction = need<HTMLButtonElement>("#detail-action");
+const detailCancel = need<HTMLButtonElement>("#detail-cancel");
 const detailPlacements = need<HTMLUListElement>("#detail-placements");
-const strip = need<HTMLElement>("#operation-strip");
-const stripGlyph = need<HTMLSpanElement>("#strip-glyph");
-const stripBar = need<HTMLProgressElement>("#strip-progress");
-const stripCancel = need<HTMLButtonElement>("#strip-cancel");
+const announcer = need<HTMLParagraphElement>("#announcer");
 const spinnerTemplate = need<HTMLTemplateElement>("#spinner");
 
-/**
- * View is a page the nav can show; "list" is one of the list tabs. The detail
- * page is drilled into from a list.
- */
+/** View is a page the nav can show; "list" is one of the list tabs. */
 type View = "list" | "mine" | "activity";
 
 let view: ListView = { items: [], source: "loading", savedAtUtc: "" };
 let lastError = "";
-// The list the detail page was opened from, and which Back returns to.
+// The page shown; an item's dialog opens over it.
 let currentView: View = "list";
 // The list tabs the nav shows, and the one last chosen (null for the first):
 // "list" shows it, or the first tab once it is gone.
 let listTabs: ListTab[] = [];
 let lastListTab: string | null = null;
 let navTabsDrawn = "";
-// The item shown on the detail page, or null when the list or Activity is up.
+// The item the dialog shows, or null while it is closed.
 let detailItemName: string | null = null;
 let activity: ActivityRecord[] = loadActivity(storage);
 let active: ActiveOperations = new Map();
@@ -339,11 +332,10 @@ function renderNav(): void {
   markNav();
 }
 
-/** markNav sets aria-current on the nav button of the page shown; none on the detail page. */
+/** markNav sets aria-current on the nav button of the page shown. */
 function markNav(): void {
   for (const link of document.querySelectorAll<HTMLButtonElement>("nav .nav-link")) {
     const current =
-      viewDetail.hidden &&
       link.dataset.view === currentView &&
       (currentView !== "list" || link.dataset.tab === currentTab());
     link.setAttribute("aria-current", current ? "page" : "false");
@@ -377,42 +369,116 @@ function setGlyph(glyph: HTMLElement, item: OptionalInstallItem): void {
   glyph.dataset.tone = String(glyphTone(item));
 }
 
-/** statusLine is a status paragraph: a spinner shown while work runs, then the text. */
+/** statusLine is a status paragraph, a live region: an outcome or a reason, never running work. */
 function statusLine(): HTMLParagraphElement {
   const status = document.createElement("p");
   status.className = "card-status";
   status.setAttribute("aria-live", "polite");
-  const spinner = spinnerTemplate.content.firstElementChild?.cloneNode(true);
   const text = document.createElement("span");
   text.className = "status-text";
-  if (spinner) {
-    status.append(spinner);
-  }
   status.append(text);
   return status;
 }
 
-function card(item: OptionalInstallItem): HTMLElement {
+/** itemNamed is the item of the current list with this name. */
+function itemNamed(itemName: string): OptionalInstallItem | undefined {
+  return view.items.find((candidate) => candidate.itemName === itemName);
+}
+
+/**
+ * fillAction gives an action button its parts: a spinner, shown while its
+ * request waits, and the label. The bar is the button's own background
+ * (style.css), so the button turns into its progress where it stands.
+ */
+function fillAction(button: HTMLButtonElement): HTMLButtonElement {
+  const spinner = spinnerTemplate.content.firstElementChild?.cloneNode(true);
+  const label = document.createElement("span");
+  label.className = "action-label";
+  if (spinner) {
+    button.append(spinner);
+  }
+  button.append(label);
+  return button;
+}
+
+function actionButton(className: string): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `pill action ${className}`.trim();
+  return fillAction(button);
+}
+
+/**
+ * paintAction writes an item's action into its button, in place: the label,
+ * or while the item is busy its progress (actionProgress), from the click
+ * on. The button is never replaced while it shows, so its bar and its width
+ * ease from one state to the next. A placement row's button names its row.
+ * Without an action (an item the organisation requires) the button is hidden.
+ */
+function paintAction(
+  button: HTMLButtonElement,
+  item: OptionalInstallItem,
+  action: ItemAction | null,
+  row?: OptionalInstallPlacement,
+): void {
+  button.hidden = action === null;
+  if (!action) {
+    return;
+  }
+  // Only the item that owns an in-flight operation is busy; other items
+  // stay actionable and route independently by operation ID.
+  const busy = busyOf(item.itemName);
+  // A request not answered yet has no operation: the item's last one is over.
+  const operation = requesting.has(item.itemName) ? undefined : latestOperation(item.itemName);
+  const progress = actionProgress(item, action, busy, operation, row?.name);
+  const label = progress?.label ?? action.label;
+  // The undo action (Remove) is outlined; the others are solid.
+  button.classList.toggle("pill-outline", action.kind === "undo");
+  button.classList.toggle("pill-primary", action.kind !== "undo");
+  const text = button.querySelector<HTMLSpanElement>(".action-label");
+  if (text && text.textContent !== label) {
+    text.textContent = label;
+  }
+  markBusy(button, busy);
+  if (progress) {
+    button.dataset.progress =
+      progress.phase === "waiting" ? "waiting" : typeof progress.percent === "number" ? "measured" : "unmeasured";
+    button.style.setProperty("--progress", `${progress.percent ?? 0}%`);
+  } else {
+    delete button.dataset.progress;
+    button.style.removeProperty("--progress");
+  }
+  button.setAttribute("aria-label", row ? `${label}: ${row.label}` : `${label} ${item.displayName}`);
+  button.onclick = () => void runAction(item, action);
+}
+
+/**
+ * createCard builds an item's card, empty; updateCard fills it. A card stays
+ * in the grid for as long as its item is listed and is updated in place, so
+ * focus stays where it is and the action button eases into its progress.
+ */
+function createCard(itemName: string): HTMLElement {
   const article = document.createElement("article");
   article.className = "card";
+  article.dataset.item = itemName;
 
   const glyph = document.createElement("span");
   glyph.className = "glyph";
   glyph.setAttribute("aria-hidden", "true");
-  setGlyph(glyph, item);
 
+  // The name is the card's control for keyboard and screen-reader users: it
+  // opens the item's dialog, as a click anywhere on the card does.
   const name = document.createElement("h3");
-  name.textContent = item.displayName;
+  const open = document.createElement("button");
+  open.type = "button";
+  open.className = "card-open";
+  open.setAttribute("aria-haspopup", "dialog");
+  name.append(open);
 
   const meta = document.createElement("p");
-  meta.className = "card-meta";
-  meta.textContent = [item.category, item.developer].filter(Boolean).join(" · ");
-  meta.hidden = meta.textContent === "";
-
+  meta.className = "card-meta card-about";
   const appliesTo = document.createElement("p");
-  appliesTo.className = "card-meta";
-  appliesTo.textContent = appliesToLine(item);
-  appliesTo.hidden = appliesTo.textContent === "";
+  appliesTo.className = "card-meta card-applies";
 
   // The status line shows only what the button cannot: a pending or required
   // item's status, or a failure or deferral reason (see cardStatus and
@@ -422,35 +488,10 @@ function card(item: OptionalInstallItem): HTMLElement {
 
   const actions = document.createElement("p");
   actions.className = "card-actions";
+  actions.append(actionButton("card-action"));
 
-  // An item the organisation requires has no action, only Details.
-  const derived = deriveAction(item);
-  if (derived) {
-    const action = document.createElement("button");
-    action.type = "button";
-    // Board B draws the undo action (Remove) outlined; the others are solid.
-    action.className = `pill card-action ${derived.kind === "undo" ? "pill-outline" : "pill-primary"}`;
-    // Only the item that owns an in-flight operation is busy; other items
-    // stay actionable and route independently by operation ID.
-    const busy = busyOf(item.itemName);
-    const label = actionText(item, derived, busy);
-    action.textContent = label;
-    markBusy(action, busy);
-    action.setAttribute("aria-label", `${label} ${item.displayName}`);
-    action.addEventListener("click", () => void runAction(item, derived));
-    actions.append(action);
-  }
-
-  const details = document.createElement("button");
-  details.type = "button";
-  details.className = "pill pill-outline card-details";
-  details.textContent = "Details";
-  details.setAttribute("aria-label", `Details for ${item.displayName}`);
-  details.addEventListener("click", () => openDetail(item));
-
-  actions.append(details);
   // The wrappers let style.css turn a card a sparse row stretches into a
-  // single line: glyph, text, then the buttons.
+  // single line: glyph, text, then the button.
   const text = document.createElement("div");
   text.className = "card-text";
   text.append(name, meta, appliesTo, status);
@@ -458,18 +499,45 @@ function card(item: OptionalInstallItem): HTMLElement {
   body.className = "card-body";
   body.append(glyph, text, actions);
   article.append(body);
-  article.dataset.item = item.itemName;
-  // A click anywhere else on the card opens Details too. The card is not a
-  // control itself, so it nests none: keyboard and screen-reader users reach
-  // the same page through its Details button.
+
+  const openItem = (): void => {
+    const item = itemNamed(itemName);
+    if (item) {
+      openDetail(item);
+    }
+  };
+  open.addEventListener("click", openItem);
+  // A click anywhere but on the action opens the dialog too.
   article.addEventListener("click", (event) => {
     const selecting = !(document.getSelection()?.isCollapsed ?? true);
     if (opensDetails(event.target instanceof Element ? event.target : null, selecting)) {
-      openDetail(item);
+      openItem();
     }
   });
-  updateCardProgress(article, item, cardStatus(item), true);
   return article;
+}
+
+function updateCard(article: HTMLElement, item: OptionalInstallItem): void {
+  const part = <E extends HTMLElement>(selector: string): E => {
+    const element = article.querySelector<E>(selector);
+    if (!element) {
+      throw new Error(`SofCat UI card is missing ${selector}`);
+    }
+    return element;
+  };
+  setGlyph(part(".glyph"), item);
+  part(".card-open").textContent = item.displayName;
+  const meta = part(".card-about");
+  meta.textContent = [item.category, item.developer].filter(Boolean).join(" · ");
+  meta.hidden = meta.textContent === "";
+  const appliesTo = part(".card-applies");
+  appliesTo.textContent = appliesToLine(item);
+  appliesTo.hidden = appliesTo.textContent === "";
+  // An item the organisation requires has no action.
+  const action = part<HTMLButtonElement>(".card-action");
+  paintAction(action, item, deriveAction(item));
+  part(".card-actions").hidden = action.hidden;
+  updateCardProgress(article, item, cardStatus(item));
 }
 
 /** latestOperation is the most recently started operation on an item, if any. */
@@ -484,52 +552,49 @@ function latestOperation(itemName: string): OperationView | undefined {
 }
 
 /**
- * updateCardProgress writes the item's operation state into its status line:
- * idleText when nothing is going on (an empty one hides the line), otherwise a
- * spinner and one line while the operation runs and the outcome afterwards.
- * warningsOnly (a Home card) shows idleText in place of running work and keeps
- * only outcomes that need attention. The bar is only in the bottom strip and
- * the full timeline only in Activity.
+ * updateCardProgress writes into a status line what the item's button cannot
+ * say: idleText when nothing is going on (an empty one hides the line), an
+ * outcome that needs attention, or the reason a cancel was refused while the
+ * work carries on. Running work is on the button and the full timeline only
+ * in Activity.
  */
-function updateCardProgress(
-  container: HTMLElement,
-  item: OptionalInstallItem,
-  idleText: string,
-  warningsOnly = false,
-): void {
+function updateCardProgress(container: HTMLElement, item: OptionalInstallItem, idleText: string): void {
   const status = container.querySelector<HTMLParagraphElement>(".card-status");
   const text = status?.querySelector<HTMLSpanElement>(".status-text");
-  const spinner = status?.querySelector<SVGElement>(".spinner");
-  if (!status || !text || !spinner) {
+  if (!status || !text) {
     throw new Error("SofCat UI card is missing its status line");
   }
   const operation = latestOperation(item.itemName);
   const progress = operation
     ? cardProgress(item, operation.records, operation.outcome, operation.action.method, operation.notice)
     : null;
-  if (!progress || (warningsOnly && !needsAttention(progress))) {
+  const refused = operation?.outcome === "active" && Boolean(operation.notice);
+  if (!progress || !(needsAttention(progress) || refused)) {
     text.textContent = idleText;
     status.hidden = idleText === "";
     delete status.dataset.outcome;
-    spinner.toggleAttribute("hidden", true);
     return;
   }
   text.textContent = progressText(progress);
   status.hidden = false;
   // "plain" opts out of the warning box the stylesheet gives finished outcomes.
   status.dataset.outcome = progress.plain ? "plain" : progress.outcome;
-  spinner.toggleAttribute("hidden", progress.outcome !== "active");
 }
 
-/** renderCardFor refreshes one item's card in place, keeping the rest of the grid untouched. */
+/** cardOf is the card of an item in the grid, if the list shows it. */
+function cardOf(itemName: string): HTMLElement | null {
+  return grid.querySelector<HTMLElement>(`[data-item="${CSS.escape(itemName)}"]`);
+}
+
+/** renderCardFor refreshes one item's card, and the dialog when it shows that item, in place. */
 function renderCardFor(itemName: string): void {
-  const article = grid.querySelector<HTMLElement>(`[data-item="${CSS.escape(itemName)}"]`);
-  const item = view.items.find((candidate) => candidate.itemName === itemName);
+  const article = cardOf(itemName);
+  const item = itemNamed(itemName);
   if (article && item) {
-    updateCardProgress(article, item, cardStatus(item), true);
+    updateCard(article, item);
   }
-  if (item && detailItemName === itemName) {
-    updateCardProgress(viewDetail, item, "");
+  if (detailItemName === itemName) {
+    renderDetail();
   }
 }
 
@@ -551,20 +616,23 @@ function renderGrid(): void {
     shown,
     viewHome.hidden !== false || viewHome.getAnimations().length > 0,
   );
-  // The rebuild replaces every button, so a focused card button (its action
-  // goes busy at the click) hands focus to its replacement.
-  const focused = grid.contains(document.activeElement) ? document.activeElement : null;
-  const focusedItem = focused?.closest<HTMLElement>(".card")?.dataset.item;
-  const focusedClass = focused?.classList.contains("card-action") ? "card-action" : "card-details";
-  grid.replaceChildren(
-    ...shown.map((item) => {
-      const article = card(item);
-      article.toggleAttribute("data-entering", entering.has(item.itemName));
-      return article;
-    }),
-  );
-  if (focusedItem !== undefined) {
-    grid.querySelector<HTMLElement>(`[data-item="${CSS.escape(focusedItem)}"] .${focusedClass}`)?.focus();
+  // Cards already listed are updated where they stand; only new ones are
+  // built, and only cards out of place are moved.
+  const listedCards = new Map([...grid.children].map((child) => [(child as HTMLElement).dataset.item, child]));
+  const articles = shown.map((item) => {
+    const existing = listedCards.get(item.itemName) as HTMLElement | undefined;
+    const article = existing ?? createCard(item.itemName);
+    updateCard(article, item);
+    article.toggleAttribute("data-entering", !existing && entering.has(item.itemName));
+    return article;
+  });
+  articles.forEach((article, index) => {
+    if (grid.children[index] !== article) {
+      grid.insertBefore(article, grid.children[index] ?? null);
+    }
+  });
+  while (grid.children.length > articles.length) {
+    grid.lastElementChild?.remove();
   }
   if (listed.length === 0) {
     resultStatus.textContent =
@@ -581,40 +649,6 @@ function renderGrid(): void {
     shown.length === listed.length
       ? `Showing all ${listed.length} items.`
       : `Showing ${shown.length} of ${listed.length} items.`;
-}
-
-/**
- * renderStrip shows the one operation being worked on, with the only progress
- * bar in the UI: determinate when the latest record carries a percentage,
- * indeterminate (never a fake 0%) otherwise.
- */
-function renderStrip(): void {
-  navBusy.toggleAttribute("hidden", active.size === 0);
-  const shown = stripView(operations.values());
-  strip.hidden = !shown;
-  if (!shown) {
-    return;
-  }
-  const { item } = shown.operation;
-  setGlyph(stripGlyph, item);
-  need<HTMLSpanElement>("#strip-name").textContent = item.displayName;
-  need<HTMLSpanElement>("#strip-text").textContent = stripLine(shown);
-  if (typeof shown.progress.percent === "number") {
-    stripBar.value = shown.progress.percent;
-  } else {
-    stripBar.removeAttribute("value");
-  }
-  stripBar.setAttribute("aria-label", `${shown.progress.label} ${item.displayName}`);
-  // Cancel stays visible, but is a real disabled button once the installer has
-  // started; its title says why.
-  const latest = shown.operation.records.at(-1)?.state ?? "";
-  const pending = Boolean(shown.operation.cancelPending);
-  stripCancel.disabled = pending || !canCancel(latest);
-  stripCancel.title = cancelTitle(latest, pending);
-  const what = shown.operation.action.method === "RemoveItem" ? "removal" : "install";
-  stripCancel.textContent = actionLabel(item, "cancel");
-  stripCancel.setAttribute("aria-label", `${stripCancel.textContent} ${what} of ${item.displayName}`);
-  stripCancel.dataset.operationId = shown.operation.operationId;
 }
 
 function renderActivity(): void {
@@ -634,7 +668,7 @@ function render(): void {
   renderCategories();
   renderGrid();
   renderDetail();
-  renderStrip();
+  navBusy.toggleAttribute("hidden", active.size === 0);
 }
 
 /**
@@ -716,18 +750,17 @@ async function runAction(item: OptionalInstallItem, action: ItemAction): Promise
 /**
  * cancelOperation asks the service to cancel. An accepted cancel ends the
  * operation through its Canceled record on the status channel; a refusal
- * leaves the item's state alone and shows the service's reason on its card.
+ * leaves the item's state alone and shows the service's reason in its status line.
  */
 async function cancelOperation(operation: OperationView): Promise<void> {
   operation.cancelPending = true;
-  renderStrip();
+  renderCardFor(operation.item.itemName);
   try {
     await api.cancelOperation(operation.operationId);
   } catch (error) {
     operation.cancelPending = false;
     operation.notice = refusalText(reason(error));
     renderCardFor(operation.item.itemName);
-    renderStrip();
   }
 }
 
@@ -769,10 +802,14 @@ api.onOperationStatus((status) => {
     void refresh();
     return;
   }
-  // Status lines and the strip are live regions, so updating them in place
-  // announces the new state without re-reading the whole grid.
+  // The buttons are updated in place and are not live regions; the announcer
+  // says each new phase once, without its percentage.
   renderCardFor(operation.item.itemName);
-  renderStrip();
+  const progress = cardProgress(operation.item, operation.records, "active", operation.action.method);
+  const line = progress ? `${operation.item.displayName}: ${progress.label}` : "";
+  if (line && announcer.textContent !== line) {
+    announcer.textContent = line;
+  }
 });
 
 function setText(selector: string, value: string, fallback = "Not provided"): void {
@@ -780,13 +817,17 @@ function setText(selector: string, value: string, fallback = "Not provided"): vo
 }
 
 /**
- * renderDetail fills the drill-down page for the item being viewed. It reads
- * the item from the current list, so a refresh after a terminal record updates
- * the status and the action button in place.
+ * renderDetail fills the dialog for the item being viewed. It reads the item
+ * from the current list, so a refresh after a terminal record updates the
+ * status and the action button in place. An item that left the list closes it.
  */
 function renderDetail(): void {
-  const item = detailItemName ? view.items.find((candidate) => candidate.itemName === detailItemName) : undefined;
+  if (detailItemName === null) {
+    return;
+  }
+  const item = itemNamed(detailItemName);
   if (!item) {
+    closeDetail();
     return;
   }
   setGlyph(need<HTMLElement>("#detail-glyph"), item);
@@ -804,63 +845,62 @@ function renderDetail(): void {
   setText("#detail-status", statusLabel(item));
   setText("#detail-restart", restartBadge(item), "None");
 
-  const derived = deriveAction(item);
-  detailAction.hidden = derived === null;
-  if (derived) {
-    detailAction.className = `pill pill-large ${derived.kind === "undo" ? "pill-outline" : "pill-primary"}`;
-    const busy = busyOf(item.itemName);
-    const label = actionText(item, derived, busy);
-    detailAction.textContent = label;
-    markBusy(detailAction, busy);
-    detailAction.setAttribute("aria-label", `${label} ${item.displayName}`);
-    detailAction.onclick = () => void runAction(item, derived);
+  paintAction(detailAction, item, deriveAction(item));
+
+  // Cancel sits beside the action while an operation on the item runs. It is
+  // a real disabled button once the installer has started; its title says
+  // why. A busy Cancel action is already the way out of a pending request.
+  const operation = latestOperation(item.itemName);
+  const running = operation?.outcome === "active" && operation.action.kind !== "cancel" ? operation : undefined;
+  detailCancel.hidden = !running;
+  if (running) {
+    const latest = running.records.at(-1)?.state ?? "";
+    const pending = Boolean(running.cancelPending);
+    detailCancel.disabled = pending || !canCancel(latest);
+    detailCancel.title = cancelTitle(latest, pending);
+    const what = running.action.method === "RemoveItem" ? "removal" : "install";
+    detailCancel.textContent = actionLabel(item, "cancel");
+    detailCancel.setAttribute("aria-label", `${detailCancel.textContent} ${what} of ${item.displayName}`);
+    detailCancel.onclick = () => void cancelOperation(running);
   }
 
-  // The Status row already says the catalog state, so the line only appears
-  // for work in progress or an outcome.
-  updateCardProgress(viewDetail, item, "");
+  // The Status row already says the catalog state and the button shows
+  // running work, so the line only appears for an outcome or a refusal.
+  updateCardProgress(dialog, item, "");
 }
 
 /**
- * renderPlacements draws one row per placement on the detail page: its label,
- * its status and the item's action for that placement alone. Rows follow the
- * item's own button while it has an operation running. The rows are rebuilt,
- * so focus goes back to the row that had it.
+ * renderPlacements draws one row per placement in the dialog: its label, its
+ * status and the item's action for that placement alone. Rows follow the
+ * item's own button while it has an operation running. The rows are built
+ * once per item and set of placements, then updated in place.
  */
 function renderPlacements(item: OptionalInstallItem, placements: OptionalInstallPlacement[]): void {
-  const focused = document.activeElement?.closest<HTMLElement>("#detail-placements li")?.dataset.placement;
   detailPlacements.hidden = placements.length === 0;
   detailPlacements.setAttribute("aria-label", actionLabel(item, "applies_to"));
-  const busy = busyOf(item.itemName);
-  detailPlacements.replaceChildren(
-    ...placements.map((placement) => {
-      const row = document.createElement("li");
-      row.dataset.placement = placement.name;
-      const label = document.createElement("span");
-      label.className = "placement-label";
-      label.textContent = placement.label;
-      const status = document.createElement("span");
-      status.className = "card-meta";
-      status.textContent = placementStatus(item, placement);
-      row.append(label, status);
-      const derived = placementAction(item, placement);
-      if (derived) {
-        const action = document.createElement("button");
-        action.type = "button";
-        action.className = `pill ${derived.kind === "undo" ? "pill-outline" : "pill-primary"}`;
-        const label = actionText(item, derived, busy, placement.name);
-        action.textContent = label;
-        markBusy(action, busy);
-        action.setAttribute("aria-label", `${label}: ${placement.label}`);
-        action.addEventListener("click", () => void runAction(item, derived));
-        row.append(action);
-      }
-      return row;
-    }),
-  );
-  if (focused !== undefined) {
-    detailPlacements.querySelector<HTMLButtonElement>(`[data-placement="${CSS.escape(focused)}"] button`)?.focus();
+  const rows = JSON.stringify([item.itemName, ...placements.map((placement) => placement.name)]);
+  if (detailPlacements.dataset.rows !== rows) {
+    detailPlacements.dataset.rows = rows;
+    detailPlacements.replaceChildren(
+      ...placements.map((placement) => {
+        const row = document.createElement("li");
+        row.dataset.placement = placement.name;
+        const label = document.createElement("span");
+        label.className = "placement-label";
+        const status = document.createElement("span");
+        status.className = "card-meta";
+        row.append(label, status, actionButton(""));
+        return row;
+      }),
+    );
   }
+  placements.forEach((placement, index) => {
+    const row = detailPlacements.children[index];
+    const [label, status, action] = row.children;
+    label.textContent = placement.label;
+    status.textContent = placementStatus(item, placement);
+    paintAction(action as HTMLButtonElement, item, placementAction(item, placement), placement);
+  });
 }
 
 /**
@@ -877,31 +917,70 @@ function setHomeHidden(hidden: boolean): void {
   viewHome.hidden = hidden;
 }
 
+const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
+
+/**
+ * morph plays the dialog growing out of card, or back into it when closing:
+ * it starts where the card is, at the card's size. Null, and no motion, when
+ * the card is not on screen, the user asked for reduced motion or the web
+ * view cannot animate.
+ */
+function morph(card: Element | null, closing: boolean): Animation | null {
+  if (!card || reducedMotion.matches || typeof dialog.animate !== "function") {
+    return null;
+  }
+  const from = card.getBoundingClientRect();
+  const to = dialog.getBoundingClientRect();
+  if (to.width === 0 || to.height === 0) {
+    return null;
+  }
+  const small = {
+    transform: `translate(${from.left - to.left}px, ${from.top - to.top}px) scale(${from.width / to.width}, ${from.height / to.height})`,
+    opacity: 0.2,
+  };
+  const full = { transform: "none", opacity: 1 };
+  return dialog.animate(closing ? [full, small] : [small, full], {
+    duration: closing ? 180 : 280,
+    easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
+  });
+}
+
 function openDetail(item: OptionalInstallItem): void {
   detailItemName = item.itemName;
   renderDetail();
-  setHomeHidden(true);
-  viewActivity.hidden = true;
-  viewDetail.hidden = false;
-  markNav();
-  detailBack.focus();
+  if (!dialog.open) {
+    dialog.showModal();
+    dialog.scrollTop = 0;
+    morph(cardOf(item.itemName), false);
+  }
 }
 
 /**
- * closeDetail returns to the list and hands focus to the Details button of the
- * card it came from. The card is found by item, because a refresh while the
- * page was open (the end of every operation brings one) rebuilds the grid.
- * When the card is gone from the list, dropped by a refresh or hidden by the
- * filters, focus goes to the search field at the top of the list instead.
+ * closeDetail closes the dialog, back into the card it came from, and hands
+ * focus to that card's name. The card is found by item, because a refresh
+ * while the dialog was open may have moved it. When the card is gone from the
+ * list, dropped by a refresh or hidden by the filters, focus goes to the
+ * search field at the top of the list instead.
  */
 function closeDetail(): void {
-  if (viewDetail.hidden || detailItemName === null) {
+  if (!dialog.open || detailItemName === null || "closing" in dialog.dataset) {
     return;
   }
   const itemName = detailItemName;
-  showView(currentView);
-  const details = grid.querySelector<HTMLButtonElement>(`[data-item="${CSS.escape(itemName)}"] .card-details`);
-  (details ?? searchInput).focus();
+  const finish = (): void => {
+    delete dialog.dataset.closing;
+    dialog.close();
+    detailItemName = null;
+    (cardOf(itemName)?.querySelector<HTMLButtonElement>(".card-open") ?? searchInput).focus();
+  };
+  // The backdrop fades while the dialog shrinks (style.css).
+  dialog.dataset.closing = "";
+  const leaving = morph(cardOf(itemName), true);
+  if (leaving) {
+    leaving.finished.then(finish, finish);
+  } else {
+    finish();
+  }
 }
 
 async function refresh(): Promise<void> {
@@ -932,17 +1011,14 @@ function showView(next: View, tab?: string): void {
   if (tab !== undefined) {
     lastListTab = tab;
   }
-  viewDetail.hidden = true;
-  detailItemName = null;
   setHomeHidden(next === "activity");
   viewActivity.hidden = next !== "activity";
   markNav();
   if (next === "activity") {
     renderActivity();
   } else if (changed) {
-    // The list tabs and My items share the grid; only switching lists rebuilds
-    // it, so Back from the detail page can refocus the card it came from. Each
-    // list has its own categories. Emptying it first lets the new list's
+    // The list tabs and My items share the grid; only switching lists empties
+    // it. Each list has its own categories. Emptying it first lets the new list's
     // cards all ease in, those it shares with the old one too.
     grid.replaceChildren();
     renderCategories();
@@ -950,12 +1026,6 @@ function showView(next: View, tab?: string): void {
   }
 }
 
-stripCancel.addEventListener("click", () => {
-  const operation = operations.get(stripCancel.dataset.operationId ?? "");
-  if (operation && operation.outcome === "active") {
-    void cancelOperation(operation);
-  }
-});
 brandLink.addEventListener("click", () => {
   // The service validated the URL; check again so nothing but http(s) ever
   // leaves the WebView, and open it in the system browser, never in here.
@@ -974,12 +1044,26 @@ retryButton.addEventListener("click", () => {
 });
 navMine.addEventListener("click", () => showView("mine"));
 navActivity.addEventListener("click", () => showView("activity"));
-detailBack.addEventListener("click", closeDetail);
-document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && !viewDetail.hidden) {
-    event.preventDefault();
+detailClose.addEventListener("click", closeDetail);
+// Escape asks the dialog to close; closeDetail does it, with its motion.
+dialog.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  closeDetail();
+});
+// A click on the backdrop lands on the dialog itself; its content is all
+// inside .dialog-body.
+dialog.addEventListener("click", (event) => {
+  if (event.target === dialog) {
     closeDetail();
-  } else if (event.key === "Escape" && !viewActivity.hidden) {
+  }
+});
+fillAction(detailAction);
+document.addEventListener("keydown", (event) => {
+  // The dialog is modal: the pages under it keep still while it is open.
+  if (dialog.open) {
+    return;
+  }
+  if (event.key === "Escape" && !viewActivity.hidden) {
     event.preventDefault();
     showView("list");
   } else if (

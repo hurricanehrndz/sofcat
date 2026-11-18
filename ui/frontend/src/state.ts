@@ -278,7 +278,7 @@ export function cardStatus(item: OptionalInstallItem): string {
 }
 
 /**
- * opensDetails says whether a click inside a card opens its detail page: a
+ * opensDetails says whether a click inside a card opens its dialog: a
  * click anywhere but on a control, so a card's buttons keep their own action,
  * and not one that ends a drag selecting the card's text (selecting is false
  * when nothing is selected).
@@ -288,7 +288,7 @@ export function opensDetails(target: Pick<Element, "closest"> | null, selecting:
 }
 
 /**
- * itemPlacements is the item's placements the detail page lists one row each
+ * itemPlacements is the item's placements the dialog lists one row each
  * for, in the service's order; [] for an item it sends none for. A cached list
  * is untrusted shape-wise, so only well-formed entries count.
  */
@@ -455,6 +455,11 @@ export function endedOperations(
   return [...active.keys()].filter((operationId) => operations.get(operationId)?.outcome !== "active");
 }
 
+/** ownsBusy is whether a button (a placement row's when row is set) is the one the busy action works for. */
+function ownsBusy(action: ItemAction, busy: ItemAction, row?: string): boolean {
+  return row === undefined || busy.placement === row || (busy.placement === undefined && busy.method === action.method);
+}
+
 /**
  * actionText is an action button's label: the action's own, or while its item
  * is busy, the item's installing or removing label for the busy action (a
@@ -471,8 +476,7 @@ export function actionText(
   if (!busy) {
     return action.label;
   }
-  const own = row === undefined || busy.placement === row || (busy.placement === undefined && busy.method === action.method);
-  if (!own) {
+  if (!ownsBusy(action, busy, row)) {
     return action.label;
   }
   // A Cancel sends the opposite mutation, so "Removing…" would misread it.
@@ -715,8 +719,8 @@ export function cardProgress(
 
 /**
  * needsAttention is true for a finished outcome the user has to act on: a
- * failure or a deferral. Only these appear on a Home card; the button already
- * shows the item's state and the bottom strip shows running work.
+ * failure or a deferral. Only these appear in a status line; the button
+ * already shows the item's state and carries the progress of running work.
  */
 export function needsAttention(progress: CardProgress | null): boolean {
   return progress !== null && progress.outcome !== "active" && !progress.plain;
@@ -728,46 +732,53 @@ export function progressText(progress: CardProgress): string {
 }
 
 /**
- * StripView is what the bottom "current operation" strip shows: one running
- * operation, its progress, and where it sits among everything still running.
+ * ActionProgress is what a busy action button shows in place of its label.
+ * waiting: the request is with the service or queued, so a spinner. working:
+ * a bar, filled to percent when the phase is measured and running back and
+ * forth when it is not (never a made-up percentage).
  */
-export type StripView = {
-  operation: OperationView;
-  progress: CardProgress;
-  position: number;
-  total: number;
+export type ActionProgress = {
+  label: string;
+  phase: "waiting" | "working";
+  percent?: number;
 };
 
 /**
- * stripView picks the operation the strip reports on: the earliest running one
- * the service has started work on, else the earliest running one. The others
- * read "Waiting…" on their own cards. Null hides the strip.
+ * actionProgress is the progress an item's action button carries: null while
+ * the button is free or busy with another placement's action (it then keeps
+ * its label). operation is the item's latest. An ended operation whose list
+ * has not arrived yet reads full, so the bar never runs backwards before the
+ * button turns into the opposite action.
  */
-export function stripView(operations: Iterable<OperationView>): StripView | null {
-  const running = [...operations].filter((operation) => operation.outcome === "active");
-  if (running.length === 0) {
+export function actionProgress(
+  item: Pick<OptionalInstallItem, "itemName" | "actionLabels">,
+  action: ItemAction,
+  busy: ItemAction | undefined,
+  operation: Pick<OperationView, "records" | "outcome" | "action"> | undefined,
+  row?: string,
+): ActionProgress | null {
+  if (!busy || !ownsBusy(action, busy, row)) {
     return null;
   }
-  const working = running.findIndex((operation) =>
-    operation.records.some((record) => !WAITING_STATES.has(record.state)),
-  );
-  const index = Math.max(working, 0);
-  const operation = running[index];
-  return {
-    operation,
-    // A refused cancel's reason replaces the phase: the strip's Cancel asked.
-    progress: cardProgress(operation.item, operation.records, "active", operation.action.method, operation.notice) ?? {
-      label: "Waiting…",
-      outcome: "active",
-    },
-    position: index + 1,
-    total: running.length,
-  };
-}
-
-/** stripLine is the strip's text: the phase, then "n of N". */
-export function stripLine(strip: StripView): string {
-  return `${progressText(strip.progress)} · ${strip.position} of ${strip.total}`;
+  const label = actionText(item, action, busy, row);
+  if (!operation || operation.outcome === "error") {
+    return { label, phase: "waiting" };
+  }
+  if (operation.outcome === "terminal") {
+    return { label, phase: "working", percent: 100 };
+  }
+  const latest = operation.records.at(-1);
+  if (!latest || WAITING_STATES.has(latest.state)) {
+    return { label, phase: "waiting" };
+  }
+  const progress = cardProgress(item, operation.records, "active", operation.action.method);
+  // A Cancel sends the opposite mutation; its own label says more than the
+  // phase. Between phases (a dependency just finished) the button keeps its
+  // installing or removing label instead of naming a record.
+  if (!progress || busy.kind === "cancel" || !isItemPhase(latest.state)) {
+    return { label, phase: "working" };
+  }
+  return { label: progressText(progress), phase: "working", percent: progress.percent };
 }
 
 /**
@@ -797,7 +808,7 @@ export function deriveAction(item: OptionalInstallItem): ItemAction | null {
     }
     default:
       // A partly installed item keeps Install, which adds the rest; its
-      // placements are removed one at a time on the detail page.
+      // placements are removed one at a time in its dialog.
       return item.isManaged && partialPlacements(item).length === 0
         ? { kind: "undo", label: actionLabel(item, "remove"), method: "RemoveItem" }
         : { kind: "do", label: actionLabel(item, "install"), method: "InstallItem" };
@@ -1030,7 +1041,7 @@ export function canCancel(state: string): boolean {
   return CANCELABLE_STATES.has(state.trim());
 }
 
-/** cancelTitle explains the strip's Cancel button: what it does, or why it is off. */
+/** cancelTitle explains the dialog's Cancel button: what it does, or why it is off. */
 export function cancelTitle(state: string, pending = false): string {
   if (pending) {
     return "Canceling…";
