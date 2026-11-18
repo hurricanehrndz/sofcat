@@ -121,6 +121,8 @@ export type BrandingView = {
   contentWidth: "compact" | "wide" | "full";
   /** The admin's filter_placement: where the list's search and category filters sit. */
   filterPlacement: "right" | "left";
+  /** The admin's navigation: the pages in a sidebar with the categories, or as tabs in the app bar. */
+  navigation: "sidebar" | "tabs";
   /**
    * What the app bar shows of the product: mark and name, the mark only, or
    * neither. The name stays for screen readers; full while there is no banner.

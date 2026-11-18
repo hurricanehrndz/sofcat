@@ -908,6 +908,11 @@ const CONTENT_WIDTHS = new Set(["compact", "wide", "full"]);
 // heading's row, left keeps them above the heading as before the key.
 const FILTER_PLACEMENTS = new Set(["right", "left"]);
 
+// The navigation names: sidebar (the default) puts the pages and the list's
+// categories in a column at the left, tabs keeps the pages in the app bar as
+// before the key. style.css draws each from :root[data-navigation].
+const NAVIGATIONS = new Set(["sidebar", "tabs"]);
+
 // The app_bar_brand names: full (the default) shows the mark and the name,
 // mark the mark only, none neither; style.css hides them only visually.
 const APP_BAR_BRANDS = new Set(["full", "mark", "none"]);
@@ -1003,6 +1008,7 @@ export function brandingView(payload: unknown): BrandingView {
     taglineScale: FONT_SCALES.get(text(raw, "taglineSize")) ?? 1,
     contentWidth: oneOf(raw, "contentWidth", CONTENT_WIDTHS, "wide"),
     filterPlacement: oneOf(raw, "filterPlacement", FILTER_PLACEMENTS, "right"),
+    navigation: oneOf(raw, "navigation", NAVIGATIONS, "sidebar"),
     // Hiding the product's name only makes sense under a banner that shows
     // the organisation; without one the app bar keeps it.
     appBarBrand: showBanner ? oneOf(raw, "appBarBrand", APP_BAR_BRANDS, "full") : "full",

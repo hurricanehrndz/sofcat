@@ -113,6 +113,11 @@ const viewActivity = need<HTMLElement>("#view-activity");
 const searchInput = need<HTMLInputElement>("#search");
 const categorySelect = need<HTMLSelectElement>("#category");
 const filtersForm = need<HTMLFormElement>("#filters");
+const primaryNav = need<HTMLElement>("#primary-nav");
+const navMarker = need<HTMLSpanElement>("#nav-marker");
+const categoryNav = need<HTMLElement>("#category-nav");
+const categoryList = need<HTMLDivElement>("#category-list");
+const listHead = need<HTMLDivElement>(".list-head");
 const resultStatus = need<HTMLParagraphElement>("#result-status");
 const grid = need<HTMLDivElement>("#item-grid");
 const activityList = need<HTMLOListElement>("#activity-list");
@@ -258,6 +263,7 @@ function applyBranding(next: BrandingView): void {
   root.style.setProperty("--tagline-scale", String(next.taglineScale));
   root.dataset.contentWidth = next.contentWidth;
   root.dataset.filterPlacement = next.filterPlacement;
+  root.dataset.navigation = next.navigation;
   root.dataset.appBarBrand = next.appBarBrand;
   // The tab order and the Software tab's heading are branding too.
   renderNav();
@@ -340,7 +346,27 @@ function markNav(): void {
       (currentView !== "list" || link.dataset.tab === currentTab());
     link.setAttribute("aria-current", current ? "page" : "false");
   }
+  placeMarker();
 }
+
+/**
+ * placeMarker moves the nav's marker under the current page's button; the
+ * stylesheet eases it there, down the sidebar or along the tabs. It is
+ * placed again whenever the nav changes size or shape.
+ */
+function placeMarker(): void {
+  const current = primaryNav.querySelector<HTMLElement>('.nav-link[aria-current="page"]');
+  navMarker.hidden = !current;
+  if (current) {
+    navMarker.style.transform = `translate(${current.offsetLeft}px, ${current.offsetTop}px)`;
+    navMarker.style.width = `${current.offsetWidth}px`;
+    navMarker.style.height = `${current.offsetHeight}px`;
+  }
+}
+new ResizeObserver(placeMarker).observe(primaryNav);
+// A late stylesheet or font changes the buttons' sizes without resizing the nav.
+window.addEventListener("load", placeMarker);
+window.addEventListener("resize", placeMarker);
 
 function renderCategories(): void {
   const selected = categorySelect.value;
@@ -361,6 +387,54 @@ function renderCategories(): void {
   if (!categorySelect.value) {
     categorySelect.value = ALL_CATEGORIES;
   }
+  renderCategoryNav();
+}
+
+let categoriesDrawn = "";
+
+/**
+ * renderCategoryNav mirrors the Category select as a list of buttons in the
+ * sidebar: one per option, the chosen one marked. The select stays the one
+ * place the choice is kept. The buttons are rebuilt only when the categories
+ * change, so a render does not take focus off them; a list with no
+ * categories, and Activity, have no list.
+ */
+function renderCategoryNav(): void {
+  const options = [...categorySelect.options].map((option) => [option.value, option.textContent ?? ""]);
+  categoryNav.hidden = options.length < 2 || currentView === "activity";
+  const drawn = JSON.stringify(options);
+  if (drawn !== categoriesDrawn) {
+    categoriesDrawn = drawn;
+    categoryList.replaceChildren(
+      ...options.map(([value, label]) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "nav-link category-link";
+        button.dataset.category = value;
+        button.textContent = label;
+        button.addEventListener("click", () => {
+          if (categorySelect.value !== value) {
+            categorySelect.value = value;
+            filterChanged();
+          }
+        });
+        return button;
+      }),
+    );
+  }
+  for (const button of categoryList.querySelectorAll<HTMLButtonElement>("button")) {
+    button.setAttribute("aria-current", String(button.dataset.category === categorySelect.value));
+  }
+}
+
+/**
+ * filterChanged redraws the list for a new category. The grid is emptied
+ * first, so the cards of the new selection all ease in, one after another.
+ */
+function filterChanged(): void {
+  grid.replaceChildren();
+  renderCategoryNav();
+  renderGrid();
 }
 
 /** setGlyph writes an item's monogram and its stable colour tone. */
@@ -626,6 +700,10 @@ function renderGrid(): void {
     article.toggleAttribute("data-entering", !existing && entering.has(item.itemName));
     return article;
   });
+  // New cards ease in one after another; the first dozen set the pace.
+  articles
+    .filter((article) => article.hasAttribute("data-entering"))
+    .forEach((article, index) => article.style.setProperty("--enter-order", String(Math.min(index, 12))));
   articles.forEach((article, index) => {
     if (grid.children[index] !== article) {
       grid.insertBefore(article, grid.children[index] ?? null);
@@ -1016,7 +1094,16 @@ function showView(next: View, tab?: string): void {
   markNav();
   if (next === "activity") {
     renderActivity();
+    renderCategoryNav();
   } else if (changed) {
+    // The list page stays up from one list to the next, so its heading
+    // eases in by hand; a page coming back from Activity brings its own.
+    if (!reducedMotion.matches && viewHome.getAnimations().length === 0) {
+      listHead.animate([{ opacity: 0, transform: "translateY(0.375rem)" }, { opacity: 1, transform: "none" }], {
+        duration: 220,
+        easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
+      });
+    }
     // The list tabs and My items share the grid; only switching lists empties
     // it. Each list has its own categories. Emptying it first lets the new list's
     // cards all ease in, those it shares with the old one too.
@@ -1036,7 +1123,7 @@ brandLink.addEventListener("click", () => {
 });
 filtersForm.addEventListener("submit", (event) => event.preventDefault());
 searchInput.addEventListener("input", renderGrid);
-categorySelect.addEventListener("change", renderGrid);
+categorySelect.addEventListener("change", filterChanged);
 retryButton.addEventListener("click", () => {
   view = { ...view, source: view.items.length ? "cache" : "loading" };
   render();

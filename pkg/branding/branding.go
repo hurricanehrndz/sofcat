@@ -73,6 +73,8 @@ type Branding struct {
 	// FilterPlacement is one of FilterPlacements, or "" for the UI's default,
 	// right.
 	FilterPlacement string `json:"filterPlacement"`
+	// Navigation is one of Navigations, or "" for the UI's default, sidebar.
+	Navigation string `json:"navigation"`
 	// AppBarBrand, BannerStyle and BannerAlign are one of AppBarBrands,
 	// BannerStyles and BannerAligns, or "" for the UI's defaults: full, text
 	// and left.
@@ -97,6 +99,11 @@ var ContentWidths = []string{"compact", "wide", "full"}
 // list's search and category filters on the heading's row, at its right,
 // and left keeps them above the heading, the layout from before the key.
 var FilterPlacements = []string{"right", "left"}
+
+// Navigations are the names navigation accepts: sidebar puts the pages and
+// the list's categories in a column at the window's left, and tabs keeps
+// the pages as tabs in the app bar, the layout from before the key.
+var Navigations = []string{"sidebar", "tabs"}
 
 // AppBarBrands are the names app_bar_brand accepts: what the app bar shows of
 // the product, its mark and name (full), the mark only, or neither. The UI
@@ -158,6 +165,7 @@ func resolve(in config.Branding) Branding {
 	out.TaglineSize = oneOf("tagline_size", in.TaglineSize, FontSizes...)
 	out.ContentWidth = oneOf("content_width", in.ContentWidth, ContentWidths...)
 	out.FilterPlacement = oneOf("filter_placement", in.FilterPlacement, FilterPlacements...)
+	out.Navigation = oneOf("navigation", in.Navigation, Navigations...)
 	out.AppBarBrand = oneOf("app_bar_brand", in.AppBarBrand, AppBarBrands...)
 	out.BannerStyle = oneOf("banner_style", in.BannerStyle, BannerStyles...)
 	out.BannerAlign = oneOf("banner_align", in.BannerAlign, BannerAligns...)

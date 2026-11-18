@@ -69,6 +69,11 @@ export class Branding {
     "filterPlacement": string;
 
     /**
+     * Navigation is one of Navigations, or "" for the UI's default, sidebar.
+     */
+    "navigation": string;
+
+    /**
      * AppBarBrand, BannerStyle and BannerAlign are one of AppBarBrands,
      * BannerStyles and BannerAligns, or "" for the UI's defaults: full, text
      * and left.
@@ -135,6 +140,9 @@ export class Branding {
         }
         if (!("filterPlacement" in $$source)) {
             this["filterPlacement"] = "";
+        }
+        if (!("navigation" in $$source)) {
+            this["navigation"] = "";
         }
         if (!("appBarBrand" in $$source)) {
             this["appBarBrand"] = "";

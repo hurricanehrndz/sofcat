@@ -229,6 +229,17 @@ func TestResolveFilterPlacement(t *testing.T) {
 	}
 }
 
+// navigation is a closed set too: an unknown value leaves the default, sidebar.
+func TestResolveNavigation(t *testing.T) {
+	for in, want := range map[string]string{
+		"sidebar": "sidebar", "Tabs": "tabs", "TABS": "tabs", "": "", "top": "", "left": "",
+	} {
+		if got := resolve(config.Branding{Navigation: in}).Navigation; got != want {
+			t.Errorf("navigation %q resolved to %q, want %q", in, got, want)
+		}
+	}
+}
+
 // The banner and app-bar keys are closed sets: an unknown value must leave the
 // UI's default rather than a layout the CSS has no rule for.
 func TestResolveBannerLayout(t *testing.T) {
