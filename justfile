@@ -139,6 +139,15 @@ site: site-install ui-install
     rm -rf site/dist/demo
     cp -R ui/frontend/dist-demo site/dist/demo
 
+# The Customization pages' screenshots, light and dark, from a fresh demo
+# build: site/src/assets/customization/ (site/scripts/screenshots.mjs holds
+# the list). Needs a Chromium: `chromium` on PATH, or CHROMIUM=/path/to/it.
+# Name shots to redo only those (`just site-screenshots nav-left`).
+site-screenshots *shots: ui-install
+    rm -rf ui/frontend/dist-demo
+    npm run build:demo --prefix ui/frontend
+    node site/scripts/screenshots.mjs {{ shots }}
+
 # Windows resources (rsrc_windows_<arch>.syso, gitignored) that go build links
 # into each executable: icon, VERSIONINFO (company, product, and file and
 # product version from `version`) and an asInvoker application manifest, all

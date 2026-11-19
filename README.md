@@ -44,7 +44,7 @@ What already works:
   navigation and item views with MDM or Group Policy managed settings or
   `config.yaml`, with no rebuild. To ship it under your own name, icon,
   service and installer, build a rebrand. See
-  [Customization](site/src/content/docs/customization/overview.md).
+  [Customization](site/src/content/docs/customization/overview.mdx).
 - **Inventory for osquery.** Every run writes a Munki-compatible
   `inventory.json`. See [osquery inventory](site/src/content/docs/guides/osquery-inventory.md).
 - **Installable conditions.** An item can require an architecture, Windows

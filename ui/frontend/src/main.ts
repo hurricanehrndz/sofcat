@@ -9,7 +9,7 @@ import {
   saveBranding,
   saveList,
 } from "./cache.ts";
-import { mountDemoBar, scopedStorage } from "./demo.ts";
+import { scopedStorage } from "./demo.ts";
 import {
   ALL_APPLIES_TO,
   ALL_CATEGORIES,
@@ -99,9 +99,6 @@ const browserStorage: StorageLike = (() => {
 // these checks to false in a production build, which drops ./demo.ts.
 const MOCK_MODE = import.meta.env.DEV || import.meta.env.MODE === "demo";
 const storage: StorageLike = MOCK_MODE ? scopedStorage(browserStorage) : browserStorage;
-if (import.meta.env.MODE === "demo") {
-  mountDemoBar();
-}
 
 function need<E extends Element>(selector: string): E {
   const element = document.querySelector<E>(selector);

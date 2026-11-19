@@ -160,14 +160,25 @@ badges, a deferral, and Cancel during the download.
   when the service queues it behind running installs.
 - `?dialog`: branding `item_view: dialog` over the store's branding, so items
   open in a dialog; combine it with the others (`?store=skills&dialog`).
+- `?branding=<json>`: a URL-encoded JSON object of branding fields laid over
+  the store's own, for example `{"bannerAlign":"center"}`. The store keeps
+  its text and link (`title`, `tagline`, `helpUrl`, `helpLabel`, `listHeading`,
+  `appliesToFilterLabel`, `sections`), and anything that is not a JSON object
+  is ignored.
+- `?embed` (demo build only): the bare storefront, without the demo's desktop.
 
 Each store keeps its own cache and Activity in `localStorage` under the mock, so
 switching stores does not show the other store's list.
 
 `npm run build:demo` builds the public demo (`vite build --mode demo --base
-/demo/ --outDir dist-demo`) that sofcat.app serves at `/demo/`. Demo mode adds
-a bar above the shell saying the service is simulated, with links between the
-stores and the unbranded view; the bar and the mock are absent from `dist/`.
+/demo/ --outDir dist-demo`) that sofcat.app serves at `/demo/`. Demo mode
+starts at `src/demo-main.ts` instead of `main.ts` (a plugin in
+`vite.config.ts`): the page draws a desktop with a menu bar saying the service
+is simulated, with links between the stores and the unbranded view, and a
+window whose frame loads the same URL with `?embed` added, where the storefront
+runs as the app draws it. Below 48rem wide the desktop gives way to a plain
+notice above the storefront. The landing page's own frame loads `?embed`
+directly. The desktop and the mock are absent from `dist/`.
 
 ## Commands
 

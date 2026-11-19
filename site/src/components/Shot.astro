@@ -1,0 +1,76 @@
+---
+// A storefront screenshot in the site's theme: the light capture under the
+// light theme and the dark one under the dark theme, by Starlight's
+// data-theme on <html> (so its theme toggle switches them, not only the OS
+// setting). The hidden one is display: none, so a screen reader meets one
+// alt text. The pictures and shots.json come from `just site-screenshots`
+// (site/scripts/screenshots.mjs); live links to the same view in the demo.
+import { Image, getImage } from "astro:assets";
+import type { ImageMetadata } from "astro";
+import shots from "../assets/customization/shots.json";
+
+interface Props {
+  name: string;
+  alt: string;
+  live?: boolean;
+}
+
+const { name, alt, live = true } = Astro.props;
+const images = import.meta.glob<{ default: ImageMetadata }>("../assets/customization/*.webp", { eager: true });
+
+function picture(scheme: "light" | "dark"): ImageMetadata {
+  const found = images[`../assets/customization/${name}-${scheme}.webp`];
+  if (!found) {
+    throw new Error(`No ${scheme} screenshot "${name}": add it to site/scripts/screenshots.mjs and run just site-screenshots`);
+  }
+  return found.default;
+}
+
+const query = (shots as Record<string, string>)[name];
+if (live && !query) {
+  throw new Error(`No demo query for screenshot "${name}" in shots.json: run just site-screenshots`);
+}
+// The content column is at most about 45rem wide; 2x covers dense screens.
+const widths = [720, 1440];
+const sizes = "(min-width: 50rem) 45rem, 100vw";
+// The column shrinks a capture to about half size: each one opens full size.
+const schemes = [
+  { scheme: "light", hide: "dark:sl-hidden" },
+  { scheme: "dark", hide: "light:sl-hidden" },
+] as const;
+const pictures = await Promise.all(
+  schemes.map(async ({ scheme, hide }) => {
+    const src = picture(scheme);
+    return { src, hide, full: (await getImage({ src })).src };
+  }),
+);
+---
+
+<figure class="shot">
+  {
+    pictures.map(({ src, hide, full }) => (
+      <a href={full} class={hide}>
+        <Image src={src} alt={alt} widths={widths} sizes={sizes} />
+      </a>
+    ))
+  }
+  {
+    live && (
+      <figcaption>
+        <a href={`/demo/?${query}`}>Open this example in the live demo</a>
+      </figcaption>
+    )
+  }
+</figure>
+
+<style>
+  .shot :global(img) {
+    width: 100%;
+    height: auto;
+    border-radius: 0.5rem;
+  }
+  figcaption {
+    margin-top: 0.25rem;
+    font-size: var(--sl-text-sm);
+  }
+</style>

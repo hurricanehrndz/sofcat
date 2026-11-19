@@ -3,6 +3,8 @@ title: Branding
 description: Set the storefront's name, tagline, logo, accent colour, banner and link button.
 ---
 
+import Shot from "../../../components/Shot.astro";
+
 The `branding:` block gives the storefront your organisation's name, logo,
 colour and a link button, with no rebuild or re-signing. This page covers
 identity and the banner. Layout and behaviour keys are on
@@ -87,6 +89,11 @@ it. Buttons and links keep the accent colour.
 Pick a wide image with no text near the edges. A taller `banner_height` shows
 more of the image's height, still centred and cropped to cover.
 
+<Shot
+  name="background-image"
+  alt="A large banner whose background is a picture of dark blue and green hills under a pale sun, with the title, tagline and Service desk button in white over it."
+/>
+
 ### `background_text`
 
 `light` or `dark`, and `light` by default. It sets the colour of the banner's
@@ -105,6 +112,11 @@ it. The wordmark is at most 3.5rem (56pt) tall, multiplied by the `title_size`
 factor. It keeps its shape and shrinks to fit a narrow window. The tagline and
 link button stay.
 
+<Shot
+  name="banner-style-logo"
+  alt="A banner showing a white ACME Software wordmark in place of the title, with the tagline under it and the Service desk button on the right."
+/>
+
 With `logo`, `title` is still the window and product name, and it becomes the
 logo's text alternative. Set it to the words the logo shows. Without a title,
 the product name is used. The logo stays out of the app-bar mark and the
@@ -121,6 +133,11 @@ and tagline, in either style.
 - `right` mirrors `left`, with the link button at the banner's left edge.
 - `center` stacks the logo, title, tagline and link button in a centred column.
 
+<Shot
+  name="banner-align-center"
+  alt="A banner with the logo tile, title, tagline and Service desk button stacked in a centred column."
+/>
+
 Any other value is `left`.
 
 ### `banner_height`
@@ -129,6 +146,16 @@ The banner's minimum height. Each value is a minimum. Content that needs more
 room grows the banner, for example a large `title_size` or a title that wraps
 in a narrow window. A banner whose content is already taller than the minimum
 is unchanged.
+
+<Shot
+  name="banner-height-small"
+  alt="A small banner: a slim green strip with a smaller logo tile, the title and tagline, and the Service desk button."
+/>
+
+<Shot
+  name="banner-height-x-large"
+  alt="An x-large banner: the logo, title, tagline and Service desk button sit in the middle of a much taller green banner."
+/>
 
 - `small` is a slim strip with 1rem of padding above and below. Gaps are
   tighter when the content wraps or is centred. The logo tile is 2.5rem, and a
@@ -153,6 +180,11 @@ Any other value is `medium`.
 banner title, and the "Available software" (or `list_heading`), "My items" and
 "Activity" headings follow in step. The four values scale the default by 0.85,
 1, 1.25 and 1.5. Any other value keeps the default.
+
+<Shot
+  name="title-size-large"
+  alt="A banner with a large title and a large tagline, and below it the list's Productivity heading at the same larger scale."
+/>
 
 ### `tagline_size`
 
@@ -186,6 +218,11 @@ before the connection status. The pill and the status wrap together in a narrow
 window, and a long label wraps inside the pill. With `app_bar`, a link on its
 own does not bring the banner up.
 
+<Shot
+  name="link-app-bar"
+  alt="The Service desk button as an outlined pill at the right end of the app bar, beside the Service connected status, and no button in the banner."
+/>
+
 Any other value is `banner`.
 
 ### `link_position`
@@ -215,5 +252,10 @@ never over the content. What happens next depends on the corner.
   means `top_right` or `bottom_right` with `banner_align: left`, and the left
   corners with `right`. The column takes up to 40% of the width, and the banner
   keeps its height. Below 40rem (640pt) wide it takes a row there too.
+
+<Shot
+  name="link-position-corner"
+  alt="A large banner with the logo, title and tagline on the left and the Service desk button in its bottom right corner."
+/>
 
 Any other value is `auto`.
