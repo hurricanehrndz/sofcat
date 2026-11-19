@@ -56,7 +56,7 @@ answer echoes the `id` with a `result` or an `error`:
 | --- | --- | --- |
 | `getServiceInfo` | none | `{version, protocolVersion: "2.0", apiVersion: 1, capabilities: [methods], busy, uptimeSeconds}` |
 | `listOptionalInstalls` | none | `{items: [OptionalInstallItem]}` (shape below) |
-| `getBranding` | none | `Branding`: `{title, tagline, helpUrl, helpLabel, linkPlacement, linkPosition, accent, logoMime, logoBase64, backgroundMime, backgroundBase64, backgroundText, listHeading, appliesToFilterLabel, titleSize, taglineSize, contentWidth, filterPlacement, navPlacement, categoryFilter, appBarBrand, bannerStyle, bannerAlign, bannerHeight, itemView, progress, sections?}` |
+| `getBranding` | none | `Branding`: `{title, tagline, helpUrl, helpLabel, linkPlacement, linkPosition, accent, logoMime, logoBase64, backgroundMime, backgroundBase64, backgroundText, listHeading, appliesToFilterLabel, titleSize, taglineSize, contentWidth, filterPlacement, navPlacement, categoryFilter, appBarBrand, bannerStyle, bannerAlign, bannerHeight, itemView, progress, refreshIntervalSeconds, sections?}` |
 | `getItemIcon` | `{iconName}` | `{mime, base64}`, both empty when the service holds no icon by that name |
 | `installItem` | `{itemName, placement?}` | `AcceptedOperation` |
 | `removeItem` | `{itemName, placement?}` | `AcceptedOperation` |
@@ -552,7 +552,7 @@ every run, so a policy change applies from the next run without a restart:
    `title_size`, `tagline_size`, `content_width`, `filter_placement`,
    `nav_placement`, `category_filter`,
    `app_bar_brand`, `banner_style`, `banner_align`, `banner_height`, `item_view`,
-   `progress`;
+   `progress`, `refresh_interval`;
    `sections` is a REG_MULTI_SZ).
 2. The `branding:` block in `config.yaml`.
 3. Nothing, and the UI keeps its default look.
@@ -642,7 +642,12 @@ with no shrink removes it at once), through the Web Animations API,
 and a close during the fade-in fades out from where it has got to. After a
 pointer action the dialog focuses its close button, and the card's name on
 close, with `focusVisible: false` where the web view takes it, so only
-keyboard use draws a ring. A
+keyboard use draws a ring. `refresh_interval` is a duration, sent as
+`refreshIntervalSeconds`: 0 for none or one that does not parse (the UI then
+uses ten minutes), -1 for a zero duration (the UI then has no timer) and at
+least 60 otherwise. On each interval the UI calls `ListOptionalInstalls` and
+`GetBranding` again, unless its window is hidden; it catches up when the
+window shows. A
 dropped field is logged at debug level and
 never fails the call.
 

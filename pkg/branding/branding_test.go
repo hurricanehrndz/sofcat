@@ -357,3 +357,19 @@ func TestResolveLinkPosition(t *testing.T) {
 		}
 	}
 }
+
+// Every refresh has the service fetch the repository, so a typo must not turn
+// into a tight loop: a bad value is the default, a short one the minimum, and
+// only an explicit zero turns the refresh off.
+func TestResolveRefreshInterval(t *testing.T) {
+	for in, want := range map[string]int{
+		"": 0, "10m": 600, " 1h ": 3600, "90s": 90,
+		"0": -1, "0s": -1,
+		"30s": 60, "1ms": 60,
+		"-5m": 0, "ten minutes": 0, "10": 0,
+	} {
+		if got := resolve(config.Branding{RefreshInterval: in}).RefreshIntervalSeconds; got != want {
+			t.Errorf("refresh_interval %q resolved to %d seconds, want %d", in, got, want)
+		}
+	}
+}

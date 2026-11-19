@@ -48,6 +48,7 @@ app_data_path: c:/cpe/sofcat/cache
 #   progress: strip                                   # running work: strip (default; a bar along the bottom) or button (in each item's button,
 #                                                     #   with a Cancel beside it; the strip only counts two or more and opens their list)
 #   item_view: page                                   # how a card opens its item: page (default; a detail page in the list's place) or dialog (over the list)
+#   refresh_interval: 10m                             # how often an open storefront fetches the list again: a duration, at least 1m (default 10m); 0 for never
 #   sections:                                         # storefront tab order; unlisted sections follow alphabetically
 #     - Apps
 #     - Branding

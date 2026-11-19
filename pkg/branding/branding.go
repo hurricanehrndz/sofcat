@@ -16,6 +16,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/hurricanehrndz/sofcat/pkg/config"
@@ -92,7 +93,18 @@ type Branding struct {
 	Progress string `json:"progress"`
 	// ItemView is one of ItemViews, or "" for the UI's default, page.
 	ItemView string `json:"itemView"`
+	// RefreshIntervalSeconds is how often an open storefront fetches the list
+	// again: 0 for the UI's default, DefaultRefreshInterval, and -1 for never.
+	RefreshIntervalSeconds int `json:"refreshIntervalSeconds"`
 }
+
+// DefaultRefreshInterval is the UI's refresh interval without one, and
+// MinRefreshInterval the shortest one: every refresh has the service fetch
+// the manifests and catalogs from the repository.
+const (
+	DefaultRefreshInterval = 10 * time.Minute
+	MinRefreshInterval     = time.Minute
+)
 
 // FontSizes are the names title_size and tagline_size accept: a small fixed
 // scale rather than a number, so a typo cannot wreck the layout.
@@ -200,7 +212,27 @@ func resolve(in config.Branding) Branding {
 	out.LinkPosition = oneOf("link_position", in.LinkPosition, LinkPositions...)
 	out.Progress = oneOf("progress", in.Progress, Progresses...)
 	out.ItemView = oneOf("item_view", in.ItemView, ItemViews...)
+	out.RefreshIntervalSeconds = refreshSeconds(in.RefreshInterval)
 	return out
+}
+
+// refreshSeconds is refresh_interval in seconds. A zero duration turns the
+// refresh off (-1), a shorter one than MinRefreshInterval is raised to it,
+// and no value or one that is not a duration is 0, the UI's default.
+func refreshSeconds(value string) int {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0
+	}
+	d, err := time.ParseDuration(value)
+	if err != nil || d < 0 {
+		slog.Debug("branding refresh_interval dropped", "value", value)
+		return 0
+	}
+	if d == 0 {
+		return -1
+	}
+	return int(max(d, MinRefreshInterval).Seconds())
 }
 
 // oneOf returns value, trimmed and lowercased, when it is one of allowed, and

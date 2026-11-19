@@ -517,3 +517,17 @@ test("a rebuild eases in only the cards it did not show, and none while the page
   assert.deepEqual(names(enteringItems(["b"], items, false)), ["a", "c"], "a widened filter");
   assert.deepEqual(names(enteringItems([], items, true)), [], "the page enters with them");
 });
+
+// Every refresh has the service fetch the repository, so only a negative
+// value from the service turns the timer off, and nothing a payload holds
+// makes it run faster than once a minute.
+test("the refresh interval is ten minutes unless the service says otherwise", () => {
+  for (const refreshIntervalSeconds of [undefined, 0, "", "60", null, NaN, Infinity]) {
+    assert.equal(brandingView({ refreshIntervalSeconds }).refreshIntervalMs, 600_000, String(refreshIntervalSeconds));
+  }
+  assert.equal(brandingView(null).refreshIntervalMs, 600_000, "no payload, as from an empty cache");
+  assert.equal(brandingView({ refreshIntervalSeconds: 3600 }).refreshIntervalMs, 3_600_000);
+  assert.equal(brandingView({ refreshIntervalSeconds: 1 }).refreshIntervalMs, 60_000, "never under a minute");
+  assert.equal(brandingView({ refreshIntervalSeconds: -1 }).refreshIntervalMs, 0, "off");
+  assert.equal(brandingView({ refreshIntervalSeconds: 1e12 }).refreshIntervalMs, 2_147_483_000, "what a timer can hold");
+});

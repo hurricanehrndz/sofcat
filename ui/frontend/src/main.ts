@@ -41,6 +41,7 @@ import {
   busyAction,
   endedOperations,
   isProgressTick,
+  isRefreshKey,
   isTerminalState,
   itemPlacements,
   localErrorState,
@@ -345,6 +346,7 @@ function logoImage(src: string, alt = ""): HTMLImageElement {
  */
 function applyBranding(next: BrandingView): void {
   branding = next;
+  scheduleRefresh(next.refreshIntervalMs);
   brandBanner.hidden = !next.showBanner;
   brandBanner.dataset.align = next.bannerAlign;
   brandBanner.dataset.height = next.bannerHeight;
@@ -1680,7 +1682,37 @@ function dialogClosed(focusVisible = true): void {
   focusCard(itemName, focusVisible);
 }
 
+// The timed refresh (branding refresh_interval): the list and the branding
+// again, so a new interval applies without a restart. A hidden window skips
+// its turn and catches up when it shows again.
+let refreshEveryMs = 0;
+let refreshTimer: number | undefined;
+let lastRefreshAt = 0;
+
+function scheduleRefresh(everyMs: number): void {
+  if (everyMs === refreshEveryMs) {
+    return;
+  }
+  refreshEveryMs = everyMs;
+  window.clearInterval(refreshTimer);
+  refreshTimer = everyMs > 0 ? window.setInterval(timedRefresh, everyMs) : undefined;
+}
+
+function timedRefresh(): void {
+  if (!document.hidden) {
+    void refresh();
+    void refreshBranding();
+  }
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (refreshEveryMs > 0 && Date.now() - lastRefreshAt >= refreshEveryMs) {
+    timedRefresh();
+  }
+});
+
 async function refresh(): Promise<void> {
+  lastRefreshAt = Date.now();
   // Only operations that ended before this request are released: a list
   // fetched earlier may not show their result yet. A failed fetch releases
   // them too, so a button is never stuck busy while offline.
@@ -1768,11 +1800,13 @@ filtersForm.addEventListener("submit", (event) => event.preventDefault());
 searchInput.addEventListener("input", renderGrid);
 categorySelect.addEventListener("change", filterChanged);
 appliesToSelect.addEventListener("change", filterChanged);
-retryButton.addEventListener("click", () => {
+/** refreshNow fetches the list again on request, saying so while it waits. */
+function refreshNow(): void {
   view = { ...view, source: view.items.length ? "cache" : "loading" };
   render();
   void refresh();
-});
+}
+retryButton.addEventListener("click", refreshNow);
 navMine.addEventListener("click", () => showView("mine"));
 navActivity.addEventListener("click", () => showView("activity"));
 detailBack.addEventListener("click", closeDetail);
@@ -1835,6 +1869,11 @@ document.addEventListener("keydown", (event) => {
     if (!dialog.open) {
       showView(viewActivity.hidden ? "activity" : "list");
     }
+  } else if (!MOCK_MODE && isRefreshKey(event)) {
+    // In a browser (dev server, demo) these keys keep reloading the page.
+    event.preventDefault();
+    refreshNow();
+    void refreshBranding();
   }
 });
 

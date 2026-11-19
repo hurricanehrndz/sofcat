@@ -125,7 +125,12 @@ field when the card is no longer listed. A refresh that takes the card off
 the list closes the dialog the same way. After a click the dialog moves
 focus without drawing a focus ring where the web view supports that (the
 `focusVisible` focus option); keyboard use draws one. In a left bar the pages and, with `category_filter: list`, the categories are buttons in two `nav` landmarks, in reading order before the search field. `Ctrl+L` shows or hides Activity (like
-Managed Software Center's ⌘L), and `Escape` leaves it too. All of this is
+Managed Software Center's ⌘L), and `Escape` leaves it too. `F5`, `Ctrl+R` or
+⌘R fetches the list and the branding again (the web view's own reload is
+off). So does a timer, every branding `refresh_interval`
+(`refreshIntervalSeconds` from `GetBranding`: 0 is the default, ten minutes,
+and a negative value turns it off), except while the window is hidden; it
+catches up when the window shows again. All of this is
 frontend-only; nothing is added to the bound surface.
 
 ## Development mock
