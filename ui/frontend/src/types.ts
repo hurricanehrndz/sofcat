@@ -112,6 +112,8 @@ export type BrandingView = {
   showBanner: boolean;
   /** The Software tab's heading: the admin's list_heading or "Available software". */
   listHeading: string;
+  /** The applies-to filter's name: the admin's applies_to_filter_label or "Works in". */
+  appliesToFilterLabel: string;
   /** The admin's tab order: these sections come first, in this order. */
   sections: string[];
   /** Factors on the default banner title (and page heading) and tagline sizes; 1 keeps them. */

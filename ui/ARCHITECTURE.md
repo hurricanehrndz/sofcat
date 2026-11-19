@@ -55,7 +55,7 @@ answer echoes the `id` with a `result` or an `error`:
 | --- | --- | --- |
 | `getServiceInfo` | none | `{version, protocolVersion: "2.0", apiVersion: 1, capabilities: [methods], busy, uptimeSeconds}` |
 | `listOptionalInstalls` | none | `{items: [OptionalInstallItem]}` (shape below) |
-| `getBranding` | none | `Branding`: `{title, tagline, helpUrl, helpLabel, linkPlacement, linkPosition, accent, logoMime, logoBase64, backgroundMime, backgroundBase64, backgroundText, listHeading, titleSize, taglineSize, contentWidth, filterPlacement, navPlacement, categoryFilter, appBarBrand, bannerStyle, bannerAlign, bannerHeight, itemView, progress, sections?}` |
+| `getBranding` | none | `Branding`: `{title, tagline, helpUrl, helpLabel, linkPlacement, linkPosition, accent, logoMime, logoBase64, backgroundMime, backgroundBase64, backgroundText, listHeading, appliesToFilterLabel, titleSize, taglineSize, contentWidth, filterPlacement, navPlacement, categoryFilter, appBarBrand, bannerStyle, bannerAlign, bannerHeight, itemView, progress, sections?}` |
 | `installItem` | `{itemName, placement?}` | `AcceptedOperation` |
 | `removeItem` | `{itemName, placement?}` | `AcceptedOperation` |
 | `cancelOperation` | `{operationId}` | `{canceled: true}` |
@@ -441,6 +441,15 @@ tab is headed by its name; the Software tab's heading is the branding
 `listHeading`, or "Available software"; "My items" keeps its name. A tab
 that disappears on a refresh falls back to the first one.
 
+The applies-to filter narrows the current list by one name from the items'
+`appliesTo`. It appears only when the list's items name two or more distinct
+names. It is a select beside the Category select, labelled "Works in" or the
+branding `appliesToFilterLabel`; with `nav_placement: left` and
+`category_filter: list` it is a second button group in the left bar under the
+categories, headed the same way. Its first option is "All". While a name is
+picked, an item with no names is hidden. Search matches the names whatever
+the filter says. It filters display only and scopes nothing.
+
 Buttons and status text use the item's labels: `install` on the install
 button, `remove` on the remove button, `cancel` on the Cancel of a pending
 request and on the strip's Cancel, `installing` and `removing` on the busy
@@ -526,7 +535,7 @@ every run, so a policy change applies from the next run without a restart:
    `/Library/Managed Preferences/<IDENTIFIER>.plist` on macOS. The names are the
    `config.yaml` keys (`title`, `tagline`, `logo`, `link_url`, `link_label`,
    `link_placement`, `link_position`, the old names `help_url` and `help_label`,
-   `accent`, `background_image`, `background_text`, `list_heading`, `sections`,
+   `accent`, `background_image`, `background_text`, `list_heading`, `applies_to_filter_label`, `sections`,
    `title_size`, `tagline_size`, `content_width`, `filter_placement`,
    `nav_placement`, `category_filter`,
    `app_bar_brand`, `banner_style`, `banner_align`, `banner_height`, `item_view`,

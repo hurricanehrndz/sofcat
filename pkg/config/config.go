@@ -147,6 +147,8 @@ type Branding struct {
 	Accent    string `yaml:"accent,omitempty"`
 	// ListHeading replaces the UI's "Available software" heading.
 	ListHeading string `yaml:"list_heading,omitempty"`
+	// AppliesToFilterLabel replaces the UI's "Works in" label on the applies-to filter.
+	AppliesToFilterLabel string `yaml:"applies_to_filter_label,omitempty"`
 	// TitleSize and TaglineSize scale the banner title (with the page
 	// headings) and the tagline: small, medium (the default), large or x-large.
 	TitleSize   string `yaml:"title_size,omitempty"`

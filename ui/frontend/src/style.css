@@ -1751,7 +1751,8 @@ h2 {
     text-transform: uppercase;
   }
 
-  :root[data-nav-placement="left"][data-category-filter="list"] #category-field {
+  :root[data-nav-placement="left"][data-category-filter="list"] #category-field,
+  :root[data-nav-placement="left"][data-category-filter="list"] #applies-to-field {
     display: none;
   }
 

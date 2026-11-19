@@ -22,6 +22,7 @@ branding:
   link_position: top_right
   accent: "#0b6e4f"
   list_heading: Software for your team
+  applies_to_filter_label: Works with
   title_size: large
   tagline_size: x-large
   content_width: full

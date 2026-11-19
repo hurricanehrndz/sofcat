@@ -59,6 +59,8 @@ import {
   tabs,
   trackOperation,
   visibleItems,
+  appliesToChoices,
+  ALL_APPLIES_TO,
   withFailure,
   withLive,
 } from "./state.ts";
@@ -102,6 +104,22 @@ test("category filter is case-insensitive and 'all' keeps everything", () => {
     ["brave"],
   );
   assert.equal(visibleItems(catalogItems, "", ALL_CATEGORIES).length, 3);
+});
+
+test("the applies-to filter keeps the items that list the name, and search finds them by it", () => {
+  const skills = [
+    item({ itemName: "both", appliesTo: ["Claude Code", "Codex"] }),
+    item({ itemName: "codex", appliesTo: ["codex ", "", 3] }),
+    item({ itemName: "plain" }),
+  ];
+  assert.deepEqual(appliesToChoices(skills), ["Claude Code", "Codex"]);
+  assert.deepEqual(visibleItems(skills, "", ALL_CATEGORIES, "Claude Code").map((i) => i.itemName), ["both"]);
+  assert.deepEqual(visibleItems(skills, "", ALL_CATEGORIES, "CODEX").map((i) => i.itemName), ["both", "codex"]);
+  assert.equal(visibleItems(skills, "", ALL_CATEGORIES, ALL_APPLIES_TO).length, 3);
+  assert.deepEqual(visibleItems(skills, "claude", ALL_CATEGORIES).map((i) => i.itemName), ["both"]);
+  // One name, or none, is nothing to choose between.
+  assert.deepEqual(appliesToChoices(skills.slice(1)), []);
+  assert.deepEqual(appliesToChoices(catalogItems), []);
 });
 
 test("card order is stable, case-insensitive by display name then item name", () => {

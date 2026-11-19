@@ -14,6 +14,8 @@ import type {
 } from "./types.ts";
 
 export const ALL_CATEGORIES = "all";
+// Empty, which no name is, so a placement that applies to "all" stays a name.
+export const ALL_APPLIES_TO = "";
 
 const RESTART_LABELS: Record<string, string> = {
   requirerestart: "Restart required",
@@ -45,13 +47,26 @@ function matchesSearch(item: OptionalInstallItem, query: string): boolean {
   if (!needle) {
     return true;
   }
-  return [item.displayName, item.itemName, item.developer ?? "", item.category ?? ""].some(
+  return [item.displayName, item.itemName, item.developer ?? "", item.category ?? "", ...appliesToNames(item)].some(
     (field) => field.toLowerCase().includes(needle),
   );
 }
 
+/** appliesToNames is the names the item's placements list. A cached list is untrusted shape-wise, so keep only real names. */
+function appliesToNames(item: Pick<OptionalInstallItem, "appliesTo">): string[] {
+  return Array.isArray(item.appliesTo)
+    ? item.appliesTo.filter((name): name is string => typeof name === "string" && name.trim() !== "")
+    : [];
+}
+
 function matchesCategory(item: OptionalInstallItem, category: string): boolean {
   return category === ALL_CATEGORIES || fold(item.category ?? "") === fold(category);
+}
+
+// An item that lists no names matches only "all": picking a name asks for
+// what works there.
+function matchesAppliesTo(item: OptionalInstallItem, name: string): boolean {
+  return name === ALL_APPLIES_TO || appliesToNames(item).some((own) => fold(own) === fold(name));
 }
 
 /** compareItems gives a stable display order: display name, then item name. */
@@ -66,9 +81,12 @@ export function visibleItems(
   items: OptionalInstallItem[],
   query: string,
   category: string,
+  appliesTo: string = ALL_APPLIES_TO,
 ): OptionalInstallItem[] {
   return items
-    .filter((item) => matchesSearch(item, query) && matchesCategory(item, category))
+    .filter(
+      (item) => matchesSearch(item, query) && matchesCategory(item, category) && matchesAppliesTo(item, appliesTo),
+    )
     .sort(compareItems);
 }
 
@@ -104,6 +122,21 @@ export function categories(items: OptionalInstallItem[]): string[] {
     }
   }
   return [...seen.values()].sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }));
+}
+
+/**
+ * appliesToChoices is what the applies-to filter offers: the names the items'
+ * placements list, or none when they list fewer than two, since one name
+ * filters nothing worth a control.
+ */
+export function appliesToChoices(items: OptionalInstallItem[]): string[] {
+  const seen = new Map<string, string>();
+  for (const name of items.flatMap(appliesToNames)) {
+    if (!seen.has(fold(name))) {
+      seen.set(fold(name), name.trim());
+    }
+  }
+  return seen.size < 2 ? [] : [...seen.values()].sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }));
 }
 
 /** ListTab is a storefront tab: a catalog section, or key "" for items without one. */
@@ -230,10 +263,7 @@ export function actionLabel(item: Pick<OptionalInstallItem, "actionLabels">, key
  * when they list none. It is display text, not scoping.
  */
 export function appliesToLine(item: Pick<OptionalInstallItem, "actionLabels" | "appliesTo">): string {
-  // A cached list is untrusted shape-wise, so keep only real names.
-  const names = Array.isArray(item.appliesTo)
-    ? item.appliesTo.filter((name): name is string => typeof name === "string" && name.trim() !== "")
-    : [];
+  const names = appliesToNames(item);
   return names.length ? `${actionLabel(item, "applies_to")}: ${names.join(", ")}` : "";
 }
 
@@ -1046,6 +1076,7 @@ function formatSavedAt(savedAtUtc: string): string {
 const DEFAULT_PRODUCT: string = import.meta.env?.VITE_PRODUCT_NAME ?? "SofCat";
 const DEFAULT_HELP_LABEL = "Get help";
 const DEFAULT_LIST_HEADING = "Available software";
+const DEFAULT_APPLIES_TO_FILTER_LABEL = "Works in";
 const IMAGE_MIMES = new Set(["image/png", "image/jpeg", "image/svg+xml"]);
 // The title_size and tagline_size names, as factors on the default size.
 const FONT_SCALES = new Map([
@@ -1175,6 +1206,7 @@ export function brandingView(payload: unknown): BrandingView {
     productMark: (Array.from(title)[0] ?? "").toUpperCase(),
     showBanner,
     listHeading: text(raw, "listHeading") || DEFAULT_LIST_HEADING,
+    appliesToFilterLabel: text(raw, "appliesToFilterLabel") || DEFAULT_APPLIES_TO_FILTER_LABEL,
     titleScale: FONT_SCALES.get(text(raw, "titleSize")) ?? 1,
     taglineScale: FONT_SCALES.get(text(raw, "taglineSize")) ?? 1,
     contentWidth: oneOf(raw, "contentWidth", CONTENT_WIDTHS, "wide"),
