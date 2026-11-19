@@ -3,10 +3,20 @@ title: Catalog presentation
 description: The catalog keys that group, name and label items in the storefront, and the three branding keys that order its tabs and rename its list heading and filter.
 ---
 
+import Shot from "../../../components/Shot.astro";
+
 The repository decides how items are grouped and worded. You set most of it
 on the item, in its package-info file, and three
 `branding` keys shape the tabs, the heading and the filter around them. None
 of it needs a rebuild.
+
+In this store the tabs are sections, the buttons read "Add" and the Works in
+filter lists the names the skills apply to:
+
+<Shot
+  name="catalog-skills"
+  alt="The Acme AI Skills store: Skills and Plugins tabs, Search, Works in and Category filters, and cards with Applies to lines and Add or Cancel buttons."
+/>
 
 This item sits under an "Apps" tab, in the Browsers category, with its own
 button wording:

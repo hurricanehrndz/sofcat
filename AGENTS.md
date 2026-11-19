@@ -32,6 +32,7 @@ Guidance for coding agents working in this repository.
   - `just test`
   - `just ui-lint`
   - `just ui-test`
+  - `just site-screenshots`: rebuild the demo and recapture the Customization pages' light and dark screenshots (`site/scripts/screenshots.mjs`); needs a Chromium (`CHROMIUM=...`)
   - `just clean`
   - `just bootstrap`
   - `just bootstrap-run`

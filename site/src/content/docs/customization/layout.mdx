@@ -3,6 +3,8 @@ title: Layout and behaviour
 description: Choose where the navigation sits, how items open, and where progress shows.
 ---
 
+import Shot from "../../../components/Shot.astro";
+
 These `branding:` keys change how the storefront is arranged and how it behaves,
 not how it is named or coloured. For the name, logo and banner see
 [Branding](/customization/branding/). For how the settings reach a machine see
@@ -48,6 +50,13 @@ Where the app bar sits. The app bar holds the product's mark and name (as
   the content scrolls, and the operation strip keeps to the content's side of
   it.
 
+This storefront also has `category_filter: list`:
+
+<Shot
+  name="nav-left"
+  alt="The app bar as a column down the left under the banner: the product name, the Productivity, Developer tools and Utilities tabs, My items, Activity, a Categories list, and the connection status at its foot."
+/>
+
 A window narrower than 40rem (640pt) shows the bar across the top for either
 value. The key only moves the bar. `category_filter` decides what else the bar
 holds. Any other value is `top`.
@@ -81,6 +90,11 @@ search field remains.
   edge. When the row is too narrow for both, they move under the heading.
 - `left` puts the controls above the heading, at the left.
 
+<Shot
+  name="filter-placement-left"
+  alt="The Search field and Category select above the Productivity heading, at the left of the content."
+/>
+
 In a window narrower than 40rem (640pt) both values stretch the controls to the
 full width, one under the other. They sit under the heading for `right` and
 above it for `left`.
@@ -104,7 +118,20 @@ The banner, app bar and operation strip span the window in all three values.
 - `compact` uses a column of up to 76rem (1216pt). Its cards keep one column's
   width, which leaves the rest of a short row empty.
 
-Any other value is `wide`.
+Any other value is `wide`. The live demo's window is at most 80rem wide, too
+narrow to show the difference, so these two pictures come from a wider window.
+
+<Shot
+  name="content-width-compact"
+  alt="A wide window with content_width compact: the heading, filters and four cards sit in a centred column with wide empty margins on both sides."
+  live={false}
+/>
+
+<Shot
+  name="content-width-full"
+  alt="The same wide window with content_width full: the heading, filters and four wider cards run to the window's edges."
+  live={false}
+/>
 
 ### `app_bar_brand`
 
@@ -113,6 +140,11 @@ What the app bar shows of the product beside the tabs.
 - `full` is the default. It shows the mark and the name.
 - `mark` shows the mark only.
 - `none` shows neither.
+
+<Shot
+  name="app-bar-brand-mark"
+  alt="The app bar under the banner showing only the green Acme mark before the tabs, with no product name."
+/>
 
 Use `mark` or `none` when the banner already names the organisation. While no
 banner shows, the value is `full`. Screen readers still get the name, as the
@@ -133,6 +165,11 @@ grows out of the card and shrinks back into it. When the card is not wholly on
 screen, the dialog just appears and disappears over a backdrop that still fades
 in. Under reduced motion neither moves. The close button, `Escape` or a click
 outside the dialog closes it.
+
+<Shot
+  name="item-view-dialog"
+  alt="Acme Notes open in a dialog over the dimmed list, with its developer, description, Install button and an Information section."
+/>
 
 With `dialog`, the cards have no Details button. The item's name is the button
 that opens its dialog. The list behind the dialog and the dialog itself keep
@@ -167,10 +204,20 @@ A Cancel button sits beside the action button while the operation runs. It
 follows the strip's rules and is placed so the action button never moves when it
 appears.
 
+<Shot
+  name="progress-button"
+  alt="The PaperTrail PDF card during an install: its action button is a progress bar reading Downloading 55%, with a Cancel button under it beside Details."
+/>
+
 With `button`, the strip shows only while two or more operations run. It shows
 a count, such as "Installing 1 of 3", and is a button. It opens a list of the
 operations above it, one row each, with the working one first. Each row shows
 its state and its own Cancel. `Escape` or a click outside closes the list.
+
+<Shot
+  name="progress-button-strip"
+  alt="Three installs requested: PaperTrail PDF downloading at 55% in its button, two other cards showing Waiting, and a strip at the bottom reading Installing 1 of 3."
+/>
 
 Screen readers hear each new phase once per operation, never a percentage. Any
 other value is `strip`.
@@ -189,3 +236,8 @@ branding:
   item_view: dialog
   progress: button
 ```
+
+<Shot
+  name="side-nav-recipe"
+  alt="The storefront with these four keys: tabs and categories down the left, and Acme Notes open in a dialog over the dimmed list."
+/>
