@@ -40,11 +40,11 @@ What already works:
 - **Self-service for standard users.** Browse, install, remove and cancel,
   with per-item progress and an Activity log. The app talks to the agent over
   a local named pipe, so nobody needs to elevate.
-- **Your branding.** Set the app's title, logo, accent colour and help link
-  with MDM or Group Policy managed settings or `config.yaml`. See
-  [ui/README.md](ui/README.md#branding). To ship it under your own name, icon,
-  service and installer, build a rebrand; see
-  [examples/brand/README.md](examples/brand/README.md).
+- **Your branding.** Set the storefront's title, logo, accent colour, banner,
+  navigation and item views with MDM or Group Policy managed settings or
+  `config.yaml`, with no rebuild. To ship it under your own name, icon,
+  service and installer, build a rebrand. See
+  [Customization](site/src/content/docs/customization/overview.md).
 - **Inventory for osquery.** Every run writes a Munki-compatible
   `inventory.json`. See [osquery inventory](site/src/content/docs/guides/osquery-inventory.md).
 - **Installable conditions.** An item can require an architecture, Windows
