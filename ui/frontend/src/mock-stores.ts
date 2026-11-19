@@ -70,6 +70,27 @@ export function categoryFilter(): string {
   return params().get("categories") ?? "";
 }
 
+// The demo is public: a crafted link must not put its own words or URL on it.
+const STORE_OWNED = ["title", "tagline", "helpUrl", "helpLabel", "listHeading", "appliesToFilterLabel", "sections"];
+
+/**
+ * brandingOverride is `?branding=`: a JSON object of Branding fields laid over
+ * the store's own, so a link (or the docs' screenshot script) can show any
+ * look or layout. The store keeps its text and its link. Anything that is not
+ * a JSON object is ignored.
+ */
+export function brandingOverride(): Partial<Branding> {
+  try {
+    const value: unknown = JSON.parse(params().get("branding") ?? "");
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      return {};
+    }
+    return Object.fromEntries(Object.entries(value).filter(([key]) => !STORE_OWNED.includes(key)));
+  } catch {
+    return {};
+  }
+}
+
 // Original marks drawn for the fictional Acme; btoa keeps them editable here.
 const APPS_LOGO =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#0b6e4f"/>' +

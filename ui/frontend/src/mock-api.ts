@@ -7,6 +7,7 @@ import {
   type MockItem,
   STORES,
   UNBRANDED,
+  brandingOverride,
   dialogView,
   offline,
   categoryFilter,
@@ -272,10 +273,12 @@ export const api: SofCatApi = {
   // its branding, so tabs fall back to alphabetical order; `?dialog` opens
   // items in a dialog (branding item_view) and `?progress=button` moves
   // running work into the buttons, either way; `?nav=left` puts the bar
-  // down the side and `?categories=list` lists the categories in it.
+  // down the side and `?categories=list` lists the categories in it;
+  // `?branding=` is a JSON object of any other fields, under those.
   getBranding: () =>
     Promise.resolve({
       ...(unbranded() ? UNBRANDED : store.branding),
+      ...brandingOverride(),
       ...(dialogView() ? { itemView: "dialog" } : {}),
       ...(progress() ? { progress: progress() } : {}),
       ...(navPlacement() ? { navPlacement: navPlacement() } : {}),

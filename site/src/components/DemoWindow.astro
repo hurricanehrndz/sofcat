@@ -2,7 +2,8 @@
 // The storefront demo framed as an app window, with a switch between the two
 // Acme stores. The demo itself is the real UI built with `npm run build:demo`
 // in ui/frontend and copied to /demo/ by `just site`; `astro dev` does not
-// serve it.
+// serve it. The frame loads `?embed`, the bare storefront, since this
+// component draws the window; the full-size links open the demo's desktop.
 const stores = [
   { id: "apps", label: "Acme Software Center", note: "Windows software" },
   { id: "skills", label: "Acme AI Skills", note: "AI skills and plugins" },
@@ -32,7 +33,7 @@ const first = stores[0];
       <span class="title">{first.label}</span>
     </div>
     <iframe
-      src={`/demo/?store=${first.id}`}
+      src={`/demo/?store=${first.id}&embed`}
       title="SofCat storefront demo"
       loading="lazy"></iframe>
   </div>
@@ -57,7 +58,7 @@ const first = stores[0];
     for (const tab of tabs) {
       tab.addEventListener("click", () => {
         for (const t of tabs) t.setAttribute("aria-pressed", String(t === tab));
-        frame.src = `/demo/?store=${tab.dataset.store}`;
+        frame.src = `/demo/?store=${tab.dataset.store}&embed`;
         title.textContent = tab.querySelector(".tab-label")!.textContent;
       });
     }
@@ -123,7 +124,13 @@ const first = stores[0];
     width: 0.7rem;
     height: 0.7rem;
     border-radius: 50%;
-    background: var(--sl-color-gray-5);
+    background: #ff5f57;
+  }
+  .dots i:nth-child(2) {
+    background: #febc2e;
+  }
+  .dots i:nth-child(3) {
+    background: #28c840;
   }
   .title {
     flex: 1;
