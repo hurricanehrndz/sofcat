@@ -100,12 +100,12 @@ Conditions use [expr](https://expr-lang.org/docs/language-definition).
 | One of | `machine_model in ["20XW0055US", "20XX0011US"]` |
 | List contains | `"lab" in machine_groups` |
 | Any element | `any(ipv4_address, # startsWith "10.20.")` |
-| Versions | `version(os_version) >= "10.0.22631.4460"`, `version(engine_version) >= "1.4"` |
+| Versions | `version(os_version) >= "10.0.22631.4460"`, `version(engine_version) >= "5.0"` |
 | Dates | `now() > date("2026-12-01")` |
 
 Wrap a version in `version(...)`, or `"10.0.9"` compares greater than
 `"10.0.22631"` as text. `version()` drops a leading `v` and anything from the
-first `-` or `+`, so a build such as `v1.4.0-3-gabc123` compares as `1.4.0`.
+first `-` or `+`, so a build such as `v5.0.0-3-gabc123` compares as `5.0.0`.
 A value that is not a version, such as `dev`, makes the condition false.
 
 In Munki's predicate syntax, `os_vers BEGINSWITH "10"` becomes
@@ -129,7 +129,7 @@ In Munki's predicate syntax, `os_vers BEGINSWITH "10"` becomes
 | `machine_type` | string | `laptop` for a portable chassis (on macOS a MacBook model or a Mac with an internal battery), otherwise `desktop` |
 | `serial_number` | string | `PF1ABCDE` |
 | `ipv4_address` | []string | `["10.20.1.5"]`, without loopback |
-| `engine_version` | string | `v1.4.0`, SofCat's version. It is the same in a rebranded build. |
+| `engine_version` | string | `v<version>`, SofCat's version, such as `v5.0.0`. It is the same in a rebranded build. |
 
 On Windows the manufacturer, model, type and serial come from SMBIOS. If SMBIOS
 can't be read, those four are missing and conditions that use them are

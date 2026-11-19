@@ -148,7 +148,8 @@ checks every zip item. It reports:
 - a variant placement that `placements.yaml` does not define, or that has no
   `paths`
 - a zip item in a repository with no `placements.yaml`
-- a `custom_action_labels` key other than the ten above, on any item
+- a `custom_action_labels` key other than the ten that
+  [Placements](/zip-items/placements/#placementsyaml) lists, on any item
 - a package-info file, of any item, whose `item_name` is not its file name
   without the extension
 - a `files` template that fails to render: for each OS the entry has a

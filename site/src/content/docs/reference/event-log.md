@@ -9,7 +9,7 @@ outcome of `sofcat.exe -serviceinstall`, `-serviceremove`, `-servicestart`
 and `-servicestop` go to the Windows Application log. The installer runs the
 first two, so `setup.exe` and `uninstall.exe` leave their record there, even
 for a silent (`/S`) run whose output nobody sees. Each entry also goes to
-stderr, as before.
+stderr.
 
 To read them, open Event Viewer, then **Windows Logs → Application**, and
 filter by the source, which is the brand's slug (`sofcat` for SofCat). From
@@ -23,8 +23,7 @@ The entry's level is the record's: Information, Warning or Error. Its text is
 the message followed by the details as `key=value` pairs, for example
 `ended a running agent pid=4120 image="C:\Program Files\SofCat\sofcat-useragent.exe"`.
 
-On stderr, each step is an info-level log line on every run. The step
-messages that used to need `-v` are among them. When a command fails,
+On stderr, each step is an info-level log line on every run. When a command fails,
 stderr shows the error twice: once as the `level=ERROR` log line and once
 as the plain error line the command exits with.
 

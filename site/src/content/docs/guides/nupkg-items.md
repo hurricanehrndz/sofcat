@@ -39,11 +39,11 @@ hello:
 
 ## Building the package
 
-Build the package with embala 0.10.0 or later and set its `scripts` key,
+Build the package with embala and set its `scripts` key,
 either `scripts = "generate"` or your own scripts. embala's `plain` style
 builds a package that `choco install` refuses, which is fine for sofcat.
 
-A package built before embala 0.10.0, or without `scripts`, carries no
+A package built with an older embala, or without `scripts`, carries no
 install script; Chocolatey's shims were what put its exe on PATH. sofcat
 fails it with `<display name>: package has no install script`. Rebuild it.
 

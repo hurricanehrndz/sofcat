@@ -31,7 +31,7 @@ machine gets, catalogs say what exists, and both are plain YAML.
 | | Today | Planned |
 | --- | --- | --- |
 | Agent | Windows service, macOS launchd daemon | Linux |
-| Item types | `.msi`, `.exe`, `.ps1`, `.nupkg` (runs the package's own scripts, see [Nupkg items](site/src/content/docs/guides/nupkg-items.md)), zip items (directory trees, from wallpapers to AI skills and plugins) | Files and scripts on any platform, native packages |
+| Item types | `.msi`, `.msix`, `.exe`, `.ps1`, `.nupkg` (runs the package's own scripts, see [Nupkg items](site/src/content/docs/guides/nupkg-items.md)), zip items (directory trees, from wallpapers to AI skills and plugins) | Files and scripts on any platform, native packages |
 | Self-service app | Windows, macOS | Linux |
 | `makecatalogs` | Linux, macOS, Windows | |
 
@@ -60,7 +60,7 @@ What already works:
 - **macOS.** A launchd daemon and a self-service app bundle, installed by the
   `.pkg` from `just pkg`, with the same features.
 - **Zip-only brands.** `INSTALLERS=zip` in a brand compiles out the command
-  installers and scripts. See [examples/brand/README.md](examples/brand/README.md).
+  installers. See [examples/brand/README.md](examples/brand/README.md).
 - **`makecatalogs` anywhere.** Build catalogs on any OS, so your repo's CI
   never needs a Windows runner.
 
@@ -106,7 +106,8 @@ flowchart LR
 package-info file. [Data directory](site/src/content/docs/reference/data-directory.md) explains
 what lives in `C:\ProgramData\SofCat` and who can write to it.
 
-Nothing is code signed yet.
+Release builds are signed; see [Code signing](site/src/content/docs/reference/code-signing.md).
+For macOS, see [Get started](site/src/content/docs/getting-started.md).
 
 ## Build catalogs with makecatalogs
 
@@ -141,13 +142,13 @@ Linux, macOS and Windows on amd64 and arm64, each holding one binary named
 `makecatalogs`. See
 [examples/example_package-info.yaml](examples/example_package-info.yaml).
 
-`sofcat -build`/`-b` and `-import`/`-i` are gone, along with the `repo_path`
-config key. Configs that still set it keep loading.
+A config that still sets the retired `repo_path` key keeps loading.
 
 ## Build from source
 
-You need Go 1.27, Node 24 and [`just`](https://github.com/casey/just).
-[mise](https://mise.jdx.dev) installs all three plus the lint and format tools:
+You need Go, Node and [`just`](https://github.com/casey/just), at the versions
+`mise.toml` pins. [mise](https://mise.jdx.dev) installs all three plus the lint
+and format tools:
 
 ```sh
 mise install
@@ -162,10 +163,10 @@ adds the GTK 4/WebKitGTK 6.0 libraries the UI package
 links against for native Linux builds and tests; on other distros install
 those from the package manager.
 
-On a Mac, `just build-macos` builds the CLI and `build/<Name>.app` (cgo, so
+On a Mac, `just build-macos` builds the CLI, the per-user helper and `build/<Name>.app` (cgo, so
 the Xcode command line tools) and `just pkg` wraps them in an unsigned `.pkg`.
 
-Both Windows executables are pure Go with no cgo, so they cross-compile from
+All three Windows executables are pure Go with no cgo, so they cross-compile from
 Linux or macOS. `just setup` uses [embala](https://github.com/hurricanehrndz/embala), so
 the installer builds there too. More in [Developer notes](site/src/content/docs/contributing/dev.md) and
 [ui/README.md](ui/README.md).
