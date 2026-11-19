@@ -27,6 +27,17 @@ export default defineConfig({
           items: ["download", "getting-started", "configuration"],
         },
         {
+          label: "Customization",
+          items: [
+            "customization/overview",
+            "customization/branding",
+            "customization/layout",
+            "customization/catalog",
+            "customization/delivery",
+            "customization/rebrand",
+          ],
+        },
+        {
           label: "Guides",
           items: ["guides/nupkg-items", "guides/required-software", "guides/conditions", "guides/ai-categories", "guides/osquery-inventory"],
         },
