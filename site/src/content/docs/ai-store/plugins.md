@@ -138,9 +138,8 @@ item-trees/example-plugin/
 Codex reads `.agents/plugins/marketplace.json` from a local marketplace in
 its own format. This entry writes it beside the Claude catalog above,
 with each plugin's version stamped from its placed hash so Codex reloads a
-plugin whose rendered files changed (the fixture in
-`test/manual/fixtures/tapas/placements.yaml` and `examples/placements.yaml`
-carry the same template):
+plugin whose rendered files changed (`examples/placements.yaml` carries the
+same template):
 
 ```yaml
     files:
@@ -245,8 +244,7 @@ same way, with `{{ if $p.HasFile ".claude-plugin/plugin.json" }}`.
 
 Claude Desktop reads each organization plugin's install behaviour from
 `installationPreference` in its `.claude-plugin/plugin.json`. One template
-serves managed and self-service plugins alike (the Tapas fixture's
-`tapas-desktop-managed` and `tapas-desktop-optional` carry it):
+serves managed and self-service plugins alike:
 
 ```json
 {

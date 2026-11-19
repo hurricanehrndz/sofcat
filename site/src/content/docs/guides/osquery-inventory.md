@@ -16,7 +16,9 @@ table construction) can't be used, because it reads SQLite databases only.
 ## File
 
 - **Path:** `%ProgramData%\SofCat\Data\inventory.json` (`AppDataPath` in
-  `config.yaml`, default `C:\ProgramData\SofCat\Data`).
+  `config.yaml`, default `C:\ProgramData\SofCat\Data`). On macOS it is
+  `/Library/Application Support/SofCat/Data/inventory.json`, in a directory
+  only root can read.
 - **Writer:** the managed run (`sofcat.exe` as SYSTEM, from the service or a
   scheduled run). It is written at the end of every run, including a run that
   fails part way, so the failure is visible. Check-only (`-C`) prints the same
@@ -26,7 +28,7 @@ table construction) can't be used, because it reads SQLite databases only.
   plants at the path is replaced, so its owner and ACL do not survive.
 - **Upgrade cleanup:** after writing the inventory, a real run deletes the
   legacy `GorillaReport.json` in the same directory, if one is there.
-- **ACL:** SDDL `D:P(A;;FA;;;SY)(A;;FR;;;BA)`. The DACL is protected, so
+- **ACL (Windows):** SDDL `D:P(A;;FA;;;SY)(A;;FR;;;BA)`. The DACL is protected, so
   nothing is inherited. `icacls` shows only these two entries:
 
   ```text
@@ -112,7 +114,7 @@ release build would report it:
   "ConsoleUser": "tester",
   "StartTime": "2026-10-01 23:29:03 -0700",
   "EndTime": "2026-10-01 23:29:05 -0700",
-  "ManagedInstallVersion": "v1.1.0",
+  "ManagedInstallVersion": "v<version>",
   "ManifestName": "selfserve_manifest",
   "Errors": ["install of DemoFailing failed: exit status 1"],
   "Warnings": [],

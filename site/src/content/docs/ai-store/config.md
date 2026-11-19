@@ -153,8 +153,11 @@ prints them as one JSON object:
 {"assigned_user": "jdoe", "memberof": ["staff", "harness-beta"]}
 ```
 
-Install it in the `conditions` folder of sofcat's data directory with your
-MDM or config management. The repository does not deliver it. The
+Keep it in the repository's `conditions/darwin/` or `conditions/windows/`
+folder, and the agent copies it to each device. See
+[Scripts from the repository](/guides/conditions/#scripts-from-the-repository).
+You can instead install it in the `conditions` folder of sofcat's data
+directory with your MDM or config management. The
 [example's script](https://github.com/hurricanehrndz/sofcat-harness-example/blob/main/conditions/10-example-facts)
 is a sketch for macOS, and
 [Admin-provided facts](/guides/conditions/#admin-provided-facts) has the

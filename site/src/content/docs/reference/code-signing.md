@@ -12,21 +12,23 @@ definitions update the same file scanned clean. Defender's ML models score
 unsigned Go binaries poorly when they also carry no publisher or version
 metadata.
 
-`just winres` now embeds a VERSIONINFO resource (company, product, version,
+`just winres` embeds a VERSIONINFO resource (company, product, version,
 original filename) and an `asInvoker` manifest in all three executables. That makes
-a false positive less likely but does not rule one out. Two things do more,
-and both need the maintainer to act.
+a false positive less likely but does not rule one out. SofCat's releases are
+also Authenticode signed, as described under
+[Release signing in CI](#release-signing-in-ci). The rest of this page is for
+your own builds.
 
-## 1. Report the false positive (now, free, per build)
+## Report a false positive
 
 Submit the flagged file at <https://www.microsoft.com/wdsi/filesubmission>:
 choose "Software developer", "Incorrectly detected as malware/malicious", and
 give the detection name and the release tag. Microsoft usually answers within
 a few days and ships a definitions fix. A submission clears that one file hash,
-so each release that gets flagged has to be submitted again. Use it to
-unblock users now. It is not a lasting fix.
+so each build that gets flagged has to be submitted again. Use it to
+unblock users. It is not a lasting fix.
 
-## 2. Authenticode signing (the lasting fix)
+## Authenticode signing
 
 What signing changes:
 
@@ -35,24 +37,24 @@ What signing changes:
   inherits that identity's reputation, so ML false positives become much rarer.
   An unsigned build starts with no reputation every time.
 - **The UAC and SmartScreen prompts name a publisher** instead of "Unknown
-  publisher". Since 2024 an EV certificate no longer skips the SmartScreen
+  publisher". An EV certificate does not skip the SmartScreen
   warning outright. Every identity builds reputation through download volume.
 - A self-signed certificate changes nothing for other people's machines.
 
-Options (prices as of 2026; confirm before buying):
+Options. Prices change, so confirm them before buying:
 
 | Option | Cost | Effort | Notes |
 | --- | --- | --- | --- |
-| [Azure Trusted Signing](https://learn.microsoft.com/azure/trusted-signing/) | about US$10 a month (Basic) | Medium: Azure subscription, identity validation (organizations, or individuals in the US/Canada), a CI service principal | Microsoft-run CA, keys stay in Azure, short-lived certificates. `jsign --storetype TRUSTEDSIGNING` signs from Linux. Probably the best fit for this project. |
+| [Azure Trusted Signing](https://learn.microsoft.com/azure/trusted-signing/) | about US$10 a month (Basic) | Medium: Azure subscription, identity validation (organizations, or individuals in the US/Canada), a CI service principal | Microsoft-run CA, keys stay in Azure, short-lived certificates. `jsign --storetype TRUSTEDSIGNING` signs from Linux. SofCat's own releases use it. |
 | [SignPath Foundation](https://signpath.org/) (free for OSS) | Free | Medium: apply, the project must meet their OSS rules (Apache-2.0 qualifies), builds must come from GitHub Actions through their connector, with manual approval per release | The publisher shown is "SignPath Foundation", not you. |
-| OV code-signing certificate (Sectigo, DigiCert, SSL.com and others) | about US$200-400 a year | Medium to high: identity validation, and the key must live on an HSM or a cloud key service (CA/B rules since 2023), so CI needs the CA's cloud signing API | Shows your name. |
-| EV code-signing certificate | about US$300-600 a year | High: company validation, hardware or cloud key | No longer skips SmartScreen. Worth it only if a customer requires EV. |
+| OV code-signing certificate (Sectigo, DigiCert, SSL.com and others) | about US$200-400 a year | Medium to high: identity validation, and the key must live on an HSM or a cloud key service (a CA/Browser Forum rule), so CI needs the CA's cloud signing API | Shows your name. |
+| EV code-signing certificate | about US$300-600 a year | High: company validation, hardware or cloud key | Does not skip SmartScreen. Worth it only if a customer requires EV. |
 
 ## Windows signing hook: `SIGN_CMD`
 
 The build signs when `SIGN_CMD` is set and does nothing about signing when it
-is not, so a local `just build` or `just setup` still produces the unsigned
-files it always has. `SIGN_CMD` is a shell command line; the build appends the
+is not, so a local `just build` or `just setup` still produces unsigned
+files. `SIGN_CMD` is a shell command line; the build appends the
 file to sign and runs it.
 
 - `just build` runs it once, after the three `go build`s, with `build/<slug>.exe`,
@@ -128,15 +130,12 @@ SignPath would work differently: upload the unsigned artifacts with
 `signpath/github-action-submit-signing-request` and attest and release what
 comes back.
 
-No WDSI submission has been made; it needs the maintainer's account.
-
 ## macOS signing and notarization
 
 Gatekeeper refuses an app or pkg downloaded from the web unless it is signed
 with a Developer ID and notarized by Apple. `just build-macos` and `just pkg`
 sign and notarize when these variables are set and do nothing about signing
-when they are not, so a local `just pkg` still produces the unsigned pkg it
-always has. Each is also a `just` variable, like `SIGN_CMD`: `just
+when they are not, so a local `just pkg` still produces an unsigned pkg. Each is also a `just` variable, like `SIGN_CMD`: `just
 CODESIGN_IDENTITY=... pkg` is the same as setting the environment variable,
 and the command line wins when both are set.
 

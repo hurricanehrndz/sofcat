@@ -58,6 +58,7 @@ you set the [signing variables](/reference/code-signing/).
 Download `sofcat-<tag>.pkg` from the
 [Download](/download/) page. It is signed
 with a Developer ID and notarized, and built for Apple silicon (arm64) only.
+It needs macOS 13 or later.
 For an Intel Mac, build one on that Mac from a checkout with `just pkg` (see
 [Developer notes](/contributing/dev/) for the toolchain); it is unsigned
 unless you set the [signing variables](/reference/code-signing/). The release
@@ -86,7 +87,7 @@ The repository is plain YAML and files served over HTTP(S):
 - a manifest per machine or group says what it gets: required items, optional
   items for the self-service app, removals and updates;
 - catalogs say what exists, with each item's installer, version and checks;
-- the items themselves (`.msi`, `.exe`, `.ps1`, `.nupkg`, zips).
+- the items themselves (`.msi`, `.msix`, `.exe`, `.ps1`, `.nupkg`, zips).
 
 `makecatalogs` builds `catalogs/<catalog>.yaml` from the repository's
 `packages-info/*.yaml`, each named after its `item_name`. It is a standalone

@@ -6,7 +6,7 @@ description: Tooling, build, lint and test workflow for working on SofCat itself
 ## Environment
 
 Tools come from [mise](https://mise.jdx.dev): `mise install` reads `mise.toml` and
-provides Go 1.27, Node 24, `just`, `prek`, `golangci-lint`, `actionlint` with `shellcheck`, and
+provides Go, Node, `just`, `prek`, `golangci-lint`, `actionlint` with `shellcheck`, and
 `treefmt` with `gofumpt` and `yamlfmt`. Activate mise in your shell (or prefix
 commands with `mise exec --`).
 `just dev-setup` installs the frontend dependencies and the [prek](https://prek.j178.dev)
@@ -45,7 +45,8 @@ production build first, then embeds `ui/frontend/dist`. No installer is
 produced by `just build`; `just setup` builds the installer,
 `build/sofcat-<version>-x86_64-setup.exe`, with embala's `setup` format (see
 `installer/embala.toml` and the `install.lua` and `uninstall.lua` beside it).
-Nothing is signed.
+Neither recipe signs anything unless `SIGN_CMD` is set
+([Code signing](/reference/code-signing/)).
 
 ## Releases
 
@@ -54,7 +55,7 @@ Merging to `main` does not release. Push a version tag on a commit that is on
 a preview, cut as a GitHub prerelease:
 
 ```sh
-git fetch origin && git tag v5.1.0 origin/main && git push origin v5.1.0
+git fetch origin && git tag v<version> origin/main && git push origin v<version>
 ```
 
 Releases follow [semantic versioning](https://semver.org/) from v5.0.0, the
@@ -64,8 +65,8 @@ in the title or summary, since the release notes are generated from merged
 pull requests. A preview may break anything the release it leads to has not
 yet shipped.
 
-Build Release (`.github/workflows/build_release.yml`) builds and signs
-everything at that tag: on Linux the Windows executables, `setup.exe` and
+Build Release (`.github/workflows/build_release.yml`) refuses a tag whose
+commit is not on `main`. It builds and signs everything at that tag: on Linux the Windows executables, `setup.exe` and
 makecatalogs, and on a macOS runner the arm64 CLI, helper, app and pkg. A
 last job attaches the files below, with a signed provenance bundle
 (`sofcat-<tag>.sigstore.json`), to the release with notes generated from the
@@ -84,17 +85,14 @@ deploy again, so the [Download](/download/) page lists it.
 | `makecatalogs-<os>-<arch>.tar.gz`, `.zip` for Windows | One `makecatalogs` binary, for Linux, macOS and Windows on amd64 and arm64. |
 
 `just archive-windows`, `just archive-macos` and `just makecatalogs-archives`
-build the archives; the two that write a `.zip` need `zip`. It refuses a tag whose commit is not on `main`.
+build the archives; the two that write a `.zip` need `zip`.
 
-## Cross-compilation: pure Go, no cgo
+## Cross-compilation
 
-The agent is pure Go — it has **zero cgo** (all Windows syscalls go through
-`golang.org/x/sys/windows`), so the Windows agent cross-compiles from Linux with
-plain `CGO_ENABLED=0 GOOS=windows go build` (`just build`). `just check-xplat`
-proves the tree also still builds for `GOOS=linux`. There is **no zig and no cgo
-toolchain** in this environment, and none is needed.
+The three Windows executables are pure Go. Their Windows syscalls go through
+`golang.org/x/sys/windows`, so they cross-compile from Linux or macOS with
+`CGO_ENABLED=0 GOOS=windows go build`, which is what `just build` runs.
+`just check-xplat` checks that the tree still builds for `GOOS=linux`.
 
-**Standing convention:** should any future component ever require cgo for OS
-interfacing (e.g. a native MSI/registry reader we cross-distribute), `zig cc` is
-the designated cross C compiler — wire it *there*, in that component's build
-recipe, not here.
+The macOS build needs cgo and runs on a Mac only. The CLI links the System
+keychain, and the app uses Wails.
