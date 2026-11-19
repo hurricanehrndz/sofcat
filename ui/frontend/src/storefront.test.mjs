@@ -286,6 +286,19 @@ test("the banner height is one of four names with a rule each; anything else is 
   }
 });
 
+// The banner, the app bar and the heading row are pinned one under another by
+// heights main.ts measures; a height the stylesheet reads and nothing sets
+// would pin a row over the one above it.
+test("main.ts sets every height the pinned rows are placed by", () => {
+  const css = readFileSync(new URL("./style.css", import.meta.url), "utf8");
+  const shell = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
+  const read = new Set([...css.matchAll(/var\((--[a-z-]+-height)\b/g)].map(([, name]) => name));
+  assert.deepEqual([...read].sort(), ["--app-bar-height", "--banner-height", "--head-height"]);
+  for (const name of read) {
+    assert.ok(shell.includes(`setProperty("${name}"`), name);
+  }
+});
+
 // Without a banner the app bar is the only place the product is named, so it
 // keeps the name whatever app_bar_brand says.
 test("the app bar drops the mark or name only under a banner", () => {

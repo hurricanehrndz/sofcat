@@ -1669,6 +1669,44 @@ h2 {
 }
 
 /*
+ * The banner, the app bar and the page's heading row (on a list, the heading
+ * and the filters) stay at the top while the content scrolls under them.
+ * Each is pinned below those above it, whose heights main.ts measures
+ * (measurePinned). A window under 30rem tall pins nothing: at a high zoom
+ * the three would leave no room for the content.
+ */
+@media (min-height: 30rem) {
+  :root {
+    --head-top: calc(var(--banner-height, 0px) + var(--app-bar-height, 0px));
+
+    /* Keeps a focused card clear of the pinned rows. */
+    scroll-padding-top: calc(var(--head-top) + var(--head-height, 0px));
+  }
+
+  #banner,
+  .app-bar {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+
+  .app-bar {
+    top: var(--banner-height, 0px);
+  }
+
+  /* The row covers main's padding too, so no card shows beside or above it. */
+  .list-head,
+  .view-head {
+    position: sticky;
+    top: var(--head-top);
+    z-index: 1;
+    margin: -1.5rem -2rem 0;
+    padding: 1.5rem 2rem 0.75rem;
+    background: var(--bg);
+  }
+}
+
+/*
  * nav_placement: left (data-nav-placement on the root), in a window at least
  * 40rem wide: the app bar becomes a column down the window's left, under the
  * banner, with the product at its top, the pages and, at its foot, the
@@ -1791,6 +1829,25 @@ h2 {
   :root[data-nav-placement="left"] .strip {
     grid-row: 3;
     grid-column: 2;
+  }
+}
+
+/* Under the pinned banner the column starts below it, and so does the heading row. */
+@media (min-width: 40rem) and (min-height: 30rem) {
+  :root[data-nav-placement="left"] {
+    --head-top: var(--banner-height, 0px);
+  }
+
+  /* A grid item's z-index counts even unpositioned: the column goes under the banner. */
+  :root[data-nav-placement="left"] .app-bar {
+    position: static;
+    z-index: auto;
+  }
+
+  :root[data-nav-placement="left"] .app-bar-inner {
+    top: var(--banner-height, 0px);
+    min-height: min(100%, 100vh - var(--banner-height, 0px));
+    max-height: calc(100vh - var(--banner-height, 0px));
   }
 }
 

@@ -442,7 +442,10 @@ and repainted in place, so a bar eases rather than restarting.
 
 The app bar carries the connection state (a dot and the cached/stale message
 with Retry). Above it, the `#banner` section stays hidden until branding
-fills it (see Branding). "My items" is the same list filtered on the client to installed or
+fills it (see Branding). The banner, the app bar and the page's heading row
+(on a list, with the filters) stay at the top while the content scrolls:
+`style.css` pins each under those above it, by the heights `measurePinned`
+in `main.ts` sets on the root, except in a window under 30rem tall. "My items" is the same list filtered on the client to installed or
 managed items; it is not a separate service call. Each distinct item
 `section` is a nav tab before "My items": the branding `sections` first, in
 that order, then the rest alphabetically, then "Software" for items without

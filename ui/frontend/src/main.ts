@@ -332,6 +332,22 @@ const appBarEnd = need<HTMLDivElement>("#app-bar-end");
 const productMark = need<HTMLSpanElement>("#product-mark");
 let branding: BrandingView = brandingView(null);
 
+// style.css pins the banner, the app bar and the page's heading row under one
+// another, so it needs the height of each; a hidden one measures 0.
+const appBar = need<HTMLElement>(".app-bar");
+const pageHeads = [...document.querySelectorAll<HTMLElement>(".list-head, .view-head")];
+function measurePinned(): void {
+  const height = (el: HTMLElement): number => el.getBoundingClientRect().height;
+  const root = document.documentElement.style;
+  root.setProperty("--banner-height", `${height(brandBanner)}px`);
+  root.setProperty("--app-bar-height", `${height(appBar)}px`);
+  root.setProperty("--head-height", `${Math.max(...pageHeads.map(height))}px`);
+}
+const pinnedSizes = new ResizeObserver(measurePinned);
+for (const el of [brandBanner, appBar, ...pageHeads]) {
+  pinnedSizes.observe(el);
+}
+
 function logoImage(src: string, alt = ""): HTMLImageElement {
   const img = document.createElement("img");
   img.alt = alt;
