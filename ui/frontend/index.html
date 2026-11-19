@@ -46,6 +46,11 @@
           <p id="category-nav-heading" class="side-heading">Categories</p>
           <div id="category-list" class="category-list"></div>
         </nav>
+        <!-- The same for the names the list's items apply to. -->
+        <nav id="applies-to-nav" class="category-nav" aria-labelledby="applies-to-nav-heading" hidden>
+          <p id="applies-to-nav-heading" class="side-heading"></p>
+          <div id="applies-to-list" class="category-list"></div>
+        </nav>
         <!-- The bar's end: the admin's link for link_placement: app_bar, then
              the connection status, kept together when the bar wraps. -->
         <div id="app-bar-end" class="app-bar-end">
@@ -79,6 +84,10 @@
                 <select id="category" name="category">
                   <option value="all">All categories</option>
                 </select>
+              </p>
+              <p id="applies-to-field" hidden>
+                <label for="applies-to"></label>
+                <select id="applies-to" name="applies-to"></select>
               </p>
             </form>
           </search>

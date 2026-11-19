@@ -11,6 +11,7 @@ import {
 } from "./cache.ts";
 import { mountDemoBar, scopedStorage } from "./demo.ts";
 import {
+  ALL_APPLIES_TO,
   ALL_CATEGORIES,
   REQUESTED_STATE,
   actionLabel,
@@ -24,6 +25,7 @@ import {
   cancelTitle,
   cardProgress,
   cardStatus,
+  appliesToChoices,
   categories,
   deriveAction,
   enteringItems,
@@ -125,6 +127,12 @@ const primaryNav = need<HTMLElement>("#primary-nav");
 const navMarker = need<HTMLSpanElement>("#nav-marker");
 const categoryNav = need<HTMLElement>("#category-nav");
 const categoryList = need<HTMLDivElement>("#category-list");
+const appliesToSelect = need<HTMLSelectElement>("#applies-to");
+const appliesToField = need<HTMLElement>("#applies-to-field");
+const appliesToLabel = need<HTMLLabelElement>("#applies-to-field label");
+const appliesToNav = need<HTMLElement>("#applies-to-nav");
+const appliesToHeading = need<HTMLElement>("#applies-to-nav-heading");
+const appliesToList = need<HTMLDivElement>("#applies-to-list");
 const listHead = need<HTMLDivElement>(".list-head");
 const resultStatus = need<HTMLParagraphElement>("#result-status");
 const grid = need<HTMLDivElement>("#item-grid");
@@ -416,12 +424,15 @@ function applyBranding(next: BrandingView): void {
   root.dataset.filterPlacement = next.filterPlacement;
   root.dataset.navPlacement = next.navPlacement;
   root.dataset.categoryFilter = next.categoryFilter;
+  appliesToLabel.textContent = next.appliesToFilterLabel;
+  appliesToHeading.textContent = next.appliesToFilterLabel;
   root.dataset.appBarBrand = next.appBarBrand;
   root.dataset.progress = next.progress;
   // The tab order and the Software tab's heading are branding too, and so
   // are how a card opens its item and where running work shows.
   renderNav();
   renderCategories();
+  renderAppliesTo();
   renderGrid();
   placeItemView();
   renderDetail();
@@ -567,32 +578,61 @@ function renderCategories(): void {
   renderCategoryNav();
 }
 
-let categoriesDrawn = "";
+/**
+ * renderAppliesTo rebuilds the select of names the list's items apply to.
+ * Like the category, a choice the new list also offers is kept, in whatever
+ * case that list spells it.
+ */
+function renderAppliesTo(): void {
+  const selected = appliesToSelect.value;
+  const names = appliesToChoices(listedItems());
+  appliesToField.hidden = names.length === 0;
+  appliesToSelect.replaceChildren(
+    ...[ALL_APPLIES_TO, ...names].map((name) => {
+      const option = document.createElement("option");
+      option.value = name;
+      option.textContent = name === ALL_APPLIES_TO ? "All" : name;
+      return option;
+    }),
+  );
+  appliesToSelect.value =
+    names.find((name) => name.toLowerCase() === selected.toLowerCase()) ?? ALL_APPLIES_TO;
+  renderCategoryNav();
+}
+
+/** The options each button group was last drawn from. */
+const categoriesDrawn = { key: "" };
+const appliesToDrawn = { key: "" };
 
 /**
- * renderCategoryNav mirrors the Category select as a list of buttons in a
- * left bar (branding category_filter: list): one per option, the chosen one
- * marked. The select stays the one place the choice is kept. The buttons are
- * rebuilt only when the categories change, so a render does not take focus
- * off them; a list with no categories has no list, and neither does a page
+ * mirrorSelect mirrors a filter select as a list of buttons in a left bar
+ * (branding category_filter: list): one per option, the chosen one marked.
+ * The select stays the one place the choice is kept. The buttons are
+ * rebuilt only when the options change, so a render does not take focus
+ * off them; a select with no choices has no list, and neither does a page
  * that hides the list, Activity or an item's detail page.
  */
-function renderCategoryNav(): void {
-  const options = [...categorySelect.options].map((option) => [option.value, option.textContent ?? ""]);
-  categoryNav.hidden = options.length < 2 || viewHome.hidden;
-  const drawn = JSON.stringify(options);
-  if (drawn !== categoriesDrawn) {
-    categoriesDrawn = drawn;
-    categoryList.replaceChildren(
+function mirrorSelect(
+  select: HTMLSelectElement,
+  nav: HTMLElement,
+  list: HTMLElement,
+  drawn: { key: string },
+): void {
+  const options = [...select.options].map((option) => [option.value, option.textContent ?? ""]);
+  nav.hidden = options.length < 2 || viewHome.hidden;
+  const key = JSON.stringify(options);
+  if (key !== drawn.key) {
+    drawn.key = key;
+    list.replaceChildren(
       ...options.map(([value, label]) => {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "nav-link category-link";
-        button.dataset.category = value;
+        button.dataset.value = value;
         button.textContent = label;
         button.addEventListener("click", () => {
-          if (categorySelect.value !== value) {
-            categorySelect.value = value;
+          if (select.value !== value) {
+            select.value = value;
             filterChanged();
           }
         });
@@ -600,13 +640,18 @@ function renderCategoryNav(): void {
       }),
     );
   }
-  for (const button of categoryList.querySelectorAll<HTMLButtonElement>("button")) {
-    button.setAttribute("aria-current", String(button.dataset.category === categorySelect.value));
+  for (const button of list.querySelectorAll<HTMLButtonElement>("button")) {
+    button.setAttribute("aria-current", String(button.dataset.value === select.value));
   }
 }
 
+function renderCategoryNav(): void {
+  mirrorSelect(categorySelect, categoryNav, categoryList, categoriesDrawn);
+  mirrorSelect(appliesToSelect, appliesToNav, appliesToList, appliesToDrawn);
+}
+
 /**
- * filterChanged redraws the list for a new category. The grid is emptied
+ * filterChanged redraws the list for a new filter choice. The grid is emptied
  * first, so the cards of the new selection all ease in, one after another.
  */
 function filterChanged(): void {
@@ -833,7 +878,7 @@ function renderGrid(): void {
   const mine = currentView === "mine";
   const tab = currentTab();
   const listed = listedItems();
-  const shown = visibleItems(listed, searchInput.value, categorySelect.value);
+  const shown = visibleItems(listed, searchInput.value, categorySelect.value, appliesToSelect.value);
   // The Software tab keeps the admin's heading; a section tab is headed by its name.
   homeHeading.textContent = mine
     ? "My items"
@@ -1080,6 +1125,7 @@ function render(): void {
   renderBanner();
   renderNav();
   renderCategories();
+  renderAppliesTo();
   renderGrid();
   renderDetail();
   renderStrip();
@@ -1635,6 +1681,7 @@ function showView(next: View, tab?: string): void {
     // cards all ease in, those it shares with the old one too.
     grid.replaceChildren();
     renderCategories();
+    renderAppliesTo();
     renderGrid();
   }
 }
@@ -1670,6 +1717,7 @@ brandLink.addEventListener("click", () => {
 filtersForm.addEventListener("submit", (event) => event.preventDefault());
 searchInput.addEventListener("input", renderGrid);
 categorySelect.addEventListener("change", filterChanged);
+appliesToSelect.addEventListener("change", filterChanged);
 retryButton.addEventListener("click", () => {
   view = { ...view, source: view.items.length ? "cache" : "loading" };
   render();

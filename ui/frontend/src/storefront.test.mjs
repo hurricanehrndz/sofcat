@@ -102,6 +102,13 @@ test("the item's own install and removal phases use its in-progress labels", () 
   assert.equal(cardProgress(item({}), [statusRecord(wire({ state: "Installing" }))], "active").label, "Installing…");
 });
 
+test("the applies-to filter's label is the admin's when set, else Works in", () => {
+  assert.equal(brandingView({ appliesToFilterLabel: "Harness" }).appliesToFilterLabel, "Harness");
+  for (const payload of [null, {}, { appliesToFilterLabel: " " }, { appliesToFilterLabel: 3 }]) {
+    assert.equal(brandingView(payload).appliesToFilterLabel, "Works in", JSON.stringify(payload));
+  }
+});
+
 test("the list heading is the admin's when set, else Available software", () => {
   assert.equal(brandingView({ listHeading: "Skills and plugins" }).listHeading, "Skills and plugins");
   assert.equal(brandingView({ listHeading: "<i>x</i>" }).listHeading, "<i>x</i>");

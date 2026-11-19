@@ -62,6 +62,8 @@ type Branding struct {
 	BackgroundText   string `json:"backgroundText"`
 	// ListHeading replaces the UI's "Available software" heading when set.
 	ListHeading string `json:"listHeading"`
+	// AppliesToFilterLabel replaces the UI's "Works in" label on the applies-to filter when set.
+	AppliesToFilterLabel string `json:"appliesToFilterLabel"`
 	// Sections is the storefront tab order; sections it omits follow it.
 	Sections []string `json:"sections,omitempty"`
 	// TitleSize and TaglineSize are one of FontSizes, or "" for the UI's
@@ -168,8 +170,9 @@ func resolve(in config.Branding) Branding {
 		HelpURL:   linkURL(in.LinkURL),
 		HelpLabel: plainText(in.LinkLabel, maxLinkLabel),
 
-		ListHeading: plainText(in.ListHeading, maxHeading),
-		Sections:    sectionList(in.Sections),
+		ListHeading:          plainText(in.ListHeading, maxHeading),
+		AppliesToFilterLabel: plainText(in.AppliesToFilterLabel, maxLinkLabel),
+		Sections:             sectionList(in.Sections),
 	}
 	if accent := strings.TrimSpace(in.Accent); accentPattern.MatchString(accent) {
 		out.Accent = strings.ToLower(accent)

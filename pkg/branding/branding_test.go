@@ -46,6 +46,17 @@ func TestResolveListHeading(t *testing.T) {
 	}
 }
 
+// The applies-to filter label is admin text like the list heading, capped
+// at the link label length.
+func TestResolveAppliesToFilterLabel(t *testing.T) {
+	if got := resolve(config.Branding{AppliesToFilterLabel: "  Works\nwith  "}).AppliesToFilterLabel; got != "Workswith" {
+		t.Errorf("label %q kept control characters or padding", got)
+	}
+	if n := len([]rune(resolve(config.Branding{AppliesToFilterLabel: strings.Repeat("x", maxLinkLabel+9)}).AppliesToFilterLabel)); n != maxLinkLabel {
+		t.Errorf("label has %d runes, want the %d cap", n, maxLinkLabel)
+	}
+}
+
 // Each section name is a tab label, so it is validated like a heading; an
 // empty or repeated name would make an empty or duplicate tab.
 func TestResolveSections(t *testing.T) {

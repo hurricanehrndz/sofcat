@@ -46,6 +46,11 @@ export class Branding {
     "listHeading": string;
 
     /**
+     * AppliesToFilterLabel replaces the UI's "Works in" label on the applies-to filter when set.
+     */
+    "appliesToFilterLabel": string;
+
+    /**
      * Sections is the storefront tab order; sections it omits follow it.
      */
     "sections"?: string[];
@@ -141,6 +146,9 @@ export class Branding {
         if (!("listHeading" in $$source)) {
             this["listHeading"] = "";
         }
+        if (!("appliesToFilterLabel" in $$source)) {
+            this["appliesToFilterLabel"] = "";
+        }
         if (!("titleSize" in $$source)) {
             this["titleSize"] = "";
         }
@@ -185,10 +193,10 @@ export class Branding {
      * Creates a new Branding instance from a string or object.
      */
     static createFrom($$source: any = {}): Branding {
-        const $$createField13_0 = $$createType0;
+        const $$createField14_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("sections" in $$parsedSource) {
-            $$parsedSource["sections"] = $$createField13_0($$parsedSource["sections"]);
+            $$parsedSource["sections"] = $$createField14_0($$parsedSource["sections"]);
         }
         return new Branding($$parsedSource as Partial<Branding>);
     }
