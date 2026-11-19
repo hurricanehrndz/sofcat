@@ -4,6 +4,7 @@
 package admin
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -38,6 +39,7 @@ type CatalogSet struct {
 	// cannot check, an invalid placements.yaml, and manifests
 	// whose conditional_items conditions do not compile.
 	// Unusable files under <repo>/conditions are listed too.
+	// So is an icon_name whose file under <repo>/icons is missing or unusable.
 	// A normal makecatalogs run warns about them and carries on; --check fails on them.
 	Problems []string
 	// Conditions are the repo's condition scripts, for the index WriteCatalogs
@@ -161,6 +163,7 @@ func CollectCatalogs(repoPath string) (CatalogSet, error) { //nolint:gocognit //
 		}
 		set.Problems = append(set.Problems, checkDependsCheck(packageInfoPath, parsed.Item.DependsCheck)...)
 		set.Problems = append(set.Problems, checkActionLabels(packageInfoPath, parsed.Item.CustomActionLabels)...)
+		set.Problems = append(set.Problems, checkIcon(repoPath, packageInfoPath, &parsed.Item)...)
 		if parsed.Item.Installer.Type == "zip" {
 			set.Problems = append(set.Problems, checkZipItem(packageInfoPath, parsed.Item.Installer, placements)...)
 		}
@@ -298,6 +301,37 @@ func checkActionLabels(path string, labels map[string]string) []string {
 		}
 	}
 	return problems
+}
+
+// checkIcon reports an icon_name the storefront could not show: a name that
+// leaves icons/, a file that is missing from <repo>/icons, too large or not a
+// PNG or JPEG, or an icon_hash that is not the file's. It fills in an empty
+// icon_hash, which is how an agent knows its cached copy is current.
+func checkIcon(repoPath, path string, item *catalog.Item) []string {
+	name := strings.TrimSpace(item.IconName)
+	if name == "" {
+		return nil
+	}
+	if !catalog.ValidIconName(name) {
+		return []string{fmt.Sprintf("%s: icon_name %q is not a path under %s/", path, name, catalog.IconsDir)}
+	}
+	iconPath := filepath.Join(repoPath, catalog.IconsDir, filepath.FromSlash(name))
+	data, err := os.ReadFile(iconPath)
+	switch {
+	case err != nil:
+		return []string{fmt.Sprintf("%s: icon_name %q: %v", path, name, err)}
+	case len(data) > catalog.MaxIconBytes:
+		return []string{fmt.Sprintf("%s: icon %s is %d bytes; the limit is %d", path, iconPath, len(data), catalog.MaxIconBytes)}
+	case catalog.IconType(data) == "":
+		return []string{fmt.Sprintf("%s: icon %s is not a PNG or JPEG", path, iconPath)}
+	}
+	sum := fmt.Sprintf("%x", sha256.Sum256(data))
+	if item.IconHash == "" {
+		item.IconHash = sum
+	} else if !strings.EqualFold(strings.TrimSpace(item.IconHash), sum) {
+		return []string{fmt.Sprintf("%s: icon_hash is not the sha256 of %s (%s)", path, iconPath, sum)}
+	}
+	return nil
 }
 
 // checkZipItem reports what makes a zip installer unusable: no variants, a

@@ -177,8 +177,8 @@ Wails needs cgo on macOS. On the Mac itself, `just lint` covers the whole tree.
   platform, so keep protocol and runner code portable and its tests running on Linux.
 - Keep `cmd/sofcat` service-message commands updated in lockstep with SofCat UI protocol changes for testing/debugging.
 - `ListOptionalInstalls` should return JSON-safe subset DTOs, not full internal item objects.
-- The bound Wails surface is exactly six methods, `ListOptionalInstalls`, `InstallItem`,
-  `RemoveItem`, `WatchOperation`, `GetBranding`, and `CancelOperation`, and one
+- The bound Wails surface is exactly seven methods, `ListOptionalInstalls`, `InstallItem`,
+  `RemoveItem`, `WatchOperation`, `GetBranding`, `CancelOperation`, and `GetItemIcon`, and one
   `sofcat:operation-status` event; the service's `getServiceInfo` and `run` are not bound.
   Progress percentages are per item, not aggregate; only `Succeeded`, `Failed`,
   `Deferred`, and `Canceled` end an operation, and

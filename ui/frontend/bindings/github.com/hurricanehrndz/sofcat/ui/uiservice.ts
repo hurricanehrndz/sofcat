@@ -37,18 +37,29 @@ export function GetBranding(): $CancellablePromise<branding$0.Branding> {
 }
 
 /**
+ * GetItemIcon returns the icon the service cached under iconName, an item's
+ * iconName; both fields are empty when it holds none. The UI never fetches an
+ * icon itself.
+ */
+export function GetItemIcon(iconName: string): $CancellablePromise<service$0.ItemIcon> {
+    return $Call.ByID(4037101123, iconName).then(($result: any) => {
+        return $$createType1($result);
+    });
+}
+
+/**
  * InstallItem selects itemName, only in placement when one is named; "" is
  * every placement.
  */
 export function InstallItem(itemName: string, placement: string): $CancellablePromise<service$0.AcceptedOperation> {
     return $Call.ByID(1746250097, itemName, placement).then(($result: any) => {
-        return $$createType1($result);
+        return $$createType2($result);
     });
 }
 
 export function ListOptionalInstalls(): $CancellablePromise<service$0.OptionalInstallItem[]> {
     return $Call.ByID(2869388195).then(($result: any) => {
-        return $$createType3($result);
+        return $$createType4($result);
     });
 }
 
@@ -57,7 +68,7 @@ export function ListOptionalInstalls(): $CancellablePromise<service$0.OptionalIn
  */
 export function RemoveItem(itemName: string, placement: string): $CancellablePromise<service$0.AcceptedOperation> {
     return $Call.ByID(153207584, itemName, placement).then(($result: any) => {
-        return $$createType1($result);
+        return $$createType2($result);
     });
 }
 
@@ -67,6 +78,7 @@ export function WatchOperation(operationID: string): $CancellablePromise<void> {
 
 // Private type creation functions
 const $$createType0 = branding$0.Branding.createFrom;
-const $$createType1 = service$0.AcceptedOperation.createFrom;
-const $$createType2 = service$0.OptionalInstallItem.createFrom;
-const $$createType3 = $Create.Array($$createType2);
+const $$createType1 = service$0.ItemIcon.createFrom;
+const $$createType2 = service$0.AcceptedOperation.createFrom;
+const $$createType3 = service$0.OptionalInstallItem.createFrom;
+const $$createType4 = $Create.Array($$createType3);

@@ -87,7 +87,8 @@ The repository is plain YAML and files served over HTTP(S):
 - a manifest per machine or group says what it gets: required items, optional
   items for the self-service app, removals and updates;
 - catalogs say what exists, with each item's installer, version and checks;
-- the items themselves (`.msi`, `.msix`, `.exe`, `.ps1`, `.nupkg`, zips).
+- the items themselves (`.msi`, `.msix`, `.exe`, `.ps1`, `.nupkg`, zips);
+- optionally `icons/`, the images the storefront shows for items that name one.
 
 `makecatalogs` builds `catalogs/<catalog>.yaml` from the repository's
 `packages-info/*.yaml`, each named after its `item_name`. It is a standalone

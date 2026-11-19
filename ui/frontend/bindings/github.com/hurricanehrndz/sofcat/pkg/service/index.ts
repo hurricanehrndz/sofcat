@@ -3,6 +3,7 @@
 
 export {
     AcceptedOperation,
+    ItemIcon,
     OptionalInstallItem,
     OptionalInstallPlacement
 } from "./models.js";

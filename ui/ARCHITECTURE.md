@@ -8,7 +8,7 @@ Any local user can reach the service, so it authorizes each mutation by item, no
 
 The self-serve manifest is per machine, as in Munki, so on a shared machine (fast user switching, Remote Desktop Services) every user sees one self-service selection. The service also authorizes by caller, so one user cannot undo another's request. It records who selected each item in the self-serve manifest's `selected_by` (item name to SID on Windows, uid elsewhere), from the connection, when `installItem` selects an item that has none recorded; a second user selecting the same item succeeds and leaves the record alone. `removeItem`, and an `installItem` for an item waiting for removal (which takes the removal back), are accepted only from that selector or a local administrator; `cancelOperation` only from the user who requested the operation or an administrator. Anyone else gets `not_authorized`, before anything changes. An administrator is a caller whose pipe client token has `BUILTIN\Administrators` enabled (a UAC-filtered token, where the group is deny-only, is not one); on macOS uid 0 or a member of group `admin`. A caller the service cannot resolve is never an administrator and matches no recorded user. An item with no recorded selector (a `default_installs` item, or one selected before selectors were recorded) stays removable by anyone. The selector is cleared when the item's removal completes, in the same file update that prunes its `managed_uninstalls` entry, so the next user to select it becomes its selector; a cancel that puts back the selection also puts back the selector it had. Streaming is not owned: anyone who knows an operation ID can stream it. IDs are therefore 128 random bits from `crypto/rand`, hex encoded, which no other user can guess.
 
-`UIService` binds exactly six calls backed by the shared `pkg/service.Client`:
+`UIService` binds exactly seven calls backed by the shared `pkg/service.Client`:
 
 1. `ListOptionalInstalls`
 2. `InstallItem`
@@ -16,6 +16,7 @@ The self-serve manifest is per machine, as in Munki, so on a shared machine (fas
 4. `WatchOperation`
 5. `GetBranding`
 6. `CancelOperation`
+7. `GetItemIcon`
 
 `WatchOperation` uses Wails' application-lifetime context and emits typed records only on `sofcat:operation-status`. The frontend imports generated calls through `frontend/src/wails-api.ts`.
 
@@ -56,6 +57,7 @@ answer echoes the `id` with a `result` or an `error`:
 | `getServiceInfo` | none | `{version, protocolVersion: "2.0", apiVersion: 1, capabilities: [methods], busy, uptimeSeconds}` |
 | `listOptionalInstalls` | none | `{items: [OptionalInstallItem]}` (shape below) |
 | `getBranding` | none | `Branding`: `{title, tagline, helpUrl, helpLabel, linkPlacement, linkPosition, accent, logoMime, logoBase64, backgroundMime, backgroundBase64, backgroundText, listHeading, appliesToFilterLabel, titleSize, taglineSize, contentWidth, filterPlacement, navPlacement, categoryFilter, appBarBrand, bannerStyle, bannerAlign, bannerHeight, itemView, progress, sections?}` |
+| `getItemIcon` | `{iconName}` | `{mime, base64}`, both empty when the service holds no icon by that name |
 | `installItem` | `{itemName, placement?}` | `AcceptedOperation` |
 | `removeItem` | `{itemName, placement?}` | `AcceptedOperation` |
 | `cancelOperation` | `{operationId}` | `{canceled: true}` |
@@ -64,7 +66,7 @@ answer echoes the `id` with a `result` or an `error`:
 | `listUserPlacements` | none | `{entries: [{item, version, placement, path, archive, hash, treeHash, held, managed}], facts: {...}, placements: {name: spec}}` |
 | `reportUserPlacements` | `{results: [{item, placement, outcome, error?}]}` | `{}` |
 
-`getServiceInfo`, `getBranding`, the two mutations and `cancelOperation` skip the
+`getServiceInfo`, `getBranding`, `getItemIcon`, the two mutations and `cancelOperation` skip the
 command queue and answer while a managed run is under way;
 `listOptionalInstalls` and the run that `run` asks for wait behind it. `apiVersion` changes only for a breaking
 change to these methods; additions show up in `capabilities`.
@@ -78,9 +80,18 @@ timeout. Any other
 command-line run fails at once with "another managed run is in progress".
 
 An `OptionalInstallItem` is `{itemName, displayName, version, catalog,
-description?, category?, section?, developer?, iconName?, restartAction?, isManaged,
+description?, category?, section?, developer?, iconName?, iconHash?, restartAction?, isManaged,
 isRequired, isInstalled, status, statusUpdatedAtUtc, lastOperationId?,
-actionLabels?, appliesTo?, placements?}`. `actionLabels` holds only the label keys
+actionLabels?, appliesTo?, placements?}`. `iconHash` is the sha256 of the icon the
+service holds for `iconName`, and is absent when it holds none. Each list call
+fills the service's icon cache (`icons` in its data directory) from the
+repository's `icons/<icon_name>`: it fetches an icon that is missing, that is
+not the one the catalog's `icon_hash` names or that, without an `icon_hash`,
+is a day old, keeps only a PNG or JPEG of at most 512 KiB, and keeps the copy
+it has when a fetch fails. `getItemIcon` reads that cache and never the
+network. The UI asks for an item's icon only when it has an `iconHash`, one
+call at a time, keeps the images for the session keyed by name and hash, and
+shows the monogram until one arrives. `actionLabels` holds only the label keys
 (`install`, `installing`, `installed`, `remove`, `removing`, `update`,
 `cancel`, `pending_install`, `pending_remove`, `applies_to`) that resolved: from the catalog item's `custom_action_labels`, else
 from the first of its placements with a variant on this OS, in
@@ -681,8 +692,10 @@ Structured `slog` diagnostics are opt-in through `SOFCAT_UI_DEBUG=1` or `SOFCAT_
 - Activity keeps 100 local display records and is not an audit trail. Upgrade only
   when an authoritative history operation exists.
 - A closed app does not resume a stream; the next list refresh converges state.
-- Icons are generated locally (monogram or category glyph); no remote icon
-  transport exists.
+- An item without an icon the service holds gets a locally generated one
+  (monogram or category glyph). The UI never fetches an icon itself, and keeps
+  the ones the service hands over only for the session, so a storefront opened
+  while the service is unreachable shows monograms.
 - `OperationStatus` is hand-typed in `frontend/src/api.ts` because bindings are
   generated with `-noevents`, so the binding-diff gate cannot catch drift in it.
   Upgrade only when bindings are generated with events.

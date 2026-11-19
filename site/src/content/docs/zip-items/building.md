@@ -23,6 +23,7 @@ item-trees/<item_name>/   the item's files, at the root
 templates/                optional: placement file templates
 manifests/                optional
 conditions/               optional: fact scripts the repository delivers
+icons/                    optional: the icons the items' icon_name keys name
 packages-info/            optional: package-info files written by hand
 ```
 

@@ -79,6 +79,20 @@ func (c *Client) GetBranding(ctx context.Context) (branding.Branding, error) {
 	return result, nil
 }
 
+// GetItemIcon returns the icon the service cached under iconName, an item's
+// icon_name. Both fields are empty when it holds none.
+func (c *Client) GetItemIcon(ctx context.Context, iconName string) (ItemIcon, error) {
+	iconName = strings.TrimSpace(iconName)
+	if iconName == "" {
+		return ItemIcon{}, errors.New("getItemIcon requires iconName")
+	}
+	var result ItemIcon
+	if err := c.call(ctx, methodGetItemIcon, iconParams{IconName: iconName}, &result, nil); err != nil {
+		return ItemIcon{}, err
+	}
+	return result, nil
+}
+
 // InstallItem selects itemName, in placement only when one is named (see
 // ui/ARCHITECTURE.md, "Protocol"); "" is every placement.
 func (c *Client) InstallItem(ctx context.Context, itemName, placement string) (AcceptedOperation, error) {

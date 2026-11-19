@@ -649,6 +649,15 @@ func (sr *serviceRunner) dispatch(ctx context.Context, conn clientConn, req rpcR
 		}
 		return resp.Branding, nil
 
+	case methodGetItemIcon:
+		// A read of the icon cache the list call filled, so it skips the
+		// command queue like getBranding.
+		params, err := decodeParams[iconParams](req.Params)
+		if err != nil || strings.TrimSpace(params.IconName) == "" {
+			return nil, newError(codeInvalidParams, req.Method+" requires params.iconName", "")
+		}
+		return readIcon(sr.config(), params.IconName), nil
+
 	case methodInstallItem, methodRemoveItem:
 		return sr.dispatchMutation(ctx, conn, req, logger)
 

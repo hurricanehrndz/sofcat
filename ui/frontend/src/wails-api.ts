@@ -10,6 +10,7 @@ export const api: SofCatApi = {
   watchOperation: (operationId) => UIService.WatchOperation(operationId),
   cancelOperation: (operationId) => UIService.CancelOperation(operationId),
   getBranding: () => UIService.GetBranding(),
+  getItemIcon: (iconName) => UIService.GetItemIcon(iconName),
   openExternal: (url) => Browser.OpenURL(url),
   onOperationStatus(handler) {
     Events.On("sofcat:operation-status", (event) => {

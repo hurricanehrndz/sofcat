@@ -42,6 +42,10 @@ these its own ACL.
 - `Data\nupkg\` holds the kept copy of each installed nupkg, whose
   before-modify and uninstall scripts run as SYSTEM
   ([Nupkg items](/guides/nupkg-items/#the-kept-copy)).
+- `Data\icons\` holds the item icons the service fetched from the
+  repository's `icons/` for the storefront
+  ([Catalog](/customization/catalog/#icon_name)). Users do not read it: the
+  service hands each image over.
 - `Data\sofcat.log` may name paths and items.
 
 `Data\run.lock` is the lock a managed run holds for its whole length. It is

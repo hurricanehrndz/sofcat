@@ -123,12 +123,36 @@ Search matches it.
 
 ### `icon_name`
 
-The catalog carries `icon_name` through to the item list, but the storefront
-does not fetch or serve icons. It draws each item's icon locally, as a
-monogram of one or two initials in a tinted tile that stays the same for the
-item, and falls back to the category's glyph when the name has no letters.
-SofCat has no remote icon transport, so an `icon_name` has no effect on the
-look today.
+The item's own icon: a PNG or JPEG of at most 512 KiB in the repository's
+`icons/` directory, named by its path under it.
+
+```yaml
+icon_name: firefox.png
+```
+
+The service fetches `<url>/icons/firefox.png` with the repository's
+credentials when the storefront lists the item, keeps it in `icons` in its
+[data directory](/reference/data-directory/) and hands it to the storefront,
+which never fetches anything itself. The icon shows on the card, the detail
+page, the progress strip and the Activity list.
+
+An item without an `icon_name`, or whose icon the service could not fetch or
+would not accept, gets a monogram: one or two initials in a tinted tile that
+stays the same for the item, or the category's glyph when the name has no
+letters.
+
+### `icon_hash`
+
+The sha256 of the icon file. `makecatalogs` fills it in from
+`icons/<icon_name>`, so leave it out of the package-info file. With it the
+service fetches an icon again only when the hash changes, and refuses a file
+that does not match. In a catalog written without it the service refreshes
+the icon once its copy is a day old.
+
+`makecatalogs -check` fails on an `icon_name` whose file is missing from
+`icons/`, is not a PNG or JPEG, is over the size limit or does not match a
+hand-written `icon_hash`, and `makecatalogs build` copies the source's
+`icons/` into the repository it builds.
 
 ## Branding keys
 

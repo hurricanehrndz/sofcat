@@ -14,8 +14,9 @@ const buildUsage = `Usage: makecatalogs build <source> -o <out> [--location-pref
 
 Builds a repository in <out> from <source>: placements.yaml, items/*.yaml
 (item files with placements:, as zip-item reads them), item-trees/<item_name>/
-(one tree per item) and the optional templates/, manifests/, conditions/ and
-packages-info/, which are copied as they are. It packs each item's zips
+(one tree per item) and the optional templates/, manifests/, conditions/,
+icons/ (the items' icon_name files) and packages-info/, which are copied as
+they are. It packs each item's zips
 under <out>/<prefix>/, writes <out>/packages-info/<item_name>.yaml, compiles
 the catalogs and runs the -check pass. It plans every item before it touches
 <out>, then wipes <out> down to an empty catalogs/ directory and rebuilds
@@ -27,7 +28,7 @@ Options:
 `
 
 // copiedDirs are the source directories build copies into <out> as they are.
-var copiedDirs = []string{"templates", "manifests", "conditions", "packages-info"}
+var copiedDirs = []string{"templates", "manifests", "conditions", "icons", "packages-info"}
 
 // plannedItem is one item of a build, checked and hashed, waiting to be packed.
 type plannedItem struct {

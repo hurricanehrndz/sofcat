@@ -1,11 +1,12 @@
 import type { Branding } from "../bindings/github.com/hurricanehrndz/sofcat/pkg/branding/models.js";
 import type {
   AcceptedOperation,
+  ItemIcon,
   OptionalInstallItem,
   OptionalInstallPlacement,
 } from "../bindings/github.com/hurricanehrndz/sofcat/pkg/service/models.js";
 
-export type { AcceptedOperation, Branding, OptionalInstallItem, OptionalInstallPlacement };
+export type { AcceptedOperation, Branding, ItemIcon, OptionalInstallItem, OptionalInstallPlacement };
 
 // ponytail: OperationStatus is hand-typed because the committed bindings are
 // generated with -noevents, so no generated model exists for the event payload.
@@ -40,6 +41,8 @@ export type SofCatApi = {
   cancelOperation(operationId: string): Promise<void>;
   onOperationStatus(handler: (status: OperationStatus) => void): void;
   getBranding(): Promise<Branding>;
+  /** getItemIcon resolves the icon the service holds under an item's iconName, with empty fields when it holds none. */
+  getItemIcon(iconName: string): Promise<ItemIcon>;
   /** openExternal opens an http(s) URL in the system browser, never in the WebView. */
   openExternal(url: string): Promise<void>;
 };

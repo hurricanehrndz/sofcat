@@ -142,3 +142,34 @@ func TestGetOptionalItemsNotInstallable(t *testing.T) {
 		t.Errorf("addServiceManagedInstall(Nowhere) error = %v, want errItemNotAvailable", err)
 	}
 }
+
+// The list call is what fills the cache: an item with an icon_name comes
+// back with the hash of the icon the storefront can then ask for.
+func TestGetOptionalItemsCachesIcons(t *testing.T) {
+	cfg := config.Configuration{AppDataPath: filepath.Clean(t.TempDir()), CachePath: t.TempDir(), Catalogs: []string{"base"}, URL: "https://repo.example/"}
+	body := testPNG
+	var fail error
+	stubIconGet(t, &body, &fail)
+	origManifest, origCatalog := manifestGet, catalogGet
+	t.Cleanup(func() { manifestGet, catalogGet = origManifest, origCatalog })
+	manifestGet = func(config.Configuration) ([]manifest.Item, []string, error) {
+		return []manifest.Item{{Name: "base", OptionalInstalls: []string{"Plain", "Tool"}}}, nil, nil
+	}
+	catalogGet = func(config.Configuration) (map[int]map[string]catalog.Item, error) {
+		return map[int]map[string]catalog.Item{1: {
+			"Plain": {Name: "Plain"},
+			"Tool":  {Name: "Tool", IconName: "tool.png"},
+		}}, nil
+	}
+
+	items, err := getOptionalItems(cfg, peer{})
+	if err != nil || len(items) != 2 {
+		t.Fatalf("getOptionalItems = %v, %v", items, err)
+	}
+	if items[0].IconHash != "" || items[1].IconName != "tool.png" || items[1].IconHash != iconSum([]byte(testPNG)) {
+		t.Errorf("icon hashes = %q and %q, want none and the PNG's", items[0].IconHash, items[1].IconHash)
+	}
+	if got := readIcon(cfg, "tool.png"); got.Mime != "image/png" {
+		t.Errorf("the listed icon is not in the cache: %#v", got)
+	}
+}

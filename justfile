@@ -432,12 +432,13 @@ manual-test-server:
 # Manual-test assets under build/manual-test/ and VM scripts stamped with the
 # server URL (auto-detected from the default route when base_url is empty).
 bootstrap base_url="": build manual-test-server
-    mkdir -p {{server_root}}/manifests {{server_root}}/catalogs {{server_root}}/packages {{vm_dir}}
+    mkdir -p {{server_root}}/manifests {{server_root}}/catalogs {{server_root}}/icons {{server_root}}/packages {{vm_dir}}
     cp build/{{app}}.exe build/{{app}}-ui.exe build/{{app}}-useragent.exe {{server_root}}/
     cp examples/example_manifest.yaml {{server_root}}/manifests/
     cp examples/example_catalog.yaml {{server_root}}/catalogs/
     cp test/manual/fixtures/selfserve/manifests/*.yaml {{server_root}}/manifests/
     cp test/manual/fixtures/selfserve/catalogs/*.yaml {{server_root}}/catalogs/
+    cp test/manual/fixtures/selfserve/icons/* {{server_root}}/icons/
     rm -rf {{server_root}}/packages/scripts
     cp -R test/manual/fixtures/selfserve/packages/scripts {{server_root}}/packages/scripts
     cp test/manual/bootstrap-vm.ps1 test/manual/bootstrap-vm-full.ps1 \
