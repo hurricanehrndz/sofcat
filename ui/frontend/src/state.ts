@@ -1153,6 +1153,9 @@ const PROGRESSES = new Set(["strip", "button"]);
 // replaces the list with the item's detail page; dialog opens the same
 // details in a dialog over the list.
 const ITEM_VIEWS = new Set(["page", "dialog"]);
+// The scrollbar names: system, the default and the look from before the key,
+// is the window's own scrollbar; slim is a thin one on the content alone.
+const SCROLLBARS = new Set(["system", "slim"]);
 
 /** oneOf returns payload[key] when it is one of allowed, else fallback. */
 function oneOf<T extends string>(payload: Record<string, unknown>, key: string, allowed: Set<string>, fallback: T): T {
@@ -1260,6 +1263,7 @@ export function brandingView(payload: unknown): BrandingView {
     bannerHeight: oneOf(raw, "bannerHeight", BANNER_HEIGHTS, "medium"),
     progress: oneOf(raw, "progress", PROGRESSES, "strip"),
     itemView: oneOf(raw, "itemView", ITEM_VIEWS, "page"),
+    scrollbar: oneOf(raw, "scrollbar", SCROLLBARS, "system"),
     refreshIntervalMs: refreshIntervalMs(raw.refreshIntervalSeconds),
     sections: Array.isArray(raw.sections)
       ? raw.sections

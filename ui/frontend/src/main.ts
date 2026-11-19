@@ -445,6 +445,7 @@ function applyBranding(next: BrandingView): void {
   appliesToHeading.textContent = next.appliesToFilterLabel;
   root.dataset.appBarBrand = next.appBarBrand;
   root.dataset.progress = next.progress;
+  root.dataset.scrollbar = next.scrollbar;
   // The tab order and the Software tab's heading are branding too, and so
   // are how a card opens its item and where running work shows.
   renderNav();

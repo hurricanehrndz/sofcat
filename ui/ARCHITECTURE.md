@@ -56,7 +56,7 @@ answer echoes the `id` with a `result` or an `error`:
 | --- | --- | --- |
 | `getServiceInfo` | none | `{version, protocolVersion: "2.0", apiVersion: 1, capabilities: [methods], busy, uptimeSeconds}` |
 | `listOptionalInstalls` | none | `{items: [OptionalInstallItem]}` (shape below) |
-| `getBranding` | none | `Branding`: `{title, tagline, helpUrl, helpLabel, linkPlacement, linkPosition, accent, logoMime, logoBase64, backgroundMime, backgroundBase64, backgroundText, listHeading, appliesToFilterLabel, titleSize, taglineSize, contentWidth, filterPlacement, navPlacement, categoryFilter, appBarBrand, bannerStyle, bannerAlign, bannerHeight, itemView, progress, refreshIntervalSeconds, sections?}` |
+| `getBranding` | none | `Branding`: `{title, tagline, helpUrl, helpLabel, linkPlacement, linkPosition, accent, logoMime, logoBase64, backgroundMime, backgroundBase64, backgroundText, listHeading, appliesToFilterLabel, titleSize, taglineSize, contentWidth, filterPlacement, navPlacement, categoryFilter, appBarBrand, bannerStyle, bannerAlign, bannerHeight, itemView, scrollbar, progress, refreshIntervalSeconds, sections?}` |
 | `getItemIcon` | `{iconName}` | `{mime, base64}`, both empty when the service holds no icon by that name |
 | `installItem` | `{itemName, placement?}` | `AcceptedOperation` |
 | `removeItem` | `{itemName, placement?}` | `AcceptedOperation` |
@@ -555,7 +555,7 @@ every run, so a policy change applies from the next run without a restart:
    `title_size`, `tagline_size`, `content_width`, `filter_placement`,
    `nav_placement`, `category_filter`,
    `app_bar_brand`, `banner_style`, `banner_align`, `banner_height`, `item_view`,
-   `progress`, `refresh_interval`;
+   `scrollbar`, `progress`, `refresh_interval`;
    `sections` is a REG_MULTI_SZ).
 2. The `branding:` block in `config.yaml`.
 3. Nothing, and the UI keeps its default look.
@@ -608,6 +608,15 @@ the banner. `banner_height` must be `small`, `medium`, `large` or `x-large`; the
 sets it as `data-height` on the banner, and anything else is `medium`.
 `progress` must be `strip` or `button`; the UI sets it as `data-progress` on
 the root element, and anything else is `strip`.
+`scrollbar` must be `system` or `slim`; the UI sets it as `data-scrollbar` on
+the root element, and anything else is `system`. For `system` the window
+scrolls and the banner, the bar and the heading row are pinned. For `slim`,
+in a window of 30rem or taller, the window does not scroll: `main` is the one
+scroller, under the banner and the bar, so its scrollbar starts there, and
+only the heading row is pinned, inside it. `style.css` also draws every
+scrollbar as a thin thumb with no track (`::-webkit-scrollbar`, which
+WebView2, WKWebView and WebKitGTK all honour). No script reads the scroll
+position, so nothing else depends on which element scrolls.
 `link_placement` must be `banner` or `app_bar`, and `link_position` `auto`,
 `top_left`, `top_right`, `bottom_left` or `bottom_right`; anything else is the
 first. The UI moves the one link button to the app bar's end, before the

@@ -187,6 +187,16 @@ test("the item view is page or dialog; anything else is page", () => {
   }
 });
 
+// The window's own scrollbar is the look from before the key, so no key, an
+// older service, a cached payload or a typo must all keep it.
+test("the scrollbar is system or slim; anything else is system", () => {
+  assert.equal(brandingView({ scrollbar: "slim" }).scrollbar, "slim");
+  assert.equal(brandingView({ scrollbar: "system" }).scrollbar, "system");
+  for (const scrollbar of [undefined, "", "thin", "SLIM", 1, "constructor"]) {
+    assert.equal(brandingView({ scrollbar }).scrollbar, "system", String(scrollbar));
+  }
+});
+
 // Keyboard and screen-reader users open an item with one button on its card,
 // and closing the item gives that button focus back: Details on a page, the
 // item's name in dialog mode, where the card has no Details button.

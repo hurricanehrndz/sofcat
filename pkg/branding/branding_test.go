@@ -264,6 +264,18 @@ func TestResolveItemView(t *testing.T) {
 	}
 }
 
+// scrollbar is a closed set: an unknown value must leave the UI's default,
+// the window's own scrollbar, rather than a layout the CSS has no rule for.
+func TestResolveScrollbar(t *testing.T) {
+	for in, want := range map[string]string{
+		"system": "system", "Slim": "slim", "SLIM": "slim", "": "", "thin": "", "overlay": "",
+	} {
+		if got := resolve(config.Branding{Scrollbar: in}).Scrollbar; got != want {
+			t.Errorf("scrollbar %q resolved to %q, want %q", in, got, want)
+		}
+	}
+}
+
 // nav_placement and category_filter are closed sets: an unknown value must
 // leave the UI's defaults, the bar at the top and the Category select, so a
 // typo never moves the bar.

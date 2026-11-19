@@ -62,6 +62,7 @@ func TestGet(t *testing.T) {
 			BannerHeight:         "x-large",
 			Progress:             "button",
 			ItemView:             "dialog",
+			Scrollbar:            "slim",
 			RefreshInterval:      "30m",
 		},
 		ConfigPath: "testdata/test_config.yaml",
