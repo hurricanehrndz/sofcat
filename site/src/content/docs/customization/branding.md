@@ -1,0 +1,219 @@
+---
+title: Branding
+description: Set the storefront's name, tagline, logo, accent colour, banner and link button.
+---
+
+The `branding:` block gives the storefront your organisation's name, logo,
+colour and a link button, with no rebuild or re-signing. This page covers
+identity and the banner. Layout and behaviour keys are on
+[Layout and behaviour](/customization/layout/), and the lists' headings are on
+[the catalog page](/customization/catalog/). How these settings reach a machine,
+and which source wins, is on [Delivering settings](/customization/delivery/).
+
+```yaml
+branding:
+  title: Acme Software Center
+  tagline: Software approved for your Mac or PC.
+  logo: C:\ProgramData\SofCat\acme-logo.png
+  accent: "#0b6e4f"
+  banner_height: large
+  link_url: https://help.acme.example/software
+  link_label: Ask IT
+```
+
+You can see a branded storefront in the [live demo](/demo/?store=apps).
+
+## Summary
+
+| Key | Accepted values | Default |
+|---|---|---|
+| `title` | Text, up to 120 characters | none |
+| `tagline` | Text, up to 240 characters | none |
+| `logo` | Path to a PNG, JPEG or SVG, up to 512 KiB | none |
+| `accent` | `#rrggbb` | SofCat's own colour |
+| `background_image` | Path to a PNG, JPEG or SVG, up to 1 MiB | none |
+| `background_text` | `light`, `dark` | `light` |
+| `banner_style` | `text`, `logo` | `text` |
+| `banner_align` | `left`, `center`, `right` | `left` |
+| `banner_height` | `small`, `medium`, `large`, `x-large` | `medium` |
+| `title_size` | `small`, `medium`, `large`, `x-large` | `medium` |
+| `tagline_size` | `small`, `medium`, `large`, `x-large` | `medium` |
+| `link_url` | Absolute `http` or `https` URL | none |
+| `link_label` | Text, up to 60 characters | `Get help` |
+| `link_placement` | `banner`, `app_bar` | `banner` |
+| `link_position` | `auto`, `top_left`, `top_right`, `bottom_left`, `bottom_right` | `auto` |
+
+## Identity
+
+### `title`
+
+Plain text, up to 120 characters. It is the window title and the name in the
+app bar. With `banner_style: logo` it also becomes the logo's text alternative.
+
+### `tagline`
+
+Plain text, up to 240 characters. It appears under the title in the banner.
+
+### `logo`
+
+A local path to a PNG, JPEG or SVG of at most 512 KiB. SofCat checks the type
+by content, not by file name. A PNG also becomes the window, taskbar and
+Alt+Tab icon.
+
+SofCat ships two stock wordmarks in
+[`examples/branding/`](https://github.com/hurricanehrndz/sofcat/tree/main/examples/branding).
+One has light lettering, for the accent colour or a dark `background_image`.
+The other has dark lettering, for a light `background_image` together with
+`background_text: dark`.
+
+Leave `<title>` and `aria-label` out of an SVG logo. The macOS web view reads
+them to screen readers in place of the text alternative, in either banner
+style.
+
+### `accent`
+
+A colour in `#rrggbb` form. It recolours buttons, links and the banner. On
+Windows 11 it also colours the native title bar. Windows 10 keeps its default
+caption.
+
+## Banner background
+
+### `background_image`
+
+A local path to a PNG, JPEG or SVG of at most 1 MiB, checked by content. The
+image fills the banner in place of the accent colour and is cropped to cover
+it. Buttons and links keep the accent colour.
+
+Pick a wide image with no text near the edges. A taller `banner_height` shows
+more of the image's height, still centred and cropped to cover.
+
+### `background_text`
+
+`light` or `dark`, and `light` by default. It sets the colour of the banner's
+title, tagline and link button over `background_image`. SofCat draws nothing
+over the image, so pick the value that reads on it.
+
+## Banner layout
+
+### `banner_style`
+
+`text` is the default. It shows the logo, if there is one, in a small white
+tile beside the title.
+
+`logo` shows the logo in the title's place, as a wordmark with no tile behind
+it. The wordmark is at most 3.5rem (56pt) tall, multiplied by the `title_size`
+factor. It keeps its shape and shrinks to fit a narrow window. The tagline and
+link button stay.
+
+With `logo`, `title` is still the window and product name, and it becomes the
+logo's text alternative. Set it to the words the logo shows. Without a title,
+the product name is used. The logo stays out of the app-bar mark and the
+window icon.
+
+Without a usable `logo`, or when the logo's data does not decode, the value is
+`text`. Any other value is `text`.
+
+### `banner_align`
+
+`left` (the default), `center` or `right`. It places the banner's logo, title
+and tagline, in either style.
+
+- `right` mirrors `left`, with the link button at the banner's left edge.
+- `center` stacks the logo, title, tagline and link button in a centred column.
+
+Any other value is `left`.
+
+### `banner_height`
+
+The banner's minimum height. Each value is a minimum. Content that needs more
+room grows the banner, for example a large `title_size` or a title that wraps
+in a narrow window. A banner whose content is already taller than the minimum
+is unchanged.
+
+- `small` is a slim strip with 1rem of padding above and below. Gaps are
+  tighter when the content wraps or is centred. The logo tile is 2.5rem, and a
+  `banner_style: logo` wordmark is 2.5rem multiplied by the `title_size`
+  factor. Over a `background_image` it drops the 7.5rem minimum, so the banner
+  hugs its content.
+- `medium` is the default. It is the content's own height, and at least 7.5rem
+  (120pt) over a `background_image`.
+- `large` is at least 11rem (176pt).
+- `x-large` is at least 16rem (256pt), which leaves room to show more of a
+  background image.
+
+With `banner_align: center` the stacked content is often taller than 11rem. There
+`large` and `x-large` also add padding, 3rem and 4.5rem above and below, so each
+step is taller than the one below. The content stays in the banner's middle.
+
+Any other value is `medium`.
+
+### `title_size`
+
+`small`, `medium` (the default), `large` or `x-large`. It sets the size of the
+banner title, and the "Available software" (or `list_heading`), "My items" and
+"Activity" headings follow in step. The four values scale the default by 0.85,
+1, 1.25 and 1.5. Any other value keeps the default.
+
+### `tagline_size`
+
+The same four sizes, applied to the banner tagline. Any other value keeps the
+default.
+
+## Link button
+
+The link shows as a button that opens the URL in the system browser.
+
+### `link_url`
+
+An absolute `http` or `https` URL. Without a valid one there is no button.
+
+The old name `help_url` is still accepted. Where one source sets both, such as
+the policy or `config.yaml`, `link_url` wins. Across sources the policy wins, as
+for every key, whichever name it uses.
+
+### `link_label`
+
+The button's text, plain text up to 60 characters. It defaults to "Get help".
+The old name `help_label` is still accepted, with the same rules as `help_url`.
+
+### `link_placement`
+
+`banner` is the default. The button sits in the banner, placed by
+`link_position`. A link on its own brings the banner up, with just the button.
+
+`app_bar` puts the button at the right end of the app bar, as an outlined pill
+before the connection status. The pill and the status wrap together in a narrow
+window, and a long label wraps inside the pill. With `app_bar`, a link on its
+own does not bring the banner up.
+
+Any other value is `banner`.
+
+### `link_position`
+
+Where the button sits in the banner. It is ignored with
+`link_placement: app_bar`. Screen readers and the keyboard reach the button after
+the title and tagline in every position.
+
+`auto` is the default. It follows `banner_align`, in the banner's vertical
+middle.
+
+- `left` puts the button at the right edge.
+- `right` puts it at the left edge.
+- `center` puts it under the tagline.
+
+The four corner values, `top_left`, `top_right`, `bottom_left` and
+`bottom_right`, put the button in that corner, inside the banner's padding and
+never over the content. What happens next depends on the corner.
+
+- A corner on the content's side, or any corner of a centred banner, gives the
+  button a row of its own above or below the content. The same room stays empty
+  on the other side, so the content stays in the middle. The banner grows when
+  its height leaves no room. On a centred `large` or `x-large` banner, the extra
+  height those add moves from the padding into these rows, so the button stays
+  in its corner.
+- A corner on the far side gives the button a column of its own instead. That
+  means `top_right` or `bottom_right` with `banner_align: left`, and the left
+  corners with `right`. The column takes up to 40% of the width, and the banner
+  keeps its height. Below 40rem (640pt) wide it takes a row there too.
+
+Any other value is `auto`.
