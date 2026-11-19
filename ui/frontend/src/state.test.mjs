@@ -28,6 +28,7 @@ import {
   insertRecord,
   isHexColor,
   isItemActive,
+  isRefreshKey,
   isItemPhase,
   isProgressTick,
   isTerminalState,
@@ -1231,4 +1232,26 @@ test("brandingView keeps a background image beside the accent, and it alone show
   assert.equal(brandingView(image).backgroundText, "light");
   assert.equal(brandingView({ ...image, backgroundText: "dark" }).backgroundText, "dark");
   assert.equal(brandingView({ ...image, backgroundText: "red; x" }).backgroundText, "light");
+});
+
+// The web view's own reload is off, so these keys are the only way to see a
+// catalog change without restarting; a held key must not flood the service.
+test("F5, Ctrl+R and Cmd+R ask for a refresh, once per press", () => {
+  const key = (overrides) => ({
+    key: "F5",
+    ctrlKey: false,
+    metaKey: false,
+    altKey: false,
+    repeat: false,
+    ...overrides,
+  });
+  assert.equal(isRefreshKey(key()), true);
+  assert.equal(isRefreshKey(key({ ctrlKey: true })), true, "Ctrl+F5");
+  assert.equal(isRefreshKey(key({ key: "r", ctrlKey: true })), true);
+  assert.equal(isRefreshKey(key({ key: "R", metaKey: true })), true);
+  assert.equal(isRefreshKey(key({ key: "r" })), false, "typing r in the search field");
+  assert.equal(isRefreshKey(key({ key: "r", ctrlKey: true, altKey: true })), false, "AltGr+R");
+  assert.equal(isRefreshKey(key({ altKey: true })), false);
+  assert.equal(isRefreshKey(key({ repeat: true })), false);
+  assert.equal(isRefreshKey(key({ key: "F6" })), false);
 });

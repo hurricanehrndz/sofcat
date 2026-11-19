@@ -1196,6 +1196,25 @@ function imageSrc(mime: string, base64: string): string {
   return IMAGE_MIMES.has(mime) && /^[A-Za-z0-9+/]+={0,2}$/.test(base64) ? `data:${mime};base64,${base64}` : "";
 }
 
+// refresh_interval as the service sends it, in seconds: its default when the
+// payload has none (0, or an older service), and at least a minute, since
+// every refresh has the service fetch the repository. The longest is what a
+// timer can hold.
+const DEFAULT_REFRESH_SECONDS = 600;
+const MIN_REFRESH_SECONDS = 60;
+const MAX_REFRESH_SECONDS = 2_147_483;
+
+/** refreshIntervalMs is the wait between list refreshes, 0 when a negative value turns them off. */
+function refreshIntervalMs(seconds: unknown): number {
+  if (typeof seconds !== "number" || !Number.isFinite(seconds) || seconds === 0) {
+    return DEFAULT_REFRESH_SECONDS * 1000;
+  }
+  if (seconds < 0) {
+    return 0;
+  }
+  return Math.min(Math.max(seconds, MIN_REFRESH_SECONDS), MAX_REFRESH_SECONDS) * 1000;
+}
+
 /** brandingView turns a GetBranding payload (or a cached copy) into what the shell shows. */
 export function brandingView(payload: unknown): BrandingView {
   const raw = typeof payload === "object" && payload !== null ? (payload as Record<string, unknown>) : {};
@@ -1241,6 +1260,7 @@ export function brandingView(payload: unknown): BrandingView {
     bannerHeight: oneOf(raw, "bannerHeight", BANNER_HEIGHTS, "medium"),
     progress: oneOf(raw, "progress", PROGRESSES, "strip"),
     itemView: oneOf(raw, "itemView", ITEM_VIEWS, "page"),
+    refreshIntervalMs: refreshIntervalMs(raw.refreshIntervalSeconds),
     sections: Array.isArray(raw.sections)
       ? raw.sections
           .filter((name): name is string => typeof name === "string" && name.trim() !== "")
@@ -1329,4 +1349,25 @@ export function refusalText(error: string): string {
   }
   const message = error.replace(/^\s*operation_not_cancelable:\s*/i, "").trim();
   return message ? message[0].toUpperCase() + message.slice(1) : "The operation can no longer be canceled";
+}
+
+/**
+ * isRefreshKey says whether a key press is a browser's reload shortcut: F5,
+ * Ctrl+R or ⌘R, with Shift or without. The web view's own reload is off, so
+ * the storefront answers these by fetching the list again.
+ */
+export function isRefreshKey(event: {
+  key: string;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  altKey: boolean;
+  repeat: boolean;
+}): boolean {
+  if (event.repeat || event.altKey) {
+    return false;
+  }
+  if (event.key === "F5") {
+    return !event.metaKey;
+  }
+  return event.key.toLowerCase() === "r" && event.ctrlKey !== event.metaKey;
 }

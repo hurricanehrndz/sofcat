@@ -32,6 +32,7 @@ You can see a branded storefront in the [live demo](/demo/?store=apps).
 | `app_bar_brand` | `full`, `mark`, `none` | `full` |
 | `item_view` | `page`, `dialog` | `page` |
 | `progress` | `strip`, `button` | `strip` |
+| `refresh_interval` | a duration, `1m` or longer; `0` for never | `10m` |
 
 For every key, any other value falls back to the default.
 
@@ -221,6 +222,23 @@ its state and its own Cancel. `Escape` or a click outside closes the list.
 
 Screen readers hear each new phase once per operation, never a percentage. Any
 other value is `strip`.
+
+### `refresh_interval`
+
+How often an open storefront fetches the list again, so people see new and
+changed items without restarting it.
+
+The value is a duration such as `10m`, `90s` or `1h`. The default is `10m`.
+The shortest is `1m`, and a shorter one is raised to it, because every refresh
+has the service fetch the manifests and catalogs from your repository. `0`
+turns the timed refresh off. In managed policy the value is a string, so write
+`0` as a string there.
+
+Each refresh also reads the branding again, so a new interval applies without
+a restart. A hidden or minimised window skips its turn and refreshes when it
+shows again. `F5`, `Ctrl+R` or ⌘R refreshes at once, whatever the interval.
+
+Any value that is not a duration is `10m`.
 
 ## Side navigation recipe
 

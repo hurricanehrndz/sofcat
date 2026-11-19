@@ -72,6 +72,7 @@ func managedFields(c *Configuration) map[string]any {
 		"branding.banner_height":           &c.Branding.BannerHeight,
 		"branding.progress":                &c.Branding.Progress,
 		"branding.item_view":               &c.Branding.ItemView,
+		"branding.refresh_interval":        &c.Branding.RefreshInterval,
 	}
 }
 

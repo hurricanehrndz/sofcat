@@ -185,6 +185,9 @@ type Branding struct {
 	// ItemView is how the storefront opens an item: page (the default, a
 	// detail page in the list's place) or dialog (a dialog over the list).
 	ItemView string `yaml:"item_view,omitempty"`
+	// RefreshInterval is how often an open storefront fetches the list again: a
+	// duration such as 10m (the default), at least 1m, or 0 for never.
+	RefreshInterval string `yaml:"refresh_interval,omitempty"`
 	// Sections orders the storefront tabs built from catalog item sections.
 	Sections []string `yaml:"sections,omitempty"`
 }

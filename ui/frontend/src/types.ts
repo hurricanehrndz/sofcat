@@ -142,4 +142,6 @@ export type BrandingView = {
   progress: "strip" | "button";
   /** The admin's item_view: an item opens as a page in the list's place or as a dialog over it. */
   itemView: "page" | "dialog";
+  /** The admin's refresh_interval in milliseconds: how often the open storefront fetches the list again, 0 for never. */
+  refreshIntervalMs: number;
 };

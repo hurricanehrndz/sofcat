@@ -414,6 +414,7 @@ export const STORES: Record<StoreName, MockStore> = {
       bannerHeight: "",
       progress: "",
       itemView: "",
+      refreshIntervalSeconds: 0,
       sections: ["Productivity", "Developer tools", "Utilities"],
     },
   },
@@ -446,6 +447,7 @@ export const STORES: Record<StoreName, MockStore> = {
       bannerHeight: "",
       progress: "",
       itemView: "",
+      refreshIntervalSeconds: 0,
       sections: ["Skills", "Plugins"],
     },
   },
@@ -478,5 +480,6 @@ export const UNBRANDED: Branding = {
   bannerHeight: "",
   progress: "",
   itemView: "",
+  refreshIntervalSeconds: 0,
   sections: [],
 };

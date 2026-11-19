@@ -105,6 +105,12 @@ export class Branding {
      */
     "itemView": string;
 
+    /**
+     * RefreshIntervalSeconds is how often an open storefront fetches the list
+     * again: 0 for the UI's default, DefaultRefreshInterval, and -1 for never.
+     */
+    "refreshIntervalSeconds": number;
+
     /** Creates a new Branding instance. */
     constructor($$source: Partial<Branding> = {}) {
         if (!("title" in $$source)) {
@@ -184,6 +190,9 @@ export class Branding {
         }
         if (!("itemView" in $$source)) {
             this["itemView"] = "";
+        }
+        if (!("refreshIntervalSeconds" in $$source)) {
+            this["refreshIntervalSeconds"] = 0;
         }
 
         Object.assign(this, $$source);
