@@ -36,6 +36,34 @@ skills and plugins on Windows and macOS.
 
 <DemoWindow />
 
+## Make it yours
+
+Most self-service catalogs stop at a logo and a colour. SofCat's storefront
+takes its name, banner, navigation, wording and item views from settings your
+MDM or Group Policy already delivers, with no rebuild and nothing to re-sign.
+When you want your own product, a rebrand builds SofCat under your name.
+
+<CardGrid>
+  <Card title="Settings, no rebuild" icon="pencil">
+    Title, logo, accent, banner image, top or side navigation, page or dialog
+    item views, and where progress shows. Change a policy value and the next
+    run picks it up. [Branding](/customization/branding/) ·
+    [Layout](/customization/layout/)
+  </Card>
+  <Card title="One install, several stores" icon="list-format">
+    A `section` on an item becomes a storefront tab with its own categories
+    and filters, and each item can word its own buttons.
+    [Catalog presentation](/customization/catalog/)
+  </Card>
+  <Card title="Your own product" icon="rocket">
+    A rebrand has your name, icon, service and installer, and installs beside
+    stock SofCat. It can fix the look at build time.
+    [Rebranded builds](/customization/rebrand/)
+  </Card>
+</CardGrid>
+
+<LinkButton href="/customization/overview/">See everything you can change</LinkButton>
+
 ## What it does
 
 <CardGrid>
@@ -53,11 +81,6 @@ skills and plugins on Windows and macOS.
     `.msi`, `.msix`, `.exe`, `.ps1` and `.nupkg` on Windows, with install
     checks, dependencies, blocking apps and required software. A nupkg runs its
     own scripts, with no Chocolatey ([Nupkg items](/guides/nupkg-items/)).
-  </Card>
-  <Card title="Your branding" icon="pencil">
-    Title, tagline, logo, accent colour, help link and section tab order come
-    from MDM or Group Policy or `config.yaml`, with no rebuild. A rebrand ships
-    under your own name, icon and installer. [Configuration](/configuration/#branding)
   </Card>
   <Card title="Installable conditions" icon="setting">
     Limit an item to machines by architecture, OS build, model or facts your

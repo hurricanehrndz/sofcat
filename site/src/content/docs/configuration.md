@@ -53,18 +53,14 @@ owns it and neither its group nor others can write it.
 | `verbose`, `debug`, `log_file_plain`, `checkonly`, `service_interval` | Yes |
 | `tls_auth`, `tls_client_cert`, `tls_client_key`, `tls_server_cert` (file paths) | Yes |
 | `tls_client_cert_store`, `tls_client_cert_store_field` | Yes |
-| `branding` (`title`, `tagline`, `logo`, `link_url`, `link_label`, `link_placement`, `link_position` (`help_url` and `help_label`, the old names of the first two, still work), `accent`, `background_image`, `background_text`, `list_heading`, `applies_to_filter_label`, `sections`, `title_size`, `tagline_size`, `content_width`, `filter_placement`, `nav_placement`, `category_filter`, `app_bar_brand`, `banner_style`, `banner_align`, `banner_height`, `item_view`, `progress`) | Yes, field by field |
+| `branding`, every key under [Customization](/customization/overview/) | Yes, field by field. See [Delivering settings](/customization/delivery/). |
 | `auth_user`, `auth_pass` | No: ignored with a warning in `sofcat.log` |
 | `app_data_path`, `service_name`, `service_pipe_name` | No: they must match the installed build |
 
 A value of the wrong type is dropped with a warning and the rest of the
 policy still applies.
 
-`branding.help_url` and `help_label` are the old names of `link_url` and
-`link_label`. Where one source, the policy or `config.yaml`, sets both names,
-the new one wins. Across sources the policy wins as for any key, whichever
-name it uses: a policy that still sets `help_url` overrides a `config.yaml`
-that has moved to `link_url`. The `WriteRoots` policy lives in the same places; see
+The `WriteRoots` policy lives in the same places; see
 [Write roots](#write-roots).
 
 On Windows, for example:
@@ -130,22 +126,15 @@ every key.
 | [`placements.yaml`](https://github.com/hurricanehrndz/sofcat/blob/main/examples/placements.yaml) | Placements for zip items. See [Zip items](/zip-items/overview/). |
 | [`zip-items/`](https://github.com/hurricanehrndz/sofcat/tree/main/examples/zip-items) | Two zip items' sources, item trees and generated package-info files. |
 | [`branding/`](https://github.com/hurricanehrndz/sofcat/tree/main/examples/branding) | Two logo-banner wordmarks for `branding.banner_style: logo`: light lettering for a dark or accent banner, dark for a light one. |
-| [`brand/`](https://github.com/hurricanehrndz/sofcat/tree/main/examples/brand) | A rebrand: your own name, icon, service and installer. |
+| [`brand/`](https://github.com/hurricanehrndz/sofcat/tree/main/examples/brand) | A rebrand: your own name, icon, service and installer. See [Rebranded builds](/customization/rebrand/). |
 
 ## Branding
 
-The storefront's title, tagline, logo, link button and its place, accent colour, banner
-background image, list heading, applies-to filter label, section tab order, banner height, banner and app-bar layout, whether the app bar sits at the top or the left (`nav_placement`), whether categories are a select or a list (`category_filter`), whether an item opens as a page or a dialog (`item_view`) and where running work shows (`progress`) come from the `branding:` block in `config.yaml` or from
-[managed settings](#managed-settings), with no rebuild. The keys and their
-limits are in the UI's
-[branding reference](https://github.com/hurricanehrndz/sofcat/blob/main/ui/README.md#branding).
-
-To ship SofCat under your own name, icon, service and installer instead,
-build a rebrand from
-[`examples/brand/`](https://github.com/hurricanehrndz/sofcat/tree/main/examples/brand).
-A rebrand can also compile in branding from a `branding.yaml`: each field it
-sets wins over `config.yaml` and managed settings, so a deployment can take
-its `url` from MDM and its look from the build.
+The storefront's name, banner, navigation and behaviour come from the
+`branding:` block in `config.yaml` or from
+[managed settings](#managed-settings), with no rebuild. To ship SofCat under
+your own name, icon, service and installer, build a rebrand. Both are covered
+under [Customization](/customization/overview/).
 
 ## Write roots
 

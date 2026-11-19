@@ -79,82 +79,22 @@ user's operation to watch it.
 
 ## Branding
 
-An organisation can put its name, a tagline, a logo, a help link, a banner background image and an accent
-colour on the UI with no rebuild or re-signing, and it works offline. The SYSTEM
-service resolves the branding and validates it; the UI only asks for it with
-`GetBranding` and never reads `config.yaml` or the registry itself. Each field
-comes from the first source that sets it:
+The service resolves and validates the storefront's branding; the UI only asks
+for it with `GetBranding` and never reads `config.yaml` or the registry itself.
+It caches the last payload in `localStorage` key `sofcat.branding.v1`, applies
+it at start, then fetches again. Check what the service resolved with
+`sofcat.exe -S GetBranding`.
 
-1. Managed settings: values under `HKLM\SOFTWARE\Policies\SofCat\branding` on
-   Windows, or the `branding` dict in
-   `/Library/Managed Preferences/<IDENTIFIER>.plist` on macOS. A rebranded build
-   reads `HKLM\SOFTWARE\Policies\<Name>\branding` instead, where `<Name>` is its
-   `pkg/identity` name, so profiles for one build never brand another. The value
-   names are the `config.yaml` keys; the full key list is at
-   <https://sofcat.app/configuration/#managed-settings>.
-2. The `branding:` block in `config.yaml` (see `examples/example_config.yaml`).
-3. Nothing. The UI then looks exactly as it does unbranded.
+The keys, their limits and where they come from are documented on the site,
+which is the only reference:
 
-A rebranded build can compile in a `branding.yaml` (see
-`examples/brand/README.md`). A field it sets comes before all three, so
-neither policy nor `config.yaml` changes it. Stock SofCat has none.
+- <https://sofcat.app/customization/branding/>: title, logo, accent, banner and link button
+- <https://sofcat.app/customization/layout/>: navigation, filters, item view and progress
+- <https://sofcat.app/customization/catalog/>: sections, list heading and the applies-to filter
+- <https://sofcat.app/customization/delivery/>: managed settings, `config.yaml` and precedence
 
-| Key (policy value and `config.yaml`) | Accepted |
-|---|---|
-| `title` | Plain text, up to 120 characters. Also the window title and the app-bar name. |
-| `tagline` | Plain text, up to 240 characters. |
-| `logo` | Local path to a PNG, JPEG or SVG of at most 512 KiB, checked by content. A PNG also becomes the window, taskbar and Alt+Tab icon. |
-| `link_url` | Absolute `http` or `https` URL. A button opens it in the system browser; without a valid one there is no button. `help_url`, its earlier name, is still accepted: where one source (the policy, or `config.yaml`) sets both, `link_url` wins; across sources the policy wins as for every key, whichever name it uses. |
-| `link_label` | The button's text: plain text, up to 60 characters. Defaults to "Get help". `help_label`, its old name, is still accepted the same way. |
-| `link_placement` | `banner`, the default: the button in the banner, placed by `link_position`; a link alone brings the banner up, with just the button. `app_bar`: the button at the app bar's right end, an outlined pill before the connection status, the two wrapping together in a narrow window; a long label wraps inside the pill. There a link alone does not bring the banner up. Any other value is `banner`. |
-| `link_position` | Where in the banner the button sits; ignored with `link_placement: app_bar`. `auto`, the default: as `banner_align` lays it out, at the right edge for `left`, the left edge for `right`, under the tagline for `center`, in the banner's vertical middle. `top_left`, `top_right`, `bottom_left`, `bottom_right`: that corner, inside the banner's padding, never over the content. A corner on the content's side, or any corner of a centred banner, gives the button a row of its own above or below the content, with as much room left empty on the other side, so the content stays in the middle and the banner grows when its height leaves no room; on a centred `large` or `x-large` banner the extra height those add moves from the padding into these rows, so the button stays in its corner. A corner on the far side (`top_right` or `bottom_right` with `banner_align: left`, the left corners with `right`) gives it a column of its own instead, up to 40% of the width, and the banner keeps its height; below 40rem (640pt) wide it takes a row there too. Screen readers and the keyboard meet the button after the title and tagline in every position. Any other value is `auto`. |
-| `accent` | `#rrggbb`. Recolours buttons, links and the banner, and on Windows 11 the native title bar (Windows 10 keeps its default caption). |
-| `background_image` | Local path to a PNG, JPEG or SVG of at most 1 MiB, checked by content. Fills the banner in place of the accent, cropped to cover it. Buttons and links keep the accent. Pick a wide image with no text near the edges. |
-| `background_text` | `light` (the default) or `dark`. The colour of the banner's title, tagline and link button over `background_image`. sofcat draws nothing over the image, so pick the one that reads on it. |
-| `list_heading` | Plain text, up to 120 characters. Replaces the "Available software" heading; "My items" is unchanged. |
-| `applies_to_filter_label` | Plain text, up to 60 characters. Replaces "Works in", the label of the applies-to filter (the select beside the Category select, or the group heading in the left bar). Empty keeps "Works in". The filter shows only when the current list's items name two or more distinct `applies_to` names; its first option is "All", and picking a name hides the items that do not list it. Search matches the names too, whatever the filter says. |
-| `title_size` | `small`, `medium` (the default), `large` or `x-large`. The size of the banner title and, in step with it, the "Available software" (or `list_heading`), "My items" and "Activity" headings: 0.85, 1, 1.25 or 1.5 times the default. Any other value keeps the default. |
-| `tagline_size` | The same four sizes for the banner tagline. |
-| `content_width` | How much of the window the lists, My items, Activity and the detail page use. `wide`, the default, centres them in a column of up to 96rem (1536pt) and lets the cards of a short row share its width: a row of one or two cards shows each as a single line, glyph, name and buttons. `full` drops the column's cap, so the content runs to the window's edges on any screen. `compact` is the layout from before this key: a column of up to 76rem (1216pt) whose cards keep one column's width, leaving the rest of a short row empty. Any other value is `wide`. The banner, app bar and operation strip span the window in all three. |
-| `nav_placement` | Where the app bar sits: the product's mark and name (as `app_bar_brand` shows them), the list tabs, My items and Activity, the `link_placement: app_bar` button and the connection status. `top`, the default and the layout from before this key: a bar across the window, under the banner. `left`: a column down the window's left, under the banner, with the mark and name at its top, the pages one under another and the link button and connection status at its foot. It stays in place while the content scrolls, and the operation strip keeps to the content's side of it. A window narrower than 40rem (640pt) shows the bar across the top for either value. Any other value is `top`. The key only moves the bar; `category_filter` decides what else it holds. |
-| `category_filter` | How a list's category is chosen. `select`, the default and the control from before this key: the Category select beside the search field. `list`: with `nav_placement: left`, the bar lists the current list's categories as buttons under the pages, and the select is gone from beside the search field, and the applies-to filter, when the list has one, is a second button group in the bar under the categories; Activity and an item's detail page show no categories. With the bar across the top, in a narrow window included, `list` is `select`. Any other value is `select`. |
-| `filter_placement` | Where the search field and the Category select sit above a list and My items (the applies-to filter, when the list has one, sits with the Category select; the search field alone while `category_filter: list` shows the categories in a left bar). `right`, the default: on the heading's row, at its right edge; when the row is too narrow for both, they move under the heading. `left`: above the heading, at the left, as before this key. In a window narrower than 40rem (640pt) both values stretch the controls to the full width, one under the other: under the heading for `right`, above it for `left`. Any other value is `right`. Either way the keyboard reaches the search field, then the Category select, then the applies-to filter, then the cards. |
-| `banner_style` | `text`, the default: the logo, if any, in a small white tile beside the title. `logo`: the logo in the title's place, as a wordmark with no tile behind it. It is at most 3.5rem (56pt) tall, times the `title_size` factor, keeps its shape and shrinks to fit a narrow window; the tagline and link button stay. `title` is still the window and product name and becomes the logo's text alternative, so set it to the words the logo shows; without a title the product name is. The logo stays out of the app-bar mark and the window icon. Without a usable `logo`, or when the logo's data does not decode, it is `text`. Any other value is `text`. Leave `<title>` and `aria-label` out of an SVG logo: the macOS web view reads them to screen readers in place of the text alternative, in either style. `examples/branding/` has a stock wordmark in light lettering (for the accent or a dark `background_image`) and dark lettering (for a light one, with `background_text: dark`). |
-| `banner_align` | `left` (the default), `center` or `right`: where the banner's logo, title and tagline sit, in either style. `right` mirrors `left`, with the link button at the banner's left edge; `center` stacks logo, title, tagline and link button in a centred column. Any other value is `left`. |
-| `banner_height` | The banner's minimum height. `small`: a slim strip, with 1rem of padding above and below, tighter gaps when the content wraps or is centred, a 2.5rem logo tile and a `banner_style: logo` wordmark of 2.5rem times the `title_size` factor; over a `background_image` it drops the 7.5rem minimum and hugs the content too. `medium`, the default: the content's own height, at least 7.5rem (120pt) over a `background_image`. `large`: at least 11rem (176pt). `x-large`: at least 16rem (256pt), room to show more of a background image. Each is a minimum: content that needs more room, a large `title_size` or a title that wraps in a narrow window, grows the banner, and a banner whose content is already taller than the minimum is unchanged. The exception is `banner_align: center`, which stacks logo, text and link button in a column often taller than 11rem: there `large` and `x-large` also add padding (3rem and 4.5rem above and below), so each step is taller than the one below. The content stays in the banner's middle. Over a background image a taller banner shows more of the picture's height, still centred and cropped to cover. Any other value is `medium`. |
-| `app_bar_brand` | What the app bar shows of the product beside the tabs: `full` (the default) the mark and the name, `mark` the mark only, `none` neither. Meant for a banner that already names the organisation: while no banner shows, it is `full`. Screen readers still get the name, the page's heading, in all three. With `none` and a banner that shows neither a title nor a logo, no name is visible anywhere. Any other value is `full`. |
-| `progress` | Where running work shows. `strip`, the default and the look from before this key: the bottom strip shows the operation being worked on, with its bar, "n of N" and Cancel. `button`: each item's action button, on its card and its detail page, carries its own progress: "Waiting…" with a spinner while the request is with the service or queued, then a bar with the phase, filled to the percentage only when the service measured the phase and moving back and forth otherwise. A success fills it; a failure, cancel or deferral drops it and shows the action again. Either way the button is freed, as under `strip`, when the refreshed list arrives. A Cancel sits beside the button while the operation runs, with the strip's rules, placed so the button never moves when it appears. The strip then shows only while two or more operations run, as a count ("Installing 1 of 3"); it is a button that opens the list of them above it, one row each, the working one first, with its state and its own Cancel. Escape or a click outside closes the list. Screen readers hear each new phase once per operation, never a percentage. Any other value is `strip`. |
-| `item_view` | How a card opens its item. `page`, the default: the item's detail page replaces the list, with Back, and each card has a Details button. `dialog`: the same details in a dialog over the dimmed list, which grows out of the card and shrinks back into it (it just appears and disappears when the card is not wholly on screen, over a backdrop that still fades in; under reduced motion neither moves); its close button, `Escape` or a click outside it closes it. The cards have no Details button: the item's name is the button that opens its dialog. The list behind the dialog and the dialog itself keep updating. The operation strip stays at the window's bottom, dimmed and out of reach like the rest of the list (a click on it closes the dialog), so while an operation on the open item runs the dialog shows a Cancel, which follows the strip's rules, beside its action on a row of its own under the title. Any other value is `page`. |
-| `sections` | A list; a REG_MULTI_SZ as policy. Up to 50 entries of plain text, up to 120 characters each. Sets the storefront tab order: the sections listed come first, then the rest alphabetically. Items without a catalog `section` appear under a "Software" tab, so give every item a section to hide it. |
-
-`nav_placement`, `category_filter`, `item_view` and `progress` are independent,
-and each defaults to the look from before it existed. Together they give a
-storefront with its pages and categories down the side and items that open
-over the list:
-
-```yaml
-branding:
-  nav_placement: left
-  category_filter: list
-  item_view: dialog
-  progress: button
-```
-
-Set the policy values with Intune (a custom OMA-URI or a registry script), Group
-Policy Preferences, or `reg add`:
-
-```bat
-reg add "HKLM\SOFTWARE\Policies\SofCat\branding" /v title /t REG_SZ /d "Acme Software Center" /f
-reg add "HKLM\SOFTWARE\Policies\SofCat\branding" /v accent /t REG_SZ /d "#0b6e4f" /f
-```
-
-The service reads managed settings at the start of every run, so a policy change
-shows after the next run. A `config.yaml` change needs a service restart. A value that fails its check is
-dropped (debug log only) and is not replaced by the config value. Check the
-result with `sofcat.exe -S GetBranding`, which prints the payload with the logo
-replaced by its size in bytes. The UI caches the last payload in
-`localStorage` key `sofcat.branding.v1`, applies it at start, then fetches
-again.
+Their sources are under `site/src/content/docs/customization/`. A new branding
+key needs its entry there in the same change.
 
 ## Cache and Activity limitations
 
