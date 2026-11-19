@@ -143,8 +143,9 @@ heading above the list. The "My items" heading is unchanged. With
 ### `applies_to_filter_label`
 
 Plain text, up to 60 characters. It replaces "Works in", the label of the
-applies-to filter. The filter is the select beside the Category select, or
-the group heading in the left bar. An empty value keeps "Works in".
+applies-to filter. The filter is the select between the search field and the
+Category select, or the group above the categories in the left bar. An empty
+value keeps "Works in".
 
 The filter shows only when the current list's items name two or more
 distinct `applies_to` names. Its first option is "All". Picking a name hides

@@ -443,10 +443,12 @@ that disappears on a refresh falls back to the first one.
 
 The applies-to filter narrows the current list by one name from the items'
 `appliesTo`. It appears only when the list's items name two or more distinct
-names. It is a select beside the Category select, labelled "Works in" or the
-branding `appliesToFilterLabel`; with `nav_placement: left` and
-`category_filter: list` it is a second button group in the left bar under the
-categories, headed the same way. Its first option is "All". While a name is
+names. It is a select between the search field and the Category select,
+labelled "Works in" or the branding `appliesToFilterLabel`; with
+`nav_placement: left` and `category_filter: list` it is a button group in the
+left bar above the categories, headed the same way. It comes first in both
+because it is the shorter list, which keeps it in view above a long category
+list. Its first option is "All". While a name is
 picked, an item with no names is hidden. Search matches the names whatever
 the filter says. It filters display only and scopes nothing.
 

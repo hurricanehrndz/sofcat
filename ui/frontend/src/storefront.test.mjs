@@ -311,6 +311,20 @@ test("a hidden app-bar brand stays in the accessibility tree", () => {
   assert.doesNotMatch(rule[0], /display|visibility|aria-hidden/);
 });
 
+// The applies-to filter is the short one: ahead of the categories it stays in
+// view in the left bar however many categories a list has.
+test("the applies-to filter comes before the categories, in the bar and beside the search field", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const at = (id) => {
+    const index = html.indexOf(`id="${id}"`);
+    assert.notEqual(index, -1, `no #${id}`);
+    return index;
+  };
+  assert.ok(at("applies-to-nav") < at("category-nav"));
+  assert.ok(at("search") < at("applies-to-field"));
+  assert.ok(at("applies-to-field") < at("category-field"));
+});
+
 // A logo that sniffed as an image but does not decode must not leave the page
 // without a visible name: the banner falls back to text, and with no title
 // to show there, the app bar shows the product again.

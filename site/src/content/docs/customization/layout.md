@@ -59,9 +59,10 @@ How a list's category is chosen.
 - `select` is the default. A Category select sits beside the search field.
 - `list` works with `nav_placement: left`. The bar lists the current list's
   categories as buttons under the pages, and the select disappears from beside
-  the search field. When the list has an applies-to filter, it becomes a second
-  button group in the bar, under the categories. Activity and an item's detail
-  page show no categories.
+  the search field. When the list has an applies-to filter, it becomes a button
+  group of its own in the bar, above the categories, so a long category list
+  cannot push it out of view. Activity and an item's detail page show no
+  categories.
 
 With the bar across the top, `list` acts as `select`. That includes a narrow
 window. Any other value is `select`.
@@ -72,7 +73,7 @@ The applies-to filter itself is described on
 ### `filter_placement`
 
 Where the search field and the Category select sit above a list and My items.
-The applies-to filter, when the list has one, sits with the Category select.
+The applies-to filter, when the list has one, sits between the two.
 While `category_filter: list` shows the categories in a left bar, only the
 search field remains.
 
@@ -84,8 +85,9 @@ In a window narrower than 40rem (640pt) both values stretch the controls to the
 full width, one under the other. They sit under the heading for `right` and
 above it for `left`.
 
-With either value the keyboard reaches the search field first, then the Category
-select, then the applies-to filter, then the cards. Any other value is `right`.
+With either value the keyboard reaches the search field first, then the
+applies-to filter, then the Category select, then the cards. Any other value is
+`right`.
 
 ## Content and app bar
 
