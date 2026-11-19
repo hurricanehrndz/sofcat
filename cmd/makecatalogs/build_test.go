@@ -231,3 +231,28 @@ func TestBuildRefusals(t *testing.T) {
 		})
 	}
 }
+
+// A built repository serves the icons its items name, and its catalog
+// carries each one's hash.
+func TestBuildPublishesIcons(t *testing.T) {
+	source := buildSource(t)
+	png := "\x89PNG\r\n\x1a\n...."
+	writeFiles(t, source, map[string]string{
+		"items/hello.yaml": testItem + "icon_name: hello.png\n",
+		"icons/hello.png":  png,
+	})
+	out := filepath.Join(t.TempDir(), "repo")
+	if code, stderr := runBuildIn(source, out); code != 0 {
+		t.Fatalf("exit %d: %s", code, stderr)
+	}
+	if body, err := os.ReadFile(filepath.Join(out, "icons", "hello.png")); err != nil || string(body) != png {
+		t.Fatalf("build did not publish icons/hello.png: %v", err)
+	}
+	body, err := os.ReadFile(filepath.Join(out, "catalogs", "skills.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "icon_hash: " + sha256File(t, filepath.Join(out, "icons", "hello.png")); !strings.Contains(string(body), want) {
+		t.Errorf("catalog lacks %q:\n%s", want, body)
+	}
+}

@@ -18,6 +18,7 @@ type Item struct {
 	Section             string        `yaml:"section,omitempty"` // storefront tab; free text like Category
 	Developer           string        `yaml:"developer,omitempty"`
 	IconName            string        `yaml:"icon_name,omitempty"`
+	IconHash            string        `yaml:"icon_hash,omitempty"` // sha256 of icons/<icon_name>; makecatalogs fills it in
 	RestartAction       string        `yaml:"restart_action,omitempty"`
 	PreScript           string        `yaml:"preinstall_script,omitempty"`
 	PostScript          string        `yaml:"postinstall_script,omitempty"`

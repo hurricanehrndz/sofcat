@@ -85,6 +85,7 @@ const (
 	actionGetServiceInfo        = "GetServiceInfo"
 	actionListOptionalInstalls  = "ListOptionalInstalls"
 	actionGetBranding           = "GetBranding"
+	actionGetItemIcon           = "GetItemIcon"
 	actionInstallItem           = "InstallItem"
 	actionRemoveItem            = "RemoveItem"
 	actionStreamOperationStatus = "StreamOperationStatus"
@@ -103,6 +104,8 @@ func canonicalizeAction(action string) (string, bool) {
 		return actionListOptionalInstalls, true
 	case strings.ToLower(actionGetBranding):
 		return actionGetBranding, true
+	case strings.ToLower(actionGetItemIcon):
+		return actionGetItemIcon, true
 	case strings.ToLower(actionInstallItem):
 		return actionInstallItem, true
 	case strings.ToLower(actionRemoveItem):
@@ -174,7 +177,7 @@ func validateCommand(cmd Command) error {
 		if len(cmd.Items) != 3 && len(cmd.Items) != 4 {
 			return fmt.Errorf("%s action requires item,placement,outcome[,error]", cmd.Action)
 		}
-	case actionInstallItem, actionRemoveItem, actionStreamOperationStatus, actionCancelOperation:
+	case actionGetItemIcon, actionInstallItem, actionRemoveItem, actionStreamOperationStatus, actionCancelOperation:
 		if len(cmd.Items) != 1 {
 			return fmt.Errorf("%s action requires exactly one argument", cmd.Action)
 		}
@@ -234,6 +237,8 @@ func SendCommand(cfg config.Configuration, spec string) (CommandResponse, error)
 			return CommandResponse{}, err
 		}
 		return CommandResponse{Status: "ok", Branding: &b, Items: []string{line}}, nil
+	case actionGetItemIcon:
+		return sendGetItemIcon(ctx, client, cmd.Items[0])
 	case actionInstallItem:
 		accepted, err := client.InstallItem(ctx, cmd.Items[0], cmd.Placement)
 		if err != nil {
@@ -289,6 +294,29 @@ func runResponse(result RunResult) (CommandResponse, error) {
 		return resp, fmt.Errorf("managed run completed with %d failed item(s)", len(result.FailedItems))
 	}
 	return resp, nil
+}
+
+// sendGetItemIcon is `-S GetItemIcon:iconName`. Its one output line has the
+// image's type and decoded size in place of the image, which is of no use on
+// a terminal.
+func sendGetItemIcon(ctx context.Context, client *Client, iconName string) (CommandResponse, error) {
+	icon, err := client.GetItemIcon(ctx, iconName)
+	if err != nil {
+		return CommandResponse{}, err
+	}
+	data, err := base64.StdEncoding.DecodeString(icon.Base64)
+	if err != nil {
+		return CommandResponse{}, fmt.Errorf("failed to decode icon: %w", err)
+	}
+	line, err := json.Marshal(struct {
+		IconName string `json:"iconName"`
+		Mime     string `json:"mime"`
+		Bytes    int    `json:"bytes"`
+	}{iconName, icon.Mime, len(data)})
+	if err != nil {
+		return CommandResponse{}, fmt.Errorf("failed to encode icon summary: %w", err)
+	}
+	return CommandResponse{Status: "ok", Items: []string{string(line)}}, nil
 }
 
 // brandingSummary is the one `-S GetBranding` output line: the payload with
@@ -816,6 +844,7 @@ func getOptionalItems(cfg config.Configuration, caller peer) ([]OptionalInstallI
 		item.Section = catItem.Section
 		item.Developer = catItem.Developer
 		item.IconName = catItem.IconName
+		item.IconHash = cacheIcon(cfg, catItem)
 		item.RestartAction = catItem.RestartAction
 		item.ActionLabels, item.AppliesTo = table.Storefront(catItem, zip.Guard.GOOS)
 		item.placementNames, item.Placements = optionalPlacements(catItem, table, zip, reported, item.IsManaged, pendingRemoval[name])

@@ -1,6 +1,8 @@
 package admin
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -279,6 +281,57 @@ func TestCollectCatalogsNupkgItem(t *testing.T) {
 			}
 			if len(set.Problems) != 1 || set.Problems[0] != path+": "+tc.want {
 				t.Errorf("problems = %v, want [%s: %s]", set.Problems, path, tc.want)
+			}
+		})
+	}
+}
+
+// An icon the storefront could not show is found when the catalog is built,
+// not on every device; a good one gets the hash agents cache it by.
+func TestCollectCatalogsIcon(t *testing.T) {
+	png := "\x89PNG\r\n\x1a\n...."
+	sum := fmt.Sprintf("%x", sha256.Sum256([]byte(png)))
+	for name, tc := range map[string]struct {
+		keys, problem, wantHash string
+	}{
+		"hash filled in":    {keys: "icon_name: tool.png", wantHash: sum},
+		"hash kept":         {keys: "icon_name: sub/tool.png\nicon_hash: " + strings.ToUpper(sum), wantHash: strings.ToUpper(sum)},
+		"wrong hash":        {keys: "icon_name: tool.png\nicon_hash: abc", problem: "icon_hash is not the sha256"},
+		"missing file":      {keys: "icon_name: none.png", problem: `icon_name "none.png"`},
+		"leaves icons":      {keys: "icon_name: ../packages-info/tool.yaml", problem: "is not a path under icons/"},
+		"not an image":      {keys: "icon_name: notes.txt", problem: "is not a PNG or JPEG"},
+		"too large":         {keys: "icon_name: huge.png", problem: "the limit is"},
+		"no icon, no check": {},
+	} {
+		t.Run(name, func(t *testing.T) {
+			repoPath := t.TempDir()
+			for rel, body := range map[string]string{
+				"packages-info/tool.yaml": "item_name: tool\ncatalog: base\ninstaller: {type: msi, location: x.msi}\n" + tc.keys + "\n",
+				"icons/tool.png":          png,
+				"icons/sub/tool.png":      png,
+				"icons/notes.txt":         "not an image",
+				"icons/huge.png":          png + strings.Repeat("x", catalog.MaxIconBytes),
+			} {
+				path := filepath.Join(repoPath, filepath.FromSlash(rel))
+				if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			set, err := CollectCatalogs(repoPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.problem == "" && len(set.Problems) != 0 {
+				t.Errorf("problems = %v, want none", set.Problems)
+			}
+			if tc.problem != "" && (len(set.Problems) != 1 || !strings.Contains(set.Problems[0], tc.problem)) {
+				t.Errorf("problems = %v, want one with %q", set.Problems, tc.problem)
+			}
+			if got := set.Catalogs["base"]["tool"].IconHash; tc.problem == "" && got != tc.wantHash {
+				t.Errorf("icon_hash = %q, want %q", got, tc.wantHash)
 			}
 		})
 	}

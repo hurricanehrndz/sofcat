@@ -11,7 +11,7 @@ objects.
 - `main.go`: Wails application, `--pipe-name` flag (default `sofcat-service`),
   bundled WebView window titled with the branding title, or `SofCat UI`
 - `service.go`: the bound service — `ListOptionalInstalls`, `InstallItem`,
-  `RemoveItem`, `WatchOperation`, `GetBranding`, `CancelOperation`
+  `RemoveItem`, `WatchOperation`, `GetBranding`, `CancelOperation`, `GetItemIcon`
 - `log.go`: opt-in diagnostics
 - `assets_production.go` / `assets_development.go`: embedded `frontend/dist` under
   the `production` tag, compile-safe source filesystem otherwise

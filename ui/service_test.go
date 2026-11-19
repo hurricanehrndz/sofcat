@@ -37,6 +37,10 @@ func (f *fakeServiceClient) GetBranding(context.Context) (branding.Branding, err
 	return f.branding, nil
 }
 
+func (f *fakeServiceClient) GetItemIcon(_ context.Context, iconName string) (sofcatservice.ItemIcon, error) {
+	return sofcatservice.ItemIcon{Mime: "image/png", Base64: iconName}, nil
+}
+
 func (f *fakeServiceClient) InstallItem(_ context.Context, itemName, placement string) (sofcatservice.AcceptedOperation, error) {
 	f.installName, f.placement = itemName, placement
 	return f.accepted, nil
@@ -67,6 +71,10 @@ func TestUIServiceValidationAndForwarding(t *testing.T) {
 
 	if b, err := service.GetBranding(); err != nil || b.Title != "Acme" {
 		t.Fatalf("branding forwarding failed: %#v %v", b, err)
+	}
+
+	if icon, err := service.GetItemIcon("demo.png"); err != nil || icon.Base64 != "demo.png" {
+		t.Fatalf("icon forwarding failed: %#v %v", icon, err)
 	}
 
 	items, err := service.ListOptionalInstalls()
@@ -129,6 +137,9 @@ func TestUIServiceWithoutStartupRejectsCalls(t *testing.T) {
 	}
 	if _, err := service.GetBranding(); err == nil {
 		t.Fatal("branding forwarded without startup")
+	}
+	if _, err := service.GetItemIcon("demo.png"); err == nil {
+		t.Fatal("icon forwarded without startup")
 	}
 	if err := service.CancelOperation("op-1"); err == nil || client.cancelID != "" {
 		t.Fatalf("cancel forwarded without startup: id=%q err=%v", client.cancelID, err)

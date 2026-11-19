@@ -4,6 +4,7 @@ description: A small command-line tool, packaged with embala
 # category: left out, makecatalogs can choose it with a model; see site/src/content/docs/guides/ai-categories.md
 category: Utilities
 developer: Example Corp
+# icon_name: the repository's icons/hello.png, shown in the storefront; makecatalogs adds its icon_hash
 icon_name: hello.png
 restart_action: None
 # update_for: names of items this package is an update for

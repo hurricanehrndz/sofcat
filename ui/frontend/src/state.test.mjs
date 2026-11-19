@@ -23,6 +23,8 @@ import {
   fromCache,
   glyphTone,
   httpUrl,
+  iconKey,
+  iconSource,
   insertRecord,
   isHexColor,
   isItemActive,
@@ -241,6 +243,30 @@ test("a required item has no action and says the organisation manages it", () =>
     label: "Remove",
     method: "RemoveItem",
   });
+});
+
+test("an item's icon is asked for only when the service holds one, and again when it changes", () => {
+  assert.equal(iconKey(item({})), "");
+  assert.equal(iconKey(item({ iconName: "tool.png" })), "", "a name without a hash is an icon the service does not hold");
+  assert.equal(iconKey(item({ iconHash: "abc" })), "");
+  assert.equal(iconKey(item({ iconName: "tool.png", iconHash: "abc" })), "abc:tool.png");
+  assert.notEqual(
+    iconKey(item({ iconName: "tool.png", iconHash: "abc" })),
+    iconKey(item({ iconName: "tool.png", iconHash: "def" })),
+  );
+  // A cached list is untrusted shape-wise.
+  assert.equal(iconKey(item({ iconName: 7, iconHash: {} })), "");
+});
+
+test("only a PNG or JPEG from the service becomes an image source", () => {
+  assert.equal(iconSource({ mime: "image/png", base64: "iVBORw0KGgo=" }), "data:image/png;base64,iVBORw0KGgo=");
+  assert.equal(iconSource({ mime: "image/jpeg", base64: "/9j/4AAQ" }), "data:image/jpeg;base64,/9j/4AAQ");
+  assert.equal(iconSource({ mime: "", base64: "" }), "", "the service holds no icon");
+  assert.equal(iconSource({ mime: "image/svg+xml", base64: "PHN2Zy8+" }), "");
+  assert.equal(iconSource({ mime: "text/html", base64: "PGh0bWw+" }), "");
+  assert.equal(iconSource({ mime: "image/png", base64: 'x" onerror="alert(1)' }), "");
+  assert.equal(iconSource({ mime: "image/png" }), "");
+  assert.equal(iconSource(null), "");
 });
 
 test("monogram uses initials and falls back to a category glyph", () => {

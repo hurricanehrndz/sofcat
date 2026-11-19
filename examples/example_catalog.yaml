@@ -118,7 +118,10 @@ Firefox:
   # section: the storefront tab the item appears under (free text, like category)
   section: Apps
   developer: Mozilla
+  # icon_name: a PNG or JPEG under the repository's icons/; icon_hash is its
+  # sha256, which makecatalogs fills in
   icon_name: firefox.png
+  icon_hash: 2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae
   restart_action: None
   # blocking_apps: process image names checked case-insensitively; trailing `.exe` optional
   # ("firefox", "Firefox", and "firefox.exe" all match a running firefox.exe)

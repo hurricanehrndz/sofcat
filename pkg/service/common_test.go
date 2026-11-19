@@ -172,3 +172,13 @@ func TestParseCommandSpecCancelOperation(t *testing.T) {
 		t.Fatal("CancelOperation without an operationId must be rejected")
 	}
 }
+
+func TestParseCommandSpecGetItemIcon(t *testing.T) {
+	cmd, err := parseCommandSpec("getitemicon:tool.png")
+	if err != nil || cmd.Action != actionGetItemIcon || len(cmd.Items) != 1 || cmd.Items[0] != "tool.png" {
+		t.Fatalf("parse GetItemIcon = %#v, %v", cmd, err)
+	}
+	if _, err := parseCommandSpec("GetItemIcon"); err == nil {
+		t.Fatal("GetItemIcon accepted no icon name")
+	}
+}

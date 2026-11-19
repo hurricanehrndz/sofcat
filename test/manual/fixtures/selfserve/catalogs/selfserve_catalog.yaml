@@ -7,7 +7,9 @@ DemoOptional:
   description: A self-service optional install used by the Workstream C smoke test
   category: Smoke
   developer: SofCat
+  # icons/demo-optional.png; icon_hash is its SHA256, as makecatalogs writes it.
   icon_name: demo-optional.png
+  icon_hash: 2c062eb741de425d77d7cec2f43a5dab0518295ea286df8115b6743cc60f29f5
   restart_action: None
   check:
     file:

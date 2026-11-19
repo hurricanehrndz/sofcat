@@ -32,6 +32,8 @@ import {
   fromCache,
   glyphTone,
   httpUrl,
+  iconKey,
+  iconSource,
   insertRecord,
   actionText,
   actionProgress,
@@ -657,10 +659,60 @@ function filterChanged(): void {
   renderGrid();
 }
 
-/** setGlyph writes an item's monogram and its stable colour tone. */
+// The item icons the service handed over this session, as <img> sources by
+// iconKey. "" is one being asked for, or one the service turned out not to hold.
+const iconSources = new Map<string, string>();
+
+function showIcon(glyph: HTMLElement, key: string, src: string): void {
+  glyph.dataset.icon = key;
+  glyph.replaceChildren(logoImage(src));
+}
+
+/**
+ * setGlyph writes an item's icon when the service has handed it over, else
+ * its monogram in its stable colour tone.
+ */
 function setGlyph(glyph: HTMLElement, item: OptionalInstallItem): void {
-  glyph.textContent = monogram(item);
   glyph.dataset.tone = String(glyphTone(item));
+  const key = iconKey(item);
+  glyph.dataset.iconKey = key;
+  const src = iconSources.get(key);
+  if (!src) {
+    delete glyph.dataset.icon;
+    glyph.textContent = monogram(item);
+  } else if (glyph.dataset.icon !== key) {
+    showIcon(glyph, key, src);
+  }
+}
+
+/**
+ * loadIcons asks the service for the listed items' icons it has not handed
+ * over yet, one at a time, and puts each into the glyphs already drawn. An
+ * item keeps its monogram until its icon arrives, and for good without one.
+ */
+async function loadIcons(items: OptionalInstallItem[]): Promise<void> {
+  for (const item of items) {
+    const key = iconKey(item);
+    if (!key || iconSources.has(key)) {
+      continue;
+    }
+    iconSources.set(key, "");
+    try {
+      const src = iconSource(await api.getItemIcon(item.iconName ?? ""));
+      if (!src) {
+        continue;
+      }
+      iconSources.set(key, src);
+      for (const glyph of document.querySelectorAll<HTMLElement>(".glyph")) {
+        if (glyph.dataset.iconKey === key) {
+          showIcon(glyph, key, src);
+        }
+      }
+    } catch {
+      // Forgotten, so the next list refresh asks again.
+      iconSources.delete(key);
+    }
+  }
 }
 
 /** statusLine is a status paragraph: a spinner shown while work runs, then the text. */
@@ -1639,6 +1691,7 @@ async function refresh(): Promise<void> {
     view = withLive(items, savedAtUtc);
     lastError = "";
     saveList(storage, items, savedAtUtc);
+    void loadIcons(items);
   } catch (error) {
     lastError = error instanceof Error ? error.message : String(error);
     view = withFailure(view);

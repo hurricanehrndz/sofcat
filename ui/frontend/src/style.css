@@ -1092,6 +1092,18 @@ h2 {
   font-weight: 700;
 }
 
+/* An item's own icon takes the tile's place: no tint behind it. */
+.glyph[data-icon] {
+  background: none;
+}
+
+.glyph img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: inherit;
+}
+
 .glyph[data-tone="1"] {
   background: var(--tone-1-bg);
   color: var(--tone-1-ink);

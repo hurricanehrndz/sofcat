@@ -358,6 +358,15 @@ if ($demo.status -ne $expectStatus) {
 }
 Write-Host "    DemoOptional metadata present and status=$($demo.status) matches disk" -ForegroundColor Green
 
+# The list call fetched the fixture icon into the service's cache, and
+# GetItemIcon hands it over: icons/demo-optional.png, a PNG of 8629 bytes.
+if ($demo.iconHash -ne "2c062eb741de425d77d7cec2f43a5dab0518295ea286df8115b6743cc60f29f5") { Fail "DemoOptional iconHash mismatch: '$($demo.iconHash)'" }
+$icon = (Invoke-SofCat "GetItemIcon:demo-optional.png").Out | Where-Object { $_ -like "{*" } | Select-Object -First 1 | ConvertFrom-Json
+if ($icon.mime -ne "image/png" -or $icon.bytes -ne 8629) { Fail "GetItemIcon returned '$($icon.mime)', $($icon.bytes) bytes" }
+$noIcon = (Invoke-SofCat "GetItemIcon:../config.yaml").Out | Where-Object { $_ -like "{*" } | Select-Object -First 1 | ConvertFrom-Json
+if ($noIcon.mime -ne "" -or $noIcon.bytes -ne 0) { Fail "GetItemIcon served a file outside the icon cache" }
+Write-Host "    DemoOptional icon cached and served" -ForegroundColor Green
+
 # --- Step 13: honest terminal event for a failing install
 Write-Step "InstallItem:DemoFailing then StreamOperationStatus reports terminal Failed/item_failed"
 $installOut = Invoke-SofCat "InstallItem:DemoFailing"

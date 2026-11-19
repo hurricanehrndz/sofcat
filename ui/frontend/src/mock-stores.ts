@@ -40,6 +40,11 @@ export function dialogView(): boolean {
   return params().has("dialog");
 }
 
+/** icons is `?icons`: every item names an icon, which the mock service answers with the SofCat one. */
+export function icons(): boolean {
+  return params().has("icons");
+}
+
 export function offline(): boolean {
   return params().has("offline");
 }

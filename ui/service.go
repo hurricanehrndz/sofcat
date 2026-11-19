@@ -17,6 +17,7 @@ const operationStatusEvent = "sofcat:operation-status"
 type serviceClient interface {
 	ListOptionalInstalls(context.Context) ([]sofcatservice.OptionalInstallItem, error)
 	GetBranding(context.Context) (branding.Branding, error)
+	GetItemIcon(context.Context, string) (sofcatservice.ItemIcon, error)
 	InstallItem(context.Context, string, string) (sofcatservice.AcceptedOperation, error)
 	RemoveItem(context.Context, string, string) (sofcatservice.AcceptedOperation, error)
 	StreamOperationStatus(context.Context, string, func(sofcatservice.OperationStatus) error) error
@@ -72,6 +73,21 @@ func (s *UIService) GetBranding() (branding.Branding, error) {
 	b, err := s.client.GetBranding(ctx)
 	s.logResult("GetBranding", "", err, started)
 	return b, err
+}
+
+// GetItemIcon returns the icon the service cached under iconName, an item's
+// iconName; both fields are empty when it holds none. The UI never fetches an
+// icon itself.
+func (s *UIService) GetItemIcon(iconName string) (sofcatservice.ItemIcon, error) {
+	started := time.Now()
+	ctx, err := s.callContext()
+	if err != nil {
+		s.logResult("GetItemIcon", "", err, started)
+		return sofcatservice.ItemIcon{}, err
+	}
+	icon, err := s.client.GetItemIcon(ctx, iconName)
+	s.logResult("GetItemIcon", "", err, started)
+	return icon, err
 }
 
 // InstallItem selects itemName, only in placement when one is named; "" is

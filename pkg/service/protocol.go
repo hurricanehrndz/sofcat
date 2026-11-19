@@ -22,6 +22,7 @@ const (
 	methodGetServiceInfo        = "getServiceInfo"
 	methodListOptionalInstalls  = "listOptionalInstalls"
 	methodGetBranding           = "getBranding"
+	methodGetItemIcon           = "getItemIcon"
 	methodInstallItem           = "installItem"
 	methodRemoveItem            = "removeItem"
 	methodCancelOperation       = "cancelOperation"
@@ -45,6 +46,7 @@ var capabilities = []string{
 	methodGetServiceInfo,
 	methodListOptionalInstalls,
 	methodGetBranding,
+	methodGetItemIcon,
 	methodInstallItem,
 	methodRemoveItem,
 	methodCancelOperation,
@@ -146,6 +148,10 @@ type itemParams struct {
 	Placement string `json:"placement,omitempty"`
 }
 
+type iconParams struct {
+	IconName string `json:"iconName"`
+}
+
 type operationParams struct {
 	OperationID string `json:"operationId"`
 }
@@ -165,15 +171,18 @@ type ServiceInfo struct {
 // an admin manifest also lists it in managed_installs: it is installed for
 // everyone and cannot be removed through self-service.
 type OptionalInstallItem struct {
-	ItemName           string `json:"itemName"`
-	DisplayName        string `json:"displayName"`
-	Version            string `json:"version"`
-	Catalog            string `json:"catalog"`
-	Description        string `json:"description,omitempty"`
-	Category           string `json:"category,omitempty"`
-	Section            string `json:"section,omitempty"`
-	Developer          string `json:"developer,omitempty"`
-	IconName           string `json:"iconName,omitempty"`
+	ItemName    string `json:"itemName"`
+	DisplayName string `json:"displayName"`
+	Version     string `json:"version"`
+	Catalog     string `json:"catalog"`
+	Description string `json:"description,omitempty"`
+	Category    string `json:"category,omitempty"`
+	Section     string `json:"section,omitempty"`
+	Developer   string `json:"developer,omitempty"`
+	IconName    string `json:"iconName,omitempty"`
+	// IconHash is the sha256 of the icon the service holds for IconName,
+	// empty when it holds none; getItemIcon returns the image.
+	IconHash           string `json:"iconHash,omitempty"`
 	RestartAction      string `json:"restartAction,omitempty"`
 	IsManaged          bool   `json:"isManaged"`
 	IsRequired         bool   `json:"isRequired"`

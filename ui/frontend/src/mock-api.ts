@@ -9,6 +9,7 @@ import {
   UNBRANDED,
   brandingOverride,
   dialogView,
+  icons,
   offline,
   categoryFilter,
   navPlacement,
@@ -262,9 +263,18 @@ export const api: SofCatApi = {
           // The list is taken when the request arrives, then answered after
           // `?slowlist=` ms (default 250): the service queues it behind
           // running installs, so a slow list must not hold a button forever.
-          const list = items.map(({ mock: _mock, ...item }) => structuredClone(item));
+          const list = items.map(({ mock: _mock, ...item }) => ({
+            ...structuredClone(item),
+            ...(icons() ? { iconName: "sofcat-icon.png", iconHash: "mock" } : {}),
+          }));
           setTimeout(() => resolve(list), slowList());
         }),
+  // The real service answers from its cache; the mock has one image to give.
+  getItemIcon: async (iconName) => {
+    const response = await fetch(`${import.meta.env.BASE_URL}${iconName}`);
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    return { mime: "image/png", base64: btoa(Array.from(bytes, (byte) => String.fromCharCode(byte)).join("")) };
+  },
   installItem: (itemName, placement) => mutate(itemName, false, placement),
   removeItem: (itemName, placement) => mutate(itemName, true, placement),
   watchOperation: (operationId) => watch(operationId),

@@ -41,6 +41,35 @@ export class AcceptedOperation {
 }
 
 /**
+ * ItemIcon is getItemIcon's result: an item's icon as the service cached it.
+ * Both fields are empty when the service holds no icon by that name.
+ */
+export class ItemIcon {
+    "mime": string;
+    "base64": string;
+
+    /** Creates a new ItemIcon instance. */
+    constructor($$source: Partial<ItemIcon> = {}) {
+        if (!("mime" in $$source)) {
+            this["mime"] = "";
+        }
+        if (!("base64" in $$source)) {
+            this["base64"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ItemIcon instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ItemIcon {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ItemIcon($$parsedSource as Partial<ItemIcon>);
+    }
+}
+
+/**
  * OptionalInstallItem is one offered self-service item. IsRequired is whether
  * an admin manifest also lists it in managed_installs: it is installed for
  * everyone and cannot be removed through self-service.
@@ -55,6 +84,12 @@ export class OptionalInstallItem {
     "section"?: string;
     "developer"?: string;
     "iconName"?: string;
+
+    /**
+     * IconHash is the sha256 of the icon the service holds for IconName,
+     * empty when it holds none; getItemIcon returns the image.
+     */
+    "iconHash"?: string;
     "restartAction"?: string;
     "isManaged": boolean;
     "isRequired": boolean;
@@ -118,18 +153,18 @@ export class OptionalInstallItem {
      * Creates a new OptionalInstallItem instance from a string or object.
      */
     static createFrom($$source: any = {}): OptionalInstallItem {
-        const $$createField16_0 = $$createType0;
-        const $$createField17_0 = $$createType1;
-        const $$createField18_0 = $$createType3;
+        const $$createField17_0 = $$createType0;
+        const $$createField18_0 = $$createType1;
+        const $$createField19_0 = $$createType3;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("actionLabels" in $$parsedSource) {
-            $$parsedSource["actionLabels"] = $$createField16_0($$parsedSource["actionLabels"]);
+            $$parsedSource["actionLabels"] = $$createField17_0($$parsedSource["actionLabels"]);
         }
         if ("appliesTo" in $$parsedSource) {
-            $$parsedSource["appliesTo"] = $$createField17_0($$parsedSource["appliesTo"]);
+            $$parsedSource["appliesTo"] = $$createField18_0($$parsedSource["appliesTo"]);
         }
         if ("placements" in $$parsedSource) {
-            $$parsedSource["placements"] = $$createField18_0($$parsedSource["placements"]);
+            $$parsedSource["placements"] = $$createField19_0($$parsedSource["placements"]);
         }
         return new OptionalInstallItem($$parsedSource as Partial<OptionalInstallItem>);
     }

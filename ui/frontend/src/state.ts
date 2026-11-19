@@ -24,8 +24,8 @@ const RESTART_LABELS: Record<string, string> = {
   requireshutdown: "Shut down required",
 };
 
-// Category glyphs are generated locally; the specification forbids fetching
-// remote catalog icons.
+// Category glyphs are generated locally. An item's own icon comes from the
+// service (GetItemIcon); the UI never fetches a catalog icon itself.
 const CATEGORY_GLYPHS: Record<string, string> = {
   browsers: "🌐",
   communication: "💬",
@@ -206,6 +206,25 @@ export function monogram(item: OptionalInstallItem): string {
     .map((word) => word[0]?.toUpperCase() ?? "")
     .join("");
   return initials || categoryGlyph(item.category);
+}
+
+/**
+ * iconKey names the icon the service holds for an item, or "" when it holds
+ * none: the hash changes with the image, so a replaced icon is asked for again.
+ */
+export function iconKey(item: Pick<OptionalInstallItem, "iconName" | "iconHash">): string {
+  const name = typeof item.iconName === "string" ? item.iconName.trim() : "";
+  const hash = typeof item.iconHash === "string" ? item.iconHash.trim() : "";
+  return name && hash ? `${hash}:${name}` : "";
+}
+
+/** iconSource is a GetItemIcon payload as an <img> source, or "" unless it is a PNG or JPEG. */
+export function iconSource(icon: { mime?: unknown; base64?: unknown } | null | undefined): string {
+  const { mime, base64 } = icon ?? {};
+  if ((mime !== "image/png" && mime !== "image/jpeg") || typeof base64 !== "string" || !/^[A-Za-z0-9+/]+=*$/.test(base64)) {
+    return "";
+  }
+  return `data:${mime};base64,${base64}`;
 }
 
 // Glyph tones are a fixed palette in style.css (.tone-0 … .tone-4).
