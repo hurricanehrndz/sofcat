@@ -112,7 +112,7 @@ msix fixtures install; do not run it on a machine you keep.
 Checks [nupkg items](../../site/src/content/docs/guides/nupkg-items.md) end to end on a clean VM
 with no Chocolatey and no guest internet.
 
-1. `just bootstrap-nupkg` (needs embala 0.12.0 from `mise install`) builds
+1. `just bootstrap-nupkg` (needs embala 0.14.0 from `mise install`) builds
    `build/sofcat.exe` and runs `build-nupkg-repo.sh`, which builds three
    plain-style packages with embala: `sofcat-nupkg-smoke` 1.0.0 and 2.0.0
    (`scripts = "generate"`, a `readme.txt` payload) and `sofcat-nupkg-bad`
@@ -140,6 +140,22 @@ at its unknown command and leaves no kept copy and no staging directory. It
 exits 0 and prints `NUPKG SMOKE PASSED`, and logs to
 `C:\sofcat-test\nupkg-smoke.log`. Its last step only logs whether plain
 `-File` would also have failed the bad script.
+
+## Setup upgrade loop (setup.exe over an existing install)
+
+Checks that `setup.exe /S` upgrades an install in place, on a clean VM.
+
+1. Take the latest released `sofcat-<version>-x86_64-setup.exe` as the old
+   installer, and build two newer ones from the tree:
+   `just version=v<new> setup` and `just version=v<newer> setup`.
+2. Copy the three installers and `run-setup-upgrade.ps1` to the VM and run,
+   as an administrator:
+   `run-setup-upgrade.ps1 -OldSetup <released> -NewSetup <new> -NewerSetup <newer>`.
+
+It covers a foreign `sofcat` service, a failed upgrade that rolls back, the
+upgrade, a repair, a downgrade refused by the version rule and by the old
+release, and the uninstall. It must exit 0 and print `SETUP UPGRADE PASSED`
+(its log is `C:\sofcat-test\setup-upgrade.log`).
 
 ## Chrome end-to-end loop (local file:// repo)
 
