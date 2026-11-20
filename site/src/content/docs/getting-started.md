@@ -21,8 +21,7 @@ self-service app install the optional ones for standard users.
    The installer puts `sofcat.exe`, `sofcat-ui.exe` and `sofcat-useragent.exe`,
    the per-user helper, in `C:\Program Files\SofCat`, registers and starts the
    `sofcat` service, adds a Start-menu shortcut and an Add or remove programs
-   entry, and registers the helper to run at logon. It ships no config, and it
-   refuses to install over an existing service.
+   entry, and registers the helper to run at logon. It ships no config.
 
 2. Write `C:\ProgramData\SofCat\config.yaml` and point it at your repository:
 
@@ -43,7 +42,19 @@ self-service app install the optional ones for standard users.
    ```
 
 Everything the service writes lives under `C:\ProgramData\SofCat`; see
-[Data directory](/reference/data-directory/). To remove SofCat, run
+[Data directory](/reference/data-directory/).
+
+To upgrade, run a newer `setup.exe /S` over the install. It stops and removes
+the service, replaces the program files, and registers and starts the
+service again; `C:\ProgramData\SofCat` stays as it is. A failed upgrade rolls
+back to the previous version, its service running. The installer refuses a
+version older than the installed one, and a `sofcat` service it did not
+install. The upgrade ends a running per-user helper and closes an open
+storefront. The helper starts again at the user's next logon, or sooner
+when the service stores a changed plan; the storefront stays closed until
+the user opens it.
+
+To remove SofCat, run
 `"C:\Program Files\SofCat\uninstall.exe" /S`. It removes the service and the
 program files, closes the storefront if it is open, and leaves
 `C:\ProgramData\SofCat` alone. The install and the uninstall record each step
