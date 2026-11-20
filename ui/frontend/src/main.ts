@@ -54,6 +54,7 @@ import {
   needsAttention,
   openControl,
   opensDetails,
+  pageSplashMs,
   placementAction,
   placementStatus,
   progressText,
@@ -68,6 +69,9 @@ import {
   shouldAcceptRecord,
   showLoading,
   showRetry,
+  splashLeft,
+  splashMs,
+  splashShownBefore,
   statusLabel,
   statusRecord,
   stripLine,
@@ -1195,12 +1199,25 @@ function renderActivity(): void {
 }
 
 /**
+ * The splash (LOADING_ALWAYS): the screen's least time up, or 0. A reload of
+ * the page within one launch (a menu's Reload, a renderer crash) gets none:
+ * the splash belongs to the launch, not the page.
+ */
+const BUILD_SPLASH_MS = splashMs(import.meta.env.VITE_LOADING_ALWAYS, import.meta.env.VITE_LOADING_SECONDS);
+const SPLASH_MS = pageSplashMs(BUILD_SPLASH_MS, BUILD_SPLASH_MS > 0 && splashShownBefore(() => sessionStorage));
+
+/**
  * renderLoading puts the loading screen up or takes it down. Under it the
- * page is inert, so Tab and a screen reader meet only the screen.
+ * page is inert, so Tab and a screen reader meet only the screen. The splash
+ * is timed from the page's start (performance.now), once per launch.
  */
 function renderLoading(): void {
-  const up = showLoading(view);
+  const elapsed = performance.now();
+  const up = showLoading(view, SPLASH_MS, elapsed);
   loading.hidden = !up;
+  // Only the splash shows its content at once; a later wait keeps the 200 ms
+  // that hides a quick answer.
+  loading.dataset.always = String(splashLeft(SPLASH_MS, elapsed) > 0);
   for (const part of document.body.children) {
     if (part !== loading) {
       part.toggleAttribute("inert", up);
@@ -1840,6 +1857,16 @@ filtersForm.addEventListener("submit", (event) => event.preventDefault());
 searchInput.addEventListener("input", renderGrid);
 categorySelect.addEventListener("change", filterChanged);
 appliesToSelect.addEventListener("change", filterChanged);
+/** endSplash takes the splash down once its time is up, unless the screen is still waiting on the service. */
+function endSplash(): void {
+  const left = splashLeft(SPLASH_MS, performance.now());
+  if (left > 0) {
+    setTimeout(endSplash, left);
+  } else {
+    renderLoading();
+  }
+}
+
 /** refreshNow fetches the list again on request, saying so while it waits. */
 function refreshNow(): void {
   view = { ...view, source: view.items.length ? "cache" : "loading" };
@@ -1980,5 +2007,8 @@ applyBranding(brandingView(loadBranding(storage)));
 view = fromCache(loadList(storage));
 render();
 showView("list");
+if (SPLASH_MS > 0) {
+  endSplash();
+}
 void refresh();
 void refreshBranding();
