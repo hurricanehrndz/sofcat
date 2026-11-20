@@ -51,10 +51,12 @@ end
 
 -- One argument as Go's syscall.EscapeArg writes it: quoted when it has a
 -- space or tab, bare otherwise. Returns it and the text after it, or nil.
+-- A quoted one ending in a backslash, which EscapeArg would have doubled,
+-- is refused rather than un-escaped.
 local function arg(s)
   local quoted, rest = s:match('^"([^"]*)"(.*)$')
   if quoted then
-    if quoted:find("[ \t]") then
+    if quoted:find("[ \t]") and not quoted:find("\\$") then
       return quoted, rest
     end
     return nil
@@ -98,6 +100,15 @@ if query.code == 0 then
       error(err, 0)
     end
     dangling = true
+  else
+    -- -servicestatus reads the config as -serviceinstall does and exits 0
+    -- whatever state the service is in, so a failure means a config that
+    -- would fail the new -serviceinstall and the rollback's, leaving no
+    -- service. It changes nothing. A dangling service is not checked.
+    local status = embala.exec{ cmd = exe, args = { "-c", config, "-servicestatus" } }
+    if status.code ~= 0 then
+      error("@APP@.exe -c " .. config .. " -servicestatus exited " .. status.code .. ": " .. (status.stderr or "") .. (status.stdout or ""))
+    end
   end
   upgrade = true
 end

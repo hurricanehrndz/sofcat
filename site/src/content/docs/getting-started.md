@@ -58,8 +58,9 @@ and the next `setup.exe` then installs normally. A service that does not stop
 in time stays registered but may stay stopped until a reboot. The installer
 refuses a version older than the installed one, a `sofcat` service it did
 not install, a `sofcat` service whose command line was changed from the one
-`sofcat.exe -serviceinstall` registers, and an install made with `/D=`,
-which is not upgraded in place. The upgrade ends a running per-user helper and closes an open
+`sofcat.exe -serviceinstall` registers, a config file the service could
+not read or parse, and an install made with `/D=`, which is not upgraded in
+place. The upgrade ends a running per-user helper and closes an open
 storefront. The helper starts again at the user's next logon, or sooner
 when the service stores a changed plan; the storefront stays closed until
 the user opens it.

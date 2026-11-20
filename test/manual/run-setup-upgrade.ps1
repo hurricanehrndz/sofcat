@@ -17,7 +17,10 @@ each as named checks:
   a  upgrade   the new setup over the old one: the new version runs, its
                service restarted with the custom config path, and
                config.yaml and a sentinel tree under Data are untouched
-  b  repair    the new setup again over itself, the service registered
+  h  config    the custom config made invalid YAML under the running
+               service: the same setup again refuses, stops and copies
+               nothing
+  b  repair   the new setup again over itself, the service registered
                again with the default config first
   -  newer     with -NewerSetup only, the newer setup over the new one
   g  imagepath our executable with an extra argument in the ImagePath: the
@@ -26,12 +29,12 @@ each as named checks:
   c  downgrade refused, nothing changed: with -NewerSetup the new setup over
                the newer install (c-version-rule, the version rule), then
                the old setup over the installed version (c-old)
+  f  uninstall uninstall.exe /S after the upgrades removes everything but
+               %ProgramData%\<ProductName>
 
 Every install check compares the whole ImagePath with the form
 -serviceinstall writes, and every run that succeeds must restart the service
 (a new process id); a refusal must leave the same one running.
-  f  uninstall uninstall.exe /S after the upgrades removes everything but
-               %ProgramData%\<ProductName>
 
 The intended form takes three installers: -OldSetup the latest released
 setup.exe (a real install made by its embala and its own -serviceremove),
@@ -264,9 +267,9 @@ function Test-SameTree {
 # executable with $ConfigPath, the Run value points at the installed helper,
 # the shortcut and the ARP entry exist, and the ARP version is $Version. With
 # $BeforePid, the service runs in a new process when $Restarted is set and
-# in that one otherwise.
+# in that one otherwise; both process ids must be real ones.
 function Assert-Installed {
-    param([string]$Prefix, [string]$Version, [string]$ConfigPath, [int]$BeforePid = 0, [bool]$Restarted = $true)
+    param([string]$Prefix, [string]$Version, [string]$ConfigPath, [int]$BeforePid = -1, [bool]$Restarted = $true)
     $status = Wait-ServiceRunning
     Check "$Prefix.service-running" ($status -eq "Running") "(status '$status')"
     $image = Get-ServiceImage
@@ -274,13 +277,14 @@ function Assert-Installed {
     $imagePath = [string](Get-RegValue $serviceKey "ImagePath")
     $want = Get-ExpectedImage $ConfigPath
     Check "$Prefix.service-imagepath" ($imagePath -ieq $want) "('$imagePath', want '$want')"
-    if ($BeforePid -ne 0) {
+    if ($BeforePid -ge 0) {
         $now = Get-ServicePid
+        $real = $BeforePid -ne 0 -and $now -ne 0
         if ($Restarted) {
-            Check "$Prefix.service-restarted" ($now -ne 0 -and $now -ne $BeforePid) "(pid $BeforePid -> $now)"
+            Check "$Prefix.service-restarted" ($real -and $now -ne $BeforePid) "(pid $BeforePid -> $now)"
         }
         else {
-            Check "$Prefix.service-not-restarted" ($now -eq $BeforePid) "(pid $BeforePid -> $now)"
+            Check "$Prefix.service-not-restarted" ($real -and $now -eq $BeforePid) "(pid $BeforePid -> $now)"
         }
     }
     $run = [string](Get-RegValue $runKey $runValue)
@@ -364,6 +368,19 @@ try {
     Check "a.service-exe-new" ($newHashes["$Slug.exe"] -ne $oldHashes["$Slug.exe"]) "($Slug.exe hash changed)"
     Check "a.config-untouched" ((Test-Path -LiteralPath $config) -and (Get-FileHash -LiteralPath $config -Algorithm SHA256).Hash -eq $configHash) "($config)"
     Check "a.data-untouched" (Test-SameTree $sentinelHashes (Get-TreeHashes $sentinel)) "($sentinel)"
+
+    # The service read its config when it started, so it keeps running; the
+    # same version again would otherwise repair, so only the config check
+    # can refuse.
+    Log "[h] unusable custom config refused"
+    $goodConfig = [System.IO.File]::ReadAllBytes($customConfig)
+    Set-Content -LiteralPath $customConfig -Encoding ASCII -Value "url: [unclosed`r`n"
+    $before = Get-ServicePid
+    $code = Invoke-Setup $NewSetup
+    [System.IO.File]::WriteAllBytes($customConfig, $goodConfig)
+    Check "h.exit-nonzero" ($code -ne 0) "(exit $code)"
+    Assert-Installed "h" $newVersion $customConfig $before $false
+    Check "h.executables-unchanged" (Test-SameHashes $newHashes (Get-Hashes))
 
     Log "[b] new over new, the service registered again with the default config"
     Register-TestService ""
@@ -450,6 +467,7 @@ catch {
 finally {
     if ($null -ne $held) { $held.Close() }
     if ($foreignCreated) { & sc.exe delete $Slug | Out-Null }
+    Remove-Item -LiteralPath (Split-Path $customConfig) -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 if ($failed.Count -gt 0) {

@@ -87,6 +87,7 @@ afresh over the old files; a stop timeout leaves it registered, perhaps
 stopped, until a reboot. It refuses a `<slug>` service that runs another
 binary or whose command line is not the form `-serviceinstall` writes
 (`"<exe>" -c <config> -service`, each path quoted when it has a space), a
+config that `<exe> -c <config> -servicestatus` cannot read or parse, a
 newer installed version (the Add or remove programs
 `DisplayVersion`) and a `/D=` directory other than the installed one, so an
 install made with `/D=` is not upgraded in place. A `<slug>` service whose
@@ -298,7 +299,8 @@ elevated, run
 `<slug>` service, a failed upgrade that must roll back to the old version, the
 upgrade from the release (both on a service registered with a custom `-c`
 config path, which must survive), a repair, the newer upgrade, a service
-command line with an extra argument refused, a downgrade the version
+command line with an extra argument refused, an invalid custom config
+refused, a downgrade the version
 rule refuses (new over newer), the old release refused and the uninstall
 after them, and
 must exit 0 and print `SETUP UPGRADE PASSED` (its log is
