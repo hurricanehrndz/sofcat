@@ -9,7 +9,7 @@ set shell := ["bash", "-cu"]
 # builds that bypass just.
 brand := ""
 _brand_env := if brand == "" { "" } else { brand / "brand.env" }
-_read := 'unset SLUG NAME PUBLISHER IDENTIFIER DESCRIPTION HOMEPAGE INSTALLERS; [ -z "$1" ] || . "$1"; printf %s "${!2:-$3}"'
+_read := 'unset SLUG NAME PUBLISHER IDENTIFIER DESCRIPTION HOMEPAGE INSTALLERS LOADING_TEXT; [ -z "$1" ] || . "$1"; printf %s "${!2:-$3}"'
 app := shell(_read, _brand_env, "SLUG", "sofcat")
 product := shell(_read, _brand_env, "NAME", "SofCat")
 publisher := shell(_read, _brand_env, "PUBLISHER", "Carlos Hernandez")
@@ -18,12 +18,17 @@ description := shell(_read, _brand_env, "DESCRIPTION", "A catalog for anything y
 homepage := shell(_read, _brand_env, "HOMEPAGE", "https://github.com/hurricanehrndz/sofcat")
 # INSTALLERS=zip builds the Windows binaries with the zip_only tag: no command
 # installers or catalog scripts are compiled in (site/src/content/docs/zip-items/building.md).
+# The loading screen's line, shown while the storefront first connects.
+loading_text := shell(_read, _brand_env, "LOADING_TEXT", "Connecting to the " + product + " service…")
 installers := shell(_read, _brand_env, "INSTALLERS", "")
 _zip_tag := if installers == "zip" { ",zip_only" } else { "" }
 _brand_ico := if brand == "" { "" } else { brand / "icon.ico" }
 _brand_png := if brand == "" { "" } else { brand / "icon.png" }
 icon_ico := if path_exists(_brand_ico) == "true" { _brand_ico } else { "assets/sofcat.ico" }
 icon_png := if path_exists(_brand_png) == "true" { _brand_png } else { "" }
+# A brand loading.gif is the loading screen's mark; without it the icon is.
+_brand_gif := if brand == "" { "" } else { brand / "loading.gif" }
+loading_gif := if path_exists(_brand_gif) == "true" { _brand_gif } else { "" }
 # A brand's write-roots.yaml (where zip items may be placed) is compiled into
 # the binaries under the brand_roots tag; without it the stock roots apply.
 _brand_roots := if brand == "" { "" } else { brand / "write-roots.yaml" }
@@ -97,13 +102,16 @@ ui-test: ui-install
     npm test --prefix ui/frontend
 
 # Production frontend assets. A brand icon.png replaces the app-bar mark in a
-# copy of public/ (build/brand/public).
+# copy of public/ (build/brand/public), and a brand loading.gif joins it there
+# as the loading screen's mark.
 ui-assets: ui-install brand-check
     rm -rf build/brand/public
-    @if [ -n "{{icon_png}}" ]; then \
-      mkdir -p build/brand && cp -R ui/frontend/public build/brand/public && \
-      cp "{{icon_png}}" build/brand/public/sofcat-icon.png; fi
-    VITE_PRODUCT_NAME="{{product}}" SOFCAT_PUBLIC_DIR="{{ if icon_png == "" { "" } else { absolute_path("build/brand/public") } }}" \
+    @if [ -n "{{icon_png}}{{loading_gif}}" ]; then \
+      mkdir -p build/brand && cp -R ui/frontend/public build/brand/public; fi
+    @if [ -n "{{icon_png}}" ]; then cp "{{icon_png}}" build/brand/public/sofcat-icon.png; fi
+    @if [ -n "{{loading_gif}}" ]; then cp "{{loading_gif}}" build/brand/public/loading.gif; fi
+    VITE_PRODUCT_NAME="{{product}}" VITE_LOADING_TEXT={{quote(loading_text)}} VITE_LOADING_ICON="{{ if loading_gif == "" { "sofcat-icon.png" } else { "loading.gif" } }}" \
+        SOFCAT_PUBLIC_DIR="{{ if icon_png + loading_gif == "" { "" } else { absolute_path("build/brand/public") } }}" \
         npm run build --prefix ui/frontend
     @if grep -rq SOFCAT_VITE_MOCK_ONLY ui/frontend/dist; then \
       echo "Dev mock leaked into the production bundle" && exit 1; \
@@ -376,6 +384,8 @@ brand-check:
     [[ {{quote(homepage)}} == http://* || {{quote(homepage)}} == https://* ]] || fail "HOMEPAGE must be an http(s) URL"
     installers={{quote(installers)}}
     case $installers in ''|zip) ;; *) fail "INSTALLERS '$installers' must be unset or zip" ;; esac
+    loading_text={{quote(loading_text)}}
+    [[ $loading_text != *[[:cntrl:]\<\>\&]* ]] || fail "LOADING_TEXT must be one line without < > or &"
     stock=0
     [ "$app" = sofcat ] && stock=$((stock + 1))
     [ "$(printf %s "$product" | tr A-Z a-z)" = sofcat ] && stock=$((stock + 1))
@@ -383,6 +393,7 @@ brand-check:
     [ $stock = 0 ] || [ $stock = 3 ] || fail "SLUG, NAME and IDENTIFIER must all differ from stock SofCat (sofcat, SofCat, ca.hrndz.sofcat) or all match it"
     [ "$(head -c 4 {{quote(icon_ico)}} | od -An -tx1 | tr -d ' \n')" = 00000100 ] || fail "{{icon_ico}} is not a Windows .ico"
     [ -z {{quote(icon_png)}} ] || [ "$(head -c 8 {{quote(icon_png)}} | od -An -tx1 | tr -d ' \n')" = 89504e470d0a1a0a ] || fail "{{icon_png}} is not a PNG"
+    [ -z {{quote(loading_gif)}} ] || [ "$(head -c 4 {{quote(loading_gif)}})" = GIF8 ] || fail "{{loading_gif}} is not a GIF"
     if [ -n {{quote(brand_branding)}} ]; then
       cp {{quote(brand_branding)}} pkg/config/brand-branding.yaml
       go test -tags brand_branding -run '^TestCompiledBrandingParses$' ./pkg/config >/dev/null || fail "{{brand_branding}} has a key that is not a branding key, or is not YAML (see examples/brand/README.md)"

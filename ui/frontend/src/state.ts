@@ -1136,6 +1136,15 @@ export function connectionLabel(view: ListView): string {
   }
 }
 
+/**
+ * showLoading is true until the service first answers, when no saved list
+ * stands in: the loading screen is up. A failed first try takes it down for
+ * the page and its Retry, which puts it back up.
+ */
+export function showLoading(view: ListView): boolean {
+  return view.source === "loading";
+}
+
 export function showRetry(view: ListView): boolean {
   return view.source === "stale";
 }

@@ -66,6 +66,7 @@ import {
   resolveTab,
   restartBadge,
   shouldAcceptRecord,
+  showLoading,
   showRetry,
   statusLabel,
   statusRecord,
@@ -114,6 +115,7 @@ function need<E extends Element>(selector: string): E {
   return element;
 }
 
+const loading = need<HTMLDivElement>("#loading");
 const connection = need<HTMLParagraphElement>("#connection");
 const connectionText = need<HTMLSpanElement>("#connection-text");
 const retryButton = need<HTMLButtonElement>("#retry");
@@ -1192,7 +1194,22 @@ function renderActivity(): void {
   );
 }
 
+/**
+ * renderLoading puts the loading screen up or takes it down. Under it the
+ * page is inert, so Tab and a screen reader meet only the screen.
+ */
+function renderLoading(): void {
+  const up = showLoading(view);
+  loading.hidden = !up;
+  for (const part of document.body.children) {
+    if (part !== loading) {
+      part.toggleAttribute("inert", up);
+    }
+  }
+}
+
 function render(): void {
+  renderLoading();
   renderBanner();
   renderNav();
   renderCategories();
