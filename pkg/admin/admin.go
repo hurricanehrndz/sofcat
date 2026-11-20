@@ -168,6 +168,10 @@ func CollectCatalogs(repoPath string) (CatalogSet, error) { //nolint:gocognit //
 			set.Problems = append(set.Problems, checkZipItem(packageInfoPath, parsed.Item.Installer, placements)...)
 		}
 		set.Problems = append(set.Problems, checkNupkgItem(packageInfoPath, parsed.Item)...)
+		// Kept in the catalog: the agent fails the item's check.
+		if _, err := parsed.Item.Check.Registry.NameMatcher(); err != nil {
+			set.Problems = append(set.Problems, fmt.Sprintf("%s: item %q: %v", packageInfoPath, itemName, err))
+		}
 		set.Catalogs[parsed.Catalog][itemName] = parsed.Item
 		source[parsed.Catalog][itemName] = packageInfoPath
 	}

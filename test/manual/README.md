@@ -153,8 +153,12 @@ Checks that `setup.exe /S` upgrades an install in place, on a clean VM.
    `run-setup-upgrade.ps1 -OldSetup <released> -NewSetup <new> -NewerSetup <newer>`.
 
 It covers a foreign `sofcat` service, a failed upgrade that rolls back, the
-upgrade, a repair, a downgrade refused by the version rule and by the old
-release, and the uninstall. It must exit 0 and print `SETUP UPGRADE PASSED`
+upgrade, a repair, a service command line with an extra argument, an
+invalid custom config, a downgrade refused by the version rule and by the
+old release, and the uninstall. The rollback and the upgrade run on a
+service registered with a custom `-c` config path, which must survive both;
+every successful run must restart the service, and every refusal must leave
+it running untouched. It must exit 0 and print `SETUP UPGRADE PASSED`
 (its log is `C:\sofcat-test\setup-upgrade.log`).
 
 ## Chrome end-to-end loop (local file:// repo)

@@ -115,6 +115,48 @@ code from it, so a newer MSI replaces the older install and leaves one Add or
 remove programs entry. An older MSI refuses to install over a newer one, so
 lowering the catalog version does not roll a machine back.
 
+## Names that carry a version
+
+Some vendor installers put the version in the Add or remove programs name,
+such as `7-Zip 26.06 (x64 edition)` or `WinSCP 6.7.1`. A `check.registry.name`
+then matches one release only. Once the catalog moves to the next release, the
+older one installed on a machine reads as absent, so an update never runs and
+a removal does nothing.
+
+Use `check.registry.name_regex` in place of `name` for these:
+
+```yaml
+check:
+  registry:
+    name_regex: '7-Zip [\d.]+ \(x64 edition\)'
+    version: 26.07
+```
+
+- It needs sofcat 5.9.0 or later. An older agent ignores the key, finds
+  nothing installed and installs the item again on every run.
+- The pattern must match the whole name, not part of it. `7-Zip` alone does
+  not match `7-Zip 26.06 (x64 edition)`.
+- It ignores case, as `name` does. sofcat trims the spaces around the
+  installed name, but uses the pattern as written, so `' 7-Zip.*'` never
+  matches.
+- It uses Go's [RE2 syntax](https://github.com/google/re2/wiki/Syntax).
+- Put it in YAML single quotes, so the backslashes stay as written.
+- Set `name` or `name_regex`, not both. `makecatalogs -check` reports an item
+  with both, or with a pattern that does not compile. An agent that gets such
+  an item records its check as failed and neither installs nor removes it.
+
+Match as tightly as the name allows. A loose pattern can match several
+entries, such as a product and its helper. Any matching entry makes the item
+count as installed, so a removal runs when any one matches. The item is up to
+date only when a matching entry is at `version` or above.
+
+An `msi` uninstaller runs `msiexec /x` on the catalog's own MSI. When the
+pattern matches an older release with another product code, msiexec does not
+know that MSI as installed and exits with 1605, so the removal fails on every
+run. To remove older releases too, use a `ps1` uninstaller that finds the
+installed entry and runs its uninstall command. Listing 1605 in
+`success_codes` only hides the failure: the old release stays.
+
 ## Exe items
 
 embala's `setup.exe` is a wizard installer that also runs unattended. sofcat
