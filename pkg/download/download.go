@@ -120,8 +120,8 @@ func open(ctx context.Context, url string) (*http.Response, error) {
 		TLSHandshakeTimeout:   10 * time.Second,
 		ResponseHeaderTimeout: 10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
-		// Each request gets its own transport, so nothing could reuse a
-		// kept-alive connection; it would sit idle until the server dropped it.
+		// Each request gets its own transport, so only its own redirects could
+		// reuse a kept-alive connection; after that it sat idle until dropped.
 		DisableKeepAlives: true,
 	}
 	if downloadCfg.TLSAuth {

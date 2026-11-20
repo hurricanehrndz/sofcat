@@ -74,12 +74,15 @@ change to these methods; additions show up in `capabilities`.
 `installItem` checks the name against the admin manifests and catalogs it
 fetches from the repository for the request, so an edit published there
 counts at once. But the settings that name them (`url`, `manifest`,
-`catalogs`) are the ones the last run read, and its `conditional_items` are
-tested with the last run's facts, so after a managed-settings change or a
-change to those facts, an item the change newly offers is refused with
-`item_not_available` until a run has read the change (`sofcat -S run`); a
-`config.yaml` change needs a service restart. The two mutations answer as
-soon as the request is recorded and its run queued, not when that run ends:
+`catalogs`) are the ones the last run read, and the facts that
+`conditional_items` and `installable_condition` test include the condition
+scripts' facts from the last run (the built-in ones are gathered for the
+request). So after a managed-settings change or a change to a script's facts,
+an item the change newly offers is refused with `item_not_available` until
+the next service run, scheduled or `sofcat -S run`, has read it; a
+`config.yaml` change needs a service restart. The two mutations answer once
+the selection is recorded and only then queue its run, so they return before
+it ends:
 `sofcat -S InstallItem:<name>` prints the `operationId` and exits, and
 `sofcat -S StreamOperationStatus:<id>` follows the operation to its end.
 
