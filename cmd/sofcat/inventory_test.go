@@ -69,23 +69,6 @@ func TestFinishInventoryCheckOnlyLeavesInstalledRecord(t *testing.T) {
 	}
 }
 
-// TestFinishInventoryCheckOnlyWriteFailure: an unwritable data directory
-// costs the check-only record, not the stdout inventory wrappers depend on.
-func TestFinishInventoryCheckOnlyWriteFailure(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "not-a-dir")
-	if err := os.WriteFile(dir, nil, 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	stdout := captureStdout(t, func() {
-		finishInventory(config.Configuration{AppDataPath: dir, CheckOnly: true}, report.New(), newPlanBuilder(), time.Now(), nil)
-	})
-
-	if err := json.Unmarshal([]byte(stdout), &report.Inventory{}); err != nil {
-		t.Fatalf("stdout is not the inventory JSON: %v (%q)", err, stdout)
-	}
-}
-
 // TestFinishInventoryRealRunWritesInstalled: a real run's inventory is
 // inventory.json and nothing else; it never writes a check-only record.
 func TestFinishInventoryRealRunWritesInstalled(t *testing.T) {

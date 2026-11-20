@@ -68,6 +68,9 @@ func managedRun(cfg config.Configuration, progress installer.ProgressFn, cancels
 	if err = sofcatlog.NewLog(cfg); err != nil {
 		return nil, fmt.Errorf("unable to initialize logger: %w", err)
 	}
+	if cfg.CheckOnly {
+		slog.Info("Check-only run: nothing will be installed or removed", "checkonly", true)
+	}
 
 	// Build the run-scoped state: report + status checker (K7)
 	run := newReportFunc()

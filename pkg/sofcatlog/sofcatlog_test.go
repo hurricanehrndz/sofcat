@@ -223,28 +223,32 @@ func TestConsoleLevelGating(t *testing.T) {
 	}
 }
 
-// TestCheckOnlyMarksFileLines encodes that a check-only run, which a service
-// may run by policy, leaves a log record like a real run, and that a reader
-// of sofcat.log can tell its lines from a real run's: only check-only lines
-// carry checkonly=true.
-func TestCheckOnlyMarksFileLines(t *testing.T) {
+// TestCheckOnlyConsoleOnStderr encodes that a check-only run's stdout is only
+// the inventory JSON, which wrappers parse, so its console lines go to stderr
+// while a real run's stay on stdout. Either way the run leaves its lines in
+// sofcat.log, since a service may run check-only by policy.
+func TestCheckOnlyConsoleOnStderr(t *testing.T) {
 	for _, checkOnly := range []bool{true, false} {
 		t.Run(map[bool]string{true: "checkonly", false: "real"}[checkOnly], func(t *testing.T) {
-			setConsole(t)
+			stdout := setConsole(t)
+			stderr := &bytes.Buffer{}
+			orig := checkOnlyConsoleOut
+			checkOnlyConsoleOut = stderr
+			t.Cleanup(func() { checkOnlyConsoleOut = orig })
 			dir := t.TempDir()
 
 			newLog(t, config.Configuration{AppDataPath: dir, CheckOnly: checkOnly})
-			slog.Info("run-line")
+			slog.Warn("run-warn")
 
-			var rec map[string]any
-			if err := json.Unmarshal(bytes.TrimSpace(readLog(t, dir)), &rec); err != nil {
-				t.Fatalf("file line is not JSON: %v", err)
+			want, other := stdout, stderr
+			if checkOnly {
+				want, other = stderr, stdout
 			}
-			if rec["msg"] != "run-line" {
-				t.Errorf("msg = %v, want run-line", rec["msg"])
+			if !strings.Contains(want.String(), "run-warn") || other.Len() != 0 {
+				t.Errorf("console line misrouted: stdout %q, stderr %q", stdout, stderr)
 			}
-			if got, want := rec["checkonly"] == true, checkOnly; got != want {
-				t.Errorf("checkonly marked = %v, want %v (%v)", got, want, rec)
+			if !strings.Contains(string(readLog(t, dir)), "run-warn") {
+				t.Errorf("file sink missing message")
 			}
 		})
 	}

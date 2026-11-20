@@ -20,6 +20,9 @@ var (
 
 	// consoleOut is the console sink; overridable in tests.
 	consoleOut io.Writer = os.Stdout
+	// checkOnlyConsoleOut is the console sink in check-only, whose stdout is
+	// only the inventory JSON; overridable in tests.
+	checkOnlyConsoleOut io.Writer = os.Stderr
 )
 
 // SetOutput redirects the console sink; intended for tests. It takes effect
@@ -30,16 +33,16 @@ func SetOutput(w io.Writer) {
 	consoleOut = w
 }
 
-// consoleHandler returns a text handler for consoleOut, or nil when consoleOut
-// is a real file with no usable handle — e.g. the NULL stdout of an
-// SCM-started Windows service. Non-file writers (test buffers) skip the probe.
-func consoleHandler(opts *slog.HandlerOptions) slog.Handler {
-	if f, ok := consoleOut.(*os.File); ok {
+// consoleHandler returns a text handler for out, or nil when out is a real
+// file with no usable handle — e.g. the NULL stdout of an SCM-started Windows
+// service. Non-file writers (test buffers) skip the probe.
+func consoleHandler(out io.Writer, opts *slog.HandlerOptions) slog.Handler {
+	if f, ok := out.(*os.File); ok {
 		if _, err := f.Stat(); err != nil {
 			return nil
 		}
 	}
-	return slog.NewTextHandler(consoleOut, opts)
+	return slog.NewTextHandler(out, opts)
 }
 
 // fanoutHandler forwards each record to every child handler that has the
@@ -87,10 +90,9 @@ func (f fanoutHandler) WithGroup(name string) slog.Handler {
 	return fanoutHandler{handlers: hs}
 }
 
-// NewLog builds the fan-out logger: a text console sink plus a rotated file
-// sink (structured JSON by default, plain text when cfg.LogFilePlain). In
-// check-only every file line carries checkonly=true. The result is installed
-// as slog's default logger.
+// NewLog builds the fan-out logger: a text console sink, on stderr in
+// check-only, plus a rotated file sink (structured JSON by default, plain text
+// when cfg.LogFilePlain). The result is installed as slog's default logger.
 func NewLog(cfg config.Configuration) error {
 	logMu.Lock()
 	defer logMu.Unlock()
@@ -107,8 +109,12 @@ func NewLog(cfg config.Configuration) error {
 	// here (alongside the console and file sinks) that renders records for the
 	// UI; D owns wiring that handler's transport. The fan-out handler already
 	// forwards every record to each enabled child, so no other change is needed.
+	out := consoleOut
+	if cfg.CheckOnly {
+		out = checkOnlyConsoleOut
+	}
 	var handlers []slog.Handler
-	if h := consoleHandler(&slog.HandlerOptions{Level: consoleLevel}); h != nil {
+	if h := consoleHandler(out, &slog.HandlerOptions{Level: consoleLevel}); h != nil {
 		handlers = append(handlers, h)
 	}
 
@@ -140,9 +146,6 @@ func NewLog(cfg config.Configuration) error {
 	} else {
 		fileHandler = slog.NewJSONHandler(logWriter, fileOpts)
 	}
-	if cfg.CheckOnly {
-		fileHandler = fileHandler.WithAttrs([]slog.Attr{slog.Bool("checkonly", true)})
-	}
 	handlers = append(handlers, fileHandler)
 
 	slog.SetDefault(slog.New(fanoutHandler{handlers: handlers}))
@@ -158,7 +161,7 @@ func Close() {
 		_ = logWriter.Close()
 		logWriter = nil
 	}
-	h := consoleHandler(nil)
+	h := consoleHandler(consoleOut, nil)
 	if h == nil {
 		h = slog.DiscardHandler
 	}

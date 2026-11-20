@@ -47,16 +47,17 @@ these its own ACL.
   ([Catalog](/customization/catalog/#icon_name)). Users do not read it: the
   service hands each image over.
 - `Data\sofcat.log` may name paths and items. Check-only runs log there
-  too, and each of their lines carries the attribute `checkonly` set to
-  `true`.
+  too, and each starts with the line `Check-only run: nothing will be
+  installed or removed`.
 
 `Data\run.lock` is the lock a managed run holds for its whole length. It is
 empty, and it is never deleted. A command-line `sofcat` run started while
 another run is under way, the service's included, fails at once with
 "another managed run is in progress". The service's own run waits for the
 other run to finish. So does `sofcat -checkonly`, which prints the inventory
-and writes `inventory-checkonly.json` instead of `inventory.json`. It says it is waiting on stderr, so
-stdout stays the inventory JSON. It waits with no limit, and a run can be
+and writes `inventory-checkonly.json` instead of `inventory.json`. It says it
+is waiting on stderr, and its log lines go to stderr too, so stdout stays the
+inventory JSON. It waits with no limit, and a run can be
 long, so a monitoring wrapper should apply its own timeout.
 
 `Data\service-manifest.yaml.lock` is taken by every read and write of the

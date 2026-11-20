@@ -161,6 +161,53 @@ func TestManagedRunFinalizesReportOnManifestError(t *testing.T) {
 	}
 }
 
+// TestManagedRunCheckOnlyStdoutIsInventory: wrappers parse a check-only run's
+// stdout as the inventory JSON, so the run's own log lines, even the warning
+// that inventory-checkonly.json could not be saved, must stay off it. The run
+// still says in sofcat.log that it was check-only.
+func TestManagedRunCheckOnlyStdoutIsInventory(t *testing.T) {
+	resetMainHooks()
+	defer resetMainHooks()
+
+	appData := t.TempDir()
+	cfg := config.Configuration{
+		CheckOnly:   true,
+		CachePath:   t.TempDir(),
+		AppDataPath: appData,
+		URL:         "http://127.0.0.1:1/",
+		Manifest:    "missing-manifest",
+	}
+	// A directory in its place makes the check-only inventory unwritable.
+	if err := os.Mkdir(filepath.Join(appData, checkOnlyInventoryFile), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	origStdout := os.Stdout
+	t.Cleanup(func() { sofcatlog.SetOutput(origStdout) })
+	t.Cleanup(sofcatlog.Close)
+
+	stdout := captureStdout(t, func() {
+		sofcatlog.SetOutput(os.Stdout)
+		if _, err := managedRun(cfg, nil, nil); err == nil {
+			t.Errorf("expected error from manifest retrieval")
+		}
+	})
+	sofcatlog.Close()
+
+	if err := json.Unmarshal([]byte(stdout), &report.Inventory{}); err != nil {
+		t.Fatalf("stdout is not only the inventory JSON: %v (%q)", err, stdout)
+	}
+	log, err := os.ReadFile(filepath.Join(appData, "sofcat.log"))
+	if err != nil {
+		t.Fatalf("read log: %v", err)
+	}
+	if !strings.Contains(string(log), "Check-only run") {
+		t.Errorf("sofcat.log does not mark the check-only run:\n%s", log)
+	}
+	if !strings.Contains(string(log), "Unable to save check-only inventory") {
+		t.Errorf("sofcat.log missing the save warning:\n%s", log)
+	}
+}
+
 // readInventory decodes the inventory.json a real run wrote under appData.
 func readInventory(t *testing.T, appData string) report.Inventory {
 	t.Helper()
