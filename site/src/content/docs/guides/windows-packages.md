@@ -132,9 +132,13 @@ check:
     version: 26.07
 ```
 
+- It needs sofcat 5.9.0 or later. An older agent ignores the key, finds
+  nothing installed and installs the item again on every run.
 - The pattern must match the whole name, not part of it. `7-Zip` alone does
   not match `7-Zip 26.06 (x64 edition)`.
-- It ignores case and the spaces around the name, as `name` does.
+- It ignores case, as `name` does. sofcat trims the spaces around the
+  installed name, but uses the pattern as written, so `' 7-Zip.*'` never
+  matches.
 - It uses Go's [RE2 syntax](https://github.com/google/re2/wiki/Syntax).
 - Put it in YAML single quotes, so the backslashes stay as written.
 - Set `name` or `name_regex`, not both. `makecatalogs -check` reports an item
@@ -142,8 +146,16 @@ check:
   an item records its check as failed and neither installs nor removes it.
 
 Match as tightly as the name allows. A loose pattern can match several
-entries, such as a product and its helper, and the item counts as installed
-when any one of them is at `version` or above.
+entries, such as a product and its helper. Any matching entry makes the item
+count as installed, so a removal runs when any one matches. The item is up to
+date only when a matching entry is at `version` or above.
+
+An `msi` uninstaller runs `msiexec /x` on the catalog's own MSI. When the
+pattern matches an older release with another product code, msiexec does not
+know that MSI as installed and exits with 1605, so the removal fails on every
+run. To remove older releases too, use a `ps1` uninstaller that finds the
+installed entry and runs its uninstall command. Listing 1605 in
+`success_codes` only hides the failure: the old release stays.
 
 ## Exe items
 

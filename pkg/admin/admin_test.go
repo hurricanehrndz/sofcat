@@ -306,6 +306,11 @@ func TestCollectCatalogsRegistryNameRegex(t *testing.T) {
 			check: `{name_regex: 'App (', version: '1.0'}`,
 			want:  `item "a": check.registry name_regex "App (" does not compile`,
 		},
+		// Wrapped in the anchors, this one would compile and match anything.
+		"escapes the anchors": {
+			check: `{name_regex: 'x)|(.*', version: '1.0'}`,
+			want:  `item "a": check.registry name_regex "x)|(.*" does not compile`,
+		},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
