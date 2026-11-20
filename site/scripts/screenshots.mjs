@@ -78,6 +78,11 @@ const SHOTS = [
   { name: "banner-height-small", branding: { bannerHeight: "small" }, crop: ".app-bar" },
   { name: "banner-height-x-large", branding: { bannerHeight: "x-large" }, crop: ".app-bar" },
   {
+    name: "banner-height-fit",
+    branding: { ...BACKGROUND, backgroundText: "light", bannerHeight: "fit" },
+    crop: ".app-bar",
+  },
+  {
     name: "background-image",
     branding: { ...BACKGROUND, backgroundText: "light", bannerHeight: "large" },
     crop: ".app-bar",

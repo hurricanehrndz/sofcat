@@ -531,7 +531,14 @@ button[aria-disabled="true"] {
  * from before the key, the content's own (7.5rem at least over an image).
  * small trims the padding, the gaps and the logo for a slim strip; large
  * and x-large hold the banner open, over the accent or an image alike.
+ * fit keeps medium's content at full size but drops any minimum, an image's
+ * included, and takes small's 1rem padding: the banner hugs what it holds.
  */
+#banner[data-height="fit"] {
+  min-height: 0;
+  padding-block: 1rem;
+}
+
 #banner[data-height="small"] {
   min-height: 0;
   row-gap: 0.5rem;
@@ -701,6 +708,14 @@ button[aria-disabled="true"] {
   grid-template-rows: none;
 }
 
+/*
+ * A fit banner hugs its content: below 40rem, where a corner still gives
+ * the button a row, it gets no empty twin either.
+ */
+#banner[data-height="fit"][data-link-position] {
+  grid-template-rows: none;
+}
+
 @media (min-width: 40rem) {
   #banner[data-align="left"][data-link-position$="right"] {
     grid-template-columns: auto minmax(0, 1fr) fit-content(40%);
@@ -720,6 +735,65 @@ button[aria-disabled="true"] {
 
   #banner[data-align="right"][data-link-position$="left"] .brand-link {
     margin: 0 2rem 0 0;
+  }
+
+  /*
+   * A fit banner hugs its content, so top and bottom have no room to mean
+   * anything: a corner names only the side. The button takes a column of
+   * its own on that side, in the banner's vertical middle, and adds no row.
+   * Left content with a left corner puts the button first and the content
+   * after it, still left-aligned (and right mirrors it). The button keeps
+   * its label on one line up to 16rem, not 40% of the width as elsewhere,
+   * and wraps beyond that; its column is as wide as the button. Centred
+   * content sits in a middle column of at most half the width between two
+   * equal columns, so it is centred in the window while the button fits
+   * its side's column; a longer label widens that column and the content
+   * shifts away from it, wrapping before it reaches the button.
+   */
+  #banner[data-height="fit"][data-link-position] .brand-link {
+    width: max-content;
+    max-width: 16rem;
+    align-self: center;
+    margin-block: 0;
+  }
+
+  #banner[data-height="fit"][data-align="left"][data-link-position$="right"],
+  #banner[data-height="fit"][data-align="right"][data-link-position$="left"] {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  #banner[data-height="fit"][data-align="left"][data-link-position$="left"] {
+    grid-template-columns: auto auto minmax(0, 1fr);
+    grid-template-rows: auto;
+    grid-template-areas: "link logo text";
+  }
+
+  #banner[data-height="fit"][data-align="left"][data-link-position$="left"] .brand-link {
+    margin-inline: 0 2rem;
+  }
+
+  #banner[data-height="fit"][data-align="right"][data-link-position$="right"] {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-rows: auto;
+    grid-template-areas: "text logo link";
+  }
+
+  #banner[data-height="fit"][data-align="right"][data-link-position$="right"] .brand-link {
+    margin-inline: 2rem 0;
+  }
+
+  #banner[data-height="fit"][data-align="center"][data-link-position] {
+    grid-template-columns: 1fr fit-content(50%) 1fr;
+    grid-template-rows: auto auto;
+    column-gap: 2rem;
+  }
+
+  #banner[data-height="fit"][data-align="center"][data-link-position$="left"] {
+    grid-template-areas: "link logo ." "link text .";
+  }
+
+  #banner[data-height="fit"][data-align="center"][data-link-position$="right"] {
+    grid-template-areas: ". logo link" ". text link";
   }
 }
 
