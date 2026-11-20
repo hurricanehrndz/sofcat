@@ -58,6 +58,8 @@ import {
   placementStatus,
   progressText,
   queueView,
+  repeatsOutcome,
+  requestText,
   refusalText,
   releaseOperation,
   requestErrorText,
@@ -1202,13 +1204,16 @@ function render(): void {
 
 /**
  * pushRecord files a record in its operation and, unless it is only a
- * percentage update, in Activity; false for a duplicate.
+ * percentage update or repeats the outcome, in Activity; false for a duplicate.
  */
 function pushRecord(operation: OperationView, record: ActivityRecord): boolean {
   if (!insertRecord(operation.records, record)) {
     return false;
   }
-  if (isProgressTick(operation.records, record)) {
+  // A tick is judged against what Activity shows: the helper's Installing after
+  // the item's own ItemCompleted would otherwise read as a second Installing.
+  const shown = operation.records.filter((filed) => !repeatsOutcome(operation.item, filed));
+  if (!shown.includes(record) || isProgressTick(shown, record)) {
     return true;
   }
   activity = addActivity(activity, record, ACTIVITY_LIMIT);
@@ -1266,7 +1271,7 @@ async function runAction(item: OptionalInstallItem, action: ItemAction): Promise
   operations.set(operationId, operation);
   pushRecord(
     operation,
-    localRecord(operationId, item, REQUESTED_STATE, `${action.label} accepted by the service.`, started),
+    localRecord(operationId, item, REQUESTED_STATE, requestText(item, action), started),
   );
   active = trackOperation(active, operationId, item.itemName);
   render();
