@@ -60,7 +60,7 @@ cross-built (`GOOS=windows GOARCH=amd64 CGO_ENABLED=0`) and stripped
 per-user helper `build/sofcat-useragent.exe` (`cmd/sofcat-useragent`, also
 `-H windowsgui`, no Wails).
 `just setup` wraps them in embala's `setup.exe` (`installer/embala.toml`,
-`install.lua` and `uninstall.lua`, embala 0.12.0); it builds on Linux. The
+`install.lua` and `uninstall.lua`, embala 0.14.0); it builds on Linux. The
 installer copies them into `C:\Program Files\SofCat`, adds the Start-menu
 shortcut and the Add or remove programs entry, then runs
 `sofcat.exe -serviceinstall`, which registers and starts the service and
@@ -72,7 +72,19 @@ the service, removes the value and ends any running helper and storefront
 (an open storefront window closes, even under `/S`), then reverses the
 copies. sofcat owns both on every platform, so
 the installer scripts only call it. `setup.exe /S` and `uninstall.exe /S` are
-the unattended forms; `setup.exe` refuses to install over an existing service.
+the unattended forms. Over an existing install, `setup.exe` upgrades in place:
+after the wizard (if any) it runs the installed `sofcat.exe -serviceremove`,
+then the fresh-install steps. An error rolls back the files and the Add or
+remove programs entry, and reinstalls the previous service, except when a
+handle to it (the Services console) left it marked for deletion: then there
+is no service until that handle closes, and the next `setup.exe` installs
+afresh over the old files; a stop timeout leaves it registered, perhaps
+stopped, until a reboot. It refuses a `<slug>` service that runs another
+binary, a newer installed version (the Add or remove programs
+`DisplayVersion`) and a `/D=` directory other than the installed one, so an
+install made with `/D=` is not upgraded in place. A `<slug>` service whose
+installed `sofcat.exe` is missing is deleted with `sc.exe` and installed
+afresh.
 The four `-service*` management commands log each step to stderr and to the
 Windows Application log under the source `<slug>`, which `-serviceinstall`
 registers and nothing removes
@@ -242,7 +254,7 @@ included, are in the Application log:
 
 Nupkg items (`site/src/content/docs/guides/nupkg-items.md`) have their own
 loop, on a clean VM with no Chocolatey. `just bootstrap-nupkg` builds
-`build/sofcat.exe` and, with embala 0.12.0 from mise, plain-style packages
+`build/sofcat.exe` and, with embala 0.14.0 from mise, plain-style packages
 `sofcat-nupkg-smoke` 1.0.0 and 2.0.0 (`scripts = "generate"`) and
 `sofcat-nupkg-bad` 1.0.0, whose install script calls an unknown command,
 into a repository at
@@ -268,8 +280,20 @@ state in `C:\ProgramData\SofCat\Data`. `install-setup.ps1 -Uninstall` runs
 `"C:\Program Files\SofCat\uninstall.exe" /S` the same way; it must remove
 the service, the `Run` value, the shortcut, the Add or remove programs entry
 and `C:\Program Files\SofCat`, and leave `C:\ProgramData\SofCat` alone.
-Running `setup.exe /S` over an existing install must exit non-zero before
-copying anything.
+
+Upgrade gate: take the latest released `setup.exe` as the old installer and
+build two newer ones from the tree (`just version=v<new> setup`, then
+`just version=v<newer> setup`; `version` defaults to `git describe`), `rig
+put` all three and `test/manual/run-setup-upgrade.ps1`, then on a clean VM,
+elevated, run
+`run-setup-upgrade.ps1 -OldSetup <released> -NewSetup <new> -NewerSetup <newer>`
+(`-ProductName`, `-Slug` and `-Identifier` for a brand). It covers a foreign
+`<slug>` service, a failed upgrade that must roll back to the old version, the
+upgrade from the release, a repair, the newer upgrade, a downgrade the version
+rule refuses (new over newer), the old release refused and the uninstall
+after them, and
+must exit 0 and print `SETUP UPGRADE PASSED` (its log is
+`C:\sofcat-test\setup-upgrade.log`).
 
 ## macOS Validation Loop
 
