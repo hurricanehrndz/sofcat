@@ -115,9 +115,9 @@ func route(cfg config.Configuration) error {
 		case "listoptionalinstalls", "listuserplacements":
 			fmt.Println("none")
 		case "installitem":
-			fmt.Println("InstallItem command completed successfully")
+			fmt.Println("InstallItem request accepted; its run is queued")
 		case "removeitem":
-			fmt.Println("RemoveItem command completed successfully")
+			fmt.Println("RemoveItem request accepted; its run is queued")
 		case "streamoperationstatus":
 			fmt.Println("StreamOperationStatus command completed successfully")
 		default:
