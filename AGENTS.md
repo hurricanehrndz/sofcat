@@ -73,10 +73,18 @@ the service, removes the value and ends any running helper and storefront
 copies. sofcat owns both on every platform, so
 the installer scripts only call it. `setup.exe /S` and `uninstall.exe /S` are
 the unattended forms. Over an existing install, `setup.exe` upgrades in place:
-it runs the installed `sofcat.exe -serviceremove`, then the fresh-install
-steps, and an error rolls back to the previous version with its service
-running. It refuses a `<slug>` service that runs another binary and a newer
-installed version (the Add or remove programs `DisplayVersion`).
+after the wizard (if any) it runs the installed `sofcat.exe -serviceremove`,
+then the fresh-install steps. An error rolls back the files and the Add or
+remove programs entry, and reinstalls the previous service, except when a
+handle to it (the Services console) left it marked for deletion: then there
+is no service until that handle closes, and the next `setup.exe` installs
+afresh over the old files; a stop timeout leaves it registered, perhaps
+stopped, until a reboot. It refuses a `<slug>` service that runs another
+binary, a newer installed version (the Add or remove programs
+`DisplayVersion`) and a `/D=` directory other than the installed one, so an
+install made with `/D=` is not upgraded in place. A `<slug>` service whose
+installed `sofcat.exe` is missing is deleted with `sc.exe` and installed
+afresh.
 The four `-service*` management commands log each step to stderr and to the
 Windows Application log under the source `<slug>`, which `-serviceinstall`
 registers and nothing removes
@@ -273,14 +281,17 @@ state in `C:\ProgramData\SofCat\Data`. `install-setup.ps1 -Uninstall` runs
 the service, the `Run` value, the shortcut, the Add or remove programs entry
 and `C:\Program Files\SofCat`, and leave `C:\ProgramData\SofCat` alone.
 
-Upgrade gate: build two installers with different versions
-(`just version=v<old> setup` and `just version=v<new> setup`; `version`
-defaults to `git describe`), `rig put` both and
-`test/manual/run-setup-upgrade.ps1`, then on a clean VM, elevated, run
-`run-setup-upgrade.ps1 -OldSetup <old setup.exe> -NewSetup <new setup.exe>`
+Upgrade gate: take the latest released `setup.exe` as the old installer and
+build two newer ones from the tree (`just version=v<new> setup`, then
+`just version=v<newer> setup`; `version` defaults to `git describe`), `rig
+put` all three and `test/manual/run-setup-upgrade.ps1`, then on a clean VM,
+elevated, run
+`run-setup-upgrade.ps1 -OldSetup <released> -NewSetup <new> -NewerSetup <newer>`
 (`-ProductName`, `-Slug` and `-Identifier` for a brand). It covers a foreign
 `<slug>` service, a failed upgrade that must roll back to the old version, the
-upgrade, a repair, a refused downgrade and the uninstall after them, and
+upgrade from the release, a repair, the newer upgrade, a downgrade the version
+rule refuses (new over newer), the old release refused and the uninstall
+after them, and
 must exit 0 and print `SETUP UPGRADE PASSED` (its log is
 `C:\sofcat-test\setup-upgrade.log`).
 

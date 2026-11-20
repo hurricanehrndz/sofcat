@@ -46,10 +46,16 @@ Everything the service writes lives under `C:\ProgramData\SofCat`; see
 
 To upgrade, run a newer `setup.exe /S` over the install. It stops and removes
 the service, replaces the program files, and registers and starts the
-service again; `C:\ProgramData\SofCat` stays as it is. A failed upgrade rolls
-back to the previous version, its service running. The installer refuses a
-version older than the installed one, and a `sofcat` service it did not
-install. The upgrade ends a running per-user helper and closes an open
+service again; `C:\ProgramData\SofCat` stays as it is. A failed upgrade
+restores the previous program files and Add or remove programs entry, and
+reinstalls the previous service. If the Services console or another program
+holds the service open, Windows only marks it for deletion, and the
+previous service cannot come back: there is none until that handle closes,
+and the next `setup.exe` then installs normally. A service that does not stop
+in time stays registered but may stay stopped until a reboot. The installer
+refuses a version older than the installed one, a `sofcat` service it did
+not install, and an install made with `/D=`, which is not upgraded in
+place. The upgrade ends a running per-user helper and closes an open
 storefront. The helper starts again at the user's next logon, or sooner
 when the service stores a changed plan; the storefront stays closed until
 the user opens it.

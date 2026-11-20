@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-setup.exe upgrade-in-place gate: two installer builds, old and new.
+setup.exe upgrade-in-place gate: three installer builds, old, new and newer.
 
 .DESCRIPTION
 Runs the installers unattended (/S) through these scenarios, in this order,
@@ -17,9 +17,18 @@ each as named checks:
                config.yaml and a sentinel tree under Data are untouched
   b  repair    the new setup again over itself
   -  newer     with -NewerSetup only, the newer setup over the new one
-  c  downgrade the old setup over the newer install: refused, nothing changed
+  c  downgrade refused, nothing changed: with -NewerSetup the new setup over
+               the newer install (c-version-rule, the version rule), then
+               the old setup over the installed version (c-old)
   f  uninstall uninstall.exe /S after the upgrades removes everything but
                %ProgramData%\<ProductName>
+
+The intended form takes three installers: -OldSetup the latest released
+setup.exe (a real install made by its embala and its own -serviceremove),
+-NewSetup and -NewerSetup built from the tree with
+`just version=v<new> setup` and `just version=v<newer> setup`. Without
+-NewerSetup the version rule goes untested when the old release refuses any
+existing service.
 
 Run once on a clean VM (no <slug> service, no install) from an elevated
 session; a run leaves the VM uninstalled, with the seeded config.yaml and
@@ -33,7 +42,7 @@ lists the failed checks and exits 1. Every line also goes to -LogPath.
 PowerShell 5.1 compatible.
 
 .EXAMPLE
-.\run-setup-upgrade.ps1 -OldSetup C:\rig\sofcat-5.7.0-x86_64-setup.exe -NewSetup C:\rig\sofcat-5.8.0-x86_64-setup.exe
+.\run-setup-upgrade.ps1 -OldSetup C:\rig\sofcat-5.7.0-x86_64-setup.exe -NewSetup C:\rig\sofcat-5.8.0-x86_64-setup.exe -NewerSetup C:\rig\sofcat-5.9.0-x86_64-setup.exe
 #>
 
 [CmdletBinding()]
@@ -297,11 +306,22 @@ try {
         $newHashes = Get-Hashes
     }
 
-    Log "[c] downgrade refused: old over the installed version"
+    if ($NewerSetup) {
+        # Both built from the current tree, so only the version rule can refuse.
+        Log "[c-version-rule] downgrade refused: new over newer"
+        $code = Invoke-Setup $NewSetup
+        Check "c-version-rule.exit-nonzero" ($code -ne 0) "(exit $code)"
+        Assert-Installed "c-version-rule" $newVersion
+        Check "c-version-rule.executables-unchanged" (Test-SameHashes $newHashes (Get-Hashes))
+    }
+
+    # A released old setup may refuse any existing service, whatever its
+    # version; one built from the current tree refuses by the version rule.
+    Log "[c-old] downgrade refused: old over the installed version"
     $code = Invoke-Setup $OldSetup
-    Check "c.exit-nonzero" ($code -ne 0) "(exit $code)"
-    Assert-Installed "c" $newVersion
-    Check "c.executables-unchanged" (Test-SameHashes $newHashes (Get-Hashes))
+    Check "c-old.exit-nonzero" ($code -ne 0) "(exit $code)"
+    Assert-Installed "c-old" $newVersion
+    Check "c-old.executables-unchanged" (Test-SameHashes $newHashes (Get-Hashes))
 
     Log "[f] uninstall after the upgrades"
     $code = Invoke-Setup $uninstaller

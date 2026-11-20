@@ -11,8 +11,15 @@
 -- Over an existing install of this product the run is an upgrade: the
 -- installed @APP@.exe -serviceremove stops the service (so no executable is
 -- locked), then the steps of a fresh install follow. A failed upgrade rolls
--- back to the previous version with its service running. Nothing here
--- touches %ProgramData%\@PRODUCT@.
+-- back the files and the ARP entry, and the undo reinstalls the previous
+-- service. Two limits: a service that cannot be deleted because a handle to
+-- it is open (the Services console) is only marked for deletion, so the
+-- undo cannot reinstall it and the machine has no service until that handle
+-- closes; the next run then finds none and installs over the previous
+-- files. A service that does not stop within -serviceremove's timeout stays
+-- registered but may end up stopped until a reboot. An install made with
+-- /D= is not upgraded.
+-- Nothing here touches %ProgramData%\@PRODUCT@.
 
 local exe = os.getenv("ProgramFiles") .. "\\@PRODUCT@\\@APP@.exe"
 
@@ -44,6 +51,7 @@ end
 
 -- sc.exe query exits 0 only for a service that exists. Every refusal comes
 -- before anything is stopped or copied, so a rollback never touches it.
+local upgrade, dangling = false, false
 local query = embala.exec{ cmd = "sc.exe", args = { "query", "@APP@" } }
 if query.code == 0 then
   -- -serviceinstall registers "<exe>" -c <config> -service; the path is
@@ -60,20 +68,51 @@ if query.code == 0 then
   if have and want and newer(have, want) then
     error("@PRODUCT@ " .. installed .. " is installed, newer than @VERSION@")
   end
-  -- Stops and deletes the service, removes the Run value and ends the helper
-  -- and storefront. On rollback, once the old @APP@.exe is restored, the undo
-  -- installs and starts its service again. In the wizard (no /S) this runs
-  -- before the wizard opens, since exec is not gated on it.
-  local remove = embala.exec{ cmd = exe, args = { "-serviceremove" },
-                              undo = { cmd = exe, args = { "-serviceinstall" } } }
-  if remove.code ~= 0 then
-    error("the installed @APP@.exe -serviceremove exited " .. remove.code .. ": " .. (remove.stderr or "") .. (remove.stdout or ""))
+  -- The script has no io library, so a run of -version tells whether the
+  -- installed @APP@.exe is there: exec raises "(os error 2)" (file) or
+  -- "(os error 3)" (path) for one that is not. Any other failure stops here.
+  local ok, err = pcall(embala.exec, { cmd = exe, args = { "-version" } })
+  if not ok then
+    if not tostring(err):find("%(os error [23]%)") then
+      error(err, 0)
+    end
+    dangling = true
   end
+  upgrade = true
 end
 
 -- A per-machine install defaults to ${ProgramFiles}\@APP@; the product
 -- name is the directory the service and the docs expect.
 embala.ui.page{ kind = "directory", default = os.getenv("ProgramFiles") .. "\\@PRODUCT@", allow_change = false }
+
+if upgrade then
+  -- exec does not wait for the wizard (no /S), so a gated call opens it first.
+  -- mkdir records nothing for a directory that exists, and with /S it is
+  -- only that. Afterwards embala.install_dir is final.
+  embala.fs.mkdir(".")
+  local dir = exe:match("^(.*)\\")
+  if (embala.install_dir:gsub("\\+$", "")):lower() ~= dir:lower() then
+    error("@PRODUCT@ is installed in " .. dir .. ", not " .. embala.install_dir .. "; an install made with /D= is not upgraded in place")
+  end
+  if dangling then
+    -- The service runs an @APP@.exe that is gone, so nothing could ever
+    -- remove it. Delete it, with no undo, and install afresh.
+    embala.exec{ cmd = "sc.exe", args = { "stop", "@APP@" } }
+    local delete = embala.exec{ cmd = "sc.exe", args = { "delete", "@APP@" } }
+    if delete.code ~= 0 then
+      error("sc.exe delete @APP@ exited " .. delete.code .. ": " .. (delete.stdout or ""))
+    end
+  else
+    -- Stops and deletes the service, removes the Run value and ends the
+    -- helper and storefront. On rollback, once the old @APP@.exe is restored,
+    -- the undo installs and starts its service again.
+    local remove = embala.exec{ cmd = exe, args = { "-serviceremove" },
+                                undo = { cmd = exe, args = { "-serviceinstall" } } }
+    if remove.code ~= 0 then
+      error("the installed @APP@.exe -serviceremove exited " .. remove.code .. ": " .. (remove.stderr or "") .. (remove.stdout or ""))
+    end
+  end
+end
 
 embala.fs.copy("@APP@.exe", "@APP@.exe")
 embala.fs.copy("@APP@-ui.exe", "@APP@-ui.exe")

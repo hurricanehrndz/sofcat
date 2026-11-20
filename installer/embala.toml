@@ -15,8 +15,8 @@
 # the per-user helper `sofcat-useragent.exe` at every logon (site/src/content/docs/zip-items/overview.md); its
 # uninstaller runs `sofcat.exe -serviceremove`, which undoes both. sofcat owns
 # its service and that value, so the scripts only call it. Over an existing
-# install the setup.exe upgrades in place, and a failed run rolls back to the
-# previous version (install.lua). The installer ships
+# install the setup.exe upgrades in place, and a failed run rolls back, with
+# the limits install.lua lists. The installer ships
 # no config.yaml: management tooling writes C:\ProgramData\SofCat\config.yaml,
 # and the service runs with defaults (every managed run failing) until that
 # file exists and the service restarts.
