@@ -176,9 +176,7 @@ the minimum is unchanged.
   no minimum, over a `background_image` too. The logo, title, tagline and
   button stay at their `medium` sizes, so the banner is shorter than `medium`
   without `small`'s smaller logo. A corner `link_position` names only the
-  side here: the button sits at that edge in the banner's vertical middle and
-  adds no height, and centred content stays in the banner's middle, wrapping
-  before it reaches the button. Below 40rem (640pt) wide the button takes a row, as in `medium`.
+  side; see [`link_position`](#link_position).
 
 With `banner_align: center` the stacked content is often taller than 11rem. There
 `large` and `x-large` also add padding, 3rem and 4.5rem above and below, so each
@@ -252,7 +250,8 @@ middle.
 
 The four corner values, `top_left`, `top_right`, `bottom_left` and
 `bottom_right`, put the button in that corner, inside the banner's padding and
-never over the content. What happens next depends on the corner.
+never over the content. What happens next depends on the corner, and on
+`banner_height: fit`, which is described after the list.
 
 - A corner on the content's side, or any corner of a centred banner, gives the
   button a row of its own above or below the content. The same room stays empty
@@ -264,9 +263,17 @@ never over the content. What happens next depends on the corner.
   means `top_right` or `bottom_right` with `banner_align: left`, and the left
   corners with `right`. The column takes up to 40% of the width, and the banner
   keeps its height. Below 40rem (640pt) wide it takes a row there too.
-- With `banner_height: fit`, from 40rem wide, a corner names only the side:
-  the button takes a column at that edge, in the banner's vertical middle,
-  whatever the content's alignment.
+
+A `fit` banner hugs its content, so there top and bottom mean nothing and a
+corner names only the side. From 40rem wide the button takes a column at
+that edge, in the banner's vertical middle, whatever the content's alignment,
+and adds no height. With `banner_align: left` and a left corner the button
+comes first and the content follows it, and `right` mirrors that. Centred
+content is centred in the window while the button fits its side's column. The
+button keeps its label on one line up to 16rem. A longer label takes the room
+it needs, and the content shifts away from it, wrapping before it reaches the
+button. Below 40rem the button takes a row above or below the content, with
+no empty row on the other side.
 
 <Shot
   name="link-position-corner"
