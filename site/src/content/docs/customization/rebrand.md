@@ -30,6 +30,7 @@ Keep brands under `branding/`, which git ignores.
 | `brand.env` | yes | Names, publisher, identifier and installer allowlist; see [`brand.env`](#brandenv). |
 | `icon.ico` | no | Exe icon (Explorer, Start menu, Add or remove programs). Defaults to the SofCat icon. |
 | `icon.png` | no | Window and taskbar icon (256x256 is best) and the app-bar mark when no runtime logo is set. Defaults to the SofCat icon. |
+| `loading.gif` | no | The mark on the loading screen, which shows while the storefront first connects to the service. It is drawn in a 72px square; an animated GIF plays, except for a user who asked for reduced motion, who sees `icon.png`. Defaults to `icon.png`. |
 | `write-roots.yaml` | no | Where zip items may be placed, compiled in. Defaults to `${ProgramData}\<NAME>` on Windows and `/Library/Application Support/<NAME>` on macOS, the directory holding the config and `Data`. Managed policy can add more. See [Write roots](/zip-items/placements/#write-roots). |
 | `branding.yaml` | no | Storefront branding compiled into the service, which no config or policy overrides. See [Built-in branding](#built-in-branding). |
 
@@ -48,6 +49,7 @@ PUBLISHER="Acme Corp"
 DESCRIPTION="Install and update Acme-approved software"
 HOMEPAGE=https://help.example.com/software
 #INSTALLERS=zip
+#LOADING_TEXT="Getting your software ready…"
 ```
 
 ### `SLUG`
@@ -88,6 +90,12 @@ three binaries zip-only: they contain no command installer (`msi`, `exe`,
 `ps1`, `msix`, `nupkg`) and reject catalog items that need one. Catalog
 scripts stay in every build. `brand-check` rejects any other value. See
 [Zip-only builds](/zip-items/building/#zip-only-builds).
+
+### `LOADING_TEXT`
+
+The line on the loading screen, which shows while the storefront first
+connects to the service. One line, without `<`, `>` or `&`. Defaults to
+"Connecting to the `<NAME>` service…".
 
 ## Checking a brand
 

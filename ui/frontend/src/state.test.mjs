@@ -51,6 +51,7 @@ import {
   requestErrorText,
   restartBadge,
   shouldAcceptRecord,
+  showLoading,
   showRetry,
   stateLabel,
   statusLabel,
@@ -306,12 +307,14 @@ test("list view transitions from cache to live and back to stale", () => {
   const empty = fromCache(null);
   assert.equal(empty.source, "loading");
   assert.equal(showRetry(empty), false);
+  assert.equal(showLoading(empty), true, "nothing to show before the first answer");
 
   const cached = fromCache({ savedAtUtc: "2026-07-21T12:00:00Z", items: catalogItems });
   assert.equal(cached.source, "cache");
   assert.equal(cached.items.length, 3);
   assert.match(bannerMessage(cached, ""), /cached/i);
   assert.equal(showRetry(cached), false);
+  assert.equal(showLoading(cached), false, "a saved list stands in while connecting");
 
   const live = withLive([catalogItems[0]], "2026-07-22T00:00:00Z");
   assert.deepEqual(live, {
@@ -342,6 +345,7 @@ test("list view transitions from cache to live and back to stale", () => {
     "Service unavailable and no cached software is stored. Reason: pipe unavailable",
   );
   assert.equal(showRetry(staleEmpty), true);
+  assert.equal(showLoading(staleEmpty), false, "a failed first try shows the page and its Retry");
 });
 
 test("only Succeeded, Failed, Deferred and Canceled end an operation", () => {

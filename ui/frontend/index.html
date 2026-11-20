@@ -7,6 +7,30 @@
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
+    <!-- The loading screen: over the whole window from the first paint until
+         the service first answers, when no saved list can stand in meanwhile
+         (renderLoading in main.ts). It knows the build's name and mark only;
+         admin branding arrives with the answer. The mark is the brand's
+         loading.gif when the build has one (VITE_LOADING_ICON), and the
+         still icon for a reader who asked for reduced motion. A GIF does
+         the spinner's job, so style.css drops the spinner beside one. -->
+    <div id="loading" class="loading" role="status" data-icon="%VITE_LOADING_ICON%">
+      <div class="loading-body">
+        <span class="product-mark" aria-hidden="true">
+          <picture>
+            <source srcset="/%VITE_LOADING_ICON%" media="(prefers-reduced-motion: no-preference)" />
+            <img alt="" src="/sofcat-icon.png" />
+          </picture>
+        </span>
+        <p class="loading-text">
+          <svg class="spinner" aria-hidden="true" width="14" height="14" viewBox="0 0 16 16">
+            <path d="M8 2a6 6 0 1 1-4.24 1.76" />
+          </svg>
+          %VITE_LOADING_TEXT%
+        </p>
+      </div>
+    </div>
+
     <!-- Organisation banner: hidden until admin branding (policy or config.yaml,
          via GetBranding) fills it. -->
     <section id="banner" aria-label="Organisation banner" hidden>
