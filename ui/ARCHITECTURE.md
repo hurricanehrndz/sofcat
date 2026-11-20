@@ -71,6 +71,21 @@ command queue and answer while a managed run is under way;
 `listOptionalInstalls` and the run that `run` asks for wait behind it. `apiVersion` changes only for a breaking
 change to these methods; additions show up in `capabilities`.
 
+`installItem` checks the name against the admin manifests and catalogs it
+fetches from the repository for the request, so an edit published there
+counts at once. But the settings that name them (`url`, `manifest`,
+`catalogs`) are the ones the last run read, and the facts that
+`conditional_items` and `installable_condition` test include the condition
+scripts' facts from the last run (the built-in ones are gathered for the
+request). So after a managed-settings change or a change to a script's facts,
+an item the change newly offers is refused with `item_not_available` until
+the next service run, scheduled or `sofcat -S run`, has read it; a
+`config.yaml` change needs a service restart. The two mutations answer once
+the selection is recorded and only then queue its run, so they return before
+it ends:
+`sofcat -S InstallItem:<name>` prints the `operationId` and exits, and
+`sofcat -S StreamOperationStatus:<id>` follows the operation to its end.
+
 Every managed run, check-only included, holds the file lock `run.lock` in the
 data directory, so the service's run and a command-line `sofcat` run never
 overlap. The service waits for the lock, and so does `sofcat -checkonly`, which
@@ -272,8 +287,9 @@ outcome, never as success; `sofcat -S run` then exits non-zero.
 `failedItems` and `deferredItems` name the items the run's report lists. The
 run reports progress to any open operation whose item it reaches, as a
 mutation's run does. A client that hangs up while it waits does not stop the
-run. A run takes as long as it takes, so the client waits
-on the notification with no deadline of its own.
+run. A run takes as long as it takes, so the client, `sofcat -S run`
+included, waits on the notification with no deadline of its own; a caller
+that needs a bound must apply its own timeout.
 
 `streamOperationStatus` answers with its result and then sends every record of
 the operation, from the first, as `operationStatus` notifications on the same
