@@ -52,12 +52,17 @@ func main() {
 		},
 		Icon: windowIcon(brand),
 	})
+	// The minimum size includes the frame: 720 wide keeps the content above
+	// the stylesheet's 40rem breakpoint, and 480 high still fits a small
+	// display at high scaling.
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:            defaultWindowTitle,
 		Title:           windowTitle(brand),
 		URL:             "/",
 		Width:           1100,
 		Height:          760,
+		MinWidth:        720,
+		MinHeight:       480,
 		DevToolsEnabled: false,
 		Windows: application.WindowsWindow{
 			CustomTheme: captionTheme(brand.Accent),
