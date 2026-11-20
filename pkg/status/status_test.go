@@ -463,6 +463,154 @@ func TestCheckRegistryMatching(t *testing.T) {
 	}
 }
 
+// TestCheckRegistryNameRegex validates name_regex, for software that puts its
+// version in DisplayName: with name, the catalog matches one release only, so
+// an installed older release reads as absent and never updates or uninstalls.
+func TestCheckRegistryNameRegex(t *testing.T) {
+	regexItem := func(pattern, version string) catalog.Item {
+		return catalog.Item{
+			Check: catalog.InstallCheck{
+				Registry: catalog.RegCheck{NameRegex: pattern, Version: version},
+			},
+			DisplayName: pattern,
+		}
+	}
+	sevenZip := regexItem(`7-Zip [\d.]+ \(x64 edition\)`, `26.07`)
+	oldSevenZip := map[string]RegistryApplication{
+		`7zip`: {Name: `7-Zip 26.06 (x64 edition)`, Version: `26.06`},
+	}
+	newSevenZip := map[string]RegistryApplication{
+		`7zip`: {Name: `7-Zip 26.07 (x64 edition)`, Version: `26.07`},
+	}
+
+	tests := []struct {
+		desc        string
+		registry    map[string]RegistryApplication
+		item        catalog.Item
+		installType string
+		want        bool
+	}{
+		// The older release's name matches the newer catalog's pattern, so it
+		// is seen as installed and outdated.
+		{`older release, install`, oldSevenZip, sevenZip, `install`, true},
+		{`older release, update`, oldSevenZip, sevenZip, `update`, true},
+		{`older release, uninstall`, oldSevenZip, sevenZip, `uninstall`, true},
+		{`current release, install`, newSevenZip, sevenZip, `install`, false},
+		{`current release, update`, newSevenZip, sevenZip, `update`, false},
+		{`absent, update`, fakeRegistryItems, sevenZip, `update`, false},
+		{`absent, uninstall`, fakeRegistryItems, sevenZip, `uninstall`, false},
+		// The pattern must match the whole name, as name does (K2): a helper
+		// or a longer product name is another product.
+		{
+			desc: `anchored at the end`,
+			registry: map[string]RegistryApplication{
+				`helper`: {Name: `WinSCP 6.7.1 Helper`, Version: `6.7.1`},
+			},
+			item:        regexItem(`WinSCP [\d.]+`, `6.7.1`),
+			installType: `uninstall`,
+			want:        false,
+		},
+		{
+			desc:        `a prefix pattern is not a match`,
+			registry:    newSevenZip,
+			item:        regexItem(`7-Zip`, `26.07`),
+			installType: `uninstall`,
+			want:        false,
+		},
+		{
+			desc: `anchored at the start`,
+			registry: map[string]RegistryApplication{
+				`other`: {Name: `Portable WinSCP 6.7.1`, Version: `6.7.1`},
+			},
+			item:        regexItem(`WinSCP [\d.]+`, `6.7.1`),
+			installType: `uninstall`,
+			want:        false,
+		},
+		{
+			desc: `alternation stays inside the anchors`,
+			registry: map[string]RegistryApplication{
+				`other`: {Name: `PuTTY release 0.85 (64-bit) extras`, Version: `0.85`},
+			},
+			item:        regexItem(`PuTTY release [\d.]+ \(64-bit\)|PuTTY release [\d.]+`, `0.85`),
+			installType: `uninstall`,
+			want:        false,
+		},
+		// Case-insensitive and trimmed like name.
+		{
+			desc: `case-insensitive and trimmed`,
+			registry: map[string]RegistryApplication{
+				`putty`: {Name: ` putty RELEASE 0.85 (64-bit) `, Version: `0.85`},
+			},
+			item:        regexItem(`PuTTY release [\d.]+ \(64-bit\)`, `0.85`),
+			installType: `install`,
+			want:        false,
+		},
+		// Several matching entries: any one at the catalog version or above
+		// satisfies the check, as with duplicate names (K3).
+		{
+			desc: `several matches, one current`,
+			registry: map[string]RegistryApplication{
+				`old`: {Name: `TortoiseGit 2.18.0.0 (64 bit)`, Version: `2.18.0.0`},
+				`new`: {Name: `TortoiseGit 2.19.2.0 (64 bit)`, Version: `2.19.2.0`},
+			},
+			item:        regexItem(`TortoiseGit [\d.]+ \(64 bit\)`, `2.19.2.0`),
+			installType: `install`,
+			want:        false,
+		},
+		{
+			desc: `several matches, none current`,
+			registry: map[string]RegistryApplication{
+				`old`:   {Name: `TortoiseGit 2.17.0.0 (64 bit)`, Version: `2.17.0.0`},
+				`older`: {Name: `TortoiseGit 2.18.0.0 (64 bit)`, Version: `2.18.0.0`},
+			},
+			item:        regexItem(`TortoiseGit [\d.]+ \(64 bit\)`, `2.19.2.0`),
+			installType: `update`,
+			want:        true,
+		},
+	}
+
+	for i := 0; i < 20; i++ {
+		for _, tt := range tests {
+			c := &Checker{registryItems: tt.registry}
+			actionNeeded, err := c.checkRegistry(tt.item, tt.installType)
+			if err != nil {
+				t.Errorf("%s: unexpected error: %v", tt.desc, err)
+			}
+			if actionNeeded != tt.want {
+				t.Errorf("%s: actionNeeded: %v; Expected checkRegistry to return %v", tt.desc, actionNeeded, tt.want)
+			}
+		}
+	}
+}
+
+// TestCheckRegistryBadNameRegex validates that a name_regex the agent cannot
+// use fails the check with no action, whatever the registry holds: read as
+// absent, every run would reinstall the item, and a pattern ignored would
+// match every entry.
+func TestCheckRegistryBadNameRegex(t *testing.T) {
+	registry := map[string]RegistryApplication{
+		`app`: {Name: `App 1.0`, Version: `1.0`},
+	}
+	items := map[string]catalog.RegCheck{
+		`does not compile`: {NameRegex: `App (`, Version: `1.0`},
+		`escapes anchors`:  {NameRegex: `x)|(.*`, Version: `1.0`},
+		`name also set`:    {Name: `App 1.0`, NameRegex: `App [\d.]+`, Version: `1.0`},
+	}
+	for desc, reg := range items {
+		for _, installType := range []string{`install`, `update`, `uninstall`} {
+			c := &Checker{registryItems: registry}
+			item := catalog.Item{Check: catalog.InstallCheck{Registry: reg}, DisplayName: `App`}
+			actionNeeded, err := c.checkRegistry(item, installType)
+			if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("%q", reg.NameRegex)) {
+				t.Errorf("%s, %s: err = %v, want one naming %q", desc, installType, err, reg.NameRegex)
+			}
+			if actionNeeded {
+				t.Errorf("%s, %s: actionNeeded = true, want false", desc, installType)
+			}
+		}
+	}
+}
+
 // TestCheckAppx validates AppX/MSIX package status checks across install/update/uninstall types
 func TestCheckAppx(t *testing.T) {
 	execCommand = fakeExecCommandAppx
