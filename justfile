@@ -9,7 +9,7 @@ set shell := ["bash", "-cu"]
 # builds that bypass just.
 brand := ""
 _brand_env := if brand == "" { "" } else { brand / "brand.env" }
-_read := 'unset SLUG NAME PUBLISHER IDENTIFIER DESCRIPTION HOMEPAGE INSTALLERS LOADING_TEXT; [ -z "$1" ] || . "$1"; printf %s "${!2:-$3}"'
+_read := 'unset SLUG NAME PUBLISHER IDENTIFIER DESCRIPTION HOMEPAGE INSTALLERS LOADING_TEXT LOADING_ALWAYS LOADING_SECONDS; [ -z "$1" ] || . "$1"; printf %s "${!2:-$3}"'
 app := shell(_read, _brand_env, "SLUG", "sofcat")
 product := shell(_read, _brand_env, "NAME", "SofCat")
 publisher := shell(_read, _brand_env, "PUBLISHER", "Carlos Hernandez")
@@ -20,6 +20,10 @@ homepage := shell(_read, _brand_env, "HOMEPAGE", "https://github.com/hurricanehr
 # installers or catalog scripts are compiled in (site/src/content/docs/zip-items/building.md).
 # The loading screen's line, shown while the storefront first connects.
 loading_text := shell(_read, _brand_env, "LOADING_TEXT", "Connecting to the " + product + " service…")
+# LOADING_ALWAYS (1 or true) shows it on every launch, as a splash, for at
+# least LOADING_SECONDS; brand-check rejects other values.
+loading_always := shell(_read, _brand_env, "LOADING_ALWAYS", "")
+loading_seconds := shell(_read, _brand_env, "LOADING_SECONDS", "3")
 installers := shell(_read, _brand_env, "INSTALLERS", "")
 _zip_tag := if installers == "zip" { ",zip_only" } else { "" }
 _brand_ico := if brand == "" { "" } else { brand / "icon.ico" }
@@ -110,7 +114,8 @@ ui-assets: ui-install brand-check
       mkdir -p build/brand && cp -R ui/frontend/public build/brand/public; fi
     @if [ -n "{{icon_png}}" ]; then cp "{{icon_png}}" build/brand/public/sofcat-icon.png; fi
     @if [ -n "{{loading_gif}}" ]; then cp "{{loading_gif}}" build/brand/public/loading.gif; fi
-    VITE_PRODUCT_NAME="{{product}}" VITE_LOADING_TEXT={{quote(loading_text)}} VITE_LOADING_ICON="{{ if loading_gif == "" { "sofcat-icon.png" } else { "loading.gif" } }}" \
+    VITE_PRODUCT_NAME="{{product}}" VITE_LOADING_TEXT={{quote(loading_text)}} VITE_LOADING_ALWAYS="{{ if loading_always == "" { "false" } else { "true" } }}" VITE_LOADING_SECONDS={{quote(loading_seconds)}} \
+        VITE_LOADING_ICON="{{ if loading_gif == "" { "sofcat-icon.png" } else { "loading.gif" } }}" \
         SOFCAT_PUBLIC_DIR="{{ if icon_png + loading_gif == "" { "" } else { absolute_path("build/brand/public") } }}" \
         npm run build --prefix ui/frontend
     @if grep -rq SOFCAT_VITE_MOCK_ONLY ui/frontend/dist; then \
@@ -386,6 +391,12 @@ brand-check:
     case $installers in ''|zip) ;; *) fail "INSTALLERS '$installers' must be unset or zip" ;; esac
     loading_text={{quote(loading_text)}}
     [[ $loading_text != *[[:cntrl:]\<\>\&]* ]] || fail "LOADING_TEXT must be one line without < > or &"
+    loading_always={{quote(loading_always)}}
+    case $loading_always in ''|1|true) ;; *) fail "LOADING_ALWAYS '$loading_always' must be unset, 1 or true" ;; esac
+    loading_seconds={{quote(loading_seconds)}}
+    [[ $loading_seconds =~ ^([0-9]{1,2})(\.([0-9]))?$ ]] &&
+      tenths=$((10#${BASH_REMATCH[1]} * 10 + 10#${BASH_REMATCH[3]:-0})) && ((tenths >= 1 && tenths <= 300)) ||
+      fail "LOADING_SECONDS '$loading_seconds' must be a number of seconds from 0.1 to 30, with at most one decimal place"
     stock=0
     [ "$app" = sofcat ] && stock=$((stock + 1))
     [ "$(printf %s "$product" | tr A-Z a-z)" = sofcat ] && stock=$((stock + 1))
