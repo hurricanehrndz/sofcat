@@ -723,6 +723,57 @@ button[aria-disabled="true"] {
   #banner[data-align="right"][data-link-position$="left"] .brand-link {
     margin: 0 2rem 0 0;
   }
+
+  /*
+   * A fit banner hugs its content, so top and bottom have no room to mean
+   * anything: a corner names only the side. The button takes a column of
+   * its own on that side, in the banner's vertical middle, and adds no row.
+   * Left content with a left corner puts the button first and the content
+   * after it, still left-aligned (and right mirrors it). Centred content
+   * sits in a middle column of at most half the width between two equal
+   * columns, so it stays centred in the window and wraps rather than meet
+   * the button; a button wider than its column takes room from the empty
+   * side, and a long label wraps.
+   * Below 40rem the corner gives the button a row, as in medium.
+   */
+  #banner[data-height="fit"][data-link-position] .brand-link {
+    align-self: center;
+    margin-block: 0;
+  }
+
+  #banner[data-height="fit"][data-align="left"][data-link-position$="left"] {
+    grid-template-columns: fit-content(40%) auto minmax(0, 1fr);
+    grid-template-rows: auto;
+    grid-template-areas: "link logo text";
+  }
+
+  #banner[data-height="fit"][data-align="left"][data-link-position$="left"] .brand-link {
+    margin-inline: 0 2rem;
+  }
+
+  #banner[data-height="fit"][data-align="right"][data-link-position$="right"] {
+    grid-template-columns: minmax(0, 1fr) auto fit-content(40%);
+    grid-template-rows: auto;
+    grid-template-areas: "text logo link";
+  }
+
+  #banner[data-height="fit"][data-align="right"][data-link-position$="right"] .brand-link {
+    margin-inline: 2rem 0;
+  }
+
+  #banner[data-height="fit"][data-align="center"][data-link-position] {
+    grid-template-columns: 1fr fit-content(50%) 1fr;
+    grid-template-rows: auto auto;
+    column-gap: 2rem;
+  }
+
+  #banner[data-height="fit"][data-align="center"][data-link-position$="left"] {
+    grid-template-areas: "link logo ." "link text .";
+  }
+
+  #banner[data-height="fit"][data-align="center"][data-link-position$="right"] {
+    grid-template-areas: ". logo link" ". text link";
+  }
 }
 
 .app-bar {

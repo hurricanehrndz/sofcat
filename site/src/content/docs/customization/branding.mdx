@@ -175,7 +175,10 @@ the minimum is unchanged.
 - `fit` is the content's own height with 1rem of padding above and below, and
   no minimum, over a `background_image` too. The logo, title, tagline and
   button stay at their `medium` sizes, so the banner is shorter than `medium`
-  without `small`'s smaller logo.
+  without `small`'s smaller logo. A corner `link_position` names only the
+  side here: the button sits at that edge in the banner's vertical middle and
+  adds no height, and centred content stays in the banner's middle, wrapping
+  before it reaches the button. Below 40rem (640pt) wide the button takes a row, as in `medium`.
 
 With `banner_align: center` the stacked content is often taller than 11rem. There
 `large` and `x-large` also add padding, 3rem and 4.5rem above and below, so each
@@ -261,6 +264,9 @@ never over the content. What happens next depends on the corner.
   means `top_right` or `bottom_right` with `banner_align: left`, and the left
   corners with `right`. The column takes up to 40% of the width, and the banner
   keeps its height. Below 40rem (640pt) wide it takes a row there too.
+- With `banner_height: fit`, from 40rem wide, a corner names only the side:
+  the button takes a column at that edge, in the banner's vertical middle,
+  whatever the content's alignment.
 
 <Shot
   name="link-position-corner"
