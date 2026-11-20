@@ -31,7 +31,7 @@ machine gets, catalogs say what exists, and both are plain YAML.
 | | Today | Planned |
 | --- | --- | --- |
 | Agent | Windows service, macOS launchd daemon | Linux |
-| Item types | `.msi`, `.msix`, `.exe`, `.ps1`, `.nupkg` (runs the package's own scripts, see [Nupkg items](site/src/content/docs/guides/nupkg-items.md)), zip items (directory trees, from wallpapers to AI skills and plugins) | Files and scripts on any platform, native packages |
+| Item types | `.msi`, `.msix`, `.exe`, `.ps1`, `.nupkg` (runs the package's own scripts, see [Nupkg items](https://sofcat.app/guides/nupkg-items/)), zip items (directory trees, from wallpapers to AI skills and plugins) | Files and scripts on any platform, native packages |
 | Self-service app | Windows, macOS | Linux |
 | `makecatalogs` | Linux, macOS, Windows | |
 
@@ -44,19 +44,19 @@ What already works:
   navigation and item views with MDM or Group Policy managed settings or
   `config.yaml`, with no rebuild. To ship it under your own name, icon,
   service and installer, build a rebrand. See
-  [Customization](site/src/content/docs/customization/overview.mdx).
+  [Customization](https://sofcat.app/customization/overview/).
 - **Inventory for osquery.** Every run writes a Munki-compatible
-  `inventory.json`. See [osquery inventory](site/src/content/docs/guides/osquery-inventory.md).
+  `inventory.json`. See [osquery inventory](https://sofcat.app/guides/osquery-inventory/).
 - **Installable conditions.** An item can require an architecture, Windows
   build, model or a fact your own scripts provide, as with Munki's
-  `installable_condition`. See [Installable conditions](site/src/content/docs/guides/conditions.md).
+  `installable_condition`. See [Installable conditions](https://sofcat.app/guides/conditions/).
 - **AI categories.** `makecatalogs` can categorize new items with a model
   behind OpenRouter, a Cloudflare AI Gateway or LiteLLM. See
-  [AI categories](site/src/content/docs/guides/ai-categories.md).
+  [AI categories](https://sofcat.app/guides/ai-categories/).
 - **Zip items.** Package directory trees, from wallpapers to AI skills, as deterministic
   zips with `makecatalogs`. On Windows a per-user helper
   (`<slug>-useragent.exe`, started at logon and on every plan change) places them in each user's
-  profile. See [Zip items](site/src/content/docs/zip-items/overview.md).
+  profile. See [Zip items](https://sofcat.app/zip-items/overview/).
 - **macOS.** A launchd daemon and a self-service app bundle, installed by the
   `.pkg` from `just pkg`, with the same features.
 - **Zip-only brands.** `INSTALLERS=zip` in a brand compiles out the command
@@ -103,11 +103,11 @@ flowchart LR
 3. `Restart-Service sofcat`.
 
 [examples/](examples/) has an annotated config, catalog, manifest and
-package-info file. [Data directory](site/src/content/docs/reference/data-directory.md) explains
+package-info file. [Data directory](https://sofcat.app/reference/data-directory/) explains
 what lives in `C:\ProgramData\SofCat` and who can write to it.
 
-Release builds are signed; see [Code signing](site/src/content/docs/reference/code-signing.md).
-For macOS, see [Get started](site/src/content/docs/getting-started.md).
+Release builds are signed; see [Code signing](https://sofcat.app/reference/code-signing/).
+For macOS, see [Install on macOS](https://sofcat.app/getting-started/#install-on-macos).
 
 ## Build catalogs with makecatalogs
 
@@ -135,7 +135,7 @@ makecatalogs [--check] <repo_path>
   `--check`) and `2` for a usage error.
 - `makecatalogs build <source> -o <out>` builds a whole repo, zip items
   included, from item files and trees, then compiles and checks it. See
-  [Building zip items](site/src/content/docs/zip-items/building.md).
+  [Building zip items](https://sofcat.app/zip-items/building/).
 
 Releases publish `makecatalogs-<os>-<arch>.tar.gz` (`.zip` for Windows) for
 Linux, macOS and Windows on amd64 and arm64, each holding one binary named
@@ -168,7 +168,7 @@ the Xcode command line tools) and `just pkg` wraps them in an unsigned `.pkg`.
 
 All three Windows executables are pure Go with no cgo, so they cross-compile from
 Linux or macOS. `just setup` uses [embala](https://github.com/hurricanehrndz/embala), so
-the installer builds there too. More in [Developer notes](site/src/content/docs/contributing/dev.md) and
+the installer builds there too. More in [Developer notes](https://sofcat.app/contributing/dev/) and
 [ui/README.md](ui/README.md).
 
 ## Contributing
