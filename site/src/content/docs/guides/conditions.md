@@ -249,5 +249,5 @@ Review changes to `conditions/` accordingly.
 
 Every run writes the facts it used to `inventory.json` under `Conditions`
 (see [osquery inventory](/guides/osquery-inventory/)). `sofcat -checkonly`
-prints the same inventory. Skipped items appear in the log as
+prints the same inventory and writes it to `inventory-checkonly.json`. Skipped items appear in the log as
 `skipping item: not installable on this machine`, with the condition.

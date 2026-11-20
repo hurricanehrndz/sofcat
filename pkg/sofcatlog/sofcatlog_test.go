@@ -223,19 +223,30 @@ func TestConsoleLevelGating(t *testing.T) {
 	}
 }
 
-// TestCheckOnlyNoFile confirms checkonly suppresses the file sink.
-func TestCheckOnlyNoFile(t *testing.T) {
-	setConsole(t)
-	dir := t.TempDir()
+// TestCheckOnlyMarksFileLines encodes that a check-only run, which a service
+// may run by policy, leaves a log record like a real run, and that a reader
+// of sofcat.log can tell its lines from a real run's: only check-only lines
+// carry checkonly=true.
+func TestCheckOnlyMarksFileLines(t *testing.T) {
+	for _, checkOnly := range []bool{true, false} {
+		t.Run(map[bool]string{true: "checkonly", false: "real"}[checkOnly], func(t *testing.T) {
+			setConsole(t)
+			dir := t.TempDir()
 
-	newLog(t, config.Configuration{AppDataPath: dir, CheckOnly: true})
-	if logWriter != nil {
-		t.Errorf("checkonly should not open a file writer")
-	}
+			newLog(t, config.Configuration{AppDataPath: dir, CheckOnly: checkOnly})
+			slog.Info("run-line")
 
-	slog.Warn("checkonly-warn")
-	if _, err := os.Stat(filepath.Join(dir, "sofcat.log")); !os.IsNotExist(err) {
-		t.Errorf("checkonly must not create a log file, stat err = %v", err)
+			var rec map[string]any
+			if err := json.Unmarshal(bytes.TrimSpace(readLog(t, dir)), &rec); err != nil {
+				t.Fatalf("file line is not JSON: %v", err)
+			}
+			if rec["msg"] != "run-line" {
+				t.Errorf("msg = %v, want run-line", rec["msg"])
+			}
+			if got, want := rec["checkonly"] == true, checkOnly; got != want {
+				t.Errorf("checkonly marked = %v, want %v (%v)", got, want, rec)
+			}
+		})
 	}
 }
 

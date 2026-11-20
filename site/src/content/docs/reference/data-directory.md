@@ -46,14 +46,16 @@ these its own ACL.
   repository's `icons/` for the storefront
   ([Catalog](/customization/catalog/#icon_name)). Users do not read it: the
   service hands each image over.
-- `Data\sofcat.log` may name paths and items.
+- `Data\sofcat.log` may name paths and items. Check-only runs log there
+  too, and each of their lines carries the attribute `checkonly` set to
+  `true`.
 
 `Data\run.lock` is the lock a managed run holds for its whole length. It is
 empty, and it is never deleted. A command-line `sofcat` run started while
 another run is under way, the service's included, fails at once with
 "another managed run is in progress". The service's own run waits for the
 other run to finish. So does `sofcat -checkonly`, which prints the inventory
-instead of writing `inventory.json`. It says it is waiting on stderr, so
+and writes `inventory-checkonly.json` instead of `inventory.json`. It says it is waiting on stderr, so
 stdout stays the inventory JSON. It waits with no limit, and a run can be
 long, so a monitoring wrapper should apply its own timeout.
 
@@ -100,7 +102,8 @@ The per-user helper writes outside both: each user's receipts and its
 - **`Data\user-artifacts`** gets one explicit entry on top of what it
   inherits: `(A;OICI;0x1200a9;;;BU)`, Users read and execute, inherited by
   the staged archives.
-- **`Data\inventory.json`** keeps its own protected ACL, which is stricter
+- **`Data\inventory.json`** and **`Data\inventory-checkonly.json`** keep
+  their own protected ACL, which is stricter
   (see [osquery inventory](/guides/osquery-inventory/)).
 - **`config.yaml`:** SDDL `O:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)`, SYSTEM and
   Administrators only, owner Administrators, whatever its creator set.

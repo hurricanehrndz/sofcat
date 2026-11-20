@@ -23,6 +23,9 @@ import (
 // inventoryFile is written under cfg.AppDataPath (ProgramData\SofCat).
 const inventoryFile = "inventory.json"
 
+// checkOnlyInventoryFile is a check-only run's inventory, beside inventoryFile.
+const checkOnlyInventoryFile = "inventory-checkonly.json"
+
 // legacyReportFile is the pre-inventory report, GorillaReport.json. It is kept
 // only so a run can delete the stale copy an upgraded machine still has (its
 // ACL is the inherited, user-readable one). Nothing writes it.
@@ -183,9 +186,9 @@ func (b *planBuilder) checkUpdates(run *report.Report, checker *status.Checker, 
 }
 
 // finishInventory builds the run's inventory and, for a real run, writes it
-// as inventory.json; check-only prints it instead. It runs even when the run
-// failed, recording the failure in Errors. A write failure is logged, never
-// returned: the run's own outcome stands.
+// as inventory.json; check-only prints it and writes inventory-checkonly.json
+// instead. It runs even when the run failed, recording the failure in Errors.
+// A write failure is logged, never returned: the run's own outcome stands.
 func finishInventory(cfg config.Configuration, run *report.Report, b *planBuilder, start time.Time, runErr error) {
 	plan := report.Plan{
 		ConsoleUser:           consoleUser(),
@@ -207,9 +210,15 @@ func finishInventory(cfg config.Configuration, run *report.Report, b *planBuilde
 		data, err := json.MarshalIndent(inv, "", "  ")
 		if err != nil {
 			slog.Warn("Unable to encode inventory", "err", err)
-			return
+		} else {
+			fmt.Println(string(data))
 		}
-		fmt.Println(string(data))
+		// inventory.json is what is installed; a check-only run never touches it.
+		path := filepath.Join(cfg.AppDataPath, checkOnlyInventoryFile)
+		slog.Info("Saving check-only inventory", "path", path)
+		if err := report.WriteInventory(path, inv); err != nil {
+			slog.Warn("Unable to save check-only inventory", "path", path, "err", err)
+		}
 		return
 	}
 

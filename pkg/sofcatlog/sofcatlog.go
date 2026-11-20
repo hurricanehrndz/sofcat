@@ -87,14 +87,13 @@ func (f fanoutHandler) WithGroup(name string) slog.Handler {
 	return fanoutHandler{handlers: hs}
 }
 
-// NewLog builds the fan-out logger: a text console sink plus, unless checkonly
-// is active, a rotated file sink (structured JSON by default, plain text when
-// cfg.LogFilePlain). The result is installed as slog's default logger.
+// NewLog builds the fan-out logger: a text console sink plus a rotated file
+// sink (structured JSON by default, plain text when cfg.LogFilePlain). In
+// check-only every file line carries checkonly=true. The result is installed
+// as slog's default logger.
 func NewLog(cfg config.Configuration) error {
 	logMu.Lock()
 	defer logMu.Unlock()
-
-	checkonly := cfg.CheckOnly
 
 	consoleLevel := slog.LevelWarn
 	if cfg.Verbose {
@@ -113,43 +112,38 @@ func NewLog(cfg config.Configuration) error {
 		handlers = append(handlers, h)
 	}
 
-	if !checkonly {
-		logPath := filepath.Join(cfg.AppDataPath, "sofcat.log")
-		if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
-			return fmt.Errorf("unable to create log directory %s: %w", filepath.Dir(logPath), err)
-		}
-
-		if logWriter != nil {
-			_ = logWriter.Close()
-		}
-		logWriter = &lumberjack.Logger{
-			Filename:   logPath,
-			MaxSize:    10,
-			MaxBackups: 3,
-			MaxAge:     28,
-			Compress:   true,
-		}
-
-		fileLevel := slog.LevelInfo
-		if cfg.Debug {
-			fileLevel = slog.LevelDebug
-		}
-		fileOpts := &slog.HandlerOptions{Level: fileLevel}
-
-		var fileHandler slog.Handler
-		if cfg.LogFilePlain {
-			fileHandler = slog.NewTextHandler(logWriter, fileOpts)
-		} else {
-			fileHandler = slog.NewJSONHandler(logWriter, fileOpts)
-		}
-		handlers = append(handlers, fileHandler)
+	logPath := filepath.Join(cfg.AppDataPath, "sofcat.log")
+	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
+		return fmt.Errorf("unable to create log directory %s: %w", filepath.Dir(logPath), err)
 	}
 
-	if len(handlers) == 0 {
-		// checkonly with no usable stdout: nowhere to log, but slog.New
-		// requires a handler.
-		handlers = append(handlers, slog.DiscardHandler)
+	if logWriter != nil {
+		_ = logWriter.Close()
 	}
+	logWriter = &lumberjack.Logger{
+		Filename:   logPath,
+		MaxSize:    10,
+		MaxBackups: 3,
+		MaxAge:     28,
+		Compress:   true,
+	}
+
+	fileLevel := slog.LevelInfo
+	if cfg.Debug {
+		fileLevel = slog.LevelDebug
+	}
+	fileOpts := &slog.HandlerOptions{Level: fileLevel}
+
+	var fileHandler slog.Handler
+	if cfg.LogFilePlain {
+		fileHandler = slog.NewTextHandler(logWriter, fileOpts)
+	} else {
+		fileHandler = slog.NewJSONHandler(logWriter, fileOpts)
+	}
+	if cfg.CheckOnly {
+		fileHandler = fileHandler.WithAttrs([]slog.Attr{slog.Bool("checkonly", true)})
+	}
+	handlers = append(handlers, fileHandler)
 
 	slog.SetDefault(slog.New(fanoutHandler{handlers: handlers}))
 	return nil
