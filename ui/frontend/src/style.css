@@ -1901,6 +1901,9 @@ h2 {
     height: 100%;
     overflow: hidden;
     scroll-padding-top: 0;
+    /* progress: button's stable gutter would still be kept on a root that
+       cannot scroll, as a blank strip beside the banner; main keeps its own. */
+    scrollbar-gutter: auto;
   }
 
   :root[data-scrollbar="slim"][data-content-width="compact"] {

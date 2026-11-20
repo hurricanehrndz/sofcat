@@ -1375,3 +1375,57 @@ export function isRefreshKey(event: {
   }
   return event.key.toLowerCase() === "r" && event.ctrlKey !== event.metaKey;
 }
+
+/** The arrow keys' step, Chromium's own. */
+const SCROLL_LINE = 40;
+
+/**
+ * scrollKeyTarget is how the focused element relates to a scroll key: the
+ * body, a control that ignores scroll keys (a button, a link), or one that
+ * handles them itself (a text field, a select, anything inside main or inside
+ * another scroller, anything while a dialog is open).
+ */
+export type ScrollKeyTarget = "body" | "control" | "own";
+
+/**
+ * forwardedScroll says how far a key press scrolls the content when only the
+ * content scrolls (branding scrollbar: slim): a distance in pixels, "start"
+ * or "end", or null to leave the key to the browser. WebView2 and WebKit only
+ * scroll an ancestor of the focused element, so without this the keys do
+ * nothing from the body at launch or from a tab in the app bar. Arrows and
+ * Space only from the body: on a control Space presses it, and an arrow may
+ * mean something to it. page is the content's visible height.
+ */
+export function forwardedScroll(
+  event: { key: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean },
+  target: ScrollKeyTarget,
+  page: number,
+): number | "start" | "end" | null {
+  if (target === "own" || event.ctrlKey || event.metaKey || event.altKey) {
+    return null;
+  }
+  // Chromium's own page step: seven eighths of the view, so a line overlaps.
+  const step = Math.max(page * 0.875, SCROLL_LINE);
+  switch (event.key) {
+    case "PageDown":
+      return step;
+    case "PageUp":
+      return -step;
+    case "End":
+      return "end";
+    case "Home":
+      return "start";
+  }
+  if (target !== "body") {
+    return null;
+  }
+  switch (event.key) {
+    case " ":
+      return event.shiftKey ? -step : step;
+    case "ArrowDown":
+      return SCROLL_LINE;
+    case "ArrowUp":
+      return -SCROLL_LINE;
+  }
+  return null;
+}
