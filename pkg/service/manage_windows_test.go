@@ -12,7 +12,9 @@ import (
 
 	"github.com/hurricanehrndz/sofcat/pkg/config"
 	"github.com/hurricanehrndz/sofcat/pkg/identity"
+	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
+	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/mgr"
 )
 
@@ -244,4 +246,27 @@ func TestAgentExesIncludeStorefront(t *testing.T) {
 // process, opens none of them, and returns.
 func TestEndAgentsWithNothingToEnd(t *testing.T) {
 	endAgents()
+}
+
+// The wait reads the service's status: running and start pending are the
+// only states a starting service may be in, and anything else is a failed
+// start whose exit code the error carries, the service's own when it set one.
+func TestServiceStartProgress(t *testing.T) {
+	tests := []struct {
+		status    svc.Status
+		want      startProgress
+		wantState string
+	}{
+		{svc.Status{State: svc.Running}, startRunning, "running"},
+		{svc.Status{State: svc.StartPending}, startPending, "start_pending"},
+		{svc.Status{State: svc.Stopped, Win32ExitCode: 1}, startFailed, "state stopped, exit code 1"},
+		{svc.Status{State: svc.Stopped, Win32ExitCode: uint32(windows.ERROR_SERVICE_SPECIFIC_ERROR), ServiceSpecificExitCode: 7}, startFailed, "state stopped, exit code 7"},
+		{svc.Status{State: svc.StopPending}, startFailed, "state stop_pending, exit code 0"},
+	}
+	for _, tt := range tests {
+		got, state := serviceStartProgress(tt.status)
+		if got != tt.want || state != tt.wantState {
+			t.Errorf("serviceStartProgress(%+v) = %v, %q; want %v, %q", tt.status, got, state, tt.want, tt.wantState)
+		}
+	}
 }

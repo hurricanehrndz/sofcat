@@ -289,18 +289,52 @@ func startWindowsService(m *mgr.Mgr, cfg config.Configuration) error {
 	defer s.Close()
 
 	status, err := s.Query()
-	if err == nil && (status.State == svc.Running || status.State == svc.StartPending) {
+	if err == nil && status.State == svc.Running {
 		slog.Info("the service is already running", "service", cfg.ServiceName, "event", sofcatlog.EventServiceStarted)
 		return nil
 	}
 
 	// -serviceinstall starts the service, so a -servicestart right after it
-	// may race its startup.
-	if err := s.Start(); err != nil && !errors.Is(err, windows.ERROR_SERVICE_ALREADY_RUNNING) {
+	// may race its startup; both wait for it below.
+	if err == nil && status.State == svc.StartPending {
+		serviceVerbose(cfg, "service=%q already starting", cfg.ServiceName)
+	} else if err := s.Start(); err != nil && !errors.Is(err, windows.ERROR_SERVICE_ALREADY_RUNNING) {
 		return fmt.Errorf("failed to start service %q: %w", cfg.ServiceName, err)
+	}
+	// The service reports running only once its runner has started and its
+	// pipe is listening (sofcatWindowsService.Execute); a runner that fails
+	// to start stops it instead.
+	query := func() (startProgress, string, error) {
+		status, err := s.Query()
+		if err != nil {
+			return startPending, "", err
+		}
+		progress, state := serviceStartProgress(status)
+		return progress, state, nil
+	}
+	if err := waitRunning(cfg.ServiceName, query, 15*time.Second, 300*time.Millisecond); err != nil {
+		return fmt.Errorf("%w; see %s and the System log's Service Control Manager entries",
+			err, filepath.Join(cfg.AppDataPath, "sofcat.log"))
 	}
 	slog.Info("started the service", "service", cfg.ServiceName, "event", sofcatlog.EventServiceStarted)
 	return nil
+}
+
+// serviceStartProgress reads where a started service stands from its status,
+// and describes the state with its exit code once it has stopped.
+func serviceStartProgress(status svc.Status) (startProgress, string) {
+	state := serviceStateString(status.State)
+	if status.State == svc.Running {
+		return startRunning, state
+	}
+	if status.State == svc.StartPending {
+		return startPending, state
+	}
+	code := status.Win32ExitCode
+	if code == uint32(windows.ERROR_SERVICE_SPECIFIC_ERROR) {
+		code = status.ServiceSpecificExitCode
+	}
+	return startFailed, fmt.Sprintf("state %s, exit code %d", state, code)
 }
 
 func stopWindowsService(m *mgr.Mgr, cfg config.Configuration) error {

@@ -23,6 +23,15 @@ The entry's level is the record's: Information, Warning or Error. Its text is
 the message followed by the details as `key=value` pairs, for example
 `ended a running agent pid=4120 image="C:\Program Files\SofCat\sofcat-useragent.exe"`.
 
+`-serviceinstall` and `-servicestart` succeed only once the service is
+running. The service reports running when its pipe is listening, before its
+first run, so a run that fails, or a missing `config.yaml`, does not fail
+them. A service that stops while starting, or is still starting 15 seconds
+later, fails the command with an error that it did not stay running. Its
+reason is in `sofcat.log`; the System log's Service Control Manager entries
+record the exit. `-serviceinstall` then undoes its own steps, as on any of
+its failures: it removes the `Run` value and deletes the service.
+
 On stderr, each step is an info-level log line on every run. When a command fails,
 stderr shows the error twice: once as the `level=ERROR` log line and once
 as the plain error line the command exits with.

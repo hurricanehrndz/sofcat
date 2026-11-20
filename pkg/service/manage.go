@@ -1,12 +1,50 @@
 package service
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/hurricanehrndz/sofcat/pkg/identity"
 )
+
+// startProgress is where a service that was just started stands, as
+// waitRunning reads it from the service manager.
+type startProgress int
+
+const (
+	startPending startProgress = iota
+	startRunning
+	startFailed
+)
+
+// waitRunning polls query every poll until the service named name runs, and
+// fails when it stops instead or is still starting after timeout. query also
+// returns a description of the state for the error. A service only reports
+// running once it is ready to serve, so the outcome of its runs never
+// counts here.
+func waitRunning(name string, query func() (startProgress, string, error), timeout, poll time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for {
+		progress, state, err := query()
+		if err != nil {
+			return fmt.Errorf("failed querying service %q: %w", name, err)
+		}
+		switch progress {
+		case startRunning:
+			return nil
+		case startFailed:
+			return fmt.Errorf("service %q did not stay running (%s)", name, state)
+		case startPending:
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("timed out waiting for service %q to start (%s)", name, state)
+		}
+		time.Sleep(poll)
+	}
+}
 
 // userSyncRunValue is the HKLM Run value that starts the per-user helper,
 // <slug>-useragent.exe, at every logon (site/src/content/docs/zip-items/overview.md).
