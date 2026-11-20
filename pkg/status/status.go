@@ -67,6 +67,12 @@ func (c *Checker) Invalidate() {
 func (c *Checker) checkRegistry(catalogItem catalog.Item, installType string) (actionNeeded bool, checkErr error) {
 	// Iterate through the reg keys to compare with the catalog
 	checkReg := catalogItem.Check.Registry
+	// A name_regex that does not compile fails the check rather than match
+	// nothing: as not installed, an install would rerun on every run.
+	nameRegex, err := checkReg.NameMatcher()
+	if err != nil {
+		return false, fmt.Errorf("%s: %w", catalogItem.DisplayName, err)
+	}
 	catalogVersion, err := version.NewVersion(checkReg.Version)
 	if err != nil {
 		slog.Warn("Unable to parse new version", "version", checkReg.Version, "err", err)
@@ -81,8 +87,13 @@ func (c *Checker) checkRegistry(catalogItem catalog.Item, installType string) (a
 	var installed bool
 	var versionMatch bool
 	for _, regItem := range c.registryItems {
-		// Check if the catalog name matches the registry name (K2: exact match, not substring)
-		if !strings.EqualFold(strings.TrimSpace(regItem.Name), strings.TrimSpace(checkReg.Name)) {
+		// Check if the catalog name matches the registry name (K2: exact match,
+		// not substring; name_regex matches the whole name too)
+		if nameRegex != nil {
+			if !nameRegex.MatchString(strings.TrimSpace(regItem.Name)) {
+				continue
+			}
+		} else if !strings.EqualFold(strings.TrimSpace(regItem.Name), strings.TrimSpace(checkReg.Name)) {
 			continue
 		}
 		installed = true

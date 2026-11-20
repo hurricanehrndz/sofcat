@@ -286,6 +286,60 @@ func TestCollectCatalogsNupkgItem(t *testing.T) {
 	}
 }
 
+// A registry check sets one of name and name_regex, and a name_regex must
+// compile: the agent fails the check of an item that breaks either rule, so
+// -check reports it when the catalog is built.
+func TestCollectCatalogsRegistryNameRegex(t *testing.T) {
+	tests := map[string]struct {
+		check string
+		want  string // problem text; empty for none
+	}{
+		"name": {check: "{name: App, version: '1.0'}"},
+		"name_regex": {
+			check: `{name_regex: 'App [\d.]+', version: '1.0'}`,
+		},
+		"both": {
+			check: `{name: App, name_regex: 'App [\d.]+', version: '1.0'}`,
+			want:  `item "a": check.registry sets both name "App" and name_regex "App [\\d.]+"; set one`,
+		},
+		"does not compile": {
+			check: `{name_regex: 'App (', version: '1.0'}`,
+			want:  `item "a": check.registry name_regex "App (" does not compile`,
+		},
+		// Wrapped in the anchors, this one would compile and match anything.
+		"escapes the anchors": {
+			check: `{name_regex: 'x)|(.*', version: '1.0'}`,
+			want:  `item "a": check.registry name_regex "x)|(.*" does not compile`,
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			repoPath := t.TempDir()
+			dir := filepath.Join(repoPath, "packages-info")
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			info := "item_name: a\ncatalog: base\ninstaller: {type: msi, location: a.msi}\ncheck: {registry: " + tc.check + "}\n"
+			if err := os.WriteFile(filepath.Join(dir, "a.yaml"), []byte(info), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			set, err := CollectCatalogs(repoPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.want == "" {
+				if len(set.Problems) != 0 {
+					t.Errorf("problems = %v, want none", set.Problems)
+				}
+				return
+			}
+			if len(set.Problems) != 1 || !strings.Contains(set.Problems[0], tc.want) {
+				t.Errorf("problems = %v, want one containing %s", set.Problems, tc.want)
+			}
+		})
+	}
+}
+
 // An icon the storefront could not show is found when the catalog is built,
 // not on every device; a good one gets the hash agents cache it by.
 func TestCollectCatalogsIcon(t *testing.T) {
