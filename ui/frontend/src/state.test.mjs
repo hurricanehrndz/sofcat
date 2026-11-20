@@ -53,6 +53,7 @@ import {
   shouldAcceptRecord,
   showLoading,
   showRetry,
+  splashMs,
   stateLabel,
   statusLabel,
   statusRecord,
@@ -346,6 +347,45 @@ test("list view transitions from cache to live and back to stale", () => {
   );
   assert.equal(showRetry(staleEmpty), true);
   assert.equal(showLoading(staleEmpty), false, "a failed first try shows the page and its Retry");
+});
+
+test("a splash keeps the loading screen up for its least time, once per launch", () => {
+  const empty = fromCache(null);
+  const cached = fromCache({ savedAtUtc: "2026-07-21T12:00:00Z", items: catalogItems });
+  const live = withLive(catalogItems, "2026-07-22T00:00:00Z");
+  const failed = withFailure(empty);
+
+  // Off: elapsed time changes nothing.
+  for (const elapsed of [0, 50, 10_000]) {
+    assert.equal(showLoading(empty, 0, elapsed), true);
+    assert.equal(showLoading(cached, 0, elapsed), false, "no splash: a saved list shows at once");
+    assert.equal(showLoading(live, 0, elapsed), false);
+    assert.equal(showLoading(failed, 0, elapsed), false);
+  }
+
+  const splash = 3000;
+  assert.equal(showLoading(live, splash, 100), true, "an instant answer waits out the splash");
+  assert.equal(showLoading(live, splash, 3000), false, "and then shows the list");
+  assert.equal(showLoading(cached, splash, 2999), true, "a saved list waits out the splash too");
+  assert.equal(showLoading(cached, splash, 3000), false);
+  assert.equal(showLoading(empty, splash, 2000), true);
+  assert.equal(showLoading(empty, splash, 9000), true, "a slow service keeps the screen up past the splash");
+  assert.equal(showLoading(failed, splash, 1000), true, "a failed first try shows Retry only after the splash");
+  assert.equal(showLoading(failed, splash, 3000), false);
+  // Later refreshes, Retry and reconnects only ever see more elapsed time:
+  // the splash never comes back, and only a list-less wait raises the screen.
+  for (const later of [cached, live, withFailure(live), failed]) {
+    assert.equal(showLoading(later, splash, 3001), false);
+    assert.equal(showLoading(later, splash, 600_000), false);
+  }
+
+  assert.equal(splashMs(undefined, undefined), 0, "off without the setting");
+  assert.equal(splashMs("false", "3"), 0);
+  assert.equal(splashMs("true", "3"), 3000);
+  assert.equal(splashMs("true", "2.5"), 2500);
+  assert.equal(splashMs("true", undefined), 3000, "seconds default to 3");
+  assert.equal(splashMs("true", "abc"), 3000);
+  assert.equal(splashMs("true", "0"), 3000);
 });
 
 test("only Succeeded, Failed, Deferred and Canceled end an operation", () => {

@@ -1140,9 +1140,27 @@ export function connectionLabel(view: ListView): string {
  * showLoading is true until the service first answers, when no saved list
  * stands in: the loading screen is up. A failed first try takes it down for
  * the page and its Retry, which puts it back up.
+ *
+ * A build with LOADING_ALWAYS also keeps it up until splashMs have passed
+ * since the page started (elapsedMs), whatever the view: a splash on every
+ * launch. Elapsed time only grows, so once down the splash never returns.
  */
-export function showLoading(view: ListView): boolean {
-  return view.source === "loading";
+export function showLoading(view: ListView, splashMs = 0, elapsedMs = 0): boolean {
+  return view.source === "loading" || elapsedMs < splashMs;
+}
+
+/**
+ * splashMs is how long the loading screen stays up at least on every launch,
+ * from the build's VITE_LOADING_ALWAYS and VITE_LOADING_SECONDS, or 0 when the
+ * build has no splash. brand-check validated both; a bad seconds value falls
+ * back to the default 3.
+ */
+export function splashMs(always: string | undefined, seconds: string | undefined): number {
+  if (always !== "true") {
+    return 0;
+  }
+  const value = Number(seconds);
+  return Math.round((Number.isFinite(value) && value > 0 ? value : 3) * 1000);
 }
 
 export function showRetry(view: ListView): boolean {

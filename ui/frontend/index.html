@@ -13,8 +13,10 @@
          admin branding arrives with the answer. The mark is the brand's
          loading.gif when the build has one (VITE_LOADING_ICON), and the
          still icon for a reader who asked for reduced motion. A GIF does
-         the spinner's job, so style.css drops the spinner beside one. -->
-    <div id="loading" class="loading" role="status" data-icon="%VITE_LOADING_ICON%">
+         the spinner's job, so style.css drops the spinner beside one. A
+         build with LOADING_ALWAYS (data-always) keeps it up on every launch
+         for at least VITE_LOADING_SECONDS, saved list or not. -->
+    <div id="loading" class="loading" role="status" data-icon="%VITE_LOADING_ICON%" data-always="%VITE_LOADING_ALWAYS%">
       <div class="loading-body">
         <span class="product-mark" aria-hidden="true">
           <picture>
