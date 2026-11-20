@@ -217,7 +217,10 @@ func installWindowsService(m *mgr.Mgr, cfg config.Configuration) error {
 }
 
 // undoServiceInstall removes the Run value runValue, unless it is empty, and
-// the service registration of an install that failed part way.
+// the service registration of an install that failed part way. It stops the
+// service first: one whose start timed out may still be starting, and a
+// delete alone would leave it running, only marked for deletion. A service
+// that never started is already stopped.
 func undoServiceInstall(m *mgr.Mgr, cfg config.Configuration, runValue string) {
 	if runValue != "" {
 		if _, err := deleteRunValueFunc(runValue); err != nil {
@@ -225,6 +228,9 @@ func undoServiceInstall(m *mgr.Mgr, cfg config.Configuration, runValue string) {
 		} else {
 			slog.Info("undid the Run value", "name", runValue, "event", sofcatlog.EventRunValueRemoved)
 		}
+	}
+	if err := stopServiceFunc(m, cfg); err != nil {
+		slog.Error("unable to stop the service before undoing its registration", "service", cfg.ServiceName, "err", err, "event", sofcatlog.EventServiceStopped)
 	}
 	if err := deleteServiceFunc(m, cfg); err != nil {
 		slog.Error("unable to undo the service registration", "service", cfg.ServiceName, "err", err, "event", sofcatlog.EventServiceInstalled)
@@ -288,31 +294,46 @@ func startWindowsService(m *mgr.Mgr, cfg config.Configuration) error {
 	}
 	defer s.Close()
 
-	status, err := s.Query()
+	return startAndWait(cfg, s.Query, func() error { return s.Start() })
+}
+
+// startTimeout bounds how long -serviceinstall and -servicestart wait for a
+// service that is still starting; the SCM gives a service process as long to
+// connect. A variable so the Windows tests can shorten it.
+var startTimeout = 30 * time.Second
+
+// startAndWait starts the service unless it is running or starting already,
+// then waits for it to run. query and start are the service's own calls.
+func startAndWait(cfg config.Configuration, query func() (svc.Status, error), start func() error) error {
+	status, err := query()
 	if err == nil && status.State == svc.Running {
 		slog.Info("the service is already running", "service", cfg.ServiceName, "event", sofcatlog.EventServiceStarted)
 		return nil
+	}
+	if err == nil && status.State == svc.StopPending {
+		return fmt.Errorf("service %q is stopping; run the command again once it has stopped", cfg.ServiceName)
 	}
 
 	// -serviceinstall starts the service, so a -servicestart right after it
 	// may race its startup; both wait for it below.
 	if err == nil && status.State == svc.StartPending {
 		serviceVerbose(cfg, "service=%q already starting", cfg.ServiceName)
-	} else if err := s.Start(); err != nil && !errors.Is(err, windows.ERROR_SERVICE_ALREADY_RUNNING) {
+	} else if err := start(); err != nil && !errors.Is(err, windows.ERROR_SERVICE_ALREADY_RUNNING) {
 		return fmt.Errorf("failed to start service %q: %w", cfg.ServiceName, err)
 	}
 	// The service reports running only once its runner has started and its
 	// pipe is listening (sofcatWindowsService.Execute); a runner that fails
-	// to start stops it instead.
-	query := func() (startProgress, string, error) {
-		status, err := s.Query()
+	// to start stops it instead. The wait ends there, so a service that
+	// fails after reporting running is not caught here.
+	progress := func() (startProgress, string, error) {
+		status, err := query()
 		if err != nil {
 			return startPending, "", err
 		}
 		progress, state := serviceStartProgress(status)
 		return progress, state, nil
 	}
-	if err := waitRunning(cfg.ServiceName, query, 15*time.Second, 300*time.Millisecond); err != nil {
+	if err := waitRunning(cfg.ServiceName, progress, startTimeout, 300*time.Millisecond); err != nil {
 		return fmt.Errorf("%w; see %s and the System log's Service Control Manager entries",
 			err, filepath.Join(cfg.AppDataPath, "sofcat.log"))
 	}
@@ -369,6 +390,14 @@ func stopWindowsService(m *mgr.Mgr, cfg config.Configuration) error {
 		status, err = s.Query()
 		if err != nil {
 			return fmt.Errorf("failed querying service %q: %w", cfg.ServiceName, err)
+		}
+		// A service that was still starting refused the control above; once
+		// it runs, it accepts one.
+		if status.State == svc.Running {
+			if _, err := s.Control(svc.Stop); err != nil &&
+				!errors.Is(err, windows.ERROR_SERVICE_CANNOT_ACCEPT_CTRL) && !errors.Is(err, windows.ERROR_SERVICE_NOT_ACTIVE) {
+				return fmt.Errorf("failed to stop service %q: %w", cfg.ServiceName, err)
+			}
 		}
 	}
 	slog.Info("stopped the service", "service", cfg.ServiceName, "event", sofcatlog.EventServiceStopped)

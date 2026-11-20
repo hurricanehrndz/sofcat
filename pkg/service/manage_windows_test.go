@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hurricanehrndz/sofcat/pkg/config"
 	"github.com/hurricanehrndz/sofcat/pkg/identity"
@@ -113,22 +114,27 @@ func TestInstallWindowsServiceRefusesExisting(t *testing.T) {
 }
 
 // A start failure must not leave a registered service behind: the installer
-// rolls its files back, and the next attempt would otherwise be refused.
+// rolls its files back, and the next attempt would otherwise be refused. The
+// stop comes before the delete: a start that timed out may still be running
+// the executable the installer is about to roll back.
 func TestInstallWindowsServiceUndoesOnStartFailure(t *testing.T) {
 	f := installFakeSCM(t)
 	f.fail["start"] = errors.New("boom")
+	// A failing stop must not keep the registration.
+	f.fail["stop"] = errors.New("still starting")
 	cfg := config.Configuration{ServiceName: "sofcat", ConfigPath: `C:\ProgramData\SofCat\config.yaml`}
 
 	if err := installWindowsService(nil, cfg); err == nil || !strings.Contains(err.Error(), "boom") {
 		t.Fatalf("install with a failing start: %v", err)
 	}
-	if n := len(f.calls); n != 6 || f.calls[4] != "unset "+identity.Slug+"-user-sync" || f.calls[5] != "delete" {
+	if n := len(f.calls); n != 7 || f.calls[4] != "unset "+identity.Slug+"-user-sync" || f.calls[5] != "stop" || f.calls[6] != "delete" {
 		t.Errorf("calls after the start failure: %q", f.calls)
 	}
 }
 
 // A Run value write failure undoes the registration the same way; the
-// service has not been started yet, so only the service goes.
+// service has not been started yet, so the stop finds it stopped and only
+// the service goes.
 func TestInstallWindowsServiceUndoesOnRunValueFailure(t *testing.T) {
 	f := installFakeSCM(t)
 	exe, err := os.Executable()
@@ -143,7 +149,7 @@ func TestInstallWindowsServiceUndoesOnRunValueFailure(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "boom") || !strings.Contains(err.Error(), name) {
 		t.Fatalf("install with a failing Run value write: %v", err)
 	}
-	expectCalls(t, f.calls, []string{"exists", "create", "set " + name + "=" + data, "delete"})
+	expectCalls(t, f.calls, []string{"exists", "create", "set " + name + "=" + data, "stop", "delete"})
 }
 
 // -serviceremove runs from the uninstaller before it deletes the executable,
@@ -246,6 +252,58 @@ func TestAgentExesIncludeStorefront(t *testing.T) {
 // process, opens none of them, and returns.
 func TestEndAgentsWithNothingToEnd(t *testing.T) {
 	endAgents()
+}
+
+// startAndWait starts only a service that is neither running nor starting,
+// then waits for it to run. A service already starting (the automatic start
+// at boot) is waited on, not started again; ERROR_SERVICE_ALREADY_RUNNING
+// from a start that lost the race is not a failure; and a stopping service
+// gets its own error instead of a misleading "did not stay running".
+func TestStartAndWait(t *testing.T) {
+	orig := startTimeout
+	startTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { startTimeout = orig })
+
+	tests := []struct {
+		name       string
+		states     []svc.State
+		startErr   error
+		wantStarts int
+		wantErr    string
+	}{
+		{"already running", []svc.State{svc.Running}, nil, 0, ""},
+		{"already starting", []svc.State{svc.StartPending, svc.StartPending, svc.Running}, nil, 0, ""},
+		{"starts and runs", []svc.State{svc.Stopped, svc.StartPending, svc.Running}, nil, 1, ""},
+		{"lost the race", []svc.State{svc.Stopped, svc.Running}, windows.ERROR_SERVICE_ALREADY_RUNNING, 1, ""},
+		{"start refused", []svc.State{svc.Stopped}, windows.ERROR_SERVICE_DISABLED, 1, "failed to start"},
+		{"stops at startup", []svc.State{svc.Stopped, svc.StartPending, svc.Stopped}, nil, 1, "did not stay running"},
+		{"stays pending", []svc.State{svc.Stopped, svc.StartPending}, nil, 1, "timed out"},
+		{"stopping", []svc.State{svc.StopPending}, nil, 0, "is stopping; run the command again once it has stopped"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			queries, starts := 0, 0
+			query := func() (svc.Status, error) {
+				s := tt.states[min(queries, len(tt.states)-1)]
+				queries++
+				return svc.Status{State: s}, nil
+			}
+			start := func() error { starts++; return tt.startErr }
+			err := startAndWait(config.Configuration{ServiceName: "sofcat"}, query, start)
+			if starts != tt.wantStarts {
+				t.Errorf("started %d times, want %d", starts, tt.wantStarts)
+			}
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("startAndWait: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("startAndWait error = %v, want it to contain %q", err, tt.wantErr)
+			}
+		})
+	}
 }
 
 // The wait reads the service's status: running and start pending are the

@@ -63,8 +63,9 @@ per-user helper `build/sofcat-useragent.exe` (`cmd/sofcat-useragent`, also
 `install.lua` and `uninstall.lua`, embala 0.12.0); it builds on Linux. The
 installer copies them into `C:\Program Files\SofCat`, adds the Start-menu
 shortcut and the Add or remove programs entry, then runs
-`sofcat.exe -serviceinstall`, which registers and starts the service (and,
-like `-servicestart`, fails unless it reaches running within 15 s) and
+`sofcat.exe -serviceinstall`, which registers and starts the service (like
+`-servicestart`, it returns once the service reports running, fails as soon
+as it stops and gives up after 30 s of starting) and
 writes the HKLM `Run` value `<slug>-user-sync` that starts the per-user
 helper, `<slug>-useragent.exe`, at logon. The service also starts the helper
 in every signed-in session whenever the user-placement plan changes. Its
