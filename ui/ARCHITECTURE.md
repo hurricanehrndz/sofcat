@@ -626,7 +626,7 @@ sets them as `data-app-bar-brand` on the root element (`full` while no banner
 shows, and hidden only visually, so the h1 keeps the product name), as the logo
 in the title's place with the title as its alt text (`text` without a usable
 logo, and no logo in the app-bar mark or the window icon) and as `data-align` on
-the banner. `banner_height` must be `small`, `medium`, `large` or `x-large`; the UI
+the banner. `banner_height` must be `small`, `medium`, `large`, `x-large` or `fit`; the UI
 sets it as `data-height` on the banner, and anything else is `medium`.
 `progress` must be `strip` or `button`; the UI sets it as `data-progress` on
 the root element, and anything else is `strip`.

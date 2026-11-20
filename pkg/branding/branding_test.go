@@ -338,7 +338,7 @@ func TestResolveExampleLogoBanners(t *testing.T) {
 // UI's default rather than a height the CSS has no rule for.
 func TestResolveBannerHeight(t *testing.T) {
 	for in, want := range map[string]string{
-		"small": "small", "Medium": "medium", "LARGE": "large", "x-large": "x-large", "": "", "xx-large": "", "300px": "", "tall": "",
+		"small": "small", "Medium": "medium", "LARGE": "large", "x-large": "x-large", "Fit": "fit", "": "", "xx-large": "", "300px": "", "tall": "",
 	} {
 		if got := resolve(config.Branding{BannerHeight: in}).BannerHeight; got != want {
 			t.Errorf("banner_height %q resolved to %q, want %q", in, got, want)

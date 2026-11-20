@@ -526,7 +526,14 @@ button[aria-disabled="true"] {
  * from before the key, the content's own (7.5rem at least over an image).
  * small trims the padding, the gaps and the logo for a slim strip; large
  * and x-large hold the banner open, over the accent or an image alike.
+ * fit keeps medium's content at full size but drops any minimum, an image's
+ * included, and takes small's 1rem padding: the banner hugs what it holds.
  */
+#banner[data-height="fit"] {
+  min-height: 0;
+  padding-block: 1rem;
+}
+
 #banner[data-height="small"] {
   min-height: 0;
   row-gap: 0.5rem;

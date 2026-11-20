@@ -148,7 +148,8 @@ var BannerAligns = []string{"left", "center", "right"}
 
 // BannerHeights are the names banner_height accepts, from a slim banner to a
 // tall one; each is a minimum, so content that needs more room still grows it.
-var BannerHeights = []string{"small", "medium", "large", "x-large"}
+// fit, last, has none: the banner is its full-size content's own height.
+var BannerHeights = []string{"small", "medium", "large", "x-large", "fit"}
 
 // Progresses are the names progress accepts: strip shows the working
 // operation in a bar along the bottom, and button shows each item's progress

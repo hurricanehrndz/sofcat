@@ -1208,8 +1208,9 @@ const APP_BAR_BRANDS = new Set(["full", "mark", "none"]);
 const BANNER_ALIGNS = new Set(["left", "center", "right"]);
 
 // The banner_height names; medium, the default, is the banner's height from
-// before the key. style.css holds the heights.
-const BANNER_HEIGHTS = new Set(["small", "medium", "large", "x-large"]);
+// before the key, and fit is the content's own with no minimum. style.css
+// holds the heights.
+const BANNER_HEIGHTS = new Set(["small", "medium", "large", "x-large", "fit"]);
 
 // The link_placement names: banner, the default and the place from before
 // the key, or app_bar, at the app bar's end before the connection status.

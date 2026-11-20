@@ -336,15 +336,15 @@ test("the banner aligns left, center or right; anything else is left", () => {
 
 // The heights live in style.css, one rule per name but medium, the banner from
 // before the key; an unknown name must land on medium, not on no rule.
-test("the banner height is one of four names with a rule each; anything else is medium", () => {
+test("the banner height is one of five names with a rule each; anything else is medium", () => {
   const css = readFileSync(new URL("./style.css", import.meta.url), "utf8");
-  for (const bannerHeight of ["small", "medium", "large", "x-large"]) {
+  for (const bannerHeight of ["small", "medium", "large", "x-large", "fit"]) {
     assert.equal(brandingView({ bannerHeight }).bannerHeight, bannerHeight);
     if (bannerHeight !== "medium") {
       assert.ok(css.includes(`#banner[data-height="${bannerHeight}"]`), bannerHeight);
     }
   }
-  for (const bannerHeight of [undefined, "", "Large", "xx-large", "300px", 2, "constructor"]) {
+  for (const bannerHeight of [undefined, "", "Large", "Fit", "xx-large", "300px", 2, "constructor"]) {
     assert.equal(brandingView({ bannerHeight }).bannerHeight, "medium", String(bannerHeight));
   }
 });

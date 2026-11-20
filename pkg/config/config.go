@@ -177,7 +177,7 @@ type Branding struct {
 	// right.
 	BannerAlign string `yaml:"banner_align,omitempty"`
 	// BannerHeight is the banner's minimum height: small, medium (the
-	// default), large or x-large.
+	// default), large or x-large; or fit, no minimum, the content's own.
 	BannerHeight string `yaml:"banner_height,omitempty"`
 	// Progress is where the storefront shows running work: strip (the
 	// default, a bar along the bottom) or button (in each item's button).
