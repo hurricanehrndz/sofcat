@@ -1,9 +1,11 @@
 package service
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/hurricanehrndz/sofcat/pkg/identity"
 )
@@ -77,5 +79,50 @@ func TestIsAgentImageSameFile(t *testing.T) {
 	}
 	if isAgentImage(filepath.Join(dir, "missing.exe"), []string{filepath.Join(dir, "gone.exe")}) {
 		t.Error("isAgentImage matched two paths that do not exist")
+	}
+}
+
+// -serviceinstall and -servicestart succeed only once the service runs: the
+// installer rolls back on their exit code, so a service that stops at
+// startup, or never finishes starting, must fail them.
+func TestWaitRunning(t *testing.T) {
+	type step struct {
+		progress startProgress
+		state    string
+		err      error
+	}
+	tests := []struct {
+		name    string
+		steps   []step
+		wantErr string
+	}{
+		{"already running", []step{{startRunning, "running", nil}}, ""},
+		{"becomes running", []step{{startPending, "start_pending", nil}, {startPending, "start_pending", nil}, {startRunning, "running", nil}}, ""},
+		{"stops at startup", []step{{startPending, "start_pending", nil}, {startFailed, "state stopped, exit code 1", nil}}, `service "sofcat" did not stay running (state stopped, exit code 1)`},
+		{"query fails", []step{{startPending, "", errors.New("boom")}}, `failed querying service "sofcat": boom`},
+		{"never leaves pending", []step{{startPending, "start_pending", nil}}, `timed out waiting for service "sofcat" to start (start_pending)`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			calls := 0
+			query := func() (startProgress, string, error) {
+				s := tt.steps[min(calls, len(tt.steps)-1)]
+				calls++
+				return s.progress, s.state, s.err
+			}
+			err := waitRunning("sofcat", query, 50*time.Millisecond, time.Millisecond)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("waitRunning: %v", err)
+				}
+				if calls != len(tt.steps) {
+					t.Errorf("queried %d times, want %d", calls, len(tt.steps))
+				}
+				return
+			}
+			if err == nil || err.Error() != tt.wantErr {
+				t.Fatalf("waitRunning error = %v, want %q", err, tt.wantErr)
+			}
+		})
 	}
 }
