@@ -14,6 +14,7 @@ import {
   categoryFilter,
   navPlacement,
   progress,
+  scrollbar,
   serial,
   slowList,
   storeName,
@@ -284,6 +285,7 @@ export const api: SofCatApi = {
   // items in a dialog (branding item_view) and `?progress=button` moves
   // running work into the buttons, either way; `?nav=left` puts the bar
   // down the side and `?categories=list` lists the categories in it;
+  // `?scrollbar=slim` gives the content its own thin scrollbar;
   // `?branding=` is a JSON object of any other fields, under those.
   getBranding: () =>
     Promise.resolve({
@@ -293,6 +295,7 @@ export const api: SofCatApi = {
       ...(progress() ? { progress: progress() } : {}),
       ...(navPlacement() ? { navPlacement: navPlacement() } : {}),
       ...(categoryFilter() ? { categoryFilter: categoryFilter() } : {}),
+      ...(scrollbar() ? { scrollbar: scrollbar() } : {}),
     }),
   openExternal(url) {
     window.open(url, "_blank", "noopener,noreferrer");

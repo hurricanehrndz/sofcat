@@ -163,6 +163,8 @@ badges, a deferral, and Cancel during the download.
   service (the mock otherwise runs them side by side).
 - `?slowlist=<ms>`: the item list answers after that long (default 250), as
   when the service queues it behind running installs.
+- `?scrollbar=slim`: branding `scrollbar: slim`, a thin scrollbar on the
+  content alone, starting under the banner and the bar.
 - `?dialog`: branding `item_view: dialog` over the store's branding, so items
   open in a dialog; combine it with the others (`?store=skills&dialog`).
 - `?branding=<json>`: a URL-encoded JSON object of branding fields laid over

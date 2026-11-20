@@ -35,4 +35,5 @@ branding:
   banner_height: x-large
   progress: button
   item_view: dialog
+  scrollbar: slim
   refresh_interval: 30m

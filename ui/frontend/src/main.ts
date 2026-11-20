@@ -29,6 +29,7 @@ import {
   categories,
   deriveAction,
   enteringItems,
+  forwardedScroll,
   fromCache,
   glyphTone,
   httpUrl,
@@ -445,6 +446,7 @@ function applyBranding(next: BrandingView): void {
   appliesToHeading.textContent = next.appliesToFilterLabel;
   root.dataset.appBarBrand = next.appBarBrand;
   root.dataset.progress = next.progress;
+  root.dataset.scrollbar = next.scrollbar;
   // The tab order and the Software tab's heading are branding too, and so
   // are how a card opens its item and where running work shows.
   renderNav();
@@ -1890,6 +1892,63 @@ document.addEventListener("keydown", (event) => {
     event.preventDefault();
     refreshNow();
     void refreshBranding();
+  }
+});
+
+// Under branding scrollbar: slim, in a window tall enough, the root does not
+// scroll and main does. The web view scrolls only an ancestor of the focused
+// element, so the keys would scroll nothing from the body or the app bar; they
+// scroll main instead. Making main focusable (tabindex -1) and focusing it at
+// launch was rejected: it misses focus on a nav tab and moves a screen
+// reader's focus.
+const content = need<HTMLElement>("main");
+const ownsScrollKeys = (target: Element): boolean => {
+  if (dialog.open || content.contains(target) || target.closest("input, textarea, select, [contenteditable]")) {
+    return true;
+  }
+  // A scroller of its own that can scroll, such as the left nav's column.
+  for (let element: Element | null = target; element && element !== document.body; element = element.parentElement) {
+    if (/auto|scroll/.test(getComputedStyle(element).overflowY) && element.scrollHeight > element.clientHeight) {
+      return true;
+    }
+  }
+  return false;
+};
+// With focus on the body the web view scrolls the scroller last clicked, so a
+// click on a blank spot of the left nav's column or of main keeps the keys
+// there rather than here.
+let pressed: Element | null = null;
+document.addEventListener("pointerdown", (event) => {
+  pressed = event.target instanceof Element ? event.target : null;
+});
+document.addEventListener("keydown", (event) => {
+  if (
+    event.defaultPrevented ||
+    !(event.target instanceof Element) ||
+    getComputedStyle(document.documentElement).overflowY !== "hidden" ||
+    getComputedStyle(content).overflowY !== "auto"
+  ) {
+    return;
+  }
+  const target =
+    event.target !== document.body
+      ? ownsScrollKeys(event.target)
+        ? "own"
+        : "control"
+      : pressed?.isConnected && ownsScrollKeys(pressed)
+        ? "own"
+        : "body";
+  // As the web view's own page step, the pinned heading row does not count.
+  const page = content.clientHeight - (parseFloat(getComputedStyle(content).scrollPaddingTop) || 0);
+  const scroll = forwardedScroll(event, target, page);
+  if (scroll === null) {
+    return;
+  }
+  event.preventDefault();
+  if (scroll === "start" || scroll === "end") {
+    content.scrollTo({ top: scroll === "start" ? 0 : content.scrollHeight });
+  } else {
+    content.scrollBy({ top: scroll });
   }
 });
 

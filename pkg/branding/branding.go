@@ -93,6 +93,8 @@ type Branding struct {
 	Progress string `json:"progress"`
 	// ItemView is one of ItemViews, or "" for the UI's default, page.
 	ItemView string `json:"itemView"`
+	// Scrollbar is one of Scrollbars, or "" for the UI's default, system.
+	Scrollbar string `json:"scrollbar"`
 	// RefreshIntervalSeconds is how often an open storefront fetches the list
 	// again: 0 for the UI's default, DefaultRefreshInterval, and -1 for never.
 	RefreshIntervalSeconds int `json:"refreshIntervalSeconds"`
@@ -158,6 +160,12 @@ var Progresses = []string{"strip", "button"}
 // same details in a dialog over the list.
 var ItemViews = []string{"page", "dialog"}
 
+// Scrollbars are the names scrollbar accepts: system is the window's own
+// scrollbar down its whole right edge, the look from before the key, and
+// slim is a thin one on the content alone, which starts under the banner
+// and the bar.
+var Scrollbars = []string{"system", "slim"}
+
 // LinkPlacements are the names link_placement accepts: the button in the
 // banner, laid out by banner_align, or at the app bar's end before the
 // connection status.
@@ -212,6 +220,7 @@ func resolve(in config.Branding) Branding {
 	out.LinkPosition = oneOf("link_position", in.LinkPosition, LinkPositions...)
 	out.Progress = oneOf("progress", in.Progress, Progresses...)
 	out.ItemView = oneOf("item_view", in.ItemView, ItemViews...)
+	out.Scrollbar = oneOf("scrollbar", in.Scrollbar, Scrollbars...)
 	out.RefreshIntervalSeconds = refreshSeconds(in.RefreshInterval)
 	return out
 }

@@ -1851,6 +1851,98 @@ h2 {
   }
 }
 
+/*
+ * scrollbar: slim (data-scrollbar on the root). Every scrollbar is a thin
+ * rounded thumb with no track, so it reads as part of the page it scrolls.
+ * And the content scrolls by itself: the window no longer does, so the
+ * banner and the bar need no pinning and the scrollbar starts under them, on
+ * the content's own edge, in place of one down the whole window beside the
+ * banner. system, the default, is the window's scrollbar from before the key.
+ */
+:root[data-scrollbar="slim"]::-webkit-scrollbar,
+:root[data-scrollbar="slim"] ::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+:root[data-scrollbar="slim"]::-webkit-scrollbar-track,
+:root[data-scrollbar="slim"] ::-webkit-scrollbar-track,
+:root[data-scrollbar="slim"]::-webkit-scrollbar-corner,
+:root[data-scrollbar="slim"] ::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* The clear border insets the thumb from the edge and from the content. */
+:root[data-scrollbar="slim"]::-webkit-scrollbar-thumb,
+:root[data-scrollbar="slim"] ::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--ink) 28%, transparent);
+  background-clip: padding-box;
+}
+
+:root[data-scrollbar="slim"]::-webkit-scrollbar-thumb:hover,
+:root[data-scrollbar="slim"] ::-webkit-scrollbar-thumb:hover,
+:root[data-scrollbar="slim"]::-webkit-scrollbar-thumb:active,
+:root[data-scrollbar="slim"] ::-webkit-scrollbar-thumb:active {
+  background: color-mix(in srgb, var(--ink) 50%, transparent);
+  background-clip: padding-box;
+}
+
+/* As with the pinned rows, a window under 30rem tall scrolls as one page. */
+@media (min-height: 30rem) {
+  :root[data-scrollbar="slim"] {
+    /* The heading row pins to the top of the content, which starts under the
+       banner and the bar. A sticky offset counts from inside the scroller's
+       padding, which the row's own margin already covers. */
+    --head-top: -1.5rem;
+    --content-cap: 96rem;
+
+    height: 100%;
+    overflow: hidden;
+    scroll-padding-top: 0;
+    /* progress: button's stable gutter would still be kept on a root that
+       cannot scroll, as a blank strip beside the banner; main keeps its own. */
+    scrollbar-gutter: auto;
+  }
+
+  :root[data-scrollbar="slim"][data-content-width="compact"] {
+    --content-cap: 76rem;
+  }
+
+  :root[data-scrollbar="slim"] body {
+    height: 100vh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* The content spans its column, so its scrollbar is at the window's edge;
+     the padding keeps the cards within content_width's cap. The gutter is
+     always kept, so a scrollbar coming or going never moves the cards. */
+  :root[data-scrollbar="slim"] main {
+    min-height: 0;
+    max-width: none;
+    padding-inline: max(2rem, calc((100% - var(--content-cap)) / 2 + 2rem));
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+    scroll-padding-top: var(--head-height, 0px);
+  }
+
+  :root[data-scrollbar="slim"][data-content-width="full"] main {
+    padding-inline: 2rem;
+  }
+}
+
+@media (min-width: 40rem) and (min-height: 30rem) {
+  :root[data-scrollbar="slim"][data-nav-placement="left"] body {
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+
+  :root[data-scrollbar="slim"][data-nav-placement="left"] .app-bar {
+    min-height: 0;
+  }
+}
+
 @media (max-width: 40rem) {
   .info,
   #item-dialog .info {

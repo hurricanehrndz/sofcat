@@ -10,6 +10,7 @@ import {
   cardStatus,
   deriveAction,
   enteringItems,
+  forwardedScroll,
   statusLabel,
   statusRecord,
   appliesToLine,
@@ -185,6 +186,68 @@ test("the item view is page or dialog; anything else is page", () => {
   for (const itemView of [undefined, "", "modal", "DIALOG", 1, "constructor"]) {
     assert.equal(brandingView({ itemView }).itemView, "page", String(itemView));
   }
+});
+
+// The window's own scrollbar is the look from before the key, so no key, an
+// older service, a cached payload or a typo must all keep it.
+test("the scrollbar is system or slim; anything else is system", () => {
+  assert.equal(brandingView({ scrollbar: "slim" }).scrollbar, "slim");
+  assert.equal(brandingView({ scrollbar: "system" }).scrollbar, "system");
+  for (const scrollbar of [undefined, "", "thin", "SLIM", 1, "constructor"]) {
+    assert.equal(brandingView({ scrollbar }).scrollbar, "system", String(scrollbar));
+  }
+});
+
+// Under slim the root does not scroll, so progress: button's stable gutter on
+// it would be a blank strip beside the banner; the slim root drops it.
+test("a slim root that does not scroll keeps no gutter of its own", () => {
+  const css = readFileSync(new URL("./style.css", import.meta.url), "utf8");
+  assert.match(css, /:root\[data-progress="button"\] \{[^}]*scrollbar-gutter: stable;/);
+  assert.match(css, /@media \(min-height: 30rem\) \{\s*:root\[data-scrollbar="slim"\] \{[^}]*overflow: hidden;[^}]*scrollbar-gutter: auto;/);
+});
+
+// Under slim only the content scrolls, and the web view scrolls only an
+// ancestor of the focused element. A keyboard user must still scroll the list
+// from launch (focus on the body) and from a tab in the app bar, while Space
+// on a button still presses it and a text field keeps its own keys.
+test("scroll keys reach the content from the body and the bar, and only there", () => {
+  const key = (k, overrides) => ({ key: k, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...overrides });
+  for (const target of ["body", "control"]) {
+    assert.equal(forwardedScroll(key("PageDown"), target, 400), 350, target);
+    assert.equal(forwardedScroll(key("PageUp"), target, 400), -350, target);
+    assert.equal(forwardedScroll(key("End"), target, 400), "end", target);
+    assert.equal(forwardedScroll(key("Home"), target, 400), "start", target);
+  }
+  assert.equal(forwardedScroll(key(" "), "body", 400), 350);
+  assert.equal(forwardedScroll(key(" ", { shiftKey: true }), "body", 400), -350);
+  assert.equal(forwardedScroll(key("ArrowDown"), "body", 400), 40);
+  assert.equal(forwardedScroll(key("ArrowUp"), "body", 400), -40);
+  for (const k of [" ", "ArrowDown", "ArrowUp"]) {
+    assert.equal(forwardedScroll(key(k), "control", 400), null, `${JSON.stringify(k)} on a button is the button's`);
+  }
+  for (const k of ["PageDown", "End", " ", "ArrowDown"]) {
+    assert.equal(forwardedScroll(key(k), "own", 400), null, `${JSON.stringify(k)} in a field or a scroller`);
+    assert.equal(forwardedScroll(key(k, { altKey: true }), "body", 400), null, `Alt+${k}`);
+  }
+  assert.equal(forwardedScroll(key("a"), "body", 400), null);
+});
+
+// The chords people use to reach the top and the bottom must work as when the
+// window scrolls; chords the window ignores, such as Shift+End, must not scroll.
+test("only the window's own top and bottom chords reach the content", () => {
+  const key = (k, overrides) => ({ key: k, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...overrides });
+  for (const target of ["body", "control"]) {
+    assert.equal(forwardedScroll(key("End", { ctrlKey: true }), target, 400), "end", target);
+    assert.equal(forwardedScroll(key("Home", { ctrlKey: true }), target, 400), "start", target);
+  }
+  assert.equal(forwardedScroll(key("ArrowDown", { metaKey: true }), "body", 400), "end");
+  assert.equal(forwardedScroll(key("ArrowUp", { metaKey: true }), "body", 400), "start");
+  assert.equal(forwardedScroll(key("ArrowDown", { metaKey: true }), "control", 400), null);
+  for (const k of ["End", "Home", "PageDown", "ArrowDown"]) {
+    assert.equal(forwardedScroll(key(k, { shiftKey: true }), "body", 400), null, `Shift+${k}`);
+    assert.equal(forwardedScroll(key(k, { metaKey: true, ctrlKey: true }), "body", 400), null, `Ctrl+Meta+${k}`);
+  }
+  assert.equal(forwardedScroll(key("End", { ctrlKey: true, shiftKey: true }), "body", 400), null, "Ctrl+Shift+End");
 });
 
 // Keyboard and screen-reader users open an item with one button on its card,

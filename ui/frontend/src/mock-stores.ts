@@ -70,6 +70,11 @@ export function navPlacement(): string {
   return params().get("nav") ?? "";
 }
 
+/** scrollbar is `?scrollbar=`: the branding scrollbar to serve, "" for the store's own. */
+export function scrollbar(): string {
+  return params().get("scrollbar") ?? "";
+}
+
 /** categoryFilter is `?categories=`: the branding category_filter to serve, "" for the store's own. */
 export function categoryFilter(): string {
   return params().get("categories") ?? "";
@@ -414,6 +419,7 @@ export const STORES: Record<StoreName, MockStore> = {
       bannerHeight: "",
       progress: "",
       itemView: "",
+      scrollbar: "",
       refreshIntervalSeconds: 0,
       sections: ["Productivity", "Developer tools", "Utilities"],
     },
@@ -447,6 +453,7 @@ export const STORES: Record<StoreName, MockStore> = {
       bannerHeight: "",
       progress: "",
       itemView: "",
+      scrollbar: "",
       refreshIntervalSeconds: 0,
       sections: ["Skills", "Plugins"],
     },
@@ -480,6 +487,7 @@ export const UNBRANDED: Branding = {
   bannerHeight: "",
   progress: "",
   itemView: "",
+  scrollbar: "",
   refreshIntervalSeconds: 0,
   sections: [],
 };

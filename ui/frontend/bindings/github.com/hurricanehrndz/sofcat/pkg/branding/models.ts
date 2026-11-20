@@ -106,6 +106,11 @@ export class Branding {
     "itemView": string;
 
     /**
+     * Scrollbar is one of Scrollbars, or "" for the UI's default, system.
+     */
+    "scrollbar": string;
+
+    /**
      * RefreshIntervalSeconds is how often an open storefront fetches the list
      * again: 0 for the UI's default, DefaultRefreshInterval, and -1 for never.
      */
@@ -190,6 +195,9 @@ export class Branding {
         }
         if (!("itemView" in $$source)) {
             this["itemView"] = "";
+        }
+        if (!("scrollbar" in $$source)) {
+            this["scrollbar"] = "";
         }
         if (!("refreshIntervalSeconds" in $$source)) {
             this["refreshIntervalSeconds"] = 0;

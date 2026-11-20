@@ -1153,6 +1153,9 @@ const PROGRESSES = new Set(["strip", "button"]);
 // replaces the list with the item's detail page; dialog opens the same
 // details in a dialog over the list.
 const ITEM_VIEWS = new Set(["page", "dialog"]);
+// The scrollbar names: system, the default and the look from before the key,
+// is the window's own scrollbar; slim is a thin one on the content alone.
+const SCROLLBARS = new Set(["system", "slim"]);
 
 /** oneOf returns payload[key] when it is one of allowed, else fallback. */
 function oneOf<T extends string>(payload: Record<string, unknown>, key: string, allowed: Set<string>, fallback: T): T {
@@ -1260,6 +1263,7 @@ export function brandingView(payload: unknown): BrandingView {
     bannerHeight: oneOf(raw, "bannerHeight", BANNER_HEIGHTS, "medium"),
     progress: oneOf(raw, "progress", PROGRESSES, "strip"),
     itemView: oneOf(raw, "itemView", ITEM_VIEWS, "page"),
+    scrollbar: oneOf(raw, "scrollbar", SCROLLBARS, "system"),
     refreshIntervalMs: refreshIntervalMs(raw.refreshIntervalSeconds),
     sections: Array.isArray(raw.sections)
       ? raw.sections
@@ -1370,4 +1374,69 @@ export function isRefreshKey(event: {
     return !event.metaKey;
   }
   return event.key.toLowerCase() === "r" && event.ctrlKey !== event.metaKey;
+}
+
+/** The arrow keys' step, Chromium's own. */
+const SCROLL_LINE = 40;
+
+/**
+ * scrollKeyTarget is how the focused element relates to a scroll key: the
+ * body, a control that ignores scroll keys (a button, a link), or one that
+ * handles them itself (a text field, a select, anything inside main or inside
+ * another scroller, anything while a dialog is open).
+ */
+export type ScrollKeyTarget = "body" | "control" | "own";
+
+/**
+ * forwardedScroll says how far a key press scrolls the content when only the
+ * content scrolls (branding scrollbar: slim): a distance in pixels, "start"
+ * or "end", or null to leave the key to the browser. WebView2 and WebKit only
+ * scroll an ancestor of the focused element, so without this the keys do
+ * nothing from the body at launch or from a tab in the app bar. Arrows and
+ * Space only from the body: on a control Space presses it, and an arrow may
+ * mean something to it. Only the chords a window scrolls by count: Ctrl+Home
+ * and Ctrl+End, ⌘↑ and ⌘↓ (WKWebView's top and bottom), Shift only with
+ * Space. page is the content's visible height.
+ */
+export function forwardedScroll(
+  event: { key: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean },
+  target: ScrollKeyTarget,
+  page: number,
+): number | "start" | "end" | null {
+  if (target === "own" || event.altKey) {
+    return null;
+  }
+  // Chromium's own page step: seven eighths of the view, so a line overlaps.
+  const step = Math.max(page * 0.875, SCROLL_LINE);
+  const chord = `${event.ctrlKey ? "Ctrl+" : ""}${event.metaKey ? "Meta+" : ""}${event.shiftKey ? "Shift+" : ""}${event.key}`;
+  switch (chord) {
+    case "PageDown":
+      return step;
+    case "PageUp":
+      return -step;
+    case "End":
+    case "Ctrl+End":
+      return "end";
+    case "Home":
+    case "Ctrl+Home":
+      return "start";
+  }
+  if (target !== "body") {
+    return null;
+  }
+  switch (chord) {
+    case " ":
+      return step;
+    case "Shift+ ":
+      return -step;
+    case "ArrowDown":
+      return SCROLL_LINE;
+    case "ArrowUp":
+      return -SCROLL_LINE;
+    case "Meta+ArrowDown":
+      return "end";
+    case "Meta+ArrowUp":
+      return "start";
+  }
+  return null;
 }
