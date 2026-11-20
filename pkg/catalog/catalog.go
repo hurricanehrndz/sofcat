@@ -2,6 +2,11 @@
 // repository tools. Keep it free of agent dependencies (config, download).
 package catalog
 
+import (
+	"fmt"
+	"regexp"
+)
+
 // Item contains an individual entry from the catalog
 type Item struct {
 	Name                string        `yaml:"-"`
@@ -100,10 +105,35 @@ type FileCheck struct {
 	Hash        string `yaml:"hash,omitempty"`
 }
 
-// RegCheck holds information about checking via registry
+// RegCheck holds information about checking via registry. Name matches an
+// Uninstall entry's DisplayName exactly; NameRegex, its alternative, matches
+// the whole DisplayName, for software that puts its version in the name.
 type RegCheck struct {
-	Name    string `yaml:"name,omitempty"`
-	Version string `yaml:"version,omitempty"`
+	Name      string `yaml:"name,omitempty"`
+	NameRegex string `yaml:"name_regex,omitempty"`
+	Version   string `yaml:"version,omitempty"`
+}
+
+// NameMatcher compiles NameRegex, anchored to the whole name and
+// case-insensitive like Name. It returns nil when NameRegex is empty, and an
+// error when both Name and NameRegex are set or the pattern does not compile.
+func (r RegCheck) NameMatcher() (*regexp.Regexp, error) {
+	if r.NameRegex == "" {
+		return nil, nil
+	}
+	if r.Name != "" {
+		return nil, fmt.Errorf("check.registry sets both name %q and name_regex %q; set one", r.Name, r.NameRegex)
+	}
+	// Compile the pattern alone first: wrapped, an unbalanced one such as
+	// `a)|(b` would compile and escape the anchors.
+	_, err := regexp.Compile(r.NameRegex)
+	if err == nil {
+		var re *regexp.Regexp
+		if re, err = regexp.Compile(`(?i)^(?:` + r.NameRegex + `)$`); err == nil {
+			return re, nil
+		}
+	}
+	return nil, fmt.Errorf("check.registry name_regex %q does not compile: %w", r.NameRegex, err)
 }
 
 // AppxCheck holds information about checking an installed AppX/MSIX package
