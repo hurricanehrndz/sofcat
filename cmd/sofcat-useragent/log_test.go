@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hurricanehrndz/sofcat/pkg/identity"
 )
@@ -73,10 +74,22 @@ func TestLogSizeCapped(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// lumberjack removes the backups past MaxBackups in a goroutine of its
+	// own after each rotation, which Close does not wait for, so the first
+	// backup can outlive Close for a moment. Wait for that cleanup, bounded.
 	dir := filepath.Join(root, identity.Name)
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		t.Fatal(err)
+	var entries []os.DirEntry
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		entries, err = os.ReadDir(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(entries) <= 2 || time.Now().After(deadline) {
+			break
+		}
+	}
+	if len(entries) > 2 {
+		t.Errorf("%d files after 5s; want at most 2 (the log and one backup)", len(entries))
 	}
 	var total int64
 	for _, e := range entries {
