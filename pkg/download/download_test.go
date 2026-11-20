@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -468,5 +469,33 @@ func TestFileContextProgress(t *testing.T) {
 	}
 	if data, _ := os.ReadFile(filepath.Join(dir, "unsized")); string(data) != body {
 		t.Fatalf("unsized download: %d bytes, want %d", len(data), len(body))
+	}
+}
+
+// Every request builds its own transport, so a connection left idle in it
+// could never be reused; it would stay open until the server dropped it, and
+// a run of downloads would pile them up. A download must close its
+// connection once its response is done.
+func TestGetClosesItsConnection(t *testing.T) {
+	SetConfig(config.Configuration{})
+	closed := make(chan struct{})
+	ts := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, "body")
+	}))
+	ts.Config.ConnState = func(_ net.Conn, state http.ConnState) {
+		if state == http.StateClosed {
+			close(closed)
+		}
+	}
+	ts.Start()
+	defer ts.Close()
+
+	if _, err := Get(ts.URL + "/file"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-closed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the connection was still open 5s after the download, want it closed")
 	}
 }
