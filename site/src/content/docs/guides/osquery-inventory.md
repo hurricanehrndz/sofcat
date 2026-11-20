@@ -22,7 +22,13 @@ table construction) can't be used, because it reads SQLite databases only.
 - **Writer:** the managed run (`sofcat.exe` as SYSTEM, from the service or a
   scheduled run). It is written at the end of every run, including a run that
   fails part way, so the failure is visible. Check-only (`-C`) prints the same
-  JSON to stdout and does not write the file.
+  JSON to stdout, its log lines going to stderr, and writes it to
+  `inventory-checkonly.json` beside it, with the same ACL; it never writes or
+  removes `inventory.json`, which stays the record of what is installed.
+  Failing to write `inventory-checkonly.json` is a warning in the log, not a
+  failed run. `inventory-checkonly.json` is the record of the most recent
+  check-only run, and a later real run does not remove it, so judge its
+  freshness by its `StartTime` and `EndTime`.
 - **Write:** the run creates a temp file in the same directory that carries the
   ACL below from creation, writes it, then renames it over `inventory.json`. A file that a user
   plants at the path is replaced, so its owner and ACL do not survive.
