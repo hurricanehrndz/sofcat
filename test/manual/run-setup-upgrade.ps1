@@ -8,18 +8,28 @@ each as named checks:
 
   e  foreign   a service named <slug> that runs another binary: the new
                setup refuses, copies nothing and leaves that service alone
-  -  old       a fresh install of the old setup
+  -  old       a fresh install of the old setup, then its service registered
+               again with -c and a custom config path that has a space
   d  rollback  the new setup over the old one while <slug>-useragent.exe, the
                last file it copies, is held open without write sharing: the
                copy fails, and rollback leaves the old version installed,
-               its service running
-  a  upgrade   the new setup over the old one: the new version runs, and
+               its service running again with the custom config path
+  a  upgrade   the new setup over the old one: the new version runs, its
+               service restarted with the custom config path, and
                config.yaml and a sentinel tree under Data are untouched
-  b  repair    the new setup again over itself
+  b  repair    the new setup again over itself, the service registered
+               again with the default config first
   -  newer     with -NewerSetup only, the newer setup over the new one
+  g  imagepath our executable with an extra argument in the ImagePath: the
+               setup of the installed version refuses, stops and copies
+               nothing
   c  downgrade refused, nothing changed: with -NewerSetup the new setup over
                the newer install (c-version-rule, the version rule), then
                the old setup over the installed version (c-old)
+
+Every install check compares the whole ImagePath with the form
+-serviceinstall writes, and every run that succeeds must restart the service
+(a new process id); a refusal must leave the same one running.
   f  uninstall uninstall.exe /S after the upgrades removes everything but
                %ProgramData%\<ProductName>
 
@@ -68,6 +78,7 @@ $agentExe   = Join-Path $installDir "$Slug-useragent.exe"
 $uninstaller = Join-Path $installDir "uninstall.exe"
 $dataRoot   = Join-Path $env:ProgramData $ProductName
 $config     = Join-Path $dataRoot "config.yaml"
+$customConfig = Join-Path (Split-Path $LogPath) "custom config\config.yaml"
 $sentinel   = Join-Path $dataRoot "Data\setup-upgrade-sentinel"
 $shortcut   = Join-Path $env:ProgramData "Microsoft\Windows\Start Menu\Programs\$ProductName.lnk"
 $runKey     = "Software\Microsoft\Windows\CurrentVersion\Run"
@@ -186,6 +197,51 @@ function Get-ServiceImage {
     return [string]$proc.Path
 }
 
+# Get-ServicePid returns the service's process id, 0 when it is not running.
+function Get-ServicePid {
+    $svc = Get-CimInstance Win32_Service -Filter "Name='$Slug'" -ErrorAction SilentlyContinue
+    if ($null -eq $svc) { return 0 }
+    return [int]$svc.ProcessId
+}
+
+# Get-ExpectedImage is the ImagePath -serviceinstall writes for a config
+# path: Go's syscall.EscapeArg quotes an argument that has a space or tab.
+function Get-ExpectedImage {
+    param([string]$ConfigPath)
+    $parts = foreach ($a in @($serviceExe, "-c", $ConfigPath, "-service")) {
+        if ($a -match "[ `t]") { "`"$a`"" } else { $a }
+    }
+    return ($parts -join " ")
+}
+
+# Register-TestService registers the installed service again, with -c when
+# $ConfigPath is set, as an administrator would by hand.
+function Register-TestService {
+    param([string]$ConfigPath)
+    $eap = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        & $serviceExe -serviceremove 2>&1 | ForEach-Object { Log "      $_" }
+        if ($LASTEXITCODE -ne 0) { throw "$Slug.exe -serviceremove exited $LASTEXITCODE" }
+        if ($ConfigPath) {
+            & $serviceExe -c $ConfigPath -serviceinstall 2>&1 | ForEach-Object { Log "      $_" }
+        }
+        else {
+            & $serviceExe -serviceinstall 2>&1 | ForEach-Object { Log "      $_" }
+        }
+        if ($LASTEXITCODE -ne 0) { throw "$Slug.exe -serviceinstall exited $LASTEXITCODE" }
+    }
+    finally {
+        $ErrorActionPreference = $eap
+    }
+}
+
+function Set-ImagePath {
+    param([string]$Value)
+    $k = $hklm.OpenSubKey($serviceKey, $true)
+    try { $k.SetValue("ImagePath", $Value, [Microsoft.Win32.RegistryValueKind]::ExpandString) } finally { $k.Close() }
+}
+
 function Get-TreeHashes {
     param([string]$Root)
     $h = @{}
@@ -205,16 +261,28 @@ function Test-SameTree {
 }
 
 # Assert-Installed checks a working install: the service runs the installed
-# executable, the Run value points at the installed helper, the shortcut and
-# the ARP entry exist, and the ARP version is $Version.
+# executable with $ConfigPath, the Run value points at the installed helper,
+# the shortcut and the ARP entry exist, and the ARP version is $Version. With
+# $BeforePid, the service runs in a new process when $Restarted is set and
+# in that one otherwise.
 function Assert-Installed {
-    param([string]$Prefix, [string]$Version)
+    param([string]$Prefix, [string]$Version, [string]$ConfigPath, [int]$BeforePid = 0, [bool]$Restarted = $true)
     $status = Wait-ServiceRunning
     Check "$Prefix.service-running" ($status -eq "Running") "(status '$status')"
     $image = Get-ServiceImage
     Check "$Prefix.service-binary" ($image -ieq $serviceExe) "(running '$image')"
     $imagePath = [string](Get-RegValue $serviceKey "ImagePath")
-    Check "$Prefix.service-imagepath" ($imagePath -like "`"$serviceExe`"*") "($imagePath)"
+    $want = Get-ExpectedImage $ConfigPath
+    Check "$Prefix.service-imagepath" ($imagePath -ieq $want) "('$imagePath', want '$want')"
+    if ($BeforePid -ne 0) {
+        $now = Get-ServicePid
+        if ($Restarted) {
+            Check "$Prefix.service-restarted" ($now -ne 0 -and $now -ne $BeforePid) "(pid $BeforePid -> $now)"
+        }
+        else {
+            Check "$Prefix.service-not-restarted" ($now -eq $BeforePid) "(pid $BeforePid -> $now)"
+        }
+    }
     $run = [string](Get-RegValue $runKey $runValue)
     Check "$Prefix.run-value" ($run -ieq "`"$agentExe`"") "($runValue = $run)"
     Check "$Prefix.shortcut" (Test-Path -LiteralPath $shortcut -PathType Leaf) "($shortcut)"
@@ -258,16 +326,23 @@ try {
     $oldVersion = [string](Get-RegValue $arpKey "DisplayVersion")
     $named = Get-NamedVersion $OldSetup
     if ($named) { Check "old.arp-version-named" ($oldVersion -eq $named) "('$oldVersion', file name '$named')" }
-    Assert-Installed "old" $oldVersion
+    Assert-Installed "old" $oldVersion $config
     $oldHashes = Get-Hashes
 
+    Log "[old-custom] the old service registered again with -c '$customConfig'"
+    New-Item -ItemType Directory -Path (Split-Path $customConfig) -Force | Out-Null
+    Set-Content -LiteralPath $customConfig -Encoding ASCII -Value "# seeded by run-setup-upgrade.ps1`r`nurl: http://127.0.0.1:9/`r`nmanifest: setup_upgrade_custom`r`n"
+    Register-TestService $customConfig
+    Assert-Installed "old-custom" $oldVersion $customConfig
+
     Log "[d] failed upgrade: $agentExe held open with read sharing only"
+    $before = Get-ServicePid
     $held = [System.IO.File]::Open($agentExe, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::Read)
     $code = Invoke-Setup $NewSetup
     $held.Close()
     $held = $null
     Check "d.exit-nonzero" ($code -ne 0) "(exit $code)"
-    Assert-Installed "d" $oldVersion
+    Assert-Installed "d" $oldVersion $customConfig $before
     Check "d.executables-old" (Test-SameHashes $oldHashes (Get-Hashes))
 
     Log "[a] upgrade old -> new"
@@ -277,50 +352,75 @@ try {
     [System.IO.File]::WriteAllBytes((Join-Path $sentinel "nested\b.bin"), [byte[]](0..255))
     $configHash = (Get-FileHash -LiteralPath $config -Algorithm SHA256).Hash
     $sentinelHashes = Get-TreeHashes $sentinel
+    $before = Get-ServicePid
     $code = Invoke-Setup $NewSetup
     Check "a.exit-zero" ($code -eq 0) "(exit $code)"
     $newVersion = [string](Get-RegValue $arpKey "DisplayVersion")
     $named = Get-NamedVersion $NewSetup
     if ($named) { Check "a.arp-version-named" ($newVersion -eq $named) "('$newVersion', file name '$named')" }
     Check "a.arp-version-changed" ($newVersion -ne $oldVersion) "('$oldVersion' -> '$newVersion')"
-    Assert-Installed "a" $newVersion
+    Assert-Installed "a" $newVersion $customConfig $before
     $newHashes = Get-Hashes
     Check "a.service-exe-new" ($newHashes["$Slug.exe"] -ne $oldHashes["$Slug.exe"]) "($Slug.exe hash changed)"
     Check "a.config-untouched" ((Test-Path -LiteralPath $config) -and (Get-FileHash -LiteralPath $config -Algorithm SHA256).Hash -eq $configHash) "($config)"
     Check "a.data-untouched" (Test-SameTree $sentinelHashes (Get-TreeHashes $sentinel)) "($sentinel)"
 
-    Log "[b] new over new"
+    Log "[b] new over new, the service registered again with the default config"
+    Register-TestService ""
+    Assert-Installed "b-default" $newVersion $config
+    $before = Get-ServicePid
     $code = Invoke-Setup $NewSetup
     Check "b.exit-zero" ($code -eq 0) "(exit $code)"
-    Assert-Installed "b" $newVersion
+    Assert-Installed "b" $newVersion $config $before
     Check "b.executables-new" (Test-SameHashes $newHashes (Get-Hashes))
+    $installedSetup = $NewSetup
 
     if ($NewerSetup) {
         Log "[newer] upgrade new -> newer"
+        $before = Get-ServicePid
         $code = Invoke-Setup $NewerSetup
         Check "newer.exit-zero" ($code -eq 0) "(exit $code)"
         $newVersion = [string](Get-RegValue $arpKey "DisplayVersion")
         $named = Get-NamedVersion $NewerSetup
         if ($named) { Check "newer.arp-version-named" ($newVersion -eq $named) "('$newVersion', file name '$named')" }
-        Assert-Installed "newer" $newVersion
+        Assert-Installed "newer" $newVersion $config $before
         $newHashes = Get-Hashes
+        $installedSetup = $NewerSetup
     }
+
+    # The setup of the installed version would otherwise repair it, so only
+    # the ImagePath rule can refuse. The value is written to the registry,
+    # where setup reads it; the SCM keeps its own copy until a reboot, so the
+    # running service never sees it.
+    Log "[g] our executable with an extra argument refused"
+    $goodImage = [string](Get-RegValue $serviceKey "ImagePath")
+    Set-ImagePath "$goodImage -debug"
+    $before = Get-ServicePid
+    $code = Invoke-Setup $installedSetup
+    $badImage = [string](Get-RegValue $serviceKey "ImagePath")
+    Set-ImagePath $goodImage
+    Check "g.exit-nonzero" ($code -ne 0) "(exit $code)"
+    Check "g.imagepath-untouched" ($badImage -eq "$goodImage -debug") "($badImage)"
+    Assert-Installed "g" $newVersion $config $before $false
+    Check "g.executables-unchanged" (Test-SameHashes $newHashes (Get-Hashes))
 
     if ($NewerSetup) {
         # Both built from the current tree, so only the version rule can refuse.
         Log "[c-version-rule] downgrade refused: new over newer"
+        $before = Get-ServicePid
         $code = Invoke-Setup $NewSetup
         Check "c-version-rule.exit-nonzero" ($code -ne 0) "(exit $code)"
-        Assert-Installed "c-version-rule" $newVersion
+        Assert-Installed "c-version-rule" $newVersion $config $before $false
         Check "c-version-rule.executables-unchanged" (Test-SameHashes $newHashes (Get-Hashes))
     }
 
     # A released old setup may refuse any existing service, whatever its
     # version; one built from the current tree refuses by the version rule.
     Log "[c-old] downgrade refused: old over the installed version"
+    $before = Get-ServicePid
     $code = Invoke-Setup $OldSetup
     Check "c-old.exit-nonzero" ($code -ne 0) "(exit $code)"
-    Assert-Installed "c-old" $newVersion
+    Assert-Installed "c-old" $newVersion $config $before $false
     Check "c-old.executables-unchanged" (Test-SameHashes $newHashes (Get-Hashes))
 
     Log "[f] uninstall after the upgrades"
