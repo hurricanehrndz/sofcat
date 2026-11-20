@@ -50,6 +50,8 @@ DESCRIPTION="Install and update Acme-approved software"
 HOMEPAGE=https://help.example.com/software
 #INSTALLERS=zip
 #LOADING_TEXT="Getting your software ready…"
+#LOADING_ALWAYS=true
+#LOADING_SECONDS=3
 ```
 
 ### `SLUG`
@@ -96,6 +98,25 @@ scripts stay in every build. `brand-check` rejects any other value. See
 The line on the loading screen, which shows while the storefront first
 connects to the service. One line, without `<`, `>` or `&`. Defaults to
 "Connecting to the `<NAME>` service…".
+
+### `LOADING_ALWAYS`
+
+Shows the loading screen on every launch of the storefront, as a short
+splash: also when a saved list could show at once and when the service
+answers at once. It stays up for at least [`LOADING_SECONDS`](#loading_seconds),
+and longer while the service has not answered and there is no saved list,
+as without it. A failed first try gives way to the page and its Retry once
+that time is up. The splash shows once per launch: not on a refresh, a
+Retry or a reload of the page. Unset (the default) or `1`/`true`;
+`brand-check` rejects any other value. Build-time, like `LOADING_TEXT`: the
+branding settings arrive with the answer the screen waits for.
+
+### `LOADING_SECONDS`
+
+The least time, in seconds from the storefront's start, that the splash
+stays up. A number from 0.1 to 30 with at most one decimal place, such as
+`3` or `1.5`; tenths are as fine as a splash needs. Defaults to 3. It has no
+effect without `LOADING_ALWAYS`, but `brand-check` checks it either way.
 
 ## Checking a brand
 

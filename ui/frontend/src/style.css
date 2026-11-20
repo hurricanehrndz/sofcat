@@ -343,6 +343,11 @@ button[aria-disabled="true"] {
   animation: rise-in 260ms cubic-bezier(0.2, 0.8, 0.2, 1) 200ms backwards;
 }
 
+/* A splash stays up anyway, so there is no flash to wait out. */
+.loading[data-always="true"] .loading-body {
+  animation-delay: 0ms;
+}
+
 .loading .product-mark {
   width: 4.5rem;
   height: 4.5rem;

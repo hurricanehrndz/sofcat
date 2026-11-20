@@ -53,6 +53,10 @@ import {
   shouldAcceptRecord,
   showLoading,
   showRetry,
+  pageSplashMs,
+  splashLeft,
+  splashMs,
+  splashShownBefore,
   stateLabel,
   statusLabel,
   statusRecord,
@@ -346,6 +350,92 @@ test("list view transitions from cache to live and back to stale", () => {
   );
   assert.equal(showRetry(staleEmpty), true);
   assert.equal(showLoading(staleEmpty), false, "a failed first try shows the page and its Retry");
+});
+
+test("a splash keeps the loading screen up for its least time, once per launch", () => {
+  const empty = fromCache(null);
+  const cached = fromCache({ savedAtUtc: "2026-07-21T12:00:00Z", items: catalogItems });
+  const live = withLive(catalogItems, "2026-07-22T00:00:00Z");
+  const failed = withFailure(empty);
+
+  // Off: elapsed time changes nothing.
+  for (const elapsed of [0, 50, 10_000]) {
+    assert.equal(showLoading(empty, 0, elapsed), true);
+    assert.equal(showLoading(cached, 0, elapsed), false, "no splash: a saved list shows at once");
+    assert.equal(showLoading(live, 0, elapsed), false);
+    assert.equal(showLoading(failed, 0, elapsed), false);
+  }
+
+  const splash = 3000;
+  assert.equal(showLoading(live, splash, 100), true, "an instant answer waits out the splash");
+  assert.equal(showLoading(live, splash, 3000), false, "and then shows the list");
+  assert.equal(showLoading(cached, splash, 2999), true, "a saved list waits out the splash too");
+  assert.equal(showLoading(cached, splash, 3000), false);
+  assert.equal(showLoading(empty, splash, 2000), true);
+  assert.equal(showLoading(empty, splash, 9000), true, "a slow service keeps the screen up past the splash");
+  assert.equal(showLoading(failed, splash, 1000), true, "a failed first try shows Retry only after the splash");
+  assert.equal(showLoading(failed, splash, 3000), false);
+  // Later refreshes, Retry and reconnects only ever see more elapsed time:
+  // the splash never comes back, and only a list-less wait raises the screen.
+  for (const later of [cached, live, withFailure(live), failed]) {
+    assert.equal(showLoading(later, splash, 3001), false);
+    assert.equal(showLoading(later, splash, 600_000), false);
+  }
+
+  assert.equal(splashMs(undefined, undefined), 0, "off without the setting");
+  assert.equal(splashMs("false", "3"), 0);
+  assert.equal(splashMs("true", "3"), 3000);
+  assert.equal(splashMs("true", "2.5"), 2500);
+  assert.equal(splashMs("true", undefined), 3000, "seconds default to 3");
+  assert.equal(splashMs("true", "abc"), 3000);
+  assert.equal(splashMs("true", ""), 3000);
+  assert.equal(splashMs("true", "0"), 100, "clamped up to 0.1 s");
+  assert.equal(splashMs("true", "99999999"), 30_000, "clamped down to 30 s, so no timer overflows");
+});
+
+test("the splash timer is due when the splash has no time left", () => {
+  assert.equal(splashLeft(0, 0), 0, "no splash: nothing to wait for");
+  assert.equal(splashLeft(3000, 1200), 1800);
+  assert.equal(splashLeft(3000, 3000), 0);
+  assert.equal(splashLeft(3000, 9000), 0, "never negative");
+  // The screen comes down exactly when the timer is due, for an instant answer.
+  const live = withLive(catalogItems, "2026-07-22T00:00:00Z");
+  for (const elapsed of [0, 1500, 2999, 3000, 3001]) {
+    assert.equal(showLoading(live, 3000, elapsed), splashLeft(3000, elapsed) > 0);
+  }
+});
+
+test("a reload within one launch gets no splash", () => {
+  const session = () => {
+    const items = new Map();
+    return { getItem: (key) => items.get(key) ?? null, setItem: (key, value) => void items.set(key, String(value)) };
+  };
+  const store = session();
+  const first = splashShownBefore(() => store);
+  assert.equal(first, false, "a new launch's page has not had it");
+  assert.equal(pageSplashMs(3000, first), 3000);
+  const reloaded = splashShownBefore(() => store);
+  assert.equal(reloaded, true, "the same session's next page has");
+  const splash = pageSplashMs(3000, reloaded);
+  assert.equal(splash, 0);
+  // A reload behaves as a build without the option: a saved list shows at
+  // once, and the waiting screen keeps its 200 ms (no data-always).
+  assert.equal(showLoading(fromCache({ savedAtUtc: "2026-07-21T12:00:00Z", items: catalogItems }), splash, 0), false);
+  assert.equal(showLoading(fromCache(null), splash, 0), true);
+  assert.equal(splashLeft(splash, 0) > 0, false);
+  assert.equal(splashLeft(pageSplashMs(3000, first), 0) > 0, true, "a new page's splash shows its content at once");
+
+  assert.equal(splashShownBefore(() => session()), false, "a new session (a new launch) shows it again");
+  const throwing = () => {
+    throw new Error("SecurityError");
+  };
+  assert.equal(splashShownBefore(throwing), false, "storage that cannot be reached counts as unmarked");
+  assert.equal(splashShownBefore(() => ({ getItem: throwing, setItem: throwing })), false);
+  assert.equal(
+    splashShownBefore(() => ({ getItem: () => "1", setItem: throwing })),
+    true,
+    "a full store still remembers the mark it read",
+  );
 });
 
 test("only Succeeded, Failed, Deferred and Canceled end an operation", () => {

@@ -1140,9 +1140,65 @@ export function connectionLabel(view: ListView): string {
  * showLoading is true until the service first answers, when no saved list
  * stands in: the loading screen is up. A failed first try takes it down for
  * the page and its Retry, which puts it back up.
+ *
+ * A build with LOADING_ALWAYS also keeps it up until splashMs have passed
+ * since the page started (elapsedMs), whatever the view: a splash on every
+ * launch. Elapsed time only grows, so once down the splash never returns.
  */
-export function showLoading(view: ListView): boolean {
-  return view.source === "loading";
+export function showLoading(view: ListView, splashMs = 0, elapsedMs = 0): boolean {
+  return view.source === "loading" || splashLeft(splashMs, elapsedMs) > 0;
+}
+
+/**
+ * splashLeft is how many ms of the splash remain, or 0 once it is over or
+ * there is none. While it is above 0 the screen's content shows without the
+ * 200 ms wait (data-always), and a timer must take the splash down at 0.
+ */
+export function splashLeft(splashMs: number, elapsedMs: number): number {
+  return Math.max(0, splashMs - elapsedMs);
+}
+
+/**
+ * splashMs is how long the loading screen stays up at least on every launch,
+ * from the build's VITE_LOADING_ALWAYS and VITE_LOADING_SECONDS, or 0 when the
+ * build has no splash. brand-check validated both; a missing or bad seconds
+ * value falls back to the default 3, and one out of range is clamped to
+ * 0.1-30, so a direct vite build cannot overflow a timer.
+ */
+export function splashMs(always: string | undefined, seconds: string | undefined): number {
+  if (always !== "true") {
+    return 0;
+  }
+  const value = Number(seconds || NaN);
+  const clamped = Number.isFinite(value) ? Math.min(30, Math.max(0.1, value)) : 3;
+  return Math.round(clamped * 1000);
+}
+
+const SPLASH_SHOWN_KEY = "sofcat.splashShown";
+
+/**
+ * splashShownBefore says whether this page is a reload within one launch
+ * that already had the splash, and marks it shown for the next one. The mark
+ * lives in sessionStorage, which a reload keeps and a new launch (a new
+ * WebView) does not. Storage that is missing or throws counts as unmarked,
+ * so the splash shows.
+ */
+export function splashShownBefore(session: () => Pick<Storage, "getItem" | "setItem">): boolean {
+  let shown = false;
+  try {
+    const store = session();
+    shown = store.getItem(SPLASH_SHOWN_KEY) === "1";
+    store.setItem(SPLASH_SHOWN_KEY, "1");
+  } catch {
+    // A store that cannot be read is unmarked; one that cannot be written
+    // keeps what it read.
+  }
+  return shown;
+}
+
+/** pageSplashMs is the build's splash for a fresh page, and none for a reload that already had it. */
+export function pageSplashMs(buildSplashMs: number, shownBefore: boolean): number {
+  return shownBefore ? 0 : buildSplashMs;
 }
 
 export function showRetry(view: ListView): boolean {
