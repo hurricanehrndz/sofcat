@@ -115,6 +115,36 @@ code from it, so a newer MSI replaces the older install and leaves one Add or
 remove programs entry. An older MSI refuses to install over a newer one, so
 lowering the catalog version does not roll a machine back.
 
+## Names that carry a version
+
+Some vendor installers put the version in the Add or remove programs name,
+such as `7-Zip 26.06 (x64 edition)` or `WinSCP 6.7.1`. A `check.registry.name`
+then matches one release only. Once the catalog moves to the next release, the
+older one installed on a machine reads as absent, so an update never runs and
+a removal does nothing.
+
+Use `check.registry.name_regex` in place of `name` for these:
+
+```yaml
+check:
+  registry:
+    name_regex: '7-Zip [\d.]+ \(x64 edition\)'
+    version: 26.07
+```
+
+- The pattern must match the whole name, not part of it. `7-Zip` alone does
+  not match `7-Zip 26.06 (x64 edition)`.
+- It ignores case and the spaces around the name, as `name` does.
+- It uses Go's [RE2 syntax](https://github.com/google/re2/wiki/Syntax).
+- Put it in YAML single quotes, so the backslashes stay as written.
+- Set `name` or `name_regex`, not both. `makecatalogs -check` reports an item
+  with both, or with a pattern that does not compile. An agent that gets such
+  an item records its check as failed and neither installs nor removes it.
+
+Match as tightly as the name allows. A loose pattern can match several
+entries, such as a product and its helper, and the item counts as installed
+when any one of them is at `version` or above.
+
 ## Exe items
 
 embala's `setup.exe` is a wizard installer that also runs unattended. sofcat
