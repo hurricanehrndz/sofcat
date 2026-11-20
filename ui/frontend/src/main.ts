@@ -1914,6 +1914,13 @@ const ownsScrollKeys = (target: Element): boolean => {
   }
   return false;
 };
+// With focus on the body the web view scrolls the scroller last clicked, so a
+// click on a blank spot of the left nav's column or of main keeps the keys
+// there rather than here.
+let pressed: Element | null = null;
+document.addEventListener("pointerdown", (event) => {
+  pressed = event.target instanceof Element ? event.target : null;
+});
 document.addEventListener("keydown", (event) => {
   if (
     event.defaultPrevented ||
@@ -1923,7 +1930,14 @@ document.addEventListener("keydown", (event) => {
   ) {
     return;
   }
-  const target = event.target === document.body ? "body" : ownsScrollKeys(event.target) ? "own" : "control";
+  const target =
+    event.target !== document.body
+      ? ownsScrollKeys(event.target)
+        ? "own"
+        : "control"
+      : pressed?.isConnected && ownsScrollKeys(pressed)
+        ? "own"
+        : "body";
   // As the web view's own page step, the pinned heading row does not count.
   const page = content.clientHeight - (parseFloat(getComputedStyle(content).scrollPaddingTop) || 0);
   const scroll = forwardedScroll(event, target, page);

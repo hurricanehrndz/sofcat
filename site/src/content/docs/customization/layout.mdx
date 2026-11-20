@@ -237,7 +237,9 @@ bar, so the banner runs the full width of the window, and it is a thin rounded
 thumb with no track. The side bar of `nav_placement: left`, the item dialog
 and the list of running work get the same thin scrollbar when they scroll.
 The mouse wheel scrolls the content when the pointer is over it, not over the
-banner or the bar; the keyboard scrolls it from anywhere.
+banner or the bar. The keyboard scrolls the content even when focus is outside
+it, as at launch or on a tab in the bar; a text field, a list that scrolls by
+itself and an open dialog keep their own keys.
 
 The space for the scrollbar is always kept, so the cards do not move when a
 list grows long enough to scroll. A window under 30rem tall scrolls as one

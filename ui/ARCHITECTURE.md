@@ -618,9 +618,12 @@ scrollbar as a thin thumb with no track (`::-webkit-scrollbar`, which
 WebView2, WKWebView and WebKitGTK all honour). The web view scrolls only an
 ancestor of the focused element, so while the root does not scroll `main.ts`
 sends the scroll keys pressed outside `main` to it (`forwardedScroll`):
-Page Up, Page Down, Home and End from the body or a control such as a nav tab,
-the arrows and Space only from the body, and none from a text field, a select,
-another scroller that can scroll or behind the open dialog. No script reads
+Page Up, Page Down, Home, End, Ctrl+Home and Ctrl+End from the body or a
+control such as a nav tab, the arrows, Space, Shift+Space, ⌘↑ and ⌘↓ only
+from the body, and none from a text field, a select, another scroller that can
+scroll or behind the open dialog. With focus on the body, a key after a click
+inside `main` or another such scroller is left to the web view, which scrolls
+the scroller last clicked. No script reads
 the scroll position, so nothing else depends on which element scrolls.
 `link_placement` must be `banner` or `app_bar`, and `link_position` `auto`,
 `top_left`, `top_right`, `bottom_left` or `bottom_right`; anything else is the

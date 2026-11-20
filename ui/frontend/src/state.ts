@@ -1394,38 +1394,49 @@ export type ScrollKeyTarget = "body" | "control" | "own";
  * scroll an ancestor of the focused element, so without this the keys do
  * nothing from the body at launch or from a tab in the app bar. Arrows and
  * Space only from the body: on a control Space presses it, and an arrow may
- * mean something to it. page is the content's visible height.
+ * mean something to it. Only the chords a window scrolls by count: Ctrl+Home
+ * and Ctrl+End, ⌘↑ and ⌘↓ (WKWebView's top and bottom), Shift only with
+ * Space. page is the content's visible height.
  */
 export function forwardedScroll(
   event: { key: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean },
   target: ScrollKeyTarget,
   page: number,
 ): number | "start" | "end" | null {
-  if (target === "own" || event.ctrlKey || event.metaKey || event.altKey) {
+  if (target === "own" || event.altKey) {
     return null;
   }
   // Chromium's own page step: seven eighths of the view, so a line overlaps.
   const step = Math.max(page * 0.875, SCROLL_LINE);
-  switch (event.key) {
+  const chord = `${event.ctrlKey ? "Ctrl+" : ""}${event.metaKey ? "Meta+" : ""}${event.shiftKey ? "Shift+" : ""}${event.key}`;
+  switch (chord) {
     case "PageDown":
       return step;
     case "PageUp":
       return -step;
     case "End":
+    case "Ctrl+End":
       return "end";
     case "Home":
+    case "Ctrl+Home":
       return "start";
   }
   if (target !== "body") {
     return null;
   }
-  switch (event.key) {
+  switch (chord) {
     case " ":
-      return event.shiftKey ? -step : step;
+      return step;
+    case "Shift+ ":
+      return -step;
     case "ArrowDown":
       return SCROLL_LINE;
     case "ArrowUp":
       return -SCROLL_LINE;
+    case "Meta+ArrowDown":
+      return "end";
+    case "Meta+ArrowUp":
+      return "start";
   }
   return null;
 }

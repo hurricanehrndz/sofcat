@@ -227,9 +227,27 @@ test("scroll keys reach the content from the body and the bar, and only there", 
   }
   for (const k of ["PageDown", "End", " ", "ArrowDown"]) {
     assert.equal(forwardedScroll(key(k), "own", 400), null, `${JSON.stringify(k)} in a field or a scroller`);
-    assert.equal(forwardedScroll(key(k, { ctrlKey: true }), "body", 400), null, `Ctrl+${k}`);
+    assert.equal(forwardedScroll(key(k, { altKey: true }), "body", 400), null, `Alt+${k}`);
   }
   assert.equal(forwardedScroll(key("a"), "body", 400), null);
+});
+
+// The chords people use to reach the top and the bottom must work as when the
+// window scrolls; chords the window ignores, such as Shift+End, must not scroll.
+test("only the window's own top and bottom chords reach the content", () => {
+  const key = (k, overrides) => ({ key: k, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...overrides });
+  for (const target of ["body", "control"]) {
+    assert.equal(forwardedScroll(key("End", { ctrlKey: true }), target, 400), "end", target);
+    assert.equal(forwardedScroll(key("Home", { ctrlKey: true }), target, 400), "start", target);
+  }
+  assert.equal(forwardedScroll(key("ArrowDown", { metaKey: true }), "body", 400), "end");
+  assert.equal(forwardedScroll(key("ArrowUp", { metaKey: true }), "body", 400), "start");
+  assert.equal(forwardedScroll(key("ArrowDown", { metaKey: true }), "control", 400), null);
+  for (const k of ["End", "Home", "PageDown", "ArrowDown"]) {
+    assert.equal(forwardedScroll(key(k, { shiftKey: true }), "body", 400), null, `Shift+${k}`);
+    assert.equal(forwardedScroll(key(k, { metaKey: true, ctrlKey: true }), "body", 400), null, `Ctrl+Meta+${k}`);
+  }
+  assert.equal(forwardedScroll(key("End", { ctrlKey: true, shiftKey: true }), "body", 400), null, "Ctrl+Shift+End");
 });
 
 // Keyboard and screen-reader users open an item with one button on its card,
