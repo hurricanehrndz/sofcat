@@ -34,6 +34,8 @@ import {
   isTerminalState,
   localErrorState,
   localRecord,
+  repeatsOutcome,
+  requestText,
   monogram,
   myItems,
   actionText,
@@ -597,16 +599,53 @@ test("state labels stay readable for wire and local states", () => {
   assert.equal(statusLabel(item({ status: "WillBeRemoved" })), "Will be removed");
 });
 
-test("activity lines name the item, state and message", () => {
-  const line = activityLine({
-    operationId: "op-1",
-    itemName: "DemoUpdater",
-    displayName: "Demo Updater",
-    state: "ItemCompleted",
-    message: "done",
-    timestampUtc: "not-a-date",
-  });
-  assert.equal(line, "not-a-date — Demo Updater: Item Completed — done");
+test("activity lines say what happened in plain words, with a reason only where there is one", () => {
+  // The messages are the ones the service and main.ts really send: a person
+  // reads Activity, so a stock message or the item's name again is noise.
+  const text = (state, message, extra = {}) =>
+    activityLine({
+      operationId: "op-1",
+      itemName: "DemoOptional",
+      displayName: "Demo Optional",
+      state,
+      message,
+      timestampUtc: "not-a-date",
+      ...extra,
+    }).replace("not-a-date — Demo Optional: ", "");
+
+  assert.equal(text(REQUESTED_STATE, "Install requested"), "Install requested");
+  assert.equal(text("Queued", "Operation queued"), "Waiting to start");
+  assert.equal(text("Downloading", "Demo Optional"), "Downloading");
+  assert.equal(text("Installing", "DemoOptional"), "Installing");
+  assert.equal(text("Removing", ""), "Removing");
+  assert.equal(text("ItemCompleted", ""), "Done");
+  assert.equal(text("ItemFailed", "exit status 1603"), "Failed — exit status 1603");
+  assert.equal(text("Succeeded", "Operation completed"), "Finished");
+  assert.equal(
+    text("Failed", "Operation failed (exit status 1603)", { detail: "exit status 1603" }),
+    "Failed — exit status 1603",
+  );
+  assert.equal(text("Failed", "Operation failed"), "Failed");
+  assert.equal(
+    text("Deferred", "blocking application(s) running: demo.exe", { errorCode: "blocked_by_running_app" }),
+    "Waiting — close demo.exe to continue",
+  );
+  assert.equal(
+    text("Deferred", "Needs Python. Install it first, then try again.", { errorCode: "missing_software" }),
+    "Postponed — Needs Python. Install it first, then try again.",
+  );
+  assert.equal(
+    text(STREAM_ENDED_STATE, "operation stream ended before a terminal event"),
+    "Lost contact with the service before it finished",
+  );
+  assert.equal(
+    text(ERROR_STATE, "command_failed: the service could not complete the request; see the SofCat service log"),
+    "Request failed — the service could not complete the request; see the SofCat service log",
+  );
+  assert.equal(text(ERROR_STATE, "pipe unavailable"), "Request failed — pipe unavailable");
+  // A state this build does not know still reads, with whatever the service said.
+  assert.equal(text("VerifyingSignature", "checking"), "Verifying Signature — checking");
+
   assert.equal(
     activityLine({
       operationId: "op-1",
@@ -616,8 +655,35 @@ test("activity lines name the item, state and message", () => {
       message: "  ",
       timestampUtc: "not-a-date",
     }),
-    "not-a-date — DemoUpdater: Queued",
+    "not-a-date — DemoUpdater: Waiting to start",
   );
+});
+
+test("Activity leaves out the own item's completion, which the terminal record repeats", () => {
+  const own = { itemName: "DemoOptional" };
+  const record = (itemName, state) => ({ itemName, state });
+  assert.equal(repeatsOutcome(own, record("DemoOptional", "ItemCompleted")), true);
+  assert.equal(repeatsOutcome(own, record("DemoOptional", "ItemFailed")), true);
+  assert.equal(repeatsOutcome(own, record("DemoUpdater", "ItemFailed")), false, "a dependency's result is news");
+  assert.equal(repeatsOutcome(own, record("DemoOptional", "Failed")), false, "the terminal record stays");
+
+  // A zip item whose user placement the helper finishes: the service sends a
+  // second Installing after the item's ItemCompleted. With that record left
+  // out, the second Installing must not show as a new line (pushRecord's rule).
+  const records = ["Downloading", "Installing", "ItemCompleted", "Installing"].map((state) =>
+    record("DemoOptional", state),
+  );
+  const shown = records.filter((filed) => !repeatsOutcome(own, filed));
+  assert.equal(isProgressTick(records, records[3]), false);
+  assert.equal(isProgressTick(shown, records[3]), true);
+});
+
+test("a request line names the placement a row's button was for", () => {
+  const skill = { placements: [{ name: "claude-user", label: "Claude Code", status: "NotInstalled" }] };
+  const install = { kind: "do", label: "Install", method: "InstallItem" };
+  assert.equal(requestText(skill, install), "Install requested");
+  assert.equal(requestText(skill, { ...install, placement: "claude-user" }), "Install requested for Claude Code");
+  assert.equal(requestText({}, { ...install, placement: "gone" }), "Install requested");
 });
 
 test("card progress shows one line and a bar while active, then only outcomes worth acting on", () => {

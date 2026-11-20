@@ -608,6 +608,25 @@ export function isProgressTick(records: ActivityRecord[], record: ActivityRecord
   return previous !== undefined && previous.itemName === record.itemName && previous.state === record.state;
 }
 
+/**
+ * repeatsOutcome is true for the ItemCompleted or ItemFailed record of the
+ * operation's own item. The terminal record that follows says the same, so
+ * Activity keeps these two states only for a dependency or an updater.
+ */
+export function repeatsOutcome(item: Pick<OptionalInstallItem, "itemName">, record: ActivityRecord): boolean {
+  return (record.state === "ItemCompleted" || record.state === "ItemFailed") && record.itemName === item.itemName;
+}
+
+/**
+ * requestText is Activity's line for an accepted request: the button's label,
+ * and for a placement row the placement it was for ("Install requested for
+ * Claude Code").
+ */
+export function requestText(item: Pick<OptionalInstallItem, "placements">, action: ItemAction): string {
+  const where = itemPlacements(item).find((placement) => placement.name === action.placement)?.label;
+  return `${action.label} requested${where ? ` for ${where}` : ""}`;
+}
+
 /** isNewer is whether a belongs above b in newest-first Activity. */
 function isNewer(a: ActivityRecord, b: ActivityRecord): boolean {
   const at = Date.parse(a.timestampUtc);
@@ -679,16 +698,58 @@ export function localRecord(
 // How Activity names who ended an operation; the service sends "user" or "service".
 const CANCELED_BY: Record<string, string> = { user: "by you", service: "by the service" };
 
+// A service error's leading code, such as "command_failed: ".
+const ERROR_CODE_PREFIX = /^[a-z]+(?:_[a-z]+)+:\s*/;
+
+/**
+ * activityText is what a record says happened, in plain words. The state
+ * carries the meaning, so the service's stock message ("Operation queued") and
+ * a message that only repeats the item's name are left out; a message is
+ * quoted only where it is the reason for a failure or a wait.
+ */
+function activityText(record: ActivityRecord): string {
+  const message = record.message.trim();
+  const because = (what: string, why: string) => (why ? `${what} — ${why}` : what);
+  switch (record.state) {
+    case REQUESTED_STATE:
+      return message || "Requested";
+    case "Queued":
+      return "Waiting to start";
+    case "ItemCompleted":
+      return "Done";
+    case "Succeeded":
+      return "Finished";
+    case "ItemFailed":
+      return because("Failed", message);
+    case "Failed":
+      return because("Failed", record.detail || (/^operation failed$/i.test(message) ? "" : message));
+    case "Deferred": {
+      const apps = blockingApps(record);
+      return apps ? `Waiting — close ${apps} to continue` : because("Postponed", message);
+    }
+    case "Canceled": {
+      // A cancel says who did it, and that replaces the service's message.
+      const who = record.canceledBy ? (CANCELED_BY[record.canceledBy] ?? `by ${record.canceledBy}`) : "";
+      return who ? `Canceled ${who}` : "Canceled";
+    }
+    case STREAM_ENDED_STATE:
+      // The message is the raw stream error, which says the same less plainly.
+      return "Lost contact with the service before it finished";
+    case ERROR_STATE:
+      return because("Request failed", message.replace(ERROR_CODE_PREFIX, ""));
+    default: {
+      const named = message === record.displayName || message === record.itemName;
+      return because(stateLabel(record.state), named ? "" : message);
+    }
+  }
+}
+
 export function activityLine(record: ActivityRecord): string {
   const when = new Date(record.timestampUtc);
-  const stamp = Number.isNaN(when.getTime()) ? record.timestampUtc : when.toLocaleString();
-  const name = record.displayName || record.itemName;
-  // A cancel says who did it, and that replaces the service's message.
-  const who = record.canceledBy ? (CANCELED_BY[record.canceledBy] ?? `by ${record.canceledBy}`) : "";
-  const label = who ? `${stateLabel(record.state)} ${who}` : stateLabel(record.state);
-  return [`${stamp} — ${name}: ${label}`, who ? "" : record.message.trim()]
-    .filter(Boolean)
-    .join(" — ");
+  const stamp = Number.isNaN(when.getTime())
+    ? record.timestampUtc
+    : when.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  return `${stamp} — ${record.displayName || record.itemName}: ${activityText(record)}`;
 }
 
 /** progressLabel names the item a determinate bar belongs to, never the operation. */
@@ -719,6 +780,12 @@ const WAITING_STATES = new Set([REQUESTED_STATE, "Queued"]);
 // older service sends no errorCode, so the message is matched as well.
 const BLOCKING_APPS = /^blocking application\(s\) running: (.+)$/i;
 
+/** blockingApps names the running applications a Deferred record waits on, when that is its reason. */
+function blockingApps(record: ActivityRecord): string | undefined {
+  // missing_software's message already says what to install (Needs …).
+  return record.errorCode === "missing_software" ? undefined : BLOCKING_APPS.exec(record.message.trim())?.[1];
+}
+
 /**
  * phaseLabel is a running phase's line. The item's own install or removal uses
  * its installing or removing label; another item's phase (who) is named.
@@ -738,8 +805,7 @@ function outcomeLabel(record: ActivityRecord, method: ActionMethod): string {
   const message = record.message.trim();
   switch (record.state) {
     case "Deferred": {
-      // missing_software's message already says what to install (Needs …).
-      const apps = record.errorCode === "missing_software" ? undefined : BLOCKING_APPS.exec(message)?.[1];
+      const apps = blockingApps(record);
       return apps ? `Waiting: close ${apps} to continue` : message || "Deferred";
     }
     case "Canceled":

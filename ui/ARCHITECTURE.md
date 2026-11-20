@@ -295,7 +295,13 @@ reported at each whole-percent change. A download of unknown length, an
 install, a removal and an `ItemFailed` record carry none. An `ItemCompleted`
 record and the terminal record carry 100. A client must not read a missing
 value as 0. Activity files a record only when it changes the item or the
-state, so the percent updates of one download are a single entry.
+state, so the percent updates of one download are a single entry. It leaves
+out the `ItemCompleted` or `ItemFailed` record of the operation's own item,
+which the terminal record repeats (`repeatsOutcome`). A line is the time, the
+item and what happened in plain words (`activityText` in `state.ts`): the
+state decides the wording ("Waiting to start" for `Queued`, "Finished" for
+`Succeeded`), and the record's message is quoted only as the reason for a
+failure, a deferral or an unknown state.
 
 Every local user can read what the service sends, so messages name items, not
 locations. A `Downloading` record's message is the item's display name; the
