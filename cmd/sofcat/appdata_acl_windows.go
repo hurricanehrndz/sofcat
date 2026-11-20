@@ -46,7 +46,7 @@ const (
 // protectAppData applies the data directory DACL to root and resets every
 // entry below it to inherit from root, like `icacls /reset /t`. Owners become
 // Administrators, so a file a user created before the fix loses the implicit
-// WRITE_DAC its owner keeps. inventory.json keeps its stricter DACL, and
+// WRITE_DAC its owner keeps. Both inventories keep their stricter DACL, and
 // user-artifacts then gets Users read back. When root is <Name>\Data, its
 // parent gets parentSDDL too, on that directory only. Symbolic links and
 // junctions are skipped, never followed. It is idempotent and keeps going
@@ -99,7 +99,8 @@ func protectAppData(root string) error {
 		case path == root:
 		case !d.IsDir() && !d.Type().IsRegular():
 			errs = append(errs, fmt.Errorf("skipped %s: not a plain file or directory", path))
-		case filepath.Dir(path) == root && strings.EqualFold(d.Name(), inventoryFile):
+		case filepath.Dir(path) == root && (strings.EqualFold(d.Name(), inventoryFile) ||
+			strings.EqualFold(d.Name(), checkOnlyInventoryFile)):
 		default:
 			errs = append(errs, setSecurity(path, inheritSDDL, windows.UNPROTECTED_DACL_SECURITY_INFORMATION))
 		}

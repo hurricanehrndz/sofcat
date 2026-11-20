@@ -25,7 +25,7 @@ const (
 // must have no access to anything in the data directory, whatever ACLs and
 // owners entries had before (as on a tree an older version created, where
 // Users could create files), except the staged archives in user-artifacts,
-// which the per-user helper reads. inventory.json keeps its stricter DACL, a
+// which the per-user helper reads. Both inventories keep their stricter DACL, a
 // junction a user planted is not followed, and the parent <Name> gets its
 // own DACL without a walk: only administrators create entries there, and
 // Users read sofcat's own placements beside Data.
@@ -38,13 +38,16 @@ func TestProtectAppData(t *testing.T) {
 	mkdir(t, root, filepath.Join(root, "cache", "packages"), artifacts, marketplace)
 	write(t, filepath.Join(parent, "config.yaml"), archive,
 		filepath.Join(root, "cache", "packages", "setup.msi"), filepath.Join(root, "service-manifest.yaml"),
-		filepath.Join(root, inventoryFile))
+		filepath.Join(root, inventoryFile), filepath.Join(root, checkOnlyInventoryFile))
 	// A planted manifest that only Everyone may read, an archive locked to
-	// SYSTEM, and inventory.json as pkg/report writes it.
+	// SYSTEM, and both inventories as pkg/report writes them.
 	setDACL(t, filepath.Join(root, "service-manifest.yaml"), "D:P(A;;FA;;;WD)")
 	setDACL(t, archive, "D:P(A;;FA;;;SY)")
-	setDACL(t, filepath.Join(root, inventoryFile), "D:P(A;;FA;;;SY)(A;;FR;;;BA)")
-	inventoryBefore := daclSDDL(t, filepath.Join(root, inventoryFile))
+	inventoriesBefore := map[string]string{}
+	for _, name := range []string{inventoryFile, checkOnlyInventoryFile} {
+		setDACL(t, filepath.Join(root, name), "D:P(A;;FA;;;SY)(A;;FR;;;BA)")
+		inventoriesBefore[name] = daclSDDL(t, filepath.Join(root, name))
+	}
 
 	canary := filepath.Join(t.TempDir(), "canary")
 	mkdir(t, canary)
@@ -81,8 +84,10 @@ func TestProtectAppData(t *testing.T) {
 	if got, w := daclSDDL(t, marketplace), "D:AI(A;OICIID;FA;;;SY)(A;OICIID;FA;;;BA)(A;OICIID;"+usersRX+";;;BU)"; got != w {
 		t.Errorf("%s:\n got %s\nwant %s", marketplace, got, w)
 	}
-	if got := daclSDDL(t, filepath.Join(root, inventoryFile)); got != inventoryBefore {
-		t.Errorf("inventory.json changed: got %s, want %s", got, inventoryBefore)
+	for name, before := range inventoriesBefore {
+		if got := daclSDDL(t, filepath.Join(root, name)); got != before {
+			t.Errorf("%s changed: got %s, want %s", name, got, before)
+		}
 	}
 	if got := sddl(t, canary); got != canaryBefore {
 		t.Errorf("junction target changed:\n got %s\nwant %s", got, canaryBefore)

@@ -223,19 +223,34 @@ func TestConsoleLevelGating(t *testing.T) {
 	}
 }
 
-// TestCheckOnlyNoFile confirms checkonly suppresses the file sink.
-func TestCheckOnlyNoFile(t *testing.T) {
-	setConsole(t)
-	dir := t.TempDir()
+// TestCheckOnlyConsoleOnStderr encodes that a check-only run's stdout is only
+// the inventory JSON, which wrappers parse, so its console lines go to stderr
+// while a real run's stay on stdout. Either way the run leaves its lines in
+// sofcat.log, since a service may run check-only by policy.
+func TestCheckOnlyConsoleOnStderr(t *testing.T) {
+	for _, checkOnly := range []bool{true, false} {
+		t.Run(map[bool]string{true: "checkonly", false: "real"}[checkOnly], func(t *testing.T) {
+			stdout := setConsole(t)
+			stderr := &bytes.Buffer{}
+			orig := checkOnlyConsoleOut
+			checkOnlyConsoleOut = stderr
+			t.Cleanup(func() { checkOnlyConsoleOut = orig })
+			dir := t.TempDir()
 
-	newLog(t, config.Configuration{AppDataPath: dir, CheckOnly: true})
-	if logWriter != nil {
-		t.Errorf("checkonly should not open a file writer")
-	}
+			newLog(t, config.Configuration{AppDataPath: dir, CheckOnly: checkOnly})
+			slog.Warn("run-warn")
 
-	slog.Warn("checkonly-warn")
-	if _, err := os.Stat(filepath.Join(dir, "sofcat.log")); !os.IsNotExist(err) {
-		t.Errorf("checkonly must not create a log file, stat err = %v", err)
+			want, other := stdout, stderr
+			if checkOnly {
+				want, other = stderr, stdout
+			}
+			if !strings.Contains(want.String(), "run-warn") || other.Len() != 0 {
+				t.Errorf("console line misrouted: stdout %q, stderr %q", stdout, stderr)
+			}
+			if !strings.Contains(string(readLog(t, dir)), "run-warn") {
+				t.Errorf("file sink missing message")
+			}
+		})
 	}
 }
 
