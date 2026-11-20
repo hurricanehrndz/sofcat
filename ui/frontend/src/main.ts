@@ -54,6 +54,7 @@ import {
   needsAttention,
   openControl,
   opensDetails,
+  pageSplashMs,
   placementAction,
   placementStatus,
   progressText,
@@ -68,7 +69,9 @@ import {
   shouldAcceptRecord,
   showLoading,
   showRetry,
+  splashLeft,
   splashMs,
+  splashShownBefore,
   statusLabel,
   statusRecord,
   stripLine,
@@ -1195,8 +1198,13 @@ function renderActivity(): void {
   );
 }
 
-/** The build's splash (LOADING_ALWAYS): the screen's least time up, or 0. */
-const SPLASH_MS = splashMs(import.meta.env.VITE_LOADING_ALWAYS, import.meta.env.VITE_LOADING_SECONDS);
+/**
+ * The splash (LOADING_ALWAYS): the screen's least time up, or 0. A reload of
+ * the page within one launch (a menu's Reload, a renderer crash) gets none:
+ * the splash belongs to the launch, not the page.
+ */
+const BUILD_SPLASH_MS = splashMs(import.meta.env.VITE_LOADING_ALWAYS, import.meta.env.VITE_LOADING_SECONDS);
+const SPLASH_MS = pageSplashMs(BUILD_SPLASH_MS, BUILD_SPLASH_MS > 0 && splashShownBefore(() => sessionStorage));
 
 /**
  * renderLoading puts the loading screen up or takes it down. Under it the
@@ -1204,8 +1212,12 @@ const SPLASH_MS = splashMs(import.meta.env.VITE_LOADING_ALWAYS, import.meta.env.
  * is timed from the page's start (performance.now), once per launch.
  */
 function renderLoading(): void {
-  const up = showLoading(view, SPLASH_MS, performance.now());
+  const elapsed = performance.now();
+  const up = showLoading(view, SPLASH_MS, elapsed);
   loading.hidden = !up;
+  // Only the splash shows its content at once; a later wait keeps the 200 ms
+  // that hides a quick answer.
+  loading.dataset.always = String(splashLeft(SPLASH_MS, elapsed) > 0);
   for (const part of document.body.children) {
     if (part !== loading) {
       part.toggleAttribute("inert", up);
@@ -1847,7 +1859,7 @@ categorySelect.addEventListener("change", filterChanged);
 appliesToSelect.addEventListener("change", filterChanged);
 /** endSplash takes the splash down once its time is up, unless the screen is still waiting on the service. */
 function endSplash(): void {
-  const left = SPLASH_MS - performance.now();
+  const left = splashLeft(SPLASH_MS, performance.now());
   if (left > 0) {
     setTimeout(endSplash, left);
   } else {

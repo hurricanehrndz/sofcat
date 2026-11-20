@@ -106,10 +106,10 @@ splash: also when a saved list could show at once and when the service
 answers at once. It stays up for at least [`LOADING_SECONDS`](#loading_seconds),
 and longer while the service has not answered and there is no saved list,
 as without it. A failed first try gives way to the page and its Retry once
-that time is up. The splash shows once per launch, never on a refresh or a
-Retry. Unset (the default) or `1`/`true`; `brand-check` rejects any other
-value. Build-time, like `LOADING_TEXT`: the branding settings arrive with
-the answer the screen waits for.
+that time is up. The splash shows once per launch: not on a refresh, a
+Retry or a reload of the page. Unset (the default) or `1`/`true`;
+`brand-check` rejects any other value. Build-time, like `LOADING_TEXT`: the
+branding settings arrive with the answer the screen waits for.
 
 ### `LOADING_SECONDS`
 
