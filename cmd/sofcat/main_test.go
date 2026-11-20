@@ -624,8 +624,10 @@ func TestRouteServiceCommandPrintsSuccessWhenNoItems(t *testing.T) {
 		}
 	})
 
-	if !strings.Contains(stdout, "InstallItem command completed successfully") {
-		t.Fatalf("expected stdout to include success message, got %q", stdout)
+	// The service answers before the install runs, so the line must not say
+	// the install is done.
+	if !strings.Contains(stdout, "InstallItem request accepted; its run is queued") {
+		t.Fatalf("expected stdout to say the request was accepted, got %q", stdout)
 	}
 }
 
