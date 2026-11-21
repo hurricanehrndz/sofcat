@@ -24,7 +24,7 @@ jobs:
           git merge-base --is-ancestor "$GITHUB_SHA" FETCH_HEAD ||
             { echo "::error::$GITHUB_REF_NAME is not on main"; exit 1; }
       - name: Install toolchain
-        uses: jdx/mise-action@d5574b52816a478f9d4e6529a3f6ff17a8a36785 # v5.2.8
+        uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a # v5.2.10
         with:
           cache: false # a release builds from fresh tools, not a restored cache
       # jsign signs Authenticode from Linux through Azure Trusted Signing
@@ -100,7 +100,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Install toolchain
-        uses: jdx/mise-action@d5574b52816a478f9d4e6529a3f6ff17a8a36785 # v5.2.8
+        uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a # v5.2.10
         with:
           cache: false
           install_args: go node just github:hurricanehrndz/embala # all this build needs from mise.toml
